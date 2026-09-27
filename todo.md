@@ -307,13 +307,22 @@ Write the test first, then the implementation, for each step:
 6. ✅ **CLI tests:** `scan`, `report --json` and `--help` exit 0; an unknown option exits 2.
 
 ## Verification
-- `python3 -m unittest discover -s tests` passes.
-- `python3 -m claude_usage scan` against the real `~/.claude/projects`, run by you, not by an agent in tests:
-  - the counts look plausible
-  - a second run reports all files skipped
-  - during a live session, a scan reads only the bytes added since the last one
-- For one evopage8 session, `python3 -m claude_usage report --session <id> --json` agrees with
-  `python3 .claude/tools/agent_usage.py --session <id> --json` (run in evopage8) for the subagents.
+- ✅ `python3 -m unittest discover -s tests` passes (185 tests), as does the guard suite (98).
+- ✅ `python3 -m claude_usage scan` against the real `~/.claude/projects` (2026-09-27):
+  - the counts look plausible: 145 files, 6,900 messages, 139.4 MB in 1.0 s
+    - all-time estimated cost $566.28, which matches the cross-check against Claude Code's `costUSD` (see
+      `pricing.py`)
+  - a second run reports all 145 files skipped (0 B read)
+  - during a live session, a scan reads only the bytes added since the last one: 2,861 bytes, and the offset moved
+    by exactly that much
+- ✅ Five evopage8 sessions with 9–24 subagents each: `python3 -m claude_usage report --session <id> --json` agrees
+  with `python3 .claude/tools/agent_usage.py --session <id> --json` (run in evopage8) on 978 of 979 fields for 89
+  subagents. The fields: type, turns, context first and last, input total, new input, cache writes, cache reads,
+  output, and tool calls and characters.
+  - agent_usage.py shows the MCP server `codebase-memory-mcp` under its own alias `cbm`; the calls and characters
+    are the same.
+  - The one difference is the model list of one subagent: 3 of its 49 turns ran on `claude-opus-4-8`, and we list
+    both models where agent_usage.py shows one.
 - `python3 -m claude_usage serve`, then open `http://127.0.0.1:8765`:
   - the current session shows as live, and a running subagent appears within 5 s
   - daily and model charts render in light and dark
