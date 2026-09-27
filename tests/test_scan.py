@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 import unittest
+from datetime import date
 from datetime import datetime
 from datetime import timedelta
 from unittest import mock
@@ -429,6 +430,69 @@ class BackgroundTest(StoreCase):
         self.scan()
         by_model = {row["model"]: row for row in queries.totals_by(self.store, "model", None, PRICES)}
         self.assertIsNone(by_model["claude-mystery-1"]["cost"])
+
+
+class RetentionTest(StoreCase):
+    """With a retention, a scan deletes the sessions whose last activity lies before its first day."""
+
+    def setUp(self):
+        super().setUp()
+        old = self.projects.session("old")
+        old.at(DAY_1).user("hi")
+        old.assistant("o1", [tool_use_block("ot1", "Read")], usage(output=10))
+        old.tool_result("ot1", "abc")
+        old.api_error("oe1")
+        old.cost_state({HAIKU: (100, 0, 0, 10, 0.01)}, totalDuration=1000)
+        self.projects.subagent("old", "a1").at(DAY_1).assistant("o2", [text_block("b")], usage(output=5))
+        self.projects.session("new").at(DAY_3).assistant("n1", [text_block("c")], usage(output=20))
+        # the main thread is old, a subagent is recent: the session is recent
+        self.projects.session("mixed").at(DAY_1).assistant("x1", [text_block("d")], usage(output=30))
+        self.projects.subagent("mixed", "a2").at(DAY_3).assistant("x2", [text_block("e")], usage(output=40))
+        self.first_kept = date.fromisoformat(local_day(DAY_3))
+        self.today = self.first_kept + timedelta(days=6)        # 7 days: DAY_3 is the first one kept
+
+    def scan_keeping(self, days):
+        """A scan with a retention of `days` days up to self.today."""
+        return scan.scan(self.store, self.projects.root, retention_days=days, today=self.today)
+
+    def sessions(self, table):
+        """The sessions with rows in a table."""
+        return sorted({row[0] for row in self.rows(
+            f"SELECT t.session_id FROM {table} x JOIN transcripts t ON t.path = x.path")})
+
+    def test_an_old_session_goes_from_every_table(self):
+        result = self.scan_keeping(7)
+        self.assertEqual(result.sessions_pruned, 1)
+        for table in ("messages", "tool_calls", "api_errors", "background", "cost_states"):
+            with self.subTest(table=table):
+                self.assertNotIn("old", self.sessions(table))
+        self.assertEqual(self.sessions("messages"), ["mixed", "new"])
+
+    def test_a_session_counts_by_its_latest_file(self):
+        self.scan_keeping(7)
+        self.assertEqual(self.rows("SELECT COUNT(*) FROM messages m JOIN transcripts t ON t.path = m.path "
+                                   "WHERE t.session_id = 'mixed'"), [(2,)])
+
+    def test_zero_keeps_everything(self):
+        result = self.scan_keeping(0)
+        self.assertEqual((result.sessions_pruned, self.sessions("messages")), (0, ["mixed", "new", "old"]))
+
+    def test_the_rows_of_files_still_there_stay_so_they_are_not_read_again(self):
+        self.scan_keeping(7)
+        self.assertEqual(self.count("transcripts"), 5)
+        again = self.scan_keeping(7)
+        self.assertEqual((again.files_scanned, again.sessions_pruned, self.sessions("messages")),
+                         (0, 0, ["mixed", "new"]))
+
+    def test_the_rows_of_files_claude_code_deleted_go_too(self):
+        for path in self.projects.project_dir().rglob("*.jsonl"):
+            if "old" in path.parts or path.name == "old.jsonl":
+                path.unlink()
+        self.scan_keeping(7)
+        self.assertEqual(self.rows("SELECT COUNT(*) FROM transcripts WHERE session_id = 'old'"), [(0,)])
+
+    def test_a_longer_retention_keeps_the_old_session(self):
+        self.assertEqual(self.scan_keeping(30).sessions_pruned, 0)
 
 
 class AttributionTest(StoreCase):

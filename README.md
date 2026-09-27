@@ -1,8 +1,9 @@
 # claude-usage
 
-Token usage of Claude Code across all projects on this machine: a persistent SQLite history that outlives the
-transcripts Claude Code deletes after its cleanup period, and a local dashboard (127.0.0.1 only) with live
-sessions, totals by day, model, agent type and project, a per-session drilldown and estimated cost.
+Token usage of Claude Code across all projects on this machine: a SQLite history of what the transcripts held,
+and a local dashboard (127.0.0.1 only) with live sessions, totals by day, model, agent type and project, a
+per-session drilldown and estimated cost. The history keeps 30 days by default, as Claude Code keeps its
+transcripts; set `retention_days` to 90 or 365 (or 0 for everything) to keep usage past their cleanup.
 
 Python ≥ 3.12, standard library only. Run it from the checkout as it is, or install it with `pip install .` to get
 a `claude-usage` command.
@@ -37,6 +38,10 @@ checkout, with the absolute interpreter path (cron's `python3` may be older than
 Errors go to stderr, so cron mails them.
 
 ## Keeping the history safe
+After each scan, sessions whose last activity is older than `retention_days` are deleted from the store; the
+dashboard offers no range longer than that. Lowering it deletes the older sessions at the next scan. SQLite reuses
+the freed space rather than shrinking the file; `make backup` writes a compacted copy.
+
 In a checkout the store is `data/usage.sqlite`, inside the working tree: `git clean -fdx` deletes it, and with it
 every day Claude Code has already removed from its transcripts. Back it up outside the checkout now and then
 (`make backup FILE=~/backups/usage-$(date +%F).sqlite`), or point `store` at a folder outside it.
@@ -50,6 +55,7 @@ never silently leaves a default in place.
 | Key | What it sets |
 |---|---|
 | `projects_dir`, `store` | Claude Code's transcripts, and the SQLite history |
+| `retention_days` | days of history kept: 7, 30 (default), 90 or 365, or 0 for everything |
 | `[serve]` `port`, `live_minutes` | the dashboard's port; how many minutes a session counts as live |
 | `[prices."<model prefix>"]` | $ per million tokens, longest matching prefix wins; `prices_checked` dates them |
 | `[fees]` `web_search_per_1000` | the flat web-search fee |

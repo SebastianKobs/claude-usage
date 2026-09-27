@@ -1,7 +1,8 @@
 # claude-usage
 
 Local dashboard and persistent SQLite history for Claude Code token usage, across all projects on this machine.
-Claude Code deletes transcripts after its cleanup period (30 days by default); the store keeps what they held.
+Claude Code deletes transcripts after its cleanup period (30 days by default); the store keeps what they held for
+`retention_days` (7, 30, 90 or 365; 30 by default, 0 keeps everything).
 
 ## Working rules
 - **TDD:** write the test first, then the implementation.
@@ -17,7 +18,9 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
 - **Never store prompt text:** only token counts, tool names and sizes, titles and metadata. The drilldown reads the
   first prompt, and the conversation (`conversation.conversation`), from the transcript on demand.
   `last-prompt.lastPrompt` and `queue-operation.content` hold prompt text too; never store them either.
-- **Keep the history:** never delete rows because a transcript is gone.
+- **Keep the history:** rows go only by the configured retention (`scan.prune`, whole sessions whose last
+  activity is older), never because a transcript is gone. A transcript row whose file still exists stays, since
+  it holds the read offset.
   - Schema migrations only add: new tables, or `ALTER TABLE … ADD COLUMN` via `ADDED_COLUMNS`. They run under
     `BEGIN IMMEDIATE`; indexes come after the added columns.
   - A bump that needs data only a new read gives raises `REREAD_BELOW`: stores below it reset `read_offset` so
@@ -224,6 +227,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - Polling: live every 5 s, the summary every 60 s, each after the previous answer, none while the tab is hidden.
     An unchanged payload isn't drawn again, so focus stays put. The banner keeps one message per source (live,
     summary, session, scan), and a response only renders if it answers the newest request.
+  - The range buttons stop at `retention_days`: the summary cuts a longer `days` to it and returns
+    `retention_days` and `history_since` (the first stored day); the page hides the longer buttons, falls back
+    from a saved longer range, and says "history since" when a range starts before the history does.
   - The session view takes focus on open; Escape or Close returns focus and scroll to the link that opened it.
   - All data goes into the DOM via `textContent`. Two exceptions, both in `chat.js`:
     - `highlighted()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans

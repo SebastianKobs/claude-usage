@@ -12,6 +12,7 @@ REPO = Path(__file__).resolve().parent.parent
 DEFAULTS = """\
 projects_dir = "~/.claude/projects"
 store = "usage.sqlite"
+retention_days = 30
 
 [serve]
 port = 8765
@@ -170,6 +171,21 @@ class SettingsTest(ConfigCase):
         self.assertEqual((settings.store, settings.port, settings.live_minutes, settings.prices_checked),
                          (self.data / "usage.sqlite", 8765, 5.0, None))
 
+    def test_the_retention_of_the_defaults(self):
+        self.assertEqual(self.settings().retention_days, 30)
+
+    def test_every_offered_retention_and_keep_everything(self):
+        for days in (0, 7, 30, 90, 365):
+            with self.subTest(days=days):
+                self.write(self.user, f"retention_days = {days}\n")
+                self.assertEqual(self.settings().retention_days, days)
+
+    def test_another_retention_is_refused(self):
+        for override in ("retention_days = 14\n", "retention_days = -1\n", 'retention_days = "30"\n',
+                         "retention_days = true\n", "retention_days = 30.0\n"):
+            with self.subTest(override=override):
+                self.assert_refused(override, "retention_days", "0, 7, 30, 90 or 365")
+
     def test_prices_checked_is_text(self):
         self.write(self.user, "prices_checked = 2026-09-27\n")
         self.assertEqual(self.settings().prices_checked, "2026-09-27")
@@ -205,6 +221,7 @@ class ShippedConfigTest(unittest.TestCase):
         self.assertIsInstance(values["projects_dir"], str)
         self.assertIsInstance(values["serve"]["port"], int)
         self.assertIsInstance(values["serve"]["live_minutes"], int)
+        self.assertEqual(values["retention_days"], 30)
         self.assertIsInstance(values["prices"], dict)
 
     def package_data(self):

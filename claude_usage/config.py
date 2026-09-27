@@ -38,7 +38,9 @@ TABLES: dict[str, tuple[str, ...] | None] = {
     "auto_compact": None,
     "prices": None,
 }
-VALUES = ("projects_dir", "store", "prices_checked")
+VALUES = ("projects_dir", "store", "prices_checked", "retention_days")
+# how many days of history the store keeps, as the dashboard's ranges offer them; 0 keeps everything
+RETENTION_CHOICES = (0, 7, 30, 90, 365)
 
 Values = dict[str, Any]
 
@@ -74,6 +76,7 @@ class Settings:
     port: int                           # 0 for any free port
     live_minutes: float                 # a session is live if its transcript changed within this many minutes
     prices_checked: str | None          # when the prices were last checked, as the config gives it
+    retention_days: int                 # the days of history the store keeps, 0 for everything
 
 
 def check_keys(config: Config) -> None:
@@ -103,9 +106,13 @@ def settings(config: Config) -> Settings:
     if (isinstance(live_minutes, bool) or not isinstance(live_minutes, (int, float))
             or not math.isfinite(live_minutes) or live_minutes <= 0):
         raise ConfigError(f"serve.live_minutes: expected a number above 0, got {live_minutes!r}")
+    retention = config.values.get("retention_days")
+    if isinstance(retention, bool) or retention not in RETENTION_CHOICES or not isinstance(retention, int):
+        raise ConfigError(f"retention_days: expected 0, 7, 30, 90 or 365 (0 keeps everything), got {retention!r}")
     checked = config.values.get("prices_checked")
     return Settings(projects_dir=config.path("projects_dir"), store=config.path("store"), port=port,
-                    live_minutes=float(live_minutes), prices_checked=str(checked) if checked else None)
+                    live_minutes=float(live_minutes), prices_checked=str(checked) if checked else None,
+                    retention_days=retention)
 
 
 def is_checkout(directory: Path = CHECKOUT_DIR) -> bool:

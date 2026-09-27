@@ -13,7 +13,9 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC
+from datetime import date
 from datetime import datetime
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +36,7 @@ class ScanResult:
     messages_upserted: int
     bytes_read: int
     errors: tuple[str, ...] = ()        # files that vanished or couldn't be read, with the reason
+    sessions_pruned: int = 0            # deleted as older than the retention
 
 
 def iso(moment: datetime | None) -> str | None:
@@ -255,8 +258,42 @@ def scan_file(store: Store, path: Path, known: sqlite3.Row | None) -> tuple[int,
     return upserted, chunk.end_offset - offset
 
 
-def scan(store: Store, projects_dir: Path, project_filter: str | None = None) -> ScanResult:
-    """One incremental scan of all transcripts below projects_dir, or of one project's (by its path)."""
+def last_activity(last_ts: str | None, mtime_ns: int) -> date:
+    """The local day of a session's last record, or of its newest file's mtime without a timestamped record."""
+    moment = datetime.fromisoformat(last_ts) if last_ts else datetime.fromtimestamp(mtime_ns / 1e9, UTC)
+    return moment.astimezone().date()
+
+
+def prune(store: Store, first_day: date) -> int:
+    """Delete the sessions whose last activity (over all their files) lies before first_day, in one transaction:
+    their messages, tool calls, API errors, background and cost-state rows, whole sessions only, so no background
+    or run total loses half its session. A transcript row stays while its file exists: it holds the offset the file
+    was read to, and without it the next scan would read the old data back in. Returns the sessions that lost
+    rows."""
+    sessions = store.connection.execute(
+        "SELECT session_id, MAX(last_ts) AS last_ts, MAX(mtime_ns) AS mtime_ns FROM transcripts GROUP BY session_id")
+    old = [row["session_id"] for row in sessions if last_activity(row["last_ts"], row["mtime_ns"]) < first_day]
+    pruned = 0
+    with store.transaction():
+        for session_id in old:
+            before = store.connection.total_changes
+            paths = [row["path"] for row in store.connection.execute(
+                "SELECT path FROM transcripts WHERE session_id = ?", (session_id,))]
+            for table in ("messages", "tool_calls", "api_errors"):
+                store.connection.executemany(f"DELETE FROM {table} WHERE path = ?", [(path,) for path in paths])
+            for table in ("background", "cost_states", "dirty_sessions"):
+                store.connection.execute(f"DELETE FROM {table} WHERE session_id = ?", (session_id,))
+            store.connection.executemany("DELETE FROM transcripts WHERE path = ?",
+                                         [(path,) for path in paths if not Path(path).exists()])
+            pruned += store.connection.total_changes > before
+    return pruned
+
+
+def scan(store: Store, projects_dir: Path, project_filter: str | None = None, retention_days: int = 0,
+         today: date | None = None) -> ScanResult:
+    """One incremental scan of all transcripts below projects_dir, or of one project's (by its path). With a
+    retention, the sessions of every project whose last activity is older than its retention_days days up to
+    today (default: the local date) are deleted afterwards."""
     paths = transcripts.find_transcripts(projects_dir)
     if project_filter is not None:
         wanted = transcripts.slug_for(project_filter)
@@ -289,4 +326,7 @@ def scan(store: Store, projects_dir: Path, project_filter: str | None = None) ->
         dirty = {row["session_id"] for row in store.connection.execute("SELECT session_id FROM dirty_sessions")}
         update_background(store, dirty)
         store.connection.execute("DELETE FROM dirty_sessions")
-    return ScanResult(scanned, skipped, upserted, bytes_read, tuple(errors))
+    pruned = 0
+    if retention_days:
+        pruned = prune(store, (today or date.today()) - timedelta(days=retention_days - 1))
+    return ScanResult(scanned, skipped, upserted, bytes_read, tuple(errors), pruned)

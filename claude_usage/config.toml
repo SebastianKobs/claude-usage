@@ -5,8 +5,13 @@
 # Claude Code's transcripts, one folder per project.
 projects_dir = "~/.claude/projects"
 
-# The SQLite usage history. It keeps what Claude Code deletes after its cleanup period.
+# The SQLite usage history.
 store = "usage.sqlite"
+
+# How many days of history the store keeps: 7, 30, 90 or 365, or 0 for everything. After each scan, sessions whose
+# last activity is older are deleted from the store, and the dashboard offers no longer range. Claude Code deletes
+# its transcripts after 30 days by default, so a longer retention is what keeps usage past that.
+retention_days = 30
 
 # When the [prices] below were last checked against the official pricing page.
 prices_checked = 2026-09-27

@@ -34,6 +34,7 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
 .day-nav { display: inline-flex; gap: 4px; align-items: center; margin-right: 8px; }
 .day-nav[hidden] { display: none; }
 .filters[hidden] { display: none; }
+.segmented button[hidden] { display: none; }       /* a range past the retention */
 /* wide enough for the longest date, so the arrows don't move while stepping */
 .day-nav output { min-width: 11ch; text-align: center; font-variant-numeric: tabular-nums; }
 .card {

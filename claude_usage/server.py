@@ -148,7 +148,7 @@ class UsageApp:
     """What the API serves: the store, the transcripts it scans, prices, and the scan throttle."""
 
     def __init__(self, usage_store: store.Store, projects_dir: Path, prices: pricing.Prices, live_minutes: float,
-                 project: str | None = None, prices_checked: str | None = None,
+                 project: str | None = None, prices_checked: str | None = None, retention_days: int = 0,
                  clock: Callable[[], float] = time.monotonic,
                  compact: compact.CompactSettings = compact.DEFAULT_COMPACT) -> None:
         self.store = usage_store
@@ -159,6 +159,7 @@ class UsageApp:
         self.prices_checked = prices_checked
         self.clock = clock
         self.compact = compact
+        self.retention_days = retention_days
         self.lock = threading.Lock()
         self.last_scan: float | None = None
         self.scan_errors: tuple[str, ...] = ()
@@ -170,7 +171,7 @@ class UsageApp:
         if self.last_scan is not None and now - self.last_scan < SCAN_INTERVAL:
             return
         try:
-            errors = scan.scan(self.store, self.projects_dir, self.project).errors
+            errors = scan.scan(self.store, self.projects_dir, self.project, self.retention_days).errors
         except (OSError, sqlite3.Error) as exc:     # no projects folder, or another scan holds the store too long
             errors = (str(exc),)
         if errors != self.scan_errors:
@@ -192,6 +193,9 @@ class UsageApp:
         single day with the nearest days before and after it that have usage, the run totals of the sessions that
         ended in them, the failed API calls (rate limits), the newest sessions and the costliest."""
         until = until or date.today()
+        # the store holds no more: a longer range would only show empty days
+        if self.retention_days:
+            days = min(days, self.retention_days)
         since = queries.first_day(days, until)
         single_day = days == 1
 
@@ -220,11 +224,13 @@ class UsageApp:
             # every session of the range once: the newest for the list, the costliest for the ranking
             sessions = queries.recent_sessions(self.store, since, self.prices, limit=None, project=self.project,
                                                until=until)
+            history_since = queries.first_stored_day(self.store, project=self.project)
             nearest = queries.nearest_days(self.store, until, project=self.project) if single_day else (None, None)
             scan_errors = list(self.scan_errors)
         return {"days": days, "since": since.isoformat(), "until": until.isoformat(),
                 **day_navigation(days, until, *nearest, today=date.today()),
-                "project_filter": self.project,
+                "project_filter": self.project, "retention_days": self.retention_days,
+                "history_since": None if history_since is None else history_since.isoformat(),
                 "prices_checked": self.prices_checked, "totals": queries.combined(groups["model"]), **groups,
                 "runtime": runtime, "api_errors": api_errors, "context": context,
                 "compact_hint_tokens": self.compact.hint_tokens, "scan_errors": scan_errors,

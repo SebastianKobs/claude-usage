@@ -90,7 +90,10 @@ function inputSplit(totals, parts, context, hintTokens) {
 
 // the range the summary covers, from the summary itself: the controls may already ask for another one
 function rangeText(summary) {
-  if (summary.days !== 1) return `last ${summary.days} days`;
+  // a young store, or one with a retention, starts after the range does
+  const since = summary.history_since;
+  const history = since && since > summary.since ? ` (history since ${shortDay(since)})` : "";
+  if (summary.days !== 1) return `last ${summary.days} days${history}`;
   return summary.until === dayText(new Date()) ? "today" : longDay(summary.until);
 }
 

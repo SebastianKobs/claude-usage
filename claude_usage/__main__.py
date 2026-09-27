@@ -64,10 +64,14 @@ def print_json(payload: Any) -> None:
 def run_scan(context: Context) -> int:
     """scan: one incremental scan; vanished files are warnings."""
     with store.Store(context.store_path) as usage_store:
-        result = scan.scan(usage_store, context.projects_dir, context.args.project)
+        result = scan.scan(usage_store, context.projects_dir, context.args.project, context.settings.retention_days)
     print(f"{result.files_scanned} files scanned, {result.files_skipped} unchanged, "
           f"{result.messages_upserted} messages updated, {report.size(result.bytes_read)} read "
           f"(store: {context.store_path})")
+    if result.sessions_pruned:
+        noun = "session" if result.sessions_pruned == 1 else "sessions"
+        print(f"{result.sessions_pruned} {noun} older than {context.settings.retention_days} days deleted "
+              "(retention_days)")
     for error in result.errors:
         print(f"warning: {error}", file=sys.stderr)
     return 0
@@ -76,9 +80,15 @@ def run_scan(context: Context) -> int:
 def run_report(context: Context) -> int:
     """report: totals per group or one session, as text or JSON; scans first unless --no-scan."""
     args = context.args
+    retention = context.settings.retention_days
+    # without --days the default range, or the whole retention if that is shorter
+    days = args.days if args.days is not None else min(queries.DEFAULT_DAYS, retention or queries.DEFAULT_DAYS)
+    if retention and days > retention:
+        raise CliError(f"--days {days} reaches past the {retention} days the store keeps (retention_days in "
+                       "the config); pick fewer days or raise it")
     with store.Store(context.store_path) as usage_store:
         if not args.no_scan:
-            scan.scan(usage_store, context.projects_dir, args.project)
+            scan.scan(usage_store, context.projects_dir, args.project, retention)
         if args.session:
             detail = queries.session_detail(usage_store, args.session, context.prices)
             if detail is None:
@@ -88,9 +98,9 @@ def run_report(context: Context) -> int:
             else:
                 print(report.session_text(detail))
             return 0
-        since = None if args.days == 0 else queries.first_day(args.days, date.today())
+        since = None if days == 0 else queries.first_day(days, date.today())
         rows = queries.totals_by(usage_store, args.by, since, context.prices, project=args.project)
-    payload = {"by": args.by, "days": args.days, "since": since.isoformat() if since else None,
+    payload = {"by": args.by, "days": days, "since": since.isoformat() if since else None,
                "project_filter": args.project, "rows": rows, "totals": queries.combined(rows)}
     if args.json:
         print_json(payload)
@@ -107,7 +117,8 @@ def run_serve(context: Context) -> int:
     compact_settings = compact.parse_compact_settings(context.config.values)   # fails before the store is opened
     with store.Store(context.store_path, check_same_thread=False) as usage_store:
         app = server.UsageApp(usage_store, context.projects_dir, context.prices, live_minutes, project=args.project,
-                              prices_checked=context.settings.prices_checked, compact=compact_settings)
+                              prices_checked=context.settings.prices_checked, compact=compact_settings,
+                              retention_days=context.settings.retention_days)
         httpd = server.make_server(app, HOST, port)
         previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
         try:
@@ -193,8 +204,9 @@ def build_parser() -> argparse.ArgumentParser:
     scan_command.add_argument("--project", metavar="PATH", help="only this project's transcripts")
 
     report_command = commands.add_parser("report", parents=[paths], help="totals or one session, as text or JSON")
-    report_command.add_argument("--days", type=days_option, default=queries.DEFAULT_DAYS,
-                                help=f"the last N days, today included (default {queries.DEFAULT_DAYS}; 0 = all time)")
+    report_command.add_argument("--days", type=days_option,
+                                help=f"the last N days, today included (default {queries.DEFAULT_DAYS}, at most "
+                                     "retention_days; 0 = all the store keeps)")
     report_command.add_argument("--by", choices=REPORT_GROUPS, default="model", help="group totals by (default model)")
     report_command.add_argument("--session", metavar="ID", help="one session: main thread, subagents and tools")
     report_command.add_argument("--project", metavar="PATH", help="only this project")

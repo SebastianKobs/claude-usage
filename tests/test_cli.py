@@ -11,6 +11,7 @@ import sys
 import unittest
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -86,6 +87,34 @@ class ScanCommandTest(CliCase):
         self.assertEqual(code, 1)
         self.assertIn("projects folder not found", err)
         self.assertNotIn("Traceback", err)
+
+
+class RetentionCommandTest(CliCase):
+    def setUp(self):
+        super().setUp()
+        long_ago = datetime.now(UTC) - timedelta(days=40)
+        self.projects.session("old").at(long_ago).assistant("m9", [text_block("x")], usage(output=9))
+
+    def test_scan_deletes_what_is_older_than_the_retention(self):
+        code, out, _ = self.run_cli("scan")
+        self.assertEqual(code, 0)
+        self.assertIn("1 session older than 30 days deleted", out)
+
+    def test_report_refuses_a_range_past_the_retention(self):
+        code, _, err = self.run_cli("report", "--days", "90")
+        self.assertEqual(code, 1)
+        self.assertIn("retention_days", err)
+
+    def test_report_without_days_keeps_to_a_shorter_retention(self):
+        override = self.tmp / "config.toml"
+        override.write_text("retention_days = 7\n", encoding="utf-8")
+        with mock.patch.object(config, "override_files", return_value=[override]):
+            code, out, _ = self.run_cli("report", "--json")
+        self.assertEqual((code, json.loads(out)["days"]), (0, 7))
+
+    def test_report_of_all_time_is_the_retention(self):
+        code, out, _ = self.run_cli("report", "--days", "0", "--json")
+        self.assertEqual((code, json.loads(out)["totals"]["turns"]), (0, 2))
 
 
 class ReportCommandTest(CliCase):

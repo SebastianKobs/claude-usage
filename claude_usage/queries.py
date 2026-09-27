@@ -199,6 +199,15 @@ def totals_by(store: Store, group: str, since: date | None, prices: pricing.Pric
     return [{**dict(zip(names, key)), **total.as_dict()} for key, total in ordered]
 
 
+def first_stored_day(store: Store, project: str | None = None) -> date | None:
+    """The earliest local day with usage (of one project path if given), None without any: where the history
+    starts, which a retention or a young store puts after a range's first day."""
+    condition, parameters = range_filter(USAGE_COLUMNS, None, None, project)
+    row = store.connection.execute(f"SELECT MIN(u.day) AS day FROM usage_rows u WHERE {condition}",
+                                   parameters).fetchone()
+    return None if row["day"] is None else date.fromisoformat(row["day"])
+
+
 def nearest_days(store: Store, day: date, project: str | None = None) -> tuple[date | None, date | None]:
     """The closest local days before and after day that have usage (of one project path if given), None where
     there is none; for stepping through days without the empty ones."""

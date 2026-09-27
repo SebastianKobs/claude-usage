@@ -28,6 +28,7 @@ async function loadSummary() {
     if (request !== summaryRequest) return;
     showError("summary", "");
     showScanErrors(summary);
+    applyRetention(summary);
     const key = drawnKey(summary);
     if (key !== summaryKey) {
       summaryKey = key;
@@ -155,6 +156,20 @@ function returnToOpener() {
 }
 
 // --- controls ------------------------------------------------------------------------------------------------
+
+// No range longer than the store keeps: those buttons hide, and a saved longer range (which the server cut to the
+// retention) becomes the longest one kept
+function applyRetention(summary) {
+  const retention = summary.retention_days;
+  for (const button of document.querySelectorAll("#range button[data-days]")) {
+    button.hidden = Boolean(retention) && Number(button.dataset.days) > retention;
+  }
+  if (summary.days < state.days) {
+    state.days = summary.days;
+    savePreference("days", state.days);
+    pressed("range", "days", state.days);
+  }
+}
 
 function pressed(groupId, attribute, value) {
   for (const button of document.querySelectorAll(`#${groupId} button[data-${attribute}]`)) {

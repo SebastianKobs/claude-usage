@@ -560,6 +560,29 @@ class ErrorTest(ServerCase):
         self.assertEqual(server.Handler.timeout, server.CONNECTION_TIMEOUT)
 
 
+class RetentionTest(ServerCase):
+    def setUp(self):
+        super().setUp()
+        self.app.retention_days = 7
+        long_ago = datetime.now(UTC) - timedelta(days=40)
+        self.projects.session("old").at(long_ago).assistant("m9", [text_block("x")], usage(output=9))
+
+    def test_a_longer_range_is_cut_to_the_retention(self):
+        _, payload = self.get_json("/api/summary?days=30")
+        today = date.today()
+        self.assertEqual((payload["days"], payload["retention_days"], payload["since"]),
+                         (7, 7, (today - timedelta(days=6)).isoformat()))
+
+    def test_the_summary_says_where_the_history_starts(self):
+        _, payload = self.get_json("/api/summary?days=7")
+        self.assertEqual(payload["history_since"], date.today().isoformat())
+
+    def test_the_requests_scan_prunes_old_sessions(self):
+        self.get_json("/api/live")
+        self.assertEqual(self.store.connection.execute(
+            "SELECT COUNT(*) FROM messages WHERE message_id = 'm9'").fetchone()[0], 0)
+
+
 class ProjectFilterTest(ServerCase):
     project = "/home/dev/other"
 

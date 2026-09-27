@@ -1,9 +1,10 @@
 """The SQLite usage history: its schema, the migrations and backups.
 
-Rows are never deleted: once Claude Code removes a transcript, the store is the only record of it. Message and tool
-rows keep only the file path; project, session and agent come from the transcripts table, so a cwd or meta file that
-shows up later corrects every row at once. The usage_rows view puts messages and background rows (see scan.py) side
-by side, so every query includes both; background rows have no turns. scan.py fills the store, queries.py reads it.
+Rows go only by the retention (scan.prune): once Claude Code removes a transcript, the store is the only record of
+it. Message and tool rows keep only the file path; project, session and agent come from the transcripts table, so a
+cwd or meta file that shows up later corrects every row at once. The usage_rows view puts messages and background
+rows (see scan.py) side by side, so every query includes both; background rows have no turns. scan.py fills the
+store, queries.py reads it.
 """
 import sqlite3
 from collections.abc import Iterator

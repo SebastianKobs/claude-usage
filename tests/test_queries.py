@@ -190,6 +190,20 @@ class ApiErrorTest(StoreCase):
         self.assertEqual(self.rows("SELECT path FROM api_errors WHERE record_id = 'e1'"), [(str(self.main.path),)])
 
 
+class FirstStoredDayTest(StoreCase):
+    def test_the_earliest_day_with_usage(self):
+        self.projects.session("s1").at(DAY_3).assistant("m1", [text_block("a")], usage(output=1))
+        self.projects.session("s2", project="/home/dev/other").at(DAY_1).assistant("m2", [text_block("b")],
+                                                                                  usage(output=1))
+        self.scan()
+        self.assertEqual(queries.first_stored_day(self.store), date.fromisoformat(local_day(DAY_1)))
+        self.assertEqual(queries.first_stored_day(self.store, project="/home/dev/app"),
+                         date.fromisoformat(local_day(DAY_3)))
+
+    def test_none_without_usage(self):
+        self.assertIsNone(queries.first_stored_day(self.store))
+
+
 class TotalsTest(StoreCase):
     def setUp(self):
         super().setUp()
