@@ -1,4 +1,4 @@
-"""Parser for Claude Code transcripts under ~/.claude/projects/<slug>/ (format notes in todo.md).
+"""Parser for Claude Code transcripts under ~/.claude/projects/<slug>/ (format notes in CLAUDE.md).
 
 A transcript is read from a byte offset, so a growing file (a live session) is never read from the start again:
 parse() returns a Chunk with what the new part holds and the offset to continue from. Only complete lines are

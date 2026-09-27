@@ -1,11 +1,12 @@
-# Defaults for claude-usage. Override any key in config.local.toml (gitignored): tables are merged key by key,
-# everything else is replaced. Relative paths are taken from the directory of this file.
+# Defaults for claude-usage, shipped with the package. Override any key in ~/.config/claude-usage/config.toml
+# (or config.local.toml in a source checkout): tables are merged key by key, everything else is replaced.
+# Relative paths here count from the data folder: data/ in a source checkout, else ~/.local/share/claude-usage.
 
 # Claude Code's transcripts, one folder per project.
 projects_dir = "~/.claude/projects"
 
 # The SQLite usage history. It keeps what Claude Code deletes after its cleanup period.
-store = "data/usage.sqlite"
+store = "usage.sqlite"
 
 # When the [prices] below were last checked against the official pricing page.
 prices_checked = 2026-09-27

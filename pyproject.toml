@@ -17,4 +17,4 @@ claude-usage = "claude_usage.__main__:main"
 packages = ["claude_usage"]
 
 [tool.setuptools.package-data]
-claude_usage = ["static/*.html"]
+claude_usage = ["static/*.html", "config.toml"]

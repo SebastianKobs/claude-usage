@@ -2,6 +2,8 @@
 import contextlib
 import io
 import json
+import os
+import shutil
 import subprocess
 import sys
 import unittest
@@ -164,6 +166,23 @@ class ArgumentTest(CliCase):
 
     def test_unknown_group_exits_2(self):
         self.assertEqual(self.run_cli("report", "--by", "weekday")[0], 2)
+
+
+class InstalledCopyTest(CliCase):
+    """The package on its own, as pip puts it into site-packages: no checkout, no config.toml next to it."""
+
+    def test_runs_from_a_copy_without_the_checkout(self):
+        site = self.tmp / "site"
+        shutil.copytree(REPO / "claude_usage", site / "claude_usage",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        environ = dict(os.environ, PYTHONPATH=str(site), XDG_CONFIG_HOME=str(self.tmp / "config"),
+                       XDG_DATA_HOME=str(self.tmp / "share"))
+        result = subprocess.run([sys.executable, "-m", "claude_usage", "--projects-dir", str(self.projects.root),
+                                 "scan"], cwd=self.tmp, env=environ, capture_output=True, text=True, timeout=60,
+                                check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("2 files scanned", result.stdout)
+        self.assertTrue((self.tmp / "share" / "claude-usage" / "usage.sqlite").exists())
 
 
 class ModuleTest(unittest.TestCase):

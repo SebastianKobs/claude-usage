@@ -1,6 +1,6 @@
-"""Command line: scan | report | serve. Settings come from config.toml (+ config.local.toml); --projects-dir and
---store override them, before or after the command. Only main() prints errors and picks the exit code: 0 on
-success, 1 on an error, 2 on bad arguments."""
+"""Command line: scan | report | serve. Settings come from the package's config.toml with the user's overrides
+(see config.py); --projects-dir and --store override them, before or after the command. Only main() prints errors
+and picks the exit code: 0 on success, 1 on an error, 2 on bad arguments."""
 import argparse
 import json
 import sqlite3
@@ -228,9 +228,10 @@ def days_option(text: str) -> int:
 def add_path_options(parser: argparse.ArgumentParser, default: Any) -> None:
     """--projects-dir and --store; on the commands with default SUPPRESS, so they don't override the global ones."""
     parser.add_argument("--projects-dir", type=Path, default=default, metavar="DIR",
-                        help="Claude Code's transcripts (default: projects_dir in config.toml, ~/.claude/projects)")
+                        help="Claude Code's transcripts (default: projects_dir in the config, ~/.claude/projects)")
     parser.add_argument("--store", type=Path, default=default, metavar="FILE",
-                        help="the SQLite history (default: store in config.toml, data/usage.sqlite)")
+                        help="the SQLite history (default: store in the config: data/usage.sqlite in a checkout, "
+                             "else ~/.local/share/claude-usage/usage.sqlite)")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -255,7 +256,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--no-scan", action="store_true", help="report the stored history without scanning")
 
     serve = commands.add_parser("serve", parents=[paths], help="the dashboard on http://127.0.0.1")
-    serve.add_argument("--port", type=int, help=f"port (default: serve.port in config.toml, {DEFAULT_PORT})")
+    serve.add_argument("--port", type=int, help=f"port (default: serve.port in the config, {DEFAULT_PORT})")
     serve.add_argument("--live-minutes", type=float,
                        help=f"a session is live if changed within this many minutes (default {DEFAULT_LIVE_MINUTES})")
     serve.add_argument("--project", metavar="PATH", help="only this project")

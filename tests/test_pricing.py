@@ -160,7 +160,7 @@ class ParseTest(unittest.TestCase):
 
 class ShippedPricesTest(unittest.TestCase):
     def setUp(self):
-        with (REPO / "config.toml").open("rb") as handle:
+        with (REPO / "claude_usage" / "config.toml").open("rb") as handle:
             self.config = tomllib.load(handle)
         self.prices = pricing.parse_prices(self.config["prices"])
 
