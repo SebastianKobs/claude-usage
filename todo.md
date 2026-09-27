@@ -169,10 +169,24 @@ claude-usage/
 
 ### `pricing.py`
 - **Config:** `[prices."<model-prefix>"]` with `input`, `cache_write_5m`, `cache_write_1h`, `cache_read` and
-  `output` in $/MTok, plus an optional `fast_multiplier`. Add a `prices_checked = "YYYY-MM-DD"` line.
-- **Lookup:** by longest prefix match on the model id. An unknown model gets `cost = None`, and the page shows "–".
-- **Filling in prices:** during implementation, load the `claude-api` skill for current prices; don't write
-  them from memory.
+  `output` in $/MTok, plus an optional `fast_multiplier`. The top-level `prices_checked = 2026-09-27` is a TOML
+  date and must sit before the first table.
+- **Lookup:** by longest prefix match on the model id; a `[1m]`-style suffix is ignored. An unknown model gets
+  `cost = None`, and the page shows "–".
+  - Dated-only models get a prefix like `claude-opus-4-20`, so it can't catch unknown 4.x ids.
+- **Fast mode:** any speed other than `standard`. The multiplier (2x on Opus 5.5, Opus 5 and Opus 4.8) applies to
+  every category, cache included. Without one, a fast request costs standard rates (Opus 4.6 does that).
+- **Not modelled:**
+  - the 1.1x for US-only inference: `usage.inference_geo` is always `not_available` in the real data
+  - long-context surcharges: there are none on 4.6 and later models
+  - the Batch discount and web search fees
+- **Prices:** from the official pricing page (checked 2026-09-27 via the `claude-api` skill and
+  platform.claude.com/docs/en/about-claude/pricing), not from memory.
+- **Cross-check against real data:** in 29 sessions with a `cost-state` record, our cost equals Claude Code's own
+  `costUSD` to the cent for most sessions (Opus 5.5, Opus 5, Opus 4.8, Sonnet 5). The deviations:
+  - We are higher where the last `cost-state` snapshot is older than the transcript.
+  - Sonnet is sometimes 5–12% lower: background calls that aren't in the transcripts.
+  - Haiku background calls are missing entirely ($1.40 over all sessions).
 
 ### `server.py` + `static/dashboard.html`
 - **Server:** `ThreadingHTTPServer` on `127.0.0.1` only (refuse other hosts). Command:
@@ -227,7 +241,7 @@ Write the test first, then the implementation, for each step:
    - a trailing line without `\n` is left for the next read; the offset stops before it
    - multi-byte UTF-8 and an unreadable line in the middle don't shift the offsets
    - a tool result in a later read than its call is still returned (as a `ToolResult`)
-3. **`test_pricing.py`:** prefix match, unknown model → None, the fast multiplier, the 1h cache-write price.
+3. ✅ **`test_pricing.py`:** prefix match, unknown model → None, the fast multiplier, the 1h cache-write price.
 4. **`test_store.py`:**
    - first scan fills the tables
    - unchanged file skipped
