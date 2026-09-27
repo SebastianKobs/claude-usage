@@ -100,26 +100,24 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
 .banner:empty { display: none; }
 
 /* figures */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .kpis { grid-template-columns: minmax(0, 1fr); } }
 .kpis .card { margin-bottom: 0; }
 .label { color: var(--text-secondary); font-size: 13px; }
 .hero { font-size: 48px; font-weight: 600; line-height: 1.1; margin-top: 4px; }
 .tile-value { font-size: 24px; font-weight: 600; margin-top: 4px; }
 .note { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
-.split-head { display: flex; justify-content: space-between; align-items: baseline; }
-.split-head h2 { margin: 0; }
-.split { display: flex; gap: 2px; height: 8px; margin: 8px 0 8px; }
+.split { display: flex; gap: 2px; height: 8px; margin: 10px 0 6px; }
 .split span { min-width: 3px; }
 .split span:first-child { border-radius: 4px 0 0 4px; }
 .split span:last-child { border-radius: 0 4px 4px 0; }
 .split span:only-child { border-radius: 4px; }
-.split-row { display: grid; grid-template-columns: 16px minmax(80px, auto) repeat(3, max-content) 1fr;
-  column-gap: 10px; align-items: baseline; font-size: 13px; margin-top: 4px; }
+.split-row { display: grid; grid-template-columns: 10px 1fr repeat(3, max-content); column-gap: 8px;
+  align-items: baseline; font-size: 12px; margin-top: 3px; cursor: default; }
 .split-row .swatch { margin-right: 0; }
 .split-number { text-align: right; font-variant-numeric: tabular-nums; }
-.split-note { color: var(--text-muted); font-size: 12px; }
-@media (max-width: 560px) { .split-row { grid-template-columns: 16px auto repeat(3, max-content); }
-  .split-note { grid-column: 2 / -1; } }
+
 
 /* live */
 .live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
@@ -205,7 +203,6 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 
   <div id="summary">
     <div class="kpis stack" id="kpis"></div>
-    <section class="card" id="input-split" aria-label="Input tokens: processed and from cache"></section>
 
     <section class="card" aria-labelledby="live-title">
       <h2 id="live-title">Live sessions <span id="live-window" class="muted"></span></h2>
@@ -378,43 +375,40 @@ function renderKpis(summary) {
     note ? el("div", {class: "note", text: note}) : null);
   const notes = [totals.unpriced_turns ? `${whole(totals.unpriced_turns)} turns of models without a price are not included`
                                        : "at API list prices"];
-  if (totals.web_searches) notes.push(`incl. ${whole(totals.web_searches)} web searches`);
+  if (totals.web_searches) notes.push(`incl. ${whole(totals.web_searches)} web searches, ${money(parts.web_search)}`);
   document.getElementById("kpis").replaceChildren(
     el("div", {class: "card hero-card"},
        el("div", {class: "label", text: `Estimated cost, ${rangeText()}`}),
        el("div", {class: "hero", text: money(totals.cost)}),
        el("div", {class: "note", text: notes.join(" · ")})),
     tile("Turns", whole(totals.turns), "API calls with usage"),
-    tile("Output tokens", compact(totals.output), `${money(parts.output)}`));
-  document.getElementById("input-split").replaceChildren(...inputSplit(totals, parts));
+    tile("Output tokens", compact(totals.output), `${money(parts.output)}`),
+    inputSplit(totals, parts));
 }
 
 // Input tokens as processed (new input + cache writes, full price or more) vs. from cache (cache reads, 0.1x): two
-// parts of one whole, so two steps of one hue rather than two categorical colors.
+// parts of one whole, so two steps of one hue rather than two categorical colors. A compact tile in the KPI row.
 function inputSplit(totals, parts) {
   const input = inputTotal(totals);
-  const processed = totals.new_input + totals.cache_write;
   const segments = [
-    {label: "Processed", tokens: processed, cost: parts.new_input + parts.cache_write, color: "var(--split-strong)",
-     note: `new input ${compact(totals.new_input)} + cache writes ${compact(totals.cache_write)}, billed at full price or more`},
+    {label: "Processed", tokens: totals.new_input + totals.cache_write, cost: parts.new_input + parts.cache_write,
+     color: "var(--split-strong)",
+     note: `New input ${compact(totals.new_input)} + cache writes ${compact(totals.cache_write)}, billed at full price or more`},
     {label: "From cache", tokens: totals.cache_read, cost: parts.cache_read, color: "var(--split-soft)",
-     note: "cache reads, billed at a tenth of the input price and not processed again"},
+     note: "Cache reads, billed at a tenth of the input price and not processed again"},
   ];
   const bar = el("div", {class: "split", role: "img",
                          "aria-label": segments.map(part => `${part.label} ${percent(part.tokens, input)}`).join(", ")},
     ...segments.filter(part => part.tokens > 0).map(part =>
       el("span", {style: `flex-grow:${part.tokens};background:${part.color}`})));
-  const rows = segments.map(part => el("div", {class: "split-row"},
+  const rows = segments.map(part => el("div", {class: "split-row", title: part.note},
     el("span", {class: "swatch", style: `background:${part.color}`}),
     el("span", {class: "split-label", text: part.label}),
     el("strong", {class: "split-number", text: compact(part.tokens)}),
     el("span", {class: "split-number secondary", text: percent(part.tokens, input)}),
-    el("span", {class: "split-number", text: money(part.cost)}),
-    el("span", {class: "split-note", text: part.note})));
-  const rest = [`output ${money(parts.output)}`];
-  if (parts.web_search) rest.push(`web search ${money(parts.web_search)}`);
-  return [el("div", {class: "split-head"}, el("h2", {text: "Input tokens"}), el("strong", {text: compact(input)})),
-          bar, ...rows, el("div", {class: "note", text: `The rest of the cost: ${rest.join(" · ")}`})];
+    el("span", {class: "split-number", text: money(part.cost)})));
+  return el("div", {class: "card"}, el("div", {class: "label", text: "Input tokens"}),
+            el("div", {class: "tile-value", text: compact(input)}), bar, ...rows);
 }
 
 function rangeText() { return state.days === 1 ? "today" : `last ${state.days} days`; }
