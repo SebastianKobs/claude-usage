@@ -101,14 +101,13 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
 
 /* figures */
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; }
-@media (min-width: 700px) { .kpis .hero-card { grid-column: span 2; } }
 .kpis .card { margin-bottom: 0; }
 .label { color: var(--text-secondary); font-size: 13px; }
 .hero { font-size: 48px; font-weight: 600; line-height: 1.1; margin-top: 4px; }
 .tile-value { font-size: 24px; font-weight: 600; margin-top: 4px; }
 .note { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
-.input-split { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--grid); }
 .split-head { display: flex; justify-content: space-between; align-items: baseline; }
+.split-head h2 { margin: 0; }
 .split { display: flex; gap: 2px; height: 8px; margin: 8px 0 8px; }
 .split span { min-width: 3px; }
 .split span:first-child { border-radius: 4px 0 0 4px; }
@@ -206,6 +205,7 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 
   <div id="summary">
     <div class="kpis stack" id="kpis"></div>
+    <section class="card" id="input-split" aria-label="Input tokens: processed and from cache"></section>
 
     <section class="card" aria-labelledby="live-title">
       <h2 id="live-title">Live sessions <span id="live-window" class="muted"></span></h2>
@@ -383,10 +383,10 @@ function renderKpis(summary) {
     el("div", {class: "card hero-card"},
        el("div", {class: "label", text: `Estimated cost, ${rangeText()}`}),
        el("div", {class: "hero", text: money(totals.cost)}),
-       el("div", {class: "note", text: notes.join(" · ")}),
-       inputSplit(totals, parts)),
+       el("div", {class: "note", text: notes.join(" · ")})),
     tile("Turns", whole(totals.turns), "API calls with usage"),
     tile("Output tokens", compact(totals.output), `${money(parts.output)}`));
+  document.getElementById("input-split").replaceChildren(...inputSplit(totals, parts));
 }
 
 // Input tokens as processed (new input + cache writes, full price or more) vs. from cache (cache reads, 0.1x): two
@@ -413,11 +413,8 @@ function inputSplit(totals, parts) {
     el("span", {class: "split-note", text: part.note})));
   const rest = [`output ${money(parts.output)}`];
   if (parts.web_search) rest.push(`web search ${money(parts.web_search)}`);
-  return el("div", {class: "input-split"},
-    el("div", {class: "split-head"}, el("span", {class: "label", text: "Input tokens"}),
-       el("strong", {text: compact(input)})),
-    bar, ...rows,
-    el("div", {class: "note", text: `The rest of the cost: ${rest.join(" · ")}`}));
+  return [el("div", {class: "split-head"}, el("h2", {text: "Input tokens"}), el("strong", {text: compact(input)})),
+          bar, ...rows, el("div", {class: "note", text: `The rest of the cost: ${rest.join(" · ")}`})];
 }
 
 function rangeText() { return state.days === 1 ? "today" : `last ${state.days} days`; }
