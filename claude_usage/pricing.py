@@ -88,18 +88,31 @@ def price_for(prices: Prices, model: str) -> Price | None:
     return prices[max(matches, key=len)]
 
 
-def cost(prices: Prices, model: str, speed: str, *, new_input: int, cache_write_5m: int, cache_write_1h: int,
-         cache_read: int, output: int) -> float | None:
-    """The estimated cost in $ of these token counts, or None for a model without a price. Any speed other than
-    standard counts as fast mode."""
+def cost_parts(prices: Prices, model: str, speed: str, *, new_input: int, cache_write_5m: int, cache_write_1h: int,
+               cache_read: int, output: int) -> dict[str, float] | None:
+    """The estimated cost in $ per category (new_input, cache_write, cache_read, output), or None for a model
+    without a price. Any speed other than standard counts as fast mode and multiplies every part."""
     price = price_for(prices, model)
     if price is None:
         return None
-    total = (new_input * price.input + cache_write_5m * price.cache_write_5m + cache_write_1h * price.cache_write_1h
-             + cache_read * price.cache_read + output * price.output) / PER_TOKENS
-    if speed != STANDARD_SPEED:
-        total *= price.fast_multiplier
-    return total
+    multiplier = price.fast_multiplier if speed != STANDARD_SPEED else 1.0
+    return {
+        "new_input": new_input * price.input * multiplier / PER_TOKENS,
+        "cache_write": (cache_write_5m * price.cache_write_5m + cache_write_1h * price.cache_write_1h)
+        * multiplier / PER_TOKENS,
+        "cache_read": cache_read * price.cache_read * multiplier / PER_TOKENS,
+        "output": output * price.output * multiplier / PER_TOKENS,
+    }
+
+
+def cost(prices: Prices, model: str, speed: str, *, new_input: int, cache_write_5m: int, cache_write_1h: int,
+         cache_read: int, output: int) -> float | None:
+    """The estimated cost in $ of these token counts, or None for a model without a price."""
+    parts = cost_parts(prices, model, speed, new_input=new_input, cache_write_5m=cache_write_5m,
+                       cache_write_1h=cache_write_1h, cache_read=cache_read, output=output)
+    if parts is None:
+        return None
+    return sum(parts.values())
 
 
 def web_search_cost(prices: Prices, searches: int) -> float:

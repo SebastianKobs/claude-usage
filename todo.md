@@ -257,7 +257,14 @@ claude-usage/
   - Views: live cards; a stacked bar chart per day by model; tables by agent type (main vs subagents), project and model; a session list that links to the drilldown.
   - Load the `dataviz` skill before writing the chart code.
   - As built:
-    - Hero figure: the estimated cost of the range, plus stat tiles for turns, output, input and cache-read share.
+    - Hero figure: the estimated cost of the range. Below it, the input tokens split into two parts, each with
+      tokens, share and cost:
+      - processed: new input and cache writes, billed at full price or more
+      - from cache: cache reads, billed at 0.1×
+      - The split is a two-step bar of one hue, validated as an ordinal ramp in both modes.
+      - A last line gives output and web search, so the parts add up to the total. The totals carry `cost_parts`
+        per category for this.
+      - Stat tiles for turns and output tokens follow.
     - "Over time", the first chart: estimated cost, input tokens and output tokens per day as three aligned line
       panels.
       - Each panel has its own y-axis and a shared time axis, so there's never a second axis on one plot.

@@ -126,6 +126,8 @@ class ApiTest(ServerCase):
         self.assertEqual(set(payload["day_model"][0]) >= {"day", "model", "turns", "output", "cost"}, True)
         self.assertEqual(payload["totals"]["turns"], 3)
         self.assertEqual(payload["totals"]["output"], 62)
+        self.assertEqual(set(payload["totals"]["cost_parts"]),
+                         {"new_input", "cache_write", "cache_read", "output", "web_search"})
 
     def test_summary_defaults_to_30_days(self):
         _, payload = self.get_json("/api/summary")

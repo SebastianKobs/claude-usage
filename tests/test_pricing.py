@@ -83,6 +83,31 @@ class CostTest(unittest.TestCase):
         self.assertEqual(cost("claude-opus-5"), 0.0)
 
 
+class CostPartsTest(unittest.TestCase):
+    def setUp(self):
+        self.prices = pricing.parse_prices(TABLE)
+        self.counts = {"new_input": MILLION, "cache_write_5m": MILLION, "cache_write_1h": MILLION,
+                       "cache_read": MILLION, "output": MILLION}
+
+    def test_parts_per_category(self):
+        parts = pricing.cost_parts(self.prices, "claude-opus-5", "standard", **self.counts)
+        self.assertEqual(parts, {"new_input": 5.0, "cache_write": 16.25, "cache_read": 0.5, "output": 25.0})
+
+    def test_parts_add_up_to_the_cost(self):
+        for speed in ("standard", "fast"):
+            with self.subTest(speed=speed):
+                parts = pricing.cost_parts(self.prices, "claude-opus-5", speed, **self.counts)
+                total = pricing.cost(self.prices, "claude-opus-5", speed, **self.counts)
+                self.assertAlmostEqual(sum(parts.values()), total)
+
+    def test_fast_mode_multiplies_every_part(self):
+        parts = pricing.cost_parts(self.prices, "claude-opus-5", "fast", **self.counts)
+        self.assertEqual(parts["cache_read"], 1.0)
+
+    def test_unknown_model_has_no_parts(self):
+        self.assertIsNone(pricing.cost_parts(self.prices, "claude-unknown", "standard", **self.counts))
+
+
 class WebSearchTest(unittest.TestCase):
     def test_default_fee(self):
         self.assertEqual(pricing.parse_prices(TABLE).web_search_per_1000, pricing.DEFAULT_WEB_SEARCH_PER_1000)

@@ -24,6 +24,8 @@
   --series-other: #a3a29b;
   --status-good: #0ca30c;
   --status-critical: #d03b3b;
+  --split-strong: #256abf;
+  --split-soft: #86b6ef;
 }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
@@ -40,6 +42,8 @@
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
     --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
     --series-other: #6b6a64;
+    --split-strong: #86b6ef;
+    --split-soft: #1c5cab;
   }
 }
 :root[data-theme="dark"] {
@@ -56,6 +60,8 @@
   --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
   --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
   --series-other: #6b6a64;
+  --split-strong: #86b6ef;
+  --split-soft: #1c5cab;
 }
 
 * { box-sizing: border-box; }
@@ -101,6 +107,20 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
 .hero { font-size: 48px; font-weight: 600; line-height: 1.1; margin-top: 4px; }
 .tile-value { font-size: 24px; font-weight: 600; margin-top: 4px; }
 .note { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+.input-split { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--grid); }
+.split-head { display: flex; justify-content: space-between; align-items: baseline; }
+.split { display: flex; gap: 2px; height: 8px; margin: 8px 0 8px; }
+.split span { min-width: 3px; }
+.split span:first-child { border-radius: 4px 0 0 4px; }
+.split span:last-child { border-radius: 0 4px 4px 0; }
+.split span:only-child { border-radius: 4px; }
+.split-row { display: grid; grid-template-columns: 16px minmax(80px, auto) repeat(3, max-content) 1fr;
+  column-gap: 10px; align-items: baseline; font-size: 13px; margin-top: 4px; }
+.split-row .swatch { margin-right: 0; }
+.split-number { text-align: right; font-variant-numeric: tabular-nums; }
+.split-note { color: var(--text-muted); font-size: 12px; }
+@media (max-width: 560px) { .split-row { grid-template-columns: 16px auto repeat(3, max-content); }
+  .split-note { grid-column: 2 / -1; } }
 
 /* live */
 .live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
@@ -280,7 +300,12 @@ function money(value) {
   if (Math.abs(value) >= 1000) return "$" + compactFormat.format(value);
   return "$" + value.toFixed(value >= 100 ? 0 : 2);
 }
-function percent(part, total) { return total ? Math.round(100 * part / total) + "%" : "–"; }
+function percent(part, total) {
+  if (!total) return "–";
+  const share = 100 * part / total;
+  // one decimal below 10%, so a small part doesn't read as 0% or a round 1%
+  return (share > 0 && share < 10 ? share.toFixed(1) : String(Math.round(share))) + "%";
+}
 function inputTotal(row) { return row.new_input + row.cache_write + row.cache_read; }
 
 function parseDay(text) {
@@ -347,21 +372,52 @@ function slotColor(slot) { return slot === null ? "var(--series-other)" : `var(-
 
 function renderKpis(summary) {
   const totals = summary.totals;
-  const input = inputTotal(totals);
+  const parts = totals.cost_parts;
   const tile = (label, value, note) => el("div", {class: "card"},
     el("div", {class: "label", text: label}), el("div", {class: "tile-value", text: value}),
     note ? el("div", {class: "note", text: note}) : null);
   const notes = [totals.unpriced_turns ? `${whole(totals.unpriced_turns)} turns of models without a price are not included`
                                        : "at API list prices"];
   if (totals.web_searches) notes.push(`incl. ${whole(totals.web_searches)} web searches`);
-  const heroNote = notes.join(" · ");
   document.getElementById("kpis").replaceChildren(
-    el("div", {class: "card hero-card"}, el("div", {class: "label", text: `Estimated cost, ${rangeText()}`}),
-       el("div", {class: "hero", text: money(totals.cost)}), el("div", {class: "note", text: heroNote})),
+    el("div", {class: "card hero-card"},
+       el("div", {class: "label", text: `Estimated cost, ${rangeText()}`}),
+       el("div", {class: "hero", text: money(totals.cost)}),
+       el("div", {class: "note", text: notes.join(" · ")}),
+       inputSplit(totals, parts)),
     tile("Turns", whole(totals.turns), "API calls with usage"),
-    tile("Output tokens", compact(totals.output)),
-    tile("Input tokens", compact(input), "new + cache writes + cache reads"),
-    tile("Cache reads", percent(totals.cache_read, input), "of input tokens"));
+    tile("Output tokens", compact(totals.output), `${money(parts.output)}`));
+}
+
+// Input tokens as processed (new input + cache writes, full price or more) vs. from cache (cache reads, 0.1x): two
+// parts of one whole, so two steps of one hue rather than two categorical colors.
+function inputSplit(totals, parts) {
+  const input = inputTotal(totals);
+  const processed = totals.new_input + totals.cache_write;
+  const segments = [
+    {label: "Processed", tokens: processed, cost: parts.new_input + parts.cache_write, color: "var(--split-strong)",
+     note: `new input ${compact(totals.new_input)} + cache writes ${compact(totals.cache_write)}, billed at full price or more`},
+    {label: "From cache", tokens: totals.cache_read, cost: parts.cache_read, color: "var(--split-soft)",
+     note: "cache reads, billed at a tenth of the input price and not processed again"},
+  ];
+  const bar = el("div", {class: "split", role: "img",
+                         "aria-label": segments.map(part => `${part.label} ${percent(part.tokens, input)}`).join(", ")},
+    ...segments.filter(part => part.tokens > 0).map(part =>
+      el("span", {style: `flex-grow:${part.tokens};background:${part.color}`})));
+  const rows = segments.map(part => el("div", {class: "split-row"},
+    el("span", {class: "swatch", style: `background:${part.color}`}),
+    el("span", {class: "split-label", text: part.label}),
+    el("strong", {class: "split-number", text: compact(part.tokens)}),
+    el("span", {class: "split-number secondary", text: percent(part.tokens, input)}),
+    el("span", {class: "split-number", text: money(part.cost)}),
+    el("span", {class: "split-note", text: part.note})));
+  const rest = [`output ${money(parts.output)}`];
+  if (parts.web_search) rest.push(`web search ${money(parts.web_search)}`);
+  return el("div", {class: "input-split"},
+    el("div", {class: "split-head"}, el("span", {class: "label", text: "Input tokens"}),
+       el("strong", {text: compact(input)})),
+    bar, ...rows,
+    el("div", {class: "note", text: `The rest of the cost: ${rest.join(" · ")}`}));
 }
 
 function rangeText() { return state.days === 1 ? "today" : `last ${state.days} days`; }

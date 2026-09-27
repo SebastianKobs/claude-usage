@@ -128,6 +128,7 @@ GROUPS = {
     "project": (("u.project", "project"),),
     "day_model": (("u.day", "day"), ("u.model", "model")),
 }
+COST_PARTS = ("new_input", "cache_write", "cache_read", "output", "web_search")
 BACKGROUND_FIELDS = ("new_input", "cache_write", "cache_read", "output", "web_searches")
 BACKGROUND_DESCRIPTION = "calls Claude Code counted that no transcript shows, e.g. Haiku for titles"
 DEFAULT_SESSION_LIMIT = 50
@@ -422,6 +423,7 @@ class UsageSum:
         self.tokens = dict.fromkeys(TOKEN_FIELDS, 0)
         self.web_searches = 0
         self.cost = 0.0
+        self.cost_parts = dict.fromkeys(COST_PARTS, 0.0)
         self.priced_rows = 0
         self.unpriced_rows = 0
         self.unpriced_turns = 0
@@ -435,8 +437,13 @@ class UsageSum:
         self.turns += row["turns"]
         searches = row["web_searches"] or 0
         self.web_searches += searches
-        self.cost += pricing.web_search_cost(prices, searches)
-        cost = pricing.cost(prices, row["price_model"], row["speed"], **counts)
+        fee = pricing.web_search_cost(prices, searches)
+        self.cost += fee
+        self.cost_parts["web_search"] += fee
+        parts = pricing.cost_parts(prices, row["price_model"], row["speed"], **counts)
+        cost = None if parts is None else sum(parts.values())
+        for part, value in (parts or {}).items():
+            self.cost_parts[part] += value
         if cost is None:
             self.unpriced_turns += row["turns"]
             self.unpriced_rows += row["row_count"]
@@ -449,7 +456,8 @@ class UsageSum:
         cost = None if self.priced_rows == 0 and self.unpriced_rows > 0 else self.cost
         return {"turns": self.turns, **self.tokens,
                 "cache_write": self.tokens["cache_write_5m"] + self.tokens["cache_write_1h"],
-                "web_searches": self.web_searches, "cost": cost, "unpriced_turns": self.unpriced_turns}
+                "web_searches": self.web_searches, "cost": cost, "cost_parts": dict(self.cost_parts),
+                "unpriced_turns": self.unpriced_turns}
 
 
 USAGE_FIELDS = ("turns", *TOKEN_FIELDS, "cache_write", "web_searches", "unpriced_turns")
@@ -460,6 +468,7 @@ def combined(rows: list[Row]) -> Row:
     total: Row = {field: sum(row[field] for row in rows) for field in USAGE_FIELDS}
     costs = [row["cost"] for row in rows if row["cost"] is not None]
     total["cost"] = sum(costs) if costs or not rows else None
+    total["cost_parts"] = {part: sum(row["cost_parts"][part] for row in rows) for part in COST_PARTS}
     return total
 
 

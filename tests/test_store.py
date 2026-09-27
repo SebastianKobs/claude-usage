@@ -398,6 +398,7 @@ class BackgroundTest(StoreCase):
         by_model = {row["model"]: row for row in store.totals_by(self.store, "model", None, PRICES)}
         self.assertEqual(by_model[HAIKU]["web_searches"], 9)
         self.assertAlmostEqual(by_model[HAIKU]["cost"], 0.09)
+        self.assertAlmostEqual(by_model[HAIKU]["cost_parts"]["web_search"], 0.09)
 
     def test_web_searches_in_the_transcripts_are_subtracted(self):
         self.main.assistant("m9", [text_block("w")], dict(usage(output=0), server_tool_use={"web_search_requests": 2}))
@@ -512,6 +513,20 @@ class TotalsTest(StoreCase):
         self.assertEqual((totals["claude-opus-5"]["cache_write_5m"], totals["claude-opus-5"]["cache_write_1h"],
                           totals["claude-opus-5"]["cache_write"], totals["claude-opus-5"]["cache_read"]),
                          (MILLION, MILLION, 2 * MILLION, MILLION))
+
+    def test_cost_parts_add_up_to_the_cost(self):
+        for row in store.totals_by(self.store, "day", None, PRICES):
+            with self.subTest(day=row["day"]):
+                self.assertAlmostEqual(sum(row["cost_parts"].values()), row["cost"])
+        opus = self.totals("model")["claude-opus-5"]["cost_parts"]
+        self.assertEqual(opus, {"new_input": 0.0, "cache_write": 16.25, "cache_read": 0.5, "output": 25.0,
+                                "web_search": 0.0})
+
+    def test_combined_adds_the_cost_parts(self):
+        rows = store.totals_by(self.store, "model", None, PRICES)
+        total = store.combined(rows)
+        self.assertAlmostEqual(total["cost_parts"]["output"], 10.0 + 25.0)     # Sonnet m1, Opus agent m3
+        self.assertAlmostEqual(sum(total["cost_parts"].values()), total["cost"])
 
     def test_unknown_model_has_no_cost(self):
         mystery = self.totals("model")["claude-mystery-9"]
