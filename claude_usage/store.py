@@ -132,6 +132,8 @@ COST_PARTS = ("new_input", "cache_write", "cache_read", "output", "web_search")
 BACKGROUND_FIELDS = ("new_input", "cache_write", "cache_read", "output", "web_searches")
 BACKGROUND_DESCRIPTION = "calls Claude Code counted that no transcript shows, e.g. Haiku for titles"
 DEFAULT_SESSION_LIMIT = 50
+DEFAULT_COSTLY_LIMIT = 10
+NO_LIMIT = -1                             # SQLite's LIMIT for all rows
 
 Row = dict[str, Any]
 
@@ -525,9 +527,9 @@ def activity_time(mtime_ns: int) -> str:
 
 
 def turn_contexts(store: Store, path: str) -> list[sqlite3.Row]:
-    """The file's messages in time order with their context size, model and output."""
+    """The file's messages in time order with their time, context size, model and output."""
     return store.connection.execute(
-        f"SELECT {CONTEXT} AS context, m.output AS output, m.model AS model FROM messages m "
+        f"SELECT m.ts AS ts, {CONTEXT} AS context, m.output AS output, m.model AS model FROM messages m "
         "WHERE m.path = ? ORDER BY m.ts, m.rowid", (path,)).fetchall()
 
 
@@ -588,6 +590,7 @@ def agent_detail(store: Store, row: sqlite3.Row, prices: pricing.Prices) -> Row:
             "context_first": turns[0]["context"] if turns else None,
             "context_last": turns[-1]["context"] if turns else None,
             "input_total": sum(turn["context"] for turn in turns),
+            "context_per_turn": [{"ts": turn["ts"], "context": turn["context"]} for turn in turns],
             "tools": [dict(tool) for tool in tools]}
 
 
@@ -617,12 +620,24 @@ def background_detail(store: Store, session_id: str, prices: pricing.Prices) -> 
     return [{"agent_id": None, "agent_type": BACKGROUND, "description": BACKGROUND_DESCRIPTION,
              "first_ts": rows[0]["ts"], "last_ts": rows[0]["ts"], "models": [row["model"] for row in rows],
              **usage, "context_first": None, "context_last": None,
-             "input_total": usage["new_input"] + usage["cache_write"] + usage["cache_read"], "tools": []}]
+             "input_total": usage["new_input"] + usage["cache_write"] + usage["cache_read"],
+             "context_per_turn": [], "tools": []}]
 
 
-def recent_sessions(store: Store, since: date | None, prices: pricing.Prices, limit: int = DEFAULT_SESSION_LIMIT,
-                    project: str | None = None) -> list[Row]:
-    """Sessions with messages from the local day since on (all without since), newest first, with totals."""
+def main_context(store: Store, session_id: str) -> Row:
+    """The average and peak context per turn of the session's main thread (None without turns). Every turn reads
+    its whole context again, so these show how far a session grew before a /clear or a compaction."""
+    row = store.connection.execute(
+        f"SELECT AVG({CONTEXT}) AS average, MAX({CONTEXT}) AS peak FROM messages m "
+        "JOIN transcripts t ON t.path = m.path WHERE t.session_id = ? AND t.agent_id IS NULL",
+        (session_id,)).fetchone()
+    return {"context_avg": None if row["average"] is None else round(row["average"]), "context_peak": row["peak"]}
+
+
+def recent_sessions(store: Store, since: date | None, prices: pricing.Prices,
+                    limit: int | None = DEFAULT_SESSION_LIMIT, project: str | None = None) -> list[Row]:
+    """Sessions with messages from the local day since on (all without since), newest first, with totals and the
+    main thread's context; limit None lists every one."""
     rows = store.connection.execute("""
         SELECT session_id, MIN(first_ts) AS first_ts, MAX(last_ts) AS last_ts,
                SUM(agent_id IS NOT NULL) AS subagents
@@ -632,11 +647,19 @@ def recent_sessions(store: Store, since: date | None, prices: pricing.Prices, li
         GROUP BY session_id
         ORDER BY MAX(last_ts) DESC
         LIMIT :limit
-        """, {"since": since_text(since), "limit": limit, "slug": project_slug(project)}).fetchall()
+        """, {"since": since_text(since), "limit": NO_LIMIT if limit is None else limit,
+              "slug": project_slug(project)}).fetchall()
     sessions = []
     for row in rows:
         main = session_rows(store, row["session_id"])[0]
         sessions.append({"session_id": row["session_id"], "project": main["project"], "title": main["title"],
                          "first_ts": row["first_ts"], "last_ts": row["last_ts"], "subagents": row["subagents"],
-                         **usage_where(store, "u.session_id = ?", (row["session_id"],), prices).as_dict()})
+                         **usage_where(store, "u.session_id = ?", (row["session_id"],), prices).as_dict(),
+                         **main_context(store, row["session_id"])})
     return sessions
+
+
+def costliest(sessions: list[Row], limit: int = DEFAULT_COSTLY_LIMIT) -> list[Row]:
+    """The `limit` costliest of recent_sessions() rows, sessions without a price last; ties keep their order."""
+    ranked = sorted(sessions, key=lambda session: -1.0 if session["cost"] is None else session["cost"], reverse=True)
+    return ranked[:limit]

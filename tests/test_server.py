@@ -120,7 +120,7 @@ class ApiTest(ServerCase):
         self.assertEqual(payload["days"], 7)
         self.assertEqual(payload["since"], (date.today() - timedelta(days=6)).isoformat())
         self.assertEqual(payload["prices_checked"], "2026-09-27")
-        for key in ("day_model", "agent_type", "project", "model", "sessions"):
+        for key in ("day_model", "agent_type", "project", "model", "sessions", "costly_sessions"):
             with self.subTest(key=key):
                 self.assertIsInstance(payload[key], list)
         self.assertEqual(set(payload["day_model"][0]) >= {"day", "model", "turns", "output", "cost"}, True)
@@ -147,6 +147,12 @@ class ApiTest(ServerCase):
         self.assertEqual((payload["title"], payload["prompt"]), ("Parser fix", "Fix the parser"))
         self.assertEqual([agent["agent_type"] for agent in payload["agents"]], ["main", "general-purpose"])
         self.assertEqual(payload["agents"][0]["tools"], [{"tool": "Read", "calls": 1, "result_chars": 3}])
+
+    def test_costly_sessions_rank_every_session_by_cost(self):
+        _, payload = self.get_json("/api/summary?days=7")
+        self.assertEqual([session["session_id"] for session in payload["costly_sessions"]], ["s1", "s2"])
+        self.assertEqual(set(payload["costly_sessions"][0]) >= {"cost", "cost_parts", "context_avg", "context_peak"},
+                         True)
 
     def test_unknown_session_is_404(self):
         status, payload = self.get_json("/api/session/nope")

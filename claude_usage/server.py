@@ -94,16 +94,18 @@ class UsageApp:
         return {"minutes": self.live_minutes, "sessions": sessions}
 
     def summary(self, days: int) -> Payload:
-        """/api/summary: totals of the last `days` local days (today included) and the sessions in them."""
+        """/api/summary: totals of the last `days` local days (today included), the newest sessions in them and
+        the costliest."""
         since = date.today() - timedelta(days=days - 1)
         with self.lock:
             self.refresh()
             groups = {group: store.totals_by(self.store, group, since, self.prices, project=self.project)
                       for group in ("day_model", "agent_type", "project", "model")}
-            sessions = store.recent_sessions(self.store, since, self.prices, project=self.project)
+            # every session of the range once: the newest for the list, the costliest for the ranking
+            sessions = store.recent_sessions(self.store, since, self.prices, limit=None, project=self.project)
         return {"days": days, "since": since.isoformat(), "project_filter": self.project,
                 "prices_checked": self.prices_checked, "totals": store.combined(groups["model"]), **groups,
-                "sessions": sessions}
+                "sessions": sessions[:store.DEFAULT_SESSION_LIMIT], "costly_sessions": store.costliest(sessions)}
 
     def session(self, session_id: str) -> Payload | None:
         """/api/session/<id>, or None for an unknown id."""

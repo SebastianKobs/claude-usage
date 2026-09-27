@@ -703,6 +703,18 @@ class SessionDetailTest(StoreCase):
         self.assertIsNone(detail["prompt"])
         self.assertEqual(detail["turns"], 3)
 
+    def test_context_per_turn_in_time_order(self):
+        main = store.session_detail(self.store, "s1", PRICES)["agents"][0]
+        self.assertEqual([turn["context"] for turn in main["context_per_turn"]], [1010, 1205])
+        timestamps = [turn["ts"] for turn in main["context_per_turn"]]
+        self.assertEqual(timestamps, sorted(timestamps))
+
+    def test_background_has_no_context_per_turn(self):
+        self.main.cost_state({"claude-sonnet-5": (100, 5000, 5000, 500, 0.1)})
+        self.scan()
+        agents = store.session_detail(self.store, "s1", PRICES)["agents"]
+        self.assertEqual((agents[-1]["agent_type"], agents[-1]["context_per_turn"]), (store.BACKGROUND, []))
+
 
 class RecentSessionsTest(StoreCase):
     def setUp(self):
@@ -729,6 +741,70 @@ class RecentSessionsTest(StoreCase):
         since = date.fromisoformat(local_day(DAY_3))
         self.assertEqual([session["session_id"] for session in store.recent_sessions(self.store, since, PRICES)],
                          ["s2"])
+
+    def test_no_limit_lists_every_session(self):
+        self.assertEqual(len(store.recent_sessions(self.store, None, PRICES, limit=None)), 2)
+
+
+class SessionContextTest(StoreCase):
+    def setUp(self):
+        super().setUp()
+        main = self.projects.session("s1")
+        main.assistant("m1", [text_block("a")], usage(new=10, cache_5m=90, cache_read=900))
+        main.assistant("m2", [text_block("b")], usage(new=10, cache_5m=90, cache_read=2900))
+        self.projects.subagent("s1", "a1").assistant("m3", [text_block("c")], usage(cache_read=50_000))
+        self.projects.subagent("s2", "a2").assistant("m4", [text_block("d")], usage(cache_read=50_000))
+        self.scan()
+
+    def sessions(self):
+        """recent_sessions by session id."""
+        return {session["session_id"]: session for session in store.recent_sessions(self.store, None, PRICES)}
+
+    def test_average_and_peak_context_of_the_main_thread(self):
+        session = self.sessions()["s1"]
+        self.assertEqual((session["context_avg"], session["context_peak"]), (2000, 3000))
+
+    def test_no_main_thread_turns_means_no_context(self):
+        session = self.sessions()["s2"]
+        self.assertEqual((session["context_avg"], session["context_peak"]), (None, None))
+
+
+class CostliestTest(StoreCase):
+    def setUp(self):
+        super().setUp()
+        dear = self.projects.session("dear")
+        dear.at(DAY_1).assistant("m1", [text_block("a")], usage(cache_read=3 * MILLION, output=100))
+        self.projects.subagent("dear", "a1").at(DAY_1).assistant("m2", [text_block("b")],
+                                                                 usage(cache_read=5 * MILLION))
+        cheap = self.projects.session("cheap")
+        cheap.at(DAY_3).assistant("m3", [text_block("c")], usage(new=10, output=10))
+        elsewhere = self.projects.session("elsewhere", project="/home/dev/other")
+        elsewhere.at(DAY_3).assistant("m4", [text_block("d")], usage(output=1000))
+        unpriced = self.projects.session("unpriced")
+        unpriced.at(DAY_3).assistant("m5", [text_block("e")], usage(output=MILLION), model="claude-unknown-9")
+        self.scan()
+
+    def costliest(self, limit=10, since=None, project=None):
+        """The session ids of costliest() over every session from since on."""
+        sessions = store.recent_sessions(self.store, since, PRICES, limit=None, project=project)
+        return [session["session_id"] for session in store.costliest(sessions, limit)]
+
+    def test_costliest_first_and_unpriced_last(self):
+        self.assertEqual(self.costliest(), ["dear", "elsewhere", "cheap", "unpriced"])
+
+    def test_limit(self):
+        self.assertEqual(self.costliest(limit=2), ["dear", "elsewhere"])
+
+    def test_since_and_project(self):
+        self.assertEqual(self.costliest(since=date.fromisoformat(local_day(DAY_3))),
+                         ["elsewhere", "cheap", "unpriced"])
+        self.assertEqual(self.costliest(project="/home/dev/app"), ["dear", "cheap", "unpriced"])
+
+    def test_the_cost_counts_the_subagents(self):
+        sessions = store.recent_sessions(self.store, None, PRICES, limit=None)
+        dear = store.costliest(sessions, 1)[0]
+        self.assertAlmostEqual(dear["cost"], (8 * MILLION * 0.2 + 100 * 10.0) / MILLION)
+        self.assertAlmostEqual(dear["cost_parts"]["cache_read"], 8 * MILLION * 0.2 / MILLION)
 
 
 if __name__ == "__main__":
