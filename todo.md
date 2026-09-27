@@ -290,6 +290,12 @@ claude-usage/
       - Each gimmick has its own copy for headings, KPI labels and the footer (`COPY` map).
       - The chart series keep the validated dark-mode steps, so the data stays readable.
       - Animations stop under `prefers-reduced-motion`.
+    - Contrast, checked for all six themes (2026-09-27):
+      - Text tokens and the accent colors used as text reach 4.5:1 on the card surface and the page. Light-mode
+        muted text is `#6f6e69`, darker than the reference palette's `#898781`, for that.
+      - Chart marks and the input bar reach 3:1.
+      - The exception is categorical slots 3–5 in light mode (2.1–2.7:1), unchanged from the validated palette.
+        The skill's relief rule covers them: both charts have a legend, a table view and tooltips.
     - All data goes into the DOM through `textContent`.
 
 ### `__main__.py` (CLI, argparse, `main(argv=None) -> int`)

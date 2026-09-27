@@ -14,18 +14,18 @@
   --surface: #fcfcfb;
   --text-primary: #0b0b0b;
   --text-secondary: #52514e;
-  --text-muted: #898781;
+  --text-muted: #6f6e69;          /* darker than the reference palette's #898781, for 4.5:1 on small text */
   --grid: #e1e0d9;
   --axis: #c3c2b7;
   --border: rgba(11, 11, 11, 0.10);
   --wash: rgba(11, 11, 11, 0.04);
   --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
   --series-5: #e87ba4; --series-6: #008300; --series-7: #4a3aa7; --series-8: #e34948;
-  --series-other: #a3a29b;
+  --series-other: #898781;
   --status-good: #0ca30c;
   --status-critical: #d03b3b;
-  --split-strong: #256abf;
-  --split-soft: #86b6ef;
+  --split-strong: #184f95;
+  --split-soft: #3987e5;
 }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
@@ -43,7 +43,7 @@
     --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
     --series-other: #6b6a64;
     --split-strong: #86b6ef;
-    --split-soft: #1c5cab;
+    --split-soft: #256abf;
   }
 }
 :root[data-theme="dark"] {
@@ -61,7 +61,7 @@
   --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
   --series-other: #6b6a64;
   --split-strong: #86b6ef;
-  --split-soft: #1c5cab;
+  --split-soft: #256abf;
 }
 
 /* Gimmick themes ("Just for fun" in the theme picker). Each restyles the chrome around the data; the chart series
@@ -72,7 +72,7 @@
   --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
   --series-other: #6b6a64;
   --split-strong: #86b6ef;
-  --split-soft: #1c5cab;
+  --split-soft: #256abf;
 }
 
 /* Terminal hacker: phosphor green on black, amber labels, monospace, shell-prompt headings */
@@ -115,7 +115,7 @@
   --surface: #0a0a0c;
   --text-primary: #fafafa;
   --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+  --text-muted: #85858e;
   --grid: #1f1f23;
   --axis: #2e2e33;
   --border: rgba(255, 255, 255, 0.10);
@@ -197,7 +197,7 @@
   border-radius: 999px; border-color: var(--rgb-magenta); font-weight: 700;
   box-shadow: 0 0 12px rgba(255, 0, 229, 0.35);
 }
-[data-theme="rgb"] button[aria-pressed="true"] { background: var(--rgb-magenta); color: #ffffff; }
+[data-theme="rgb"] button[aria-pressed="true"] { background: var(--rgb-magenta); color: #050716; }
 [data-theme="rgb"] .tooltip { border-color: var(--rgb-cyan); box-shadow: 0 0 18px rgba(0, 229, 255, 0.35); }
 [data-theme="rgb"] .chart svg path[stroke], [data-theme="hacker"] .chart svg path[stroke] {
   filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.35));
