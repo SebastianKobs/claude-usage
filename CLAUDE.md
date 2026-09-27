@@ -9,7 +9,9 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
   `unittest`).
 - **Tests:** `make test` runs both suites.
   - the app: `python3 -m unittest discover -s tests` (`make test-app`)
-  - the guard hook: `python3 -m unittest discover -s .claude/tests` (`make test-guard`)
+  - the guard hook: `python3 -m unittest discover -s .claude/hooks/project-guard/tests` (`make test-guard`)
+  - The guard is a submodule. Clone with `--recurse-submodules`, or run `git submodule update --init`.
+    Change it in its own repo, then commit the new submodule commit here.
 - **Never read real transcripts in tests.** Tests build their own under `tests/.tmp/` (see `tests/helpers.py`) and
   pass temp paths via `--projects-dir` and `--store`. Real `~/.claude/projects` is only read to verify a change
   against real data, and only when the user asks. Print counts and totals then, never prompt or message text.
@@ -50,7 +52,8 @@ claude_usage/
   server.py                  loopback-only http.server + JSON API
   static/dashboard.html      the whole page: vanilla JS, inline SVG, no external resources
 tests/                       helpers.py (projects-folder and transcript builders) and one test file per module
-.claude/                     the guard hook (hooks/guard.py, guard.yml) and its tests
+.claude/hooks/project-guard/  the guard hook, a git submodule (github.com/SebastianKobs/claude-project-guard, see its
+                             README and CLAUDE.md); project overrides in .claude/guard.yml
 ```
 
 ## Transcript format

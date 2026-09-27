@@ -2,9 +2,8 @@
 data/
 config.local.toml
 
-# test scratch directories
+# test scratch directories (the guard hook has its own .gitignore)
 tests/.tmp/
-.claude/tests/.tmp/
 
 # per-developer Claude Code and guard settings
 .claude/settings.local.json

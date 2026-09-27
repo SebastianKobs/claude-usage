@@ -75,11 +75,11 @@ test-app: ## the app's tests
 	@$(PYTHON) -m unittest discover -s tests
 
 test-guard: ## the guard hook's tests
-	@$(PYTHON) -m unittest discover -s .claude/tests
+	@$(PYTHON) -m unittest discover -s .claude/hooks/project-guard/tests
 
 clean: ## remove caches and test scratch folders (never data/)
 	@find . -name __pycache__ -type d -prune -exec rm -rf {} +
-	@rm -rf tests/.tmp .claude/tests/.tmp *.egg-info build dist
+	@rm -rf tests/.tmp .claude/hooks/project-guard/tests/.tmp *.egg-info build dist
 
 cron-line: ## print a crontab line that keeps the history without the dashboard
 	@echo "*/30 * * * * cd $(CURDIR) && $(PYTHON) -m claude_usage scan >/dev/null 2>&1"
