@@ -9,6 +9,12 @@
   --series-other: #6b6a64;
   --split-strong: #86b6ef;
   --split-soft: #256abf;
+  --hint-warning-edge: #fab219;
+  --code-keyword: #b9b5f4; --code-string: #7eb779; --code-number: #ec9577; --code-comment: #a3a29b;
+  --code-title: #80b2f1; --code-attr: #f1adc0; --code-addition: #7eb779; --code-deletion: #f5a5a1;
+  --shade-ink: #ffffff;
+  --shade-step-1: 17.2%; --shade-step-2: 17.2%; --shade-step-3: 17.2%; --shade-step-4: 19.7%; --shade-step-5: 17.2%;
+  --shade-step-6: 13.8%; --shade-step-7: 19.7%; --shade-step-8: 19.7%; --shade-step-other: 13.6%;
 }
 
 @media (prefers-reduced-motion: reduce) {

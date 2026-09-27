@@ -27,10 +27,12 @@ function renderSummary() {
   const summary = state.summary;
   if (!summary) return;
   renderKpis(summary);
+  renderRuntime(summary);
   renderDayNav();
   renderTrend(summary);
   renderChart(summary);
   renderTables(summary);
+  renderLimits(summary);
   const scope = summary.project_filter ? `project ${summary.project_filter}` : "all projects";
   document.getElementById("scope").textContent = `· ${scope}`;
   document.getElementById("footer").textContent = "Estimated cost at Claude API list prices" +
@@ -111,7 +113,7 @@ function setup() {
     pressed("metric", "metric", state.metric);
     if (state.summary) renderChart(state.summary);
   });
-  for (const name of ["chart", "trend", "costly"]) {
+  for (const name of ["chart", "trend", "costly", "limits"]) {
     document.getElementById(`${name}-table-toggle`).addEventListener("click", event => {
       const table = document.getElementById(`${name}-table`);
       table.hidden = !table.hidden;
@@ -128,9 +130,11 @@ function setup() {
     if (!state.summary) return;
     renderTrend(state.summary);
     renderChart(state.summary);
+    renderLimits(state.summary);
   });
   resize.observe(document.getElementById("chart"));
   resize.observe(document.getElementById("trend"));
+  resize.observe(document.getElementById("limits"));
   resize.observe(document.getElementById("drilldown"));
 
   loadLive();

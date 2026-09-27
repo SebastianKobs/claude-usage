@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 from claude_usage import __main__ as cli
+from claude_usage import config
 from claude_usage import server
 from helpers import TempDirTestCase
 from helpers import text_block
@@ -28,12 +29,12 @@ class CliCase(TempDirTestCase):
     def setUp(self):
         super().setUp()
         now = datetime.now(UTC)
-        main = self.projects.session("s1", project="/home/dev/app").at(now)
-        main.user("Fix the parser")
-        main.ai_title("Parser fix")
-        main.assistant("m1", [tool_use_block("t1", "Read")], usage(new=10, cache_read=100, output=50),
-                       model="claude-sonnet-5")
-        main.tool_result("t1", "abc")
+        self.main = self.projects.session("s1", project="/home/dev/app").at(now)
+        self.main.user("Fix the parser")
+        self.main.ai_title("Parser fix")
+        self.main.assistant("m1", [tool_use_block("t1", "Read")], usage(new=10, cache_read=100, output=50),
+                            model="claude-sonnet-5")
+        self.main.tool_result("t1", "abc")
         other = self.projects.session("s2", project="/home/dev/other").at(now)
         other.assistant("m2", [text_block("x")], usage(output=7), model="claude-opus-5-5")
 
@@ -94,6 +95,23 @@ class ReportCommandTest(CliCase):
         projects = sorted(row["project"] for row in json.loads(out)["rows"])
         self.assertEqual(projects, ["/home/dev/app", "/home/dev/other"])
 
+    def test_report_by_skill(self):
+        self.main.assistant("m9", [text_block("s")], usage(output=3), attributionSkill="dataviz")
+        code, out, _ = self.run_cli("report", "--by", "skill", "--json")
+        self.assertEqual(code, 0)
+        self.assertIn(("dataviz", 3), [(row["skill"], row["output"]) for row in json.loads(out)["rows"]])
+
+    def test_report_text_names_the_unattributed_turns(self):
+        _, out, _ = self.run_cli("report", "--by", "mcp_server")
+        self.assertIn("(none)", out)
+        self.assertNotIn("None", out)
+
+    def test_report_by_effort(self):
+        self.main.assistant("m9", [text_block("e")], usage(output=3), effort="medium")
+        code, out, _ = self.run_cli("report", "--by", "effort")
+        self.assertEqual(code, 0)
+        self.assertIn("medium", out)
+
     def test_report_text(self):
         code, out, _ = self.run_cli("report", "--by", "model")
         self.assertEqual(code, 0)
@@ -126,6 +144,33 @@ class ReportCommandTest(CliCase):
         self.assertIn("main", out)
         self.assertIn("Read", out)
 
+    def test_session_text_shows_the_run_totals(self):
+        self.main.cost_state({}, totalDuration=600000, totalAPIDuration=240000, totalAPIDurationWithoutRetries=200000,
+                             totalToolDuration=90000, totalLinesAdded=150, totalLinesRemoved=50)
+        _, out, _ = self.run_cli("report", "--session", "s1")
+        self.assertIn("Run: 10 min wall-clock, API 4 min (3 min 20 s without retries), tools 1 min 30 s, "
+                      "lines +150 / -50", out)
+
+    def test_session_text_shows_skills_mcp_servers_and_api_errors(self):
+        self.main.assistant("m9", [text_block("s")], usage(output=3), attributionSkill="dataviz",
+                            attributionMcpServer="codebase-memory-mcp")
+        self.main.api_error("e1")
+        _, out, _ = self.run_cli("report", "--session", "s1")
+        for expected in ("Skill", "dataviz", "MCP server", "codebase-memory-mcp", "rate_limit", "five_hour"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, out)
+
+    def test_session_text_marks_estimated_run_totals(self):
+        _, out, _ = self.run_cli("report", "--session", "s1")
+        self.assertIn("Run (estimated from the transcripts; tool time includes waiting for permission): ", out)
+        self.assertNotIn("without retries", out)
+
+    def test_session_text_shows_usage_per_model_and_effort(self):
+        self.main.assistant("m9", [text_block("e")], usage(output=3), effort="max")
+        _, out, _ = self.run_cli("report", "--session", "s1")
+        self.assertIn("Model / effort", out)
+        self.assertIn("  max", out)
+
     def test_unknown_session_exits_1(self):
         code, _, err = self.run_cli("report", "--session", "nope")
         self.assertEqual(code, 1)
@@ -149,6 +194,16 @@ class ServeCommandTest(CliCase):
             code, _, err = self.run_cli("serve", "--port", "8765")
         self.assertEqual(code, 1)
         self.assertIn("Address already in use", err)
+
+
+    def test_a_bad_compact_setting_exits_1_without_a_traceback(self):
+        settings = config.load(overrides=[])
+        settings.values["chat"] = {"compact_hint_tokens": "lots"}
+        with mock.patch.object(cli.config, "load", return_value=settings):
+            code, _, err = self.run_cli("serve", "--port", "8765")
+        self.assertEqual(code, 1)
+        self.assertIn("compact_hint_tokens", err)
+        self.assertNotIn("Traceback", err)
 
 
 class ArgumentTest(CliCase):

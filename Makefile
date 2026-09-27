@@ -15,7 +15,7 @@ ID ?=
 SERVE_OPTIONS := $(if $(PORT),--port $(PORT)) $(if $(LIVE_MINUTES),--live-minutes $(LIVE_MINUTES))
 
 .DEFAULT_GOAL := help
-.PHONY: help start stop restart status logs scan report session test test-app test-guard clean cron-line
+.PHONY: help start stop restart status logs scan report session test clean cron-line
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
@@ -69,17 +69,12 @@ session: ## one session's drilldown (ID=<session-id>)
 	@if [ -z "$(ID)" ]; then echo "usage: make session ID=<session-id>"; exit 2; fi
 	@$(CLI) report --session $(ID) $(ARGS)
 
-test: test-app test-guard ## run all tests
-
-test-app: ## the app's tests
+test: ## run the tests
 	@$(PYTHON) -m unittest discover -s tests
-
-test-guard: ## the guard hook's tests
-	@$(PYTHON) -m unittest discover -s .claude/hooks/project-guard/tests
 
 clean: ## remove caches and test scratch folders (never data/)
 	@find . -name __pycache__ -type d -prune -exec rm -rf {} +
-	@rm -rf tests/.tmp .claude/hooks/project-guard/tests/.tmp *.egg-info build dist
+	@rm -rf tests/.tmp *.egg-info build dist
 
 cron-line: ## print a crontab line that keeps the history without the dashboard
 	@echo "*/30 * * * * cd $(CURDIR) && $(PYTHON) -m claude_usage scan >/dev/null 2>&1"

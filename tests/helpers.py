@@ -55,6 +55,18 @@ def tool_use_block(tool_use_id, name, tool_input=None):
     return {"type": "tool_use", "id": tool_use_id, "name": name, "input": tool_input or {}}
 
 
+def edit_result(*hunks):
+    """The toolUseResult of an Edit: each hunk a list of lines prefixed with "+", "-" or " "."""
+    return {"filePath": "/home/dev/app/x.py", "oldString": "old", "newString": "new", "userModified": False,
+            "structuredPatch": [{"oldStart": 1, "oldLines": 1, "newStart": 1, "newLines": 1, "lines": list(lines)}
+                                for lines in hunks]}
+
+
+def create_result(content):
+    """The toolUseResult of a Write that created a file with this content."""
+    return {"type": "create", "filePath": "/home/dev/app/new.py", "content": content, "structuredPatch": []}
+
+
 class Transcript:
     """Appends records to one transcript file, one JSON object per line, with the common fields Claude Code sets
     (plus agentId and isSidechain in a subagent's file). The clock starts at START and moves one second per
@@ -118,10 +130,11 @@ class Transcript:
         """An ai-title record: only type, aiTitle and sessionId, no timestamp."""
         return self.bare({"type": "ai-title", "aiTitle": title, "sessionId": self.session_id})
 
-    def cost_state(self, model_usage, start=START):
+    def cost_state(self, model_usage, start=START, **run_totals):
         """A cost-state record as Claude Code writes it when a process ends: no timestamp, the totals since the
         process started (start) per model. model_usage maps a model id to
-        (input, cache_write, cache_read, output, cost_usd[, web_searches])."""
+        (input, cache_write, cache_read, output, cost_usd[, web_searches]); run_totals adds fields such as
+        totalDuration=60000 or totalLinesAdded=12."""
         usage_by_model = {}
         for model, values in model_usage.items():
             new_input, cache_write, cache_read, output, cost = values[:5]
@@ -132,29 +145,48 @@ class Transcript:
         return self.bare({"type": "cost-state", "sessionId": self.session_id,
                           "totalCostUSD": sum(values["costUSD"] for values in usage_by_model.values()),
                           "startTime": int(start.timestamp() * 1000), "modelUsage": usage_by_model,
-                          "hasUnknownModelCost": False})
+                          "hasUnknownModelCost": False, **run_totals})
 
     def queue_operation(self, operation="enqueue"):
         """A queue-operation record: timestamp and sessionId, but no cwd (main transcripts often start with one)."""
         return self.bare({"type": "queue-operation", "operation": operation, "timestamp": self.timestamp(),
                           "sessionId": self.session_id})
 
-    def tool_result(self, tool_use_id, content):
-        """A user record carrying a tool result; content is a string or a list of text blocks."""
-        block = {"type": "tool_result", "tool_use_id": tool_use_id, "content": content}
-        return self.record("user", message={"role": "user", "content": [block]})
+    def api_error(self, record_id, error="rate_limit", status=429, limit_type="five_hour", resets_at=None):
+        """A failed API call as Claude Code records it: a <synthetic> assistant message with isApiErrorMessage,
+        the error kind and HTTP status, and for a rate limit the quota that was hit (limit_type=None leaves
+        quotaLimits out, as for a server error). resets_at is a datetime, written as epoch seconds."""
+        fields = {"isApiErrorMessage": True, "error": error, "uuid": record_id}
+        if status is not None:
+            fields["apiErrorStatus"] = status
+        if limit_type is not None:
+            fields["quotaLimits"] = {"status": "rejected", "rateLimitType": limit_type,
+                                     "resetsAt": int(resets_at.timestamp()) if resets_at else None,
+                                     "isUsingOverage": False}
+        message = {"id": f"msg_{record_id}", "type": "message", "role": "assistant", "model": "<synthetic>",
+                   "content": [text_block("API Error")], "usage": usage()}
+        return self.record("assistant", message=message, **fields)
 
-    def assistant(self, message_id, blocks, final_usage, model=DEFAULT_MODEL):
+    def tool_result(self, tool_use_id, content, is_error=None, **fields):
+        """A user record carrying a tool result; content is a string or a list of text blocks. is_error True marks
+        a failed call; fields adds e.g. toolUseResult (see edit_result and create_result)."""
+        block = {"type": "tool_result", "tool_use_id": tool_use_id, "content": content}
+        if is_error is not None:
+            block["is_error"] = is_error
+        return self.record("user", message={"role": "user", "content": [block]}, **fields)
+
+    def assistant(self, message_id, blocks, final_usage, model=DEFAULT_MODEL, **fields):
         """An assistant message, stored as one record per content block with the same message id. Only the last
         record carries final_usage; the earlier ones carry the usage seen while streaming (output_tokens 1), so a
-        parser that doesn't keep the last usage per id gets the output wrong."""
+        parser that doesn't keep the last usage per id gets the output wrong. fields goes on every record, e.g.
+        attributionSkill="dataviz"."""
         records = []
         for index, block in enumerate(blocks):
             is_last = index == len(blocks) - 1
             block_usage = final_usage if is_last else dict(final_usage, output_tokens=1)
             message = {"id": message_id, "type": "message", "role": "assistant", "model": model,
                        "content": [block], "usage": block_usage}
-            records.append(self.record("assistant", message=message))
+            records.append(self.record("assistant", message=message, **fields))
         return records
 
 

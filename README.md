@@ -14,7 +14,7 @@ make status | stop | restart | logs
 make scan                      # read new transcript data into the store
 make report ARGS="--days 7 --by project"
 make session ID=<session-id>   # one session: main thread, subagents, background, tools
-make test                      # the app's and the guard hook's tests
+make test                      # the tests
 make help                      # everything else
 ```
 

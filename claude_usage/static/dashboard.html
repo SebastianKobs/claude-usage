@@ -37,7 +37,7 @@
 
   <section id="drilldown" class="card" hidden></section>
 
-  <div class="filters" role="group" aria-label="Filters">
+  <div class="filters" id="filters" role="group" aria-label="Filters">
     <span class="label">Range</span>
     <div class="segmented" id="range">
       <button type="button" data-days="1">Daily</button>
@@ -62,6 +62,7 @@
 
   <div id="summary">
     <div class="kpis stack" id="kpis"></div>
+    <div class="kpis stack" id="runtime" aria-label="Time and lines changed"></div>
 
     <section class="card" aria-labelledby="live-title">
       <h2 id="live-title"><span data-label="Live sessions">Live sessions</span> <span id="live-window" class="muted"></span></h2>
@@ -102,11 +103,33 @@
       <div id="costly-table" class="table-wrap" hidden></div>
     </section>
 
+    <section class="card" aria-labelledby="limits-title">
+      <div class="chart-head">
+        <h2 id="limits-title" data-label="Rate limits">Rate limits</h2>
+        <span class="muted" id="limits-note">rate-limit hits per day</span>
+        <span class="spacer"></span>
+        <button type="button" id="limits-table-toggle" aria-pressed="false">Table view</button>
+      </div>
+      <div id="limits-legend" class="legend"></div>
+      <div id="limits" class="chart"></div>
+      <div id="limits-table" class="table-wrap" hidden></div>
+      <h3 data-label="Latest API errors">Latest API errors</h3>
+      <div id="limit-events" class="table-wrap"></div>
+    </section>
+
     <div class="grid-2 stack">
       <section class="card"><h2 data-label="By agent type">By agent type</h2><div id="by-agent" class="table-wrap"></div></section>
       <section class="card"><h2 data-label="By model">By model</h2><div id="by-model" class="table-wrap"></div></section>
     </div>
     <section class="card"><h2 data-label="By project">By project</h2><div id="by-project" class="table-wrap"></div></section>
+    <div class="grid-2 stack">
+      <section class="card"><h2 data-label="By skill">By skill</h2>
+        <p class="note">turns Claude Code attributes to a skill while it runs</p>
+        <div id="by-skill" class="table-wrap"></div></section>
+      <section class="card"><h2 data-label="By MCP server">By MCP server</h2>
+        <p class="note">turns Claude Code attributes to an MCP server's tools</p>
+        <div id="by-mcp-server" class="table-wrap"></div></section>
+    </div>
     <section class="card"><h2 data-label="Sessions">Sessions</h2><div id="sessions" class="table-wrap"></div></section>
   </div>
 
@@ -118,6 +141,11 @@
 <script src="/static/js/figures.js" defer></script>
 <script src="/static/js/charts.js" defer></script>
 <script src="/static/js/tables.js" defer></script>
+<script src="/static/js/limits.js" defer></script>
+<script src="/static/js/vendor/highlight.min.js" defer></script>
+<script src="/static/js/vendor/marked.umd.min.js" defer></script>
+<script src="/static/js/vendor/purify.min.js" defer></script>
+<script src="/static/js/chat.js" defer></script>
 <script src="/static/js/drilldown.js" defer></script>
 <script src="/static/js/themes.js" defer></script>
 <script src="/static/js/main.js" defer></script>

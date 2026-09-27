@@ -19,6 +19,27 @@ web_search_per_1000 = 10.0      # $ per 1,000 web searches, e.g. Claude Code's W
 port = 8765
 live_minutes = 5        # a session counts as live if its transcript changed within this many minutes
 
+# When the conversation in a session's view hints at compacting. Anthropic publishes no "normal" context size, only
+# that quality degrades as the context fills (code.claude.com/docs/en/best-practices), so the soft hint is a
+# heuristic: 200K matches Claude Code's exceeds_200k_tokens flag. The Input tokens tile shows your median and p90
+# context per turn; pick a threshold from those.
+[chat]
+compact_hint_tokens = 200000
+auto_compact_warn_share = 0.8  # the stronger warning, from this share of the auto-compact point on
+# After the first hint of each kind, a short reminder at each milestone: every further 50% of the hint threshold
+# (300K, 400K, ... at 200K), and every further 5% of the auto-compact point (85%, 90%, 95%).
+compact_reminder_step = 0.5
+auto_compact_reminder_step = 0.05
+
+# Where Claude Code auto-compacts, by model id prefix (the longest match wins, a [1m] suffix is ignored): about 967K
+# on models with a native 1M window, at 200K on 200K windows (code.claude.com/docs/en/model-config, 2026-09-27).
+# Set default to your autoCompactWindow or CLAUDE_CODE_AUTO_COMPACT_WINDOW if you changed it.
+[auto_compact]
+default = 967000
+"claude-haiku-4-5" = 200000
+"claude-sonnet-4-5" = 200000
+"claude-3-5-haiku" = 200000
+
 # Prices in $ per million tokens, by model id prefix: the longest matching prefix wins, so "claude-opus-5-5"
 # beats "claude-opus-5". Source: platform.claude.com/docs/en/about-claude/pricing (Claude API, first party).
 # - Cache writes cost 1.25x (5m) and 2x (1h) of base input. Cache reads cost 0.1x, except on Fable 5.1 and

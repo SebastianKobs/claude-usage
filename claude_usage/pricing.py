@@ -3,6 +3,7 @@ matching prefix wins. The fast-mode multiplier applies to every token category, 
 because the cache multipliers stack on top of the fast-mode price. Web searches are a flat fee per search
 ([fees] web_search_per_1000), not multiplied by fast mode. Not modelled: the 1.1x for US-only inference
 (`inference_geo`; not seen in real transcripts) and the Batch API discount."""
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -79,13 +80,18 @@ def parse_prices(table: dict[str, Any], fees: Any = None) -> Prices:
     return Prices(prices, parse_fees(fees))
 
 
-def price_for(prices: Prices, model: str) -> Price | None:
-    """The Price of the longest prefix of model (without a [1m]-style suffix), or None if no prefix matches."""
+def longest_prefix(table: Mapping[str, Any], model: str) -> Any:
+    """The value of the longest key of table that model (without a [1m]-style suffix) starts with, or None."""
     base = transcripts.CONTEXT_SUFFIX.sub("", model)
-    matches = [prefix for prefix in prices if prefix and base.startswith(prefix)]
+    matches = [prefix for prefix in table if prefix and base.startswith(prefix)]
     if not matches:
         return None
-    return prices[max(matches, key=len)]
+    return table[max(matches, key=len)]
+
+
+def price_for(prices: Prices, model: str) -> Price | None:
+    """The Price of the longest prefix of model (without a [1m]-style suffix), or None if no prefix matches."""
+    return longest_prefix(prices, model)
 
 
 def cost_parts(prices: Prices, model: str, speed: str, *, new_input: int, cache_write_5m: int, cache_write_1h: int,

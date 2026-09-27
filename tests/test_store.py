@@ -12,6 +12,8 @@ from unittest import mock
 from claude_usage import pricing
 from claude_usage import store
 from helpers import TempDirTestCase
+from helpers import create_result
+from helpers import edit_result
 from helpers import text_block
 from helpers import thinking_block
 from helpers import tool_use_block
@@ -418,6 +420,248 @@ class BackgroundTest(StoreCase):
         self.assertIsNone(by_model["claude-mystery-1"]["cost"])
 
 
+class RuntimeTest(StoreCase):
+    """Wall-clock, API and tool time and lines changed, from the sessions' cost-state records."""
+
+    def setUp(self):
+        super().setUp()
+        self.main = self.projects.session("s1", project="/home/dev/app")
+        self.main.at(DAY_1).assistant("m1", [text_block("a")], usage(output=MILLION))
+        self.main.cost_state({}, totalDuration=600000, totalAPIDuration=240000, totalAPIDurationWithoutRetries=200000,
+                             totalToolDuration=90000, totalLinesAdded=150, totalLinesRemoved=50)
+        other = self.projects.session("s2", project="/home/dev/other")
+        other.at(DAY_3).assistant("m2", [text_block("b")], usage(output=MILLION))
+        other.cost_state({}, totalDuration=60000, totalAPIDuration=30000, totalAPIDurationWithoutRetries=30000,
+                         totalToolDuration=5000, totalLinesAdded=10, totalLinesRemoved=0)
+        self.scan()
+
+    def test_the_snapshot_keeps_the_run_totals_and_its_day(self):
+        self.assertEqual(self.rows("SELECT day, duration_ms, api_ms, api_ms_without_retries, tool_ms, lines_added, "
+                                   "lines_removed FROM cost_states WHERE session_id = 's1'"),
+                         [(local_day(DAY_1), 600000, 240000, 200000, 90000, 150, 50)])
+
+    def test_totals_of_the_sessions_that_ended_in_the_range(self):
+        totals = store.runtime_totals(self.store, None, PRICES)
+        self.assertEqual((totals["sessions"], totals["duration_ms"], totals["api_ms"], totals["api_ms_without_retries"],
+                          totals["tool_ms"], totals["lines_added"], totals["lines_removed"]),
+                         (2, 660000, 270000, 230000, 95000, 160, 50))
+
+    def test_since_until_and_project(self):
+        self.assertEqual(store.runtime_totals(self.store, DAY_3.date(), PRICES)["lines_added"], 10)
+        self.assertEqual(store.runtime_totals(self.store, None, PRICES, until=DAY_1.date())["lines_added"], 150)
+        self.assertEqual(store.runtime_totals(self.store, None, PRICES, project="/home/dev/other")["sessions"], 1)
+
+    def test_cost_per_100_lines_changed_counts_the_whole_sessions(self):
+        totals = store.runtime_totals(self.store, None, PRICES)
+        self.assertAlmostEqual(totals["cost"], 20.0)
+        self.assertAlmostEqual(totals["cost_per_100_lines"], 20.0 / 210 * 100)
+
+    def test_no_lines_changed_means_no_cost_per_line(self):
+        totals = store.runtime_totals(self.store, date(2030, 1, 1), PRICES)
+        self.assertEqual((totals["sessions"], totals["lines_added"], totals["duration_ms"]), (0, 0, 0))
+        self.assertIsNone(totals["cost_per_100_lines"])
+
+    def test_session_detail_has_the_run_totals(self):
+        runtime = store.session_detail(self.store, "s1", PRICES)["runtime"]
+        self.assertEqual(runtime, {"source": "cost_record", "duration_ms": 600000, "api_ms": 240000,
+                                   "api_ms_without_retries": 200000, "tool_ms": 90000, "lines_added": 150,
+                                   "lines_removed": 50})
+
+
+class EstimatedRuntimeTest(StoreCase):
+    """Without a cost record, the session view estimates the run totals from the stored transcript data."""
+
+    def setUp(self):
+        super().setUp()
+        self.main = self.projects.session("s1")
+        self.main.at(DAY_1).user("fix it")                                          # 12:00:00
+        self.main.at(DAY_1 + timedelta(seconds=4)).assistant(                       # 12:00:04, 12:00:05
+            "m1", [thinking_block(), tool_use_block("t1", "Edit")], usage(output=5))
+        self.main.at(DAY_1 + timedelta(seconds=20)).tool_result(                    # 12:00:20
+            "t1", "ok", toolUseResult=edit_result(["+a", "+b", "-c"]))
+        self.main.at(DAY_1 + timedelta(seconds=30)).assistant("m2", [text_block("done")], usage(output=5))
+        agent = self.projects.subagent("s1", "a1")
+        agent.at(DAY_1 + timedelta(seconds=10)).user("look")                        # 12:00:10
+        agent.at(DAY_1 + timedelta(seconds=13)).assistant(                          # 12:00:13
+            "a1-m1", [tool_use_block("t2", "Write")], usage(output=5))
+        agent.at(DAY_1 + timedelta(seconds=15)).tool_result("t2", "ok", toolUseResult=create_result("x\ny\n"))
+        self.scan()
+
+    def test_the_run_totals_are_estimated_from_the_transcripts(self):
+        runtime = store.session_detail(self.store, "s1", PRICES)["runtime"]
+        # session: 12:00:00 to 12:00:30; API: m1 5 s, m2 10 s (from the tool result), a1-m1 3 s;
+        # tools: t1 15 s (from the record with the tool_use block), t2 2 s
+        self.assertEqual(runtime, {"source": "transcripts", "duration_ms": 30000, "api_ms": 18000,
+                                   "api_ms_without_retries": None, "tool_ms": 17000, "lines_added": 4,
+                                   "lines_removed": 1})
+
+    def test_reading_in_pieces_gives_the_same_estimate(self):
+        whole = store.session_detail(self.store, "s1", PRICES)["runtime"]
+        self.store.close()
+        self.store_path.unlink()
+        self.store = store.Store(self.store_path)
+        self.addCleanup(self.store.close)
+        lines = self.main.path.read_bytes().splitlines(keepends=True)
+        self.main.path.write_bytes(b"".join(lines[:1]))           # the next read starts with m1
+        self.scan()
+        self.main.path.write_bytes(b"".join(lines))
+        self.scan()
+        self.assertEqual(store.session_detail(self.store, "s1", PRICES)["runtime"], whole)
+
+    def test_a_cost_record_replaces_the_estimate(self):
+        self.main.cost_state({}, totalDuration=99000)
+        self.scan()
+        runtime = store.session_detail(self.store, "s1", PRICES)["runtime"]
+        self.assertEqual((runtime["source"], runtime["duration_ms"]), ("cost_record", 99000))
+
+    def test_a_session_without_timestamps_has_no_run_totals(self):
+        self.projects.session("s3").ai_title("only a title")
+        self.scan()
+        self.assertIsNone(store.session_detail(self.store, "s3", PRICES)["runtime"])
+
+
+class AttributionTest(StoreCase):
+    """Usage per skill and per MCP server, as Claude Code attributes the turns."""
+
+    def setUp(self):
+        super().setUp()
+        self.main = self.projects.session("s1", project="/home/dev/app")
+        self.main.at(DAY_1).assistant("m1", [text_block("a")], usage(output=MILLION), attributionSkill="dataviz")
+        self.main.assistant("m2", [text_block("b")], usage(output=MILLION), attributionSkill="dataviz",
+                            attributionMcpServer="codebase-memory-mcp", attributionMcpTool="search_graph")
+        self.main.assistant("m3", [text_block("c")], usage(output=MILLION))
+        other = self.projects.session("s2", project="/home/dev/other")
+        other.at(DAY_3).assistant("m4", [text_block("d")], usage(output=MILLION),
+                                  attributionMcpServer="laravel-boost", attributionMcpTool="search-docs")
+        self.scan()
+
+    def totals(self, group, **options):
+        """totals_by as a dict from the group key to (turns, output, cost)."""
+        return {row[group]: (row["turns"], row["output"], row["cost"])
+                for row in store.totals_by(self.store, group, None, PRICES, **options)}
+
+    def test_messages_keep_their_attribution(self):
+        self.assertEqual(self.rows("SELECT message_id, skill, mcp_server FROM messages ORDER BY message_id"),
+                         [("m1", "dataviz", None), ("m2", "dataviz", "codebase-memory-mcp"), ("m3", None, None),
+                          ("m4", None, "laravel-boost")])
+
+    def test_by_skill(self):
+        self.assertEqual(self.totals("skill"), {None: (2, 2 * MILLION, 20.0), "dataviz": (2, 2 * MILLION, 20.0)})
+
+    def test_by_mcp_server(self):
+        self.assertEqual(self.totals("mcp_server"), {None: (2, 2 * MILLION, 20.0),
+                                                     "codebase-memory-mcp": (1, MILLION, 10.0),
+                                                     "laravel-boost": (1, MILLION, 10.0)})
+
+    def test_project_filter(self):
+        self.assertEqual(set(self.totals("mcp_server", project="/home/dev/other")), {"laravel-boost"})
+
+    def test_background_is_attributed_to_nothing(self):
+        self.main.cost_state({HAIKU: (MILLION, 0, 0, 0, 1.0)})
+        self.scan()
+        self.assertEqual(self.totals("skill")[None][1], 2 * MILLION)
+        self.assertEqual(set(self.totals("skill")), {None, "dataviz"})
+
+
+class ApiErrorTest(StoreCase):
+    """Rate limits and other failed API calls, per day or hour and as a list of events."""
+
+    def setUp(self):
+        super().setUp()
+        self.resets = DAY_1 + timedelta(hours=5)
+        self.main = self.projects.session("s1", project="/home/dev/app")
+        self.main.ai_title("Parser fix")
+        self.main.at(DAY_1).api_error("e1", resets_at=self.resets)
+        self.main.api_error("e2", resets_at=self.resets)
+        self.main.at(DAY_3).api_error("e3", error="server_error", status=None, limit_type=None)
+        agent = self.projects.subagent("s1", "a1", project="/home/dev/app")
+        agent.at(DAY_3 + timedelta(minutes=5)).api_error("e4", limit_type="seven_day")
+        other = self.projects.session("s2", project="/home/dev/other")
+        other.at(DAY_3 + timedelta(minutes=10)).api_error("e5")
+        self.scan()
+
+    def counts(self, group, since=None, **options):
+        """api_errors_by as (key, error, count) tuples."""
+        return [(row[group], row["error"], row["count"])
+                for row in store.api_errors_by(self.store, group, since, **options)]
+
+    def test_errors_are_stored_with_their_quota(self):
+        self.assertEqual(self.rows("SELECT record_id, error, status, limit_type, resets_at, day FROM api_errors "
+                                   "WHERE record_id = 'e1'"),
+                         [("e1", "rate_limit", 429, "five_hour", store.iso(self.resets), local_day(DAY_1))])
+
+    def test_counts_per_day_and_error(self):
+        self.assertEqual(self.counts("day"), [(local_day(DAY_1), "rate_limit", 2),
+                                              (local_day(DAY_3), "rate_limit", 2),
+                                              (local_day(DAY_3), "server_error", 1)])
+
+    def test_counts_per_local_hour(self):
+        self.assertEqual(self.counts("hour", since=DAY_3.date()),
+                         [(local_hour(DAY_3), "rate_limit", 2), (local_hour(DAY_3), "server_error", 1)])
+
+    def test_since_until_and_project(self):
+        self.assertEqual(self.counts("day", until=DAY_1.date()), [(local_day(DAY_1), "rate_limit", 2)])
+        self.assertEqual(self.counts("day", project="/home/dev/other"), [(local_day(DAY_3), "rate_limit", 1)])
+
+    def test_unknown_group_raises(self):
+        with self.assertRaises(ValueError):
+            store.api_errors_by(self.store, "model", None)
+
+    def test_events_newest_first_with_their_session(self):
+        events = store.api_error_events(self.store, None)
+        self.assertEqual([event["record_id"] for event in events], ["e5", "e4", "e3", "e2", "e1"])
+        self.assertEqual({key: events[1][key] for key in ("session_id", "title", "agent_type", "limit_type")},
+                         {"session_id": "s1", "title": "Parser fix", "agent_type": "general-purpose",
+                          "limit_type": "seven_day"})
+        self.assertEqual(events[-1]["resets_at"], store.iso(self.resets))
+
+    def test_events_limit_and_filters(self):
+        self.assertEqual([event["record_id"] for event in store.api_error_events(self.store, None, limit=2)],
+                         ["e5", "e4"])
+        self.assertEqual([event["record_id"] for event in store.api_error_events(
+            self.store, None, project="/home/dev/app", until=DAY_1.date())], ["e2", "e1"])
+
+    def test_a_forked_copy_is_not_counted_twice(self):
+        fork = self.projects.session("s9", project="/home/dev/app")
+        fork.at(DAY_1).api_error("e1", resets_at=self.resets)
+        self.scan()
+        self.assertEqual(self.rows("SELECT path FROM api_errors WHERE record_id = 'e1'"), [(str(self.main.path),)])
+
+
+class EffortTest(StoreCase):
+    """Usage per model and effort level."""
+
+    def setUp(self):
+        super().setUp()
+        main = self.projects.session("s1")
+        main.at(DAY_1).assistant("m1", [text_block("a")], usage(output=MILLION), effort="high")
+        main.assistant("m2", [text_block("b")], usage(output=MILLION), effort="high")
+        main.assistant("m3", [text_block("c")], usage(output=MILLION), effort="medium")
+        main.assistant("m4", [text_block("d")], usage(output=MILLION), model="claude-opus-5", effort="max")
+        main.cost_state({HAIKU: (MILLION, 0, 0, 0, 1.0)})
+        self.scan()
+
+    def test_by_model_and_effort(self):
+        rows = store.totals_by(self.store, "model_effort", None, PRICES)
+        self.assertEqual([(row["model"], row["effort"], row["turns"], row["cost"]) for row in rows],
+                         [(HAIKU, None, 0, 1.0), ("claude-opus-5", "max", 1, 25.0),
+                          ("claude-sonnet-5", "high", 2, 20.0), ("claude-sonnet-5", "medium", 1, 10.0)])
+
+    def test_by_day_model_and_effort(self):
+        rows = store.totals_by(self.store, "day_model_effort", None, PRICES)
+        self.assertIn((local_day(DAY_1), "claude-sonnet-5", "medium", 1),
+                      [(row["day"], row["model"], row["effort"], row["turns"]) for row in rows])
+
+    def test_by_local_hour_model_and_effort(self):
+        rows = store.totals_by(self.store, "hour_model_effort", None, PRICES)
+        self.assertIn((local_hour(DAY_1), "claude-sonnet-5", "high", 2),
+                      [(row["hour"], row["model"], row["effort"], row["turns"]) for row in rows])
+
+    def test_by_effort(self):
+        rows = {row["effort"]: row["turns"] for row in store.totals_by(self.store, "effort", None, PRICES)}
+        self.assertEqual(rows, {None: 0, "high": 2, "max": 1, "medium": 1})
+
+
 class SchemaTest(TempDirTestCase):
     def test_data_survives_reopening(self):
         build_session(self.projects)
@@ -469,6 +713,80 @@ class SchemaTest(TempDirTestCase):
             self.assertEqual(store.scan(second, self.projects.root).files_scanned, 1)
             self.assertEqual(second.connection.execute("SELECT web_searches FROM background").fetchall()[0][0], 1)
             self.assertEqual(second.connection.execute("SELECT web_searches FROM messages").fetchall()[0][0], 0)
+
+    def test_a_version_4_store_gets_run_total_columns_and_reads_its_files_again(self):
+        main = self.projects.session("s1")
+        main.at(DAY_1).user("hi")
+        main.assistant("m1", [text_block("a")], usage(output=5))
+        main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)}, totalDuration=60000, totalLinesAdded=7)
+        with store.Store(self.store_path) as first:
+            store.scan(first, self.projects.root)
+            # what a version-4 store looks like: cost states without the run totals
+            first.connection.execute("DROP TABLE cost_states")
+            first.connection.execute("CREATE TABLE cost_states (session_id TEXT PRIMARY KEY, path TEXT NOT NULL, "
+                                     "snapshot_ts TEXT, start_ts TEXT, models TEXT NOT NULL)")
+            first.connection.execute("UPDATE meta SET value = '4' WHERE key = 'schema_version'")
+        with store.Store(self.store_path) as second:
+            self.assertEqual(store.scan(second, self.projects.root).files_scanned, 1)
+            row = second.connection.execute("SELECT duration_ms, lines_added FROM cost_states").fetchone()
+            self.assertEqual(tuple(row), (60000, 7))
+
+    def test_a_version_5_store_gets_attribution_columns_and_reads_its_files_again(self):
+        main = self.projects.session("s1")
+        main.at(DAY_1).assistant("m1", [text_block("a")], usage(output=5), attributionSkill="dataviz")
+        with store.Store(self.store_path) as first:
+            store.scan(first, self.projects.root)
+            # what a version-5 store looks like: messages without the attribution columns
+            first.connection.execute("DROP VIEW usage_rows")
+            first.connection.execute("ALTER TABLE messages DROP COLUMN mcp_server")
+            first.connection.execute("ALTER TABLE messages DROP COLUMN skill")
+            first.connection.execute("UPDATE meta SET value = '5' WHERE key = 'schema_version'")
+        with store.Store(self.store_path) as second:
+            self.assertEqual(store.scan(second, self.projects.root).files_scanned, 1)
+            self.assertEqual(second.connection.execute("SELECT skill FROM messages").fetchone()[0], "dataviz")
+
+    def test_a_version_6_store_reads_its_files_again_for_the_api_errors(self):
+        main = self.projects.session("s1")
+        main.at(DAY_1).api_error("e1")
+        with store.Store(self.store_path) as first:
+            store.scan(first, self.projects.root)
+            # what a version-6 store looks like: no api_errors table, every file read to its end
+            first.connection.execute("DROP TABLE api_errors")
+            first.connection.execute("UPDATE meta SET value = '6' WHERE key = 'schema_version'")
+        with store.Store(self.store_path) as second:
+            self.assertEqual(store.scan(second, self.projects.root).files_scanned, 1)
+            self.assertEqual(second.connection.execute("SELECT record_id FROM api_errors").fetchone()[0], "e1")
+
+    def test_a_version_7_store_gets_timing_columns_and_reads_its_files_again(self):
+        main = self.projects.session("s1")
+        main.at(DAY_1).user("hi")
+        main.assistant("m1", [text_block("a")], usage(output=5))
+        with store.Store(self.store_path) as first:
+            store.scan(first, self.projects.root)
+            # what a version-7 store looks like: no timing columns
+            first.connection.execute("DROP VIEW usage_rows")
+            for table, column in (("messages", "request_ts"), ("messages", "end_ts"), ("tool_calls", "call_ts"),
+                                  ("tool_calls", "result_ts"), ("tool_calls", "lines_added"),
+                                  ("tool_calls", "lines_removed"), ("transcripts", "last_user_ts")):
+                first.connection.execute(f"ALTER TABLE {table} DROP COLUMN {column}")
+            first.connection.execute("UPDATE meta SET value = '7' WHERE key = 'schema_version'")
+        with store.Store(self.store_path) as second:
+            self.assertEqual(store.scan(second, self.projects.root).files_scanned, 1)
+            row = second.connection.execute("SELECT request_ts, end_ts FROM messages").fetchone()
+            self.assertEqual(tuple(row), (store.iso(DAY_1), store.iso(DAY_1 + timedelta(seconds=1))))
+
+    def test_a_version_8_store_gets_the_effort_column_and_reads_its_files_again(self):
+        main = self.projects.session("s1")
+        main.at(DAY_1).assistant("m1", [text_block("a")], usage(output=5), effort="max")
+        with store.Store(self.store_path) as first:
+            store.scan(first, self.projects.root)
+            # what a version-8 store looks like: messages without the effort column
+            first.connection.execute("DROP VIEW usage_rows")
+            first.connection.execute("ALTER TABLE messages DROP COLUMN effort")
+            first.connection.execute("UPDATE meta SET value = '8' WHERE key = 'schema_version'")
+        with store.Store(self.store_path) as second:
+            self.assertEqual(store.scan(second, self.projects.root).files_scanned, 1)
+            self.assertEqual(second.connection.execute("SELECT effort FROM messages").fetchone()[0], "max")
 
     def test_a_newer_schema_is_refused(self):
         with store.Store(self.store_path):
@@ -756,6 +1074,134 @@ class SessionDetailTest(StoreCase):
         self.scan()
         agents = store.session_detail(self.store, "s1", PRICES)["agents"]
         self.assertEqual((agents[-1]["agent_type"], agents[-1]["context_per_turn"]), (store.BACKGROUND, []))
+
+
+class SessionAttributionAndErrorsTest(StoreCase):
+    """A session's usage per skill and MCP server and its failed API calls, without other sessions' rows."""
+
+    def setUp(self):
+        super().setUp()
+        main = self.projects.session("s1")
+        main.at(DAY_1).assistant("m1", [text_block("a")], usage(output=MILLION), attributionSkill="dataviz")
+        main.assistant("m2", [text_block("b")], usage(output=MILLION), attributionMcpServer="codebase-memory-mcp")
+        main.assistant("m3", [text_block("c")], usage(output=MILLION))
+        main.api_error("e1")
+        agent = self.projects.subagent("s1", "a1")
+        agent.at(DAY_1 + timedelta(minutes=1)).assistant("m4", [text_block("d")], usage(output=MILLION),
+                                                         attributionSkill="dataviz")
+        agent.api_error("e2", error="server_error", status=None, limit_type=None)
+        other = self.projects.session("s2")
+        other.at(DAY_1).assistant("m5", [text_block("e")], usage(output=MILLION), attributionSkill="init",
+                                  attributionMcpServer="laravel-boost")
+        other.api_error("e3")
+        self.scan()
+        self.detail = store.session_detail(self.store, "s1", PRICES)
+
+    def test_usage_per_skill_of_the_session_and_its_subagents(self):
+        self.assertEqual([(row["skill"], row["turns"], row["cost"]) for row in self.detail["skills"]],
+                         [("dataviz", 2, 20.0)])
+
+    def test_usage_per_mcp_server_of_the_session(self):
+        self.assertEqual([(row["mcp_server"], row["turns"]) for row in self.detail["mcp_servers"]],
+                         [("codebase-memory-mcp", 1)])
+
+    def test_api_errors_of_the_session_newest_first(self):
+        self.assertEqual([(event["record_id"], event["agent_type"]) for event in self.detail["api_errors"]],
+                         [("e2", "general-purpose"), ("e1", "main")])
+
+    def test_a_session_without_any_has_empty_lists(self):
+        self.projects.session("s3").at(DAY_1).assistant("m6", [text_block("f")], usage(output=1))
+        self.scan()
+        detail = store.session_detail(self.store, "s3", PRICES)
+        self.assertEqual((detail["skills"], detail["mcp_servers"], detail["api_errors"]), ([], [], []))
+
+
+class SessionEffortTest(StoreCase):
+    """A session's usage per model and effort level, per agent and per turn."""
+
+    def setUp(self):
+        super().setUp()
+        self.main = self.projects.session("s1")
+        self.main.at(DAY_1).assistant("m1", [text_block("a")], usage(output=MILLION), effort="high")
+        self.main.assistant("m2", [text_block("b")], usage(output=MILLION), effort="max")
+        agent = self.projects.subagent("s1", "a1")
+        agent.at(DAY_1).assistant("m3", [text_block("c")], usage(output=MILLION), model="claude-opus-5",
+                                  effort="medium")
+        self.main.cost_state({HAIKU: (MILLION, 0, 0, 0, 1.0)})
+        self.projects.session("s2").at(DAY_1).assistant("m4", [text_block("d")], usage(output=MILLION), effort="low")
+        self.scan()
+        self.detail = store.session_detail(self.store, "s1", PRICES)
+
+    def test_usage_per_model_of_the_session(self):
+        self.assertEqual([(row["model"], row["turns"], row["cost"]) for row in self.detail["models"]],
+                         [(HAIKU, 0, 1.0), ("claude-opus-5", 1, 25.0), ("claude-sonnet-5", 2, 20.0)])
+
+    def test_usage_per_model_and_effort_of_the_session(self):
+        self.assertEqual([(row["model"], row["effort"], row["turns"]) for row in self.detail["model_effort"]],
+                         [(HAIKU, None, 0), ("claude-opus-5", "medium", 1), ("claude-sonnet-5", "high", 1),
+                          ("claude-sonnet-5", "max", 1)])
+
+    def test_each_agent_lists_its_models_and_effort_levels(self):
+        main, agent = self.detail["agents"][:2]
+        self.assertEqual(main["model_efforts"], [{"model": "claude-sonnet-5", "effort": "high"},
+                                                 {"model": "claude-sonnet-5", "effort": "max"}])
+        self.assertEqual(agent["model_efforts"], [{"model": "claude-opus-5", "effort": "medium"}])
+        self.assertEqual(self.detail["agents"][-1]["model_efforts"], [])
+
+    def test_effort_levels_are_ordered_low_to_max(self):
+        self.main.assistant("m5", [text_block("e")], usage(output=1), effort="low")
+        self.scan()
+        main = store.session_detail(self.store, "s1", PRICES)["agents"][0]
+        self.assertEqual([entry["effort"] for entry in main["model_efforts"]], ["low", "high", "max"])
+
+    def test_each_turn_carries_its_effort_level(self):
+        turns = self.detail["agents"][0]["context_per_turn"]
+        self.assertEqual([turn["effort"] for turn in turns], ["high", "max"])
+
+
+class ContextStatsTest(StoreCase):
+    """The median and 90th percentile of the context per main-thread turn, to choose a compact hint by."""
+
+    def setUp(self):
+        super().setUp()
+        main = self.projects.session("s1", project="/home/dev/app")
+        for index, context in enumerate((100, 200, 300, 400, 1000)):
+            main.at(DAY_1).assistant(f"m{index}", [text_block("a")], usage(cache_read=context, output=1))
+        agent = self.projects.subagent("s1", "a1", project="/home/dev/app")
+        agent.at(DAY_1).assistant("a1-m1", [text_block("b")], usage(cache_read=99999, output=1))
+        other = self.projects.session("s2", project="/home/dev/other")
+        other.at(DAY_3).assistant("o1", [text_block("c")], usage(new=50, cache_5m=50, output=1))
+        self.scan()
+
+    def test_median_and_p90_of_main_thread_turns(self):
+        self.assertEqual(store.context_stats(self.store, DAY_1.date(), until=DAY_1.date()),
+                         {"turns": 5, "median": 300, "p90": 760})
+
+    def test_subagents_do_not_count(self):
+        self.assertEqual(store.context_stats(self.store, None, session_id="s1")["turns"], 5)
+
+    def test_project_and_session_filters(self):
+        self.assertEqual(store.context_stats(self.store, None, project="/home/dev/other"),
+                         {"turns": 1, "median": 100, "p90": 100})
+        self.assertEqual(store.context_stats(self.store, None, session_id="s2")["median"], 100)
+
+    def test_no_turns_means_no_values(self):
+        self.assertEqual(store.context_stats(self.store, date(2030, 1, 1)), {"turns": 0, "median": None, "p90": None})
+
+
+class TranscriptPathTest(StoreCase):
+    def setUp(self):
+        super().setUp()
+        self.main, self.agent = build_session(self.projects)
+        self.scan()
+
+    def test_the_main_thread_and_a_subagent(self):
+        self.assertEqual(store.transcript_path(self.store, "s1", None), self.main.path)
+        self.assertEqual(store.transcript_path(self.store, "s1", "a1"), self.agent.path)
+
+    def test_unknown_session_or_agent_is_none(self):
+        self.assertIsNone(store.transcript_path(self.store, "nope", None))
+        self.assertIsNone(store.transcript_path(self.store, "s1", "nope"))
 
 
 class RecentSessionsTest(StoreCase):

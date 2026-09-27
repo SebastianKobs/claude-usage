@@ -18,6 +18,17 @@ function el(tag, attributes, ...children) {
   return node;
 }
 
+// Replace a node's children, leaving out the missing ones: replaceChildren itself would show null as text
+function fill(node, ...children) {
+  node.replaceChildren(...children.filter(child => child !== null && child !== undefined && child !== false));
+}
+
+// An element whose text is a label in the theme's wording; data-label lets applyTheme reword it in place, so a
+// view that isn't drawn again (a session's) follows a theme change too
+function themed(tag, label, attributes) {
+  return el(tag, {...attributes, "data-label": label, text: hype(label)});
+}
+
 function svg(tag, attributes) {
   const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
   for (const [name, value] of Object.entries(attributes || {})) node.setAttribute(name, value);
@@ -38,6 +49,15 @@ function percent(part, total) {
   const share = 100 * part / total;
   // one decimal below 10%, so a small part doesn't read as 0% or a round 1%
   return (share > 0 && share < 10 ? share.toFixed(1) : String(Math.round(share))) + "%";
+}
+function duration(milliseconds) {
+  if (milliseconds === null || milliseconds === undefined) return "–";
+  const seconds = Math.round(milliseconds / 1000);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours) return minutes ? `${hours} h ${minutes} min` : `${hours} h`;
+  if (minutes) return seconds % 60 ? `${minutes} min ${seconds % 60} s` : `${minutes} min`;
+  return `${seconds} s`;
 }
 function inputTotal(row) { return row.new_input + row.cache_write + row.cache_read; }
 
@@ -118,5 +138,22 @@ function modelSlots(models) {
     slots.set(model, free.length ? free.shift() : null);        // null: folded into "Other"
   }
   return slots;
+}
+// effort levels from least to most; others sort after them by name
+const EFFORT_ORDER = ["low", "medium", "high", "xhigh", "max"];
+function effortRank(effort) {
+  const rank = EFFORT_ORDER.indexOf(effort);
+  return rank === -1 ? EFFORT_ORDER.length : rank;
+}
+function effortName(effort) { return effort ? `effort ${effort}` : "no effort level"; }
+// A model's color, shaded by effort level: the model's own color for low, none or an unknown level, then one step
+// further from the surface each for medium, high and max (xhigh shares max's shade). Each slot's step is sized for
+// the same lightness gap (--shade-step-*, validated per theme); the legend, tooltip and table name every level.
+const EFFORT_SHADES = {medium: 1, high: 2, xhigh: 3, max: 3};
+function effortShade(slot, effort) {
+  const step = EFFORT_SHADES[effort] || 0;
+  const name = slot === null ? "other" : slot + 1;
+  if (step === 0) return slotColor(slot);
+  return `color-mix(in oklab, var(--series-${name}), var(--shade-ink) calc(var(--shade-step-${name}) * ${step}))`;
 }
 function slotColor(slot) { return slot === null ? "var(--series-other)" : `var(--series-${slot + 1})`; }

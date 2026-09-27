@@ -19,6 +19,16 @@
   --series-other: #898781;
   --status-good: #0ca30c;
   --status-critical: #d03b3b;
+  --status-warning: #fab219;
+  --hint-warning-edge: #a86f00;  /* the warning hue, darkened to clear 3:1 as an edge on the light surface */
   --split-strong: #184f95;
   --split-soft: #3987e5;
+  /* effort shades: each model's color mixed toward --shade-ink by its step per effort level, steps sized for a
+     lightness gap of 0.065 (validated with --ordinal; every shade clears 3:1 but slots 3-5 at their own color) */
+  /* code in the conversation: highlight.js's classes on the wash, every token >= 4.5:1 as text */
+  --code-keyword: #4a3aa7; --code-string: #006d00; --code-number: #b04c24; --code-comment: #5f5e59;
+  --code-title: #1c5cab; --code-attr: #7e4057; --code-addition: #006d00; --code-deletion: #a63332;
+  --shade-ink: #000000;
+  --shade-step-1: 11.3%; --shade-step-2: 9.7%; --shade-step-3: 9.7%; --shade-step-4: 13%; --shade-step-5: 9.1%;
+  --shade-step-6: 12.3%; --shade-step-7: 15%; --shade-step-8: 10.4%; --shade-step-other: 10.4%;
 }

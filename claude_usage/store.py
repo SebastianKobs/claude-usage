@@ -14,6 +14,7 @@ background rows side by side, so every query includes both; background rows have
 import json
 import hashlib
 import sqlite3
+import statistics
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -27,7 +28,10 @@ from typing import Any
 from claude_usage import pricing
 from claude_usage import transcripts
 
-SCHEMA_VERSION = 4                      # 2: cost_states and background; 3: web_searches; 4: start_ts
+SCHEMA_VERSION = 9                      # 2: cost_states and background; 3: web_searches; 4: start_ts;
+                                        # 5: the run totals of cost_states; 6: skill and mcp_server;
+                                        # 7: api_errors; 8: the times and lines the run totals
+                                        # are estimated from without a cost record; 9: effort
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -49,7 +53,8 @@ CREATE TABLE IF NOT EXISTS transcripts (
     read_offset INTEGER NOT NULL,   -- bytes read so far
     head_hash TEXT,                 -- SHA-256 of the first line, to notice a rewritten file
     first_ts TEXT,
-    last_ts TEXT
+    last_ts TEXT,
+    last_user_ts TEXT               -- of the last user record read: the request of a reply in the next read
 );
 CREATE INDEX IF NOT EXISTS transcripts_session ON transcripts (session_id);
 CREATE TABLE IF NOT EXISTS messages (
@@ -64,7 +69,12 @@ CREATE TABLE IF NOT EXISTS messages (
     cache_write_1h INTEGER NOT NULL,
     cache_read INTEGER NOT NULL,
     output INTEGER NOT NULL,
-    web_searches INTEGER NOT NULL DEFAULT 0
+    web_searches INTEGER NOT NULL DEFAULT 0,
+    skill TEXT,                     -- the skill Claude Code attributes the call to
+    mcp_server TEXT,                -- the MCP server it attributes the call to
+    request_ts TEXT,                -- of the last user record before it (a prompt or a tool result)
+    end_ts TEXT,                    -- of its last record: request_ts to end_ts is the time waiting on the API
+    effort TEXT                     -- the effort level it ran at, e.g. medium, high, max
 );
 CREATE INDEX IF NOT EXISTS messages_path ON messages (path);
 CREATE INDEX IF NOT EXISTS messages_day ON messages (day);
@@ -72,7 +82,12 @@ CREATE TABLE IF NOT EXISTS tool_calls (
     tool_use_id TEXT PRIMARY KEY,
     path TEXT NOT NULL,
     tool TEXT NOT NULL,
-    result_chars INTEGER
+    result_chars INTEGER,
+    call_ts TEXT,                   -- of the record with the call
+    result_ts TEXT,                 -- of the record with the result: in between, the tool ran (or waited for
+                                    -- permission)
+    lines_added INTEGER NOT NULL DEFAULT 0,             -- by an Edit or a Write
+    lines_removed INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS tool_calls_path ON tool_calls (path);
 CREATE TABLE IF NOT EXISTS cost_states (
@@ -80,8 +95,15 @@ CREATE TABLE IF NOT EXISTS cost_states (
     path TEXT NOT NULL,             -- the main transcript it was read from
     snapshot_ts TEXT,
     start_ts TEXT,                  -- when the process that wrote it started: the snapshot covers only that run
-    models TEXT NOT NULL            -- JSON: [[model, new_input, cache_write, cache_read, output, cost_usd,
+    models TEXT NOT NULL,           -- JSON: [[model, new_input, cache_write, cache_read, output, cost_usd,
                                     --         web_searches], ...]
+    day TEXT,                       -- local date of snapshot_ts
+    duration_ms INTEGER NOT NULL DEFAULT 0,             -- wall-clock time of the run
+    api_ms INTEGER NOT NULL DEFAULT 0,                  -- waiting on API calls, retries included
+    api_ms_without_retries INTEGER NOT NULL DEFAULT 0,
+    tool_ms INTEGER NOT NULL DEFAULT 0,                 -- running tools
+    lines_added INTEGER NOT NULL DEFAULT 0,
+    lines_removed INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS background (
     session_id TEXT NOT NULL,
@@ -96,6 +118,17 @@ CREATE TABLE IF NOT EXISTS background (
     web_searches INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (session_id, model)
 );
+CREATE TABLE IF NOT EXISTS api_errors (
+    record_id TEXT PRIMARY KEY,     -- the record's uuid
+    path TEXT NOT NULL,             -- the file that stored the id first owns it
+    ts TEXT,
+    day TEXT,                       -- local date of ts
+    error TEXT NOT NULL,            -- e.g. rate_limit, server_error
+    status INTEGER,                 -- HTTP status, e.g. 429
+    limit_type TEXT,                -- for a rate limit, the quota that was hit, e.g. five_hour
+    resets_at TEXT                  -- and when it resets
+);
+CREATE INDEX IF NOT EXISTS api_errors_day ON api_errors (day);
 """
 # A view holds no data, so it is simply recreated on every open.
 VIEW = """
@@ -104,18 +137,33 @@ CREATE VIEW usage_rows AS
 SELECT m.path AS path, t.session_id AS session_id, t.agent_id AS agent_id, t.agent_type AS agent_type,
        t.project AS project, t.slug AS slug, m.model AS model, m.speed AS speed, m.ts AS ts, m.day AS day,
        m.new_input AS new_input, m.cache_write_5m AS cache_write_5m, m.cache_write_1h AS cache_write_1h,
-       m.cache_read AS cache_read, m.output AS output, m.web_searches AS web_searches, 1 AS turn
+       m.cache_read AS cache_read, m.output AS output, m.web_searches AS web_searches, 1 AS turn,
+       m.skill AS skill, m.mcp_server AS mcp_server, m.effort AS effort
 FROM messages m JOIN transcripts t ON t.path = m.path
 UNION ALL
 SELECT b.path, b.session_id, NULL, '(background)', t.project, t.slug, b.model, 'standard', b.ts, b.day,
-       b.new_input, b.cache_write, 0, b.cache_read, b.output, b.web_searches, 0
+       b.new_input, b.cache_write, 0, b.cache_read, b.output, b.web_searches, 0, NULL, NULL, NULL
 FROM background b JOIN transcripts t ON t.path = b.path;
 """
 BACKGROUND = "(background)"               # the agent type of background rows, as in VIEW
+# the run totals of a cost-state record, as cost_states columns and CostState fields
+RUN_FIELDS = ("duration_ms", "api_ms", "api_ms_without_retries", "tool_ms", "lines_added", "lines_removed")
 # columns added after version 1, for stores created before them: (table, column, declaration)
 ADDED_COLUMNS = (("messages", "web_searches", "INTEGER NOT NULL DEFAULT 0"),
                  ("background", "web_searches", "INTEGER NOT NULL DEFAULT 0"),
-                 ("cost_states", "start_ts", "TEXT"))
+                 ("cost_states", "start_ts", "TEXT"),
+                 ("cost_states", "day", "TEXT"),
+                 ("messages", "skill", "TEXT"),
+                 ("messages", "mcp_server", "TEXT"),
+                 ("messages", "request_ts", "TEXT"),
+                 ("messages", "end_ts", "TEXT"),
+                 ("messages", "effort", "TEXT"),
+                 ("tool_calls", "call_ts", "TEXT"),
+                 ("tool_calls", "result_ts", "TEXT"),
+                 ("tool_calls", "lines_added", "INTEGER NOT NULL DEFAULT 0"),
+                 ("tool_calls", "lines_removed", "INTEGER NOT NULL DEFAULT 0"),
+                 ("transcripts", "last_user_ts", "TEXT"),
+                 *(("cost_states", column, "INTEGER NOT NULL DEFAULT 0") for column in RUN_FIELDS))
 TOKEN_FIELDS = ("new_input", "cache_write_5m", "cache_write_1h", "cache_read", "output")
 TOKEN_SUMS = ", ".join(f"SUM(u.{field}) AS {field}" for field in TOKEN_FIELDS)
 USAGE_SUMS = f"SUM(u.turn) AS turns, COUNT(*) AS row_count, SUM(u.web_searches) AS web_searches, {TOKEN_SUMS}"
@@ -126,6 +174,14 @@ GROUPS = {
     "model": (("u.model", "model"),),
     "agent_type": (("u.agent_type", "agent_type"),),
     "project": (("u.project", "project"),),
+    # None for the turns without one
+    "skill": (("u.skill", "skill"),),
+    "mcp_server": (("u.mcp_server", "mcp_server"),),
+    "effort": (("u.effort", "effort"),),
+    "model_effort": (("u.model", "model"), ("u.effort", "effort")),
+    "day_model_effort": (("u.day", "day"), ("u.model", "model"), ("u.effort", "effort")),
+    "hour_model_effort": (("strftime('%Y-%m-%dT%H', u.ts, 'localtime')", "hour"), ("u.model", "model"),
+                          ("u.effort", "effort")),
     "day_model": (("u.day", "day"), ("u.model", "model")),
     # ts is UTC; SQLite's localtime uses the same zone as local_day, so an hour falls on its day
     "hour_model": (("strftime('%Y-%m-%dT%H', u.ts, 'localtime')", "hour"), ("u.model", "model")),
@@ -135,7 +191,16 @@ BACKGROUND_FIELDS = ("new_input", "cache_write", "cache_read", "output", "web_se
 BACKGROUND_DESCRIPTION = "calls Claude Code counted that no transcript shows, e.g. Haiku for titles"
 DEFAULT_SESSION_LIMIT = 50
 DEFAULT_COSTLY_LIMIT = 10
+DEFAULT_EVENT_LIMIT = 50
+# api_errors_by group -> the column it counts by, as (SQL expression, result key)
+ERROR_GROUPS = {
+    "day": ("e.day", "day"),
+    # ts is UTC; SQLite's localtime uses the same zone as local_day, as in GROUPS
+    "hour": ("strftime('%Y-%m-%dT%H', e.ts, 'localtime')", "hour"),
+}
 NO_LIMIT = -1                             # SQLite's LIMIT for all rows
+# effort levels from least to most; others sort after them by name, as on the dashboard
+EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max")
 
 Row = dict[str, Any]
 
@@ -174,7 +239,7 @@ class Store:
                              f"{SCHEMA_VERSION}; update claude-usage")
         elif int(row["value"]) < SCHEMA_VERSION:
             self.add_missing_columns()
-            # versions 1 and 2 didn't keep (all of) the cost-state data: read every file again on the next scan
+            # older versions didn't keep all of the cost-state data: read every file again on the next scan
             # (the upserts make that idempotent; no row is removed)
             self.connection.execute("UPDATE transcripts SET read_offset = 0, size = -1")
             self.connection.execute("UPDATE meta SET value = ? WHERE key = 'schema_version'", (str(SCHEMA_VERSION),))
@@ -248,9 +313,10 @@ def upsert_transcript(store: Store, chunk: transcripts.Chunk, size: int, mtime_n
     """Insert or merge the file's row: title and branch take the newest value, cwd and first_ts the first one."""
     store.connection.execute("""
         INSERT INTO transcripts (path, slug, cwd, project, session_id, agent_id, agent_type, description, title,
-                                 git_branch, size, mtime_ns, read_offset, head_hash, first_ts, last_ts)
+                                 git_branch, size, mtime_ns, read_offset, head_hash, first_ts, last_ts,
+                                 last_user_ts)
         VALUES (:path, :slug, :cwd, COALESCE(:cwd, :slug), :session_id, :agent_id, :agent_type, :description,
-                :title, :git_branch, :size, :mtime_ns, :read_offset, :head_hash, :first_ts, :last_ts)
+                :title, :git_branch, :size, :mtime_ns, :read_offset, :head_hash, :first_ts, :last_ts, :last_user_ts)
         ON CONFLICT (path) DO UPDATE SET
             cwd = COALESCE(transcripts.cwd, excluded.cwd),
             project = COALESCE(transcripts.cwd, excluded.cwd, excluded.slug),
@@ -266,21 +332,24 @@ def upsert_transcript(store: Store, chunk: transcripts.Chunk, size: int, mtime_n
             first_ts = MIN(COALESCE(transcripts.first_ts, excluded.first_ts),
                            COALESCE(excluded.first_ts, transcripts.first_ts)),
             last_ts = MAX(COALESCE(transcripts.last_ts, excluded.last_ts),
-                          COALESCE(excluded.last_ts, transcripts.last_ts))
+                          COALESCE(excluded.last_ts, transcripts.last_ts)),
+            last_user_ts = COALESCE(excluded.last_user_ts, transcripts.last_user_ts)
         """, {"path": str(chunk.path), "slug": chunk.slug, "cwd": chunk.cwd, "session_id": chunk.session_id,
               "agent_id": chunk.agent_id, "agent_type": chunk.agent_type, "description": chunk.description,
               "title": chunk.title, "git_branch": chunk.git_branch, "size": size, "mtime_ns": mtime_ns,
               "read_offset": chunk.end_offset, "head_hash": head, "first_ts": iso(chunk.first_ts),
-              "last_ts": iso(chunk.last_ts), "unknown": transcripts.UNKNOWN_AGENT_TYPE})
+              "last_ts": iso(chunk.last_ts), "last_user_ts": iso(chunk.last_user_ts),
+              "unknown": transcripts.UNKNOWN_AGENT_TYPE})
 
 
 def upsert_messages(store: Store, chunk: transcripts.Chunk) -> int:
     """Insert new messages and update the counters of those this file owns; returns the rows changed. A copy of an
-    id in another file (a forked or resumed session) changes nothing, and ts keeps the first record's time."""
+    id in another file (a forked or resumed session) changes nothing; ts and request_ts keep the first read's
+    time, and end_ts moves to the latest record of a message split across reads."""
     cursor = store.connection.executemany("""
         INSERT INTO messages (message_id, path, model, speed, ts, day, new_input, cache_write_5m, cache_write_1h,
-                              cache_read, output, web_searches)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              cache_read, output, web_searches, skill, mcp_server, request_ts, end_ts, effort)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (message_id) DO UPDATE SET
             model = excluded.model,
             speed = excluded.speed,
@@ -289,26 +358,44 @@ def upsert_messages(store: Store, chunk: transcripts.Chunk) -> int:
             cache_write_1h = excluded.cache_write_1h,
             cache_read = excluded.cache_read,
             output = excluded.output,
-            web_searches = excluded.web_searches
+            web_searches = excluded.web_searches,
+            skill = excluded.skill,
+            mcp_server = excluded.mcp_server,
+            effort = COALESCE(excluded.effort, messages.effort),
+            request_ts = COALESCE(messages.request_ts, excluded.request_ts),
+            end_ts = MAX(COALESCE(messages.end_ts, excluded.end_ts), COALESCE(excluded.end_ts, messages.end_ts))
         WHERE messages.path = excluded.path
         """, [(message.message_id, str(chunk.path), message.model, message.speed, iso(message.timestamp),
                local_day(message.timestamp), message.new_input, message.cache_write_5m, message.cache_write_1h,
-               message.cache_read, message.output, message.web_searches) for message in chunk.messages])
+               message.cache_read, message.output, message.web_searches, message.skill, message.mcp_server,
+               iso(message.request_ts), iso(message.end_ts), message.effort) for message in chunk.messages])
     return max(cursor.rowcount, 0)
 
 
 def insert_tool_calls(store: Store, chunk: transcripts.Chunk) -> None:
     """Insert the chunk's tool calls; ids already stored (by this or another file) are kept as they are."""
     store.connection.executemany(
-        "INSERT OR IGNORE INTO tool_calls (tool_use_id, path, tool, result_chars) VALUES (?, ?, ?, NULL)",
-        [(call.tool_use_id, str(chunk.path), call.tool) for call in chunk.tool_calls])
+        "INSERT OR IGNORE INTO tool_calls (tool_use_id, path, tool, result_chars, call_ts) VALUES (?, ?, ?, NULL, ?)",
+        [(call.tool_use_id, str(chunk.path), call.tool, iso(call.timestamp)) for call in chunk.tool_calls])
 
 
 def update_tool_results(store: Store, chunk: transcripts.Chunk) -> None:
-    """Set the result size on the calls this file owns; a result without a known call is dropped."""
+    """Set the result size, time and changed lines on the calls this file owns; a result without a known call is
+    dropped."""
     store.connection.executemany(
-        "UPDATE tool_calls SET result_chars = ? WHERE tool_use_id = ? AND path = ?",
-        [(result.chars, result.tool_use_id, str(chunk.path)) for result in chunk.tool_results])
+        "UPDATE tool_calls SET result_chars = ?, result_ts = ?, lines_added = ?, lines_removed = ? "
+        "WHERE tool_use_id = ? AND path = ?",
+        [(result.chars, iso(result.timestamp), result.lines_added, result.lines_removed, result.tool_use_id,
+          str(chunk.path)) for result in chunk.tool_results])
+
+
+def insert_api_errors(store: Store, chunk: transcripts.Chunk) -> None:
+    """Insert the chunk's failed API calls; ids already stored (by this or another file) are kept as they are."""
+    store.connection.executemany(
+        "INSERT OR IGNORE INTO api_errors (record_id, path, ts, day, error, status, limit_type, resets_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [(error.record_id, str(chunk.path), iso(error.timestamp), local_day(error.timestamp), error.error,
+          error.status, error.limit_type, iso(error.resets_at)) for error in chunk.api_errors])
 
 
 def upsert_cost_state(store: Store, chunk: transcripts.Chunk, previous_last_ts: str | None) -> None:
@@ -319,12 +406,18 @@ def upsert_cost_state(store: Store, chunk: transcripts.Chunk, previous_last_ts: 
         return
     models = [[model.model, model.new_input, model.cache_write, model.cache_read, model.output, model.cost_usd,
                model.web_searches] for model in cost_state.models]
-    store.connection.execute("""
-        INSERT INTO cost_states (session_id, path, snapshot_ts, start_ts, models) VALUES (?, ?, ?, ?, ?)
+    snapshot_ts = iso(cost_state.snapshot_ts) or previous_last_ts
+    snapshot = datetime.fromisoformat(snapshot_ts) if snapshot_ts else None
+    run_columns = ", ".join(RUN_FIELDS)
+    run_updates = ", ".join(f"{field} = excluded.{field}" for field in RUN_FIELDS)
+    store.connection.execute(f"""
+        INSERT INTO cost_states (session_id, path, snapshot_ts, start_ts, models, day, {run_columns})
+        VALUES (?, ?, ?, ?, ?, ?, {", ".join("?" for _ in RUN_FIELDS)})
         ON CONFLICT (session_id) DO UPDATE SET path = excluded.path, snapshot_ts = excluded.snapshot_ts,
-                                               start_ts = excluded.start_ts, models = excluded.models
-        """, (chunk.session_id, str(chunk.path), iso(cost_state.snapshot_ts) or previous_last_ts,
-              iso(cost_state.start_ts), json.dumps(models)))
+                                               start_ts = excluded.start_ts, models = excluded.models,
+                                               day = excluded.day, {run_updates}
+        """, (chunk.session_id, str(chunk.path), snapshot_ts, iso(cost_state.start_ts), json.dumps(models),
+              local_day(snapshot), *(getattr(cost_state, field) for field in RUN_FIELDS)))
 
 
 def update_background(store: Store, session_ids: set[str]) -> None:
@@ -369,18 +462,21 @@ def scan_file(store: Store, path: Path, known: sqlite3.Row | None) -> tuple[int,
         return None
     head = head_hash(path)
     offset = 0
+    last_user_ts = None
     if known is not None:
         rewritten = (stat.st_size < known["read_offset"]
                      or (known["head_hash"] is not None and head != known["head_hash"]))
         if not rewritten:
             offset = known["read_offset"]
-    chunk = transcripts.parse(path, offset)
+            last_user_ts = datetime.fromisoformat(known["last_user_ts"]) if known["last_user_ts"] else None
+    chunk = transcripts.parse(path, offset, last_user_ts)
     with store.transaction():
         upsert_cost_state(store, chunk, known["last_ts"] if known is not None else None)
         upsert_transcript(store, chunk, stat.st_size, stat.st_mtime_ns, head)
         upserted = upsert_messages(store, chunk)
         insert_tool_calls(store, chunk)
         update_tool_results(store, chunk)
+        insert_api_errors(store, chunk)
     return upserted, chunk.end_offset - offset
 
 
@@ -391,7 +487,7 @@ def scan(store: Store, projects_dir: Path, project_filter: str | None = None) ->
         wanted = transcripts.slug_for(project_filter)
         paths = [path for path in paths if transcripts.project_slug(path) == wanted]
     known = {row["path"]: row for row in store.connection.execute(
-        "SELECT path, session_id, size, mtime_ns, read_offset, head_hash, last_ts FROM transcripts")}
+        "SELECT path, session_id, size, mtime_ns, read_offset, head_hash, last_ts, last_user_ts FROM transcripts")}
     touched = set()
     scanned = 0
     skipped = 0
@@ -502,9 +598,10 @@ def since_text(since: date | None) -> str | None:
 
 
 def totals_by(store: Store, group: str, since: date | None, prices: pricing.Prices,
-              project: str | None = None, until: date | None = None) -> list[Row]:
-    """Totals per day, model, agent_type, project, day_model or hour_model (from the local day since up to the
-    local day until, both inclusive, and of one project path if given), ordered by the group key."""
+              project: str | None = None, until: date | None = None, session_id: str | None = None) -> list[Row]:
+    """Totals per day, model, agent_type, project, skill, mcp_server, effort, model_effort, day_model, hour_model,
+    day_model_effort or hour_model_effort (from the local day since up to the local day until, both inclusive, and
+    of one project path or session if given), ordered by the group key."""
     if group not in GROUPS:
         raise ValueError(f"unknown group {group!r}; expected one of {', '.join(GROUPS)}")
     columns = GROUPS[group]
@@ -513,8 +610,10 @@ def totals_by(store: Store, group: str, since: date | None, prices: pricing.Pric
     rows = store.connection.execute(
         f"SELECT {selected}, u.model AS price_model, u.speed AS speed, {USAGE_SUMS} "
         f"FROM usage_rows u WHERE (:since IS NULL OR u.day >= :since) AND (:until IS NULL OR u.day <= :until) "
-        f"AND (:slug IS NULL OR u.slug = :slug) GROUP BY {grouped}, u.model, u.speed",
-        {"since": since_text(since), "until": since_text(until), "slug": project_slug(project)})
+        f"AND (:slug IS NULL OR u.slug = :slug) AND (:session IS NULL OR u.session_id = :session) "
+        f"GROUP BY {grouped}, u.model, u.speed",
+        {"since": since_text(since), "until": since_text(until), "slug": project_slug(project),
+         "session": session_id})
     sums: dict[tuple[Any, ...], UsageSum] = {}
     for row in rows:
         key = tuple(row[name] for _, name in columns)
@@ -536,16 +635,69 @@ def nearest_days(store: Store, day: date, project: str | None = None) -> tuple[d
                  for value in (row["previous_day"], row["next_day"]))
 
 
+ERROR_FILTER = ("(:since IS NULL OR e.day >= :since) AND (:until IS NULL OR e.day <= :until) "
+                "AND (:slug IS NULL OR t.slug = :slug) AND (:session IS NULL OR t.session_id = :session)")
+
+
+def api_errors_by(store: Store, group: str, since: date | None, project: str | None = None,
+                  until: date | None = None) -> list[Row]:
+    """The failed API calls per local day or hour and error kind (from the local day since up to until, both
+    inclusive, and of one project path if given), ordered by time and kind."""
+    if group not in ERROR_GROUPS:
+        raise ValueError(f"unknown group {group!r}; expected one of {', '.join(ERROR_GROUPS)}")
+    expression, name = ERROR_GROUPS[group]
+    rows = store.connection.execute(
+        f"SELECT {expression} AS {name}, e.error AS error, COUNT(*) AS count "
+        f"FROM api_errors e JOIN transcripts t ON t.path = e.path WHERE {ERROR_FILTER} "
+        f"GROUP BY 1, 2 ORDER BY 1, 2",
+        {"since": since_text(since), "until": since_text(until), "slug": project_slug(project), "session": None})
+    return [dict(row) for row in rows]
+
+
+def api_error_events(store: Store, since: date | None, project: str | None = None, until: date | None = None,
+                     limit: int = DEFAULT_EVENT_LIMIT, session_id: str | None = None) -> list[Row]:
+    """The failed API calls of the range (of one project path or session if given), newest first, with the
+    session, its title and the agent they hit."""
+    rows = store.connection.execute(
+        "SELECT e.record_id AS record_id, e.ts AS ts, e.error AS error, e.status AS status, "
+        "e.limit_type AS limit_type, e.resets_at AS resets_at, t.session_id AS session_id, t.project AS project, "
+        "t.agent_type AS agent_type, (SELECT main.title FROM transcripts main WHERE main.session_id = t.session_id "
+        "AND main.agent_id IS NULL AND main.title IS NOT NULL LIMIT 1) AS title "
+        f"FROM api_errors e JOIN transcripts t ON t.path = e.path WHERE {ERROR_FILTER} "
+        "ORDER BY e.ts DESC, e.rowid DESC LIMIT :limit",
+        {"since": since_text(since), "until": since_text(until), "slug": project_slug(project), "limit": limit,
+         "session": session_id})
+    return [dict(row) for row in rows]
+
+
 def activity_time(mtime_ns: int) -> str:
     """A file mtime as ISO text in UTC."""
     return datetime.fromtimestamp(mtime_ns / 1e9, UTC).isoformat(timespec="seconds")
 
 
+def effort_order(effort: str | None) -> tuple[int, str]:
+    """A sort key for effort levels: low to max, then unknown ones by name, then none."""
+    if effort is None:
+        return len(EFFORT_ORDER) + 1, ""
+    if effort in EFFORT_ORDER:
+        return EFFORT_ORDER.index(effort), effort
+    return len(EFFORT_ORDER), effort
+
+
 def turn_contexts(store: Store, path: str) -> list[sqlite3.Row]:
-    """The file's messages in time order with their time, context size, model and output."""
+    """The file's messages in time order with their time, context size, model, output and effort level."""
     return store.connection.execute(
-        f"SELECT m.ts AS ts, {CONTEXT} AS context, m.output AS output, m.model AS model FROM messages m "
+        f"SELECT m.ts AS ts, {CONTEXT} AS context, m.output AS output, m.model AS model, m.effort AS effort "
+        "FROM messages m "
         "WHERE m.path = ? ORDER BY m.ts, m.rowid", (path,)).fetchall()
+
+
+def transcript_path(store: Store, session_id: str, agent_id: str | None) -> Path | None:
+    """The file of a session's main thread (agent_id None) or of one of its subagents, as last scanned; None if the
+    store doesn't know it. The file itself may be gone."""
+    row = store.connection.execute(
+        "SELECT path FROM transcripts WHERE session_id = ? AND agent_id IS ?", (session_id, agent_id)).fetchone()
+    return None if row is None else Path(row["path"])
 
 
 def session_rows(store: Store, session_id: str) -> list[sqlite3.Row]:
@@ -601,11 +753,15 @@ def agent_detail(store: Store, row: sqlite3.Row, prices: pricing.Prices) -> Row:
     return {"agent_id": row["agent_id"], "agent_type": row["agent_type"], "description": row["description"],
             "first_ts": row["first_ts"], "last_ts": row["last_ts"],
             "models": sorted({turn["model"] for turn in turns}),
+            "model_efforts": [{"model": model, "effort": effort} for model, effort in
+                              sorted({(turn["model"], turn["effort"]) for turn in turns if turn["effort"]},
+                                     key=lambda pair: (pair[0], effort_order(pair[1])))],
             **usage_where(store, "u.path = ? AND u.turn = 1", (row["path"],), prices).as_dict(),
             "context_first": turns[0]["context"] if turns else None,
             "context_last": turns[-1]["context"] if turns else None,
             "input_total": sum(turn["context"] for turn in turns),
-            "context_per_turn": [{"ts": turn["ts"], "context": turn["context"]} for turn in turns],
+            "context_per_turn": [{"ts": turn["ts"], "context": turn["context"], "effort": turn["effort"]}
+                                 for turn in turns],
             "tools": [dict(tool) for tool in tools]}
 
 
@@ -622,7 +778,74 @@ def session_detail(store: Store, session_id: str, prices: pricing.Prices) -> Row
             "first_ts": min((row["first_ts"] for row in rows if row["first_ts"]), default=None),
             "last_ts": max((row["last_ts"] for row in rows if row["last_ts"]), default=None),
             "prompt": prompt, **usage_where(store, "u.session_id = ?", (session_id,), prices).as_dict(),
+            "runtime": session_runtime(store, session_id),
+            "context": context_stats(store, None, session_id=session_id),
+            # the session's usage per model and per model and effort level, background included
+            "models": totals_by(store, "model", None, prices, session_id=session_id),
+            "model_effort": totals_by(store, "model_effort", None, prices, session_id=session_id),
+            # only the turns Claude Code attributes to a skill or an MCP server, as in the summary
+            **{key: [row for row in totals_by(store, group, None, prices, session_id=session_id)
+                     if row[group] is not None]
+               for key, group in (("skills", "skill"), ("mcp_servers", "mcp_server"))},
+            "api_errors": api_error_events(store, None, limit=NO_LIMIT, session_id=session_id),
             "agents": [agent_detail(store, row, prices) for row in rows] + background_detail(store, session_id, prices)}
+
+
+def milliseconds_between(start: str | None, end: str | None) -> int:
+    """The milliseconds from one stored timestamp to a later one; 0 if either is missing or end is earlier."""
+    if start is None or end is None:
+        return 0
+    return max(0, round((datetime.fromisoformat(end) - datetime.fromisoformat(start)).total_seconds() * 1000))
+
+
+def session_runtime(store: Store, session_id: str) -> Row | None:
+    """The session's run totals: from its latest cost-state record ("source": "cost_record"), else estimated from
+    its transcripts ("transcripts"), or None without a timestamped record. The estimate: session time from the
+    first record to the last, API time from each call's request to the end of its reply, tool time from each call
+    to its result (so it includes waiting for permission), lines from the Edit and Write results; the retries
+    are unknown."""
+    row = store.connection.execute(f"SELECT {', '.join(RUN_FIELDS)} FROM cost_states WHERE session_id = ?",
+                                   (session_id,)).fetchone()
+    if row is not None:
+        return {"source": "cost_record", **dict(row)}
+    span = store.connection.execute("SELECT MIN(first_ts) AS first_ts, MAX(last_ts) AS last_ts FROM transcripts "
+                                    "WHERE session_id = ?", (session_id,)).fetchone()
+    if span["first_ts"] is None:
+        return None
+    replies = store.connection.execute(
+        "SELECT m.request_ts, m.end_ts FROM messages m JOIN transcripts t ON t.path = m.path "
+        "WHERE t.session_id = ?", (session_id,)).fetchall()
+    calls = store.connection.execute(
+        "SELECT c.call_ts, c.result_ts, c.lines_added, c.lines_removed FROM tool_calls c "
+        "JOIN transcripts t ON t.path = c.path WHERE t.session_id = ?", (session_id,)).fetchall()
+    return {"source": "transcripts", "duration_ms": milliseconds_between(span["first_ts"], span["last_ts"]),
+            "api_ms": sum(milliseconds_between(reply["request_ts"], reply["end_ts"]) for reply in replies),
+            "api_ms_without_retries": None,
+            "tool_ms": sum(milliseconds_between(call["call_ts"], call["result_ts"]) for call in calls),
+            "lines_added": sum(call["lines_added"] for call in calls),
+            "lines_removed": sum(call["lines_removed"] for call in calls)}
+
+
+def runtime_totals(store: Store, since: date | None, prices: pricing.Prices, project: str | None = None,
+                   until: date | None = None) -> Row:
+    """The run totals of the sessions whose latest cost-state record falls on a local day from since up to until
+    (of one project path if given), with those sessions' whole cost and the cost per 100 lines changed (None
+    without changed lines or a price). A record covers the process that wrote it, so a session filed here counts
+    its whole run."""
+    condition = ("c.session_id IN (SELECT c.session_id FROM cost_states c JOIN transcripts t ON t.path = c.path "
+                 "WHERE (:since IS NULL OR c.day >= :since) AND (:until IS NULL OR c.day <= :until) "
+                 "AND (:slug IS NULL OR t.slug = :slug))")
+    parameters = {"since": since_text(since), "until": since_text(until), "slug": project_slug(project)}
+    sums = ", ".join(f"COALESCE(SUM(c.{field}), 0) AS {field}" for field in RUN_FIELDS)
+    row = store.connection.execute(f"SELECT COUNT(*) AS sessions, {sums} FROM cost_states c WHERE {condition}",
+                                   parameters).fetchone()
+    session_ids = tuple(session["session_id"] for session in store.connection.execute(
+        f"SELECT c.session_id AS session_id FROM cost_states c WHERE {condition}", parameters))
+    placeholders = ", ".join("?" for _ in session_ids)
+    cost = usage_where(store, f"u.session_id IN ({placeholders})", session_ids, prices).as_dict()["cost"]
+    lines = row["lines_added"] + row["lines_removed"]
+    per_100_lines = None if cost is None or lines == 0 else cost / lines * 100
+    return {**dict(row), "cost": cost, "cost_per_100_lines": per_100_lines}
 
 
 def background_detail(store: Store, session_id: str, prices: pricing.Prices) -> list[Row]:
@@ -635,8 +858,25 @@ def background_detail(store: Store, session_id: str, prices: pricing.Prices) -> 
     return [{"agent_id": None, "agent_type": BACKGROUND, "description": BACKGROUND_DESCRIPTION,
              "first_ts": rows[0]["ts"], "last_ts": rows[0]["ts"], "models": [row["model"] for row in rows],
              **usage, "context_first": None, "context_last": None,
-             "input_total": usage["new_input"] + usage["cache_write"] + usage["cache_read"],
+             "input_total": usage["new_input"] + usage["cache_write"] + usage["cache_read"], "model_efforts": [],
              "context_per_turn": [], "tools": []}]
+
+
+def context_stats(store: Store, since: date | None, project: str | None = None, until: date | None = None,
+                  session_id: str | None = None) -> Row:
+    """The median and 90th percentile of the context per main-thread turn (subagents start small and would pull it
+    down) from the local day since up to until, of one project path or session if given; None values without
+    turns. What a compact hint threshold can be chosen by."""
+    contexts = sorted(row["context"] for row in store.connection.execute(
+        f"SELECT {CONTEXT} AS context FROM messages m JOIN transcripts t ON t.path = m.path "
+        "WHERE t.agent_id IS NULL AND (:since IS NULL OR m.day >= :since) AND (:until IS NULL OR m.day <= :until) "
+        "AND (:slug IS NULL OR t.slug = :slug) AND (:session IS NULL OR t.session_id = :session)",
+        {"since": since_text(since), "until": since_text(until), "slug": project_slug(project),
+         "session": session_id}))
+    if not contexts:
+        return {"turns": 0, "median": None, "p90": None}
+    p90 = contexts[0] if len(contexts) == 1 else statistics.quantiles(contexts, n=10, method="inclusive")[8]
+    return {"turns": len(contexts), "median": round(statistics.median(contexts)), "p90": round(p90)}
 
 
 def main_context(store: Store, session_id: str) -> Row:

@@ -7,6 +7,8 @@ from datetime import datetime
 from claude_usage import transcripts
 from helpers import DEFAULT_MODEL
 from helpers import TempDirTestCase
+from helpers import create_result
+from helpers import edit_result
 from helpers import slug
 from helpers import text_block
 from helpers import thinking_block
@@ -84,6 +86,26 @@ class MessageUsageTest(ParseCase):
         self.main.assistant("m2", [text_block("b")], usage(output=1))
         self.assertEqual([message.web_searches for message in self.parse().messages], [3, 0])
 
+    def test_skill_and_mcp_server_the_message_is_attributed_to(self):
+        self.main.assistant("m1", [text_block("a"), text_block("b")], usage(output=5),
+                            attributionSkill="dataviz", attributionMcpServer="codebase-memory-mcp",
+                            attributionMcpTool="search_graph")
+        message = self.parse().messages[0]
+        self.assertEqual((message.skill, message.mcp_server), ("dataviz", "codebase-memory-mcp"))
+
+    def test_effort_level_of_the_message(self):
+        self.main.assistant("m1", [text_block("a"), text_block("b")], usage(output=5), effort="medium")
+        self.assertEqual(self.parse().messages[0].effort, "medium")
+
+    def test_a_message_without_an_effort_level_has_none(self):
+        self.main.assistant("m1", [text_block("a")], usage(output=5))
+        self.assertIsNone(self.parse().messages[0].effort)
+
+    def test_a_message_without_attribution_has_none(self):
+        self.main.assistant("m1", [text_block("a")], usage(output=5), attributionSkill="")
+        message = self.parse().messages[0]
+        self.assertEqual((message.skill, message.mcp_server), (None, None))
+
     def test_assistant_record_without_usage_or_id_is_skipped(self):
         self.main.record("assistant", message={"id": "m1", "model": DEFAULT_MODEL, "content": []})
         self.main.record("assistant", message={"model": DEFAULT_MODEL, "content": [], "usage": usage(output=1)})
@@ -119,6 +141,54 @@ class ToolTest(ParseCase):
         second = self.parse(offset=first.end_offset)
         self.assertEqual(second.tool_calls, ())
         self.assertEqual([(result.tool_use_id, result.chars) for result in second.tool_results], [("t1", 5)])
+
+
+class TimingTest(ParseCase):
+    """What the session time, API wait, tool time and lines changed are estimated from without a cost record."""
+
+    def test_a_message_runs_from_the_user_record_before_it_to_its_last_record(self):
+        self.main.at(datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)).user("hi")
+        self.main.at(datetime(2026, 9, 1, 12, 0, 5, tzinfo=UTC)).assistant(
+            "m1", [thinking_block(), text_block("a")], usage(output=5))
+        message = self.only_message()
+        self.assertEqual((message.request_ts, message.end_ts),
+                         (datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC), datetime(2026, 9, 1, 12, 0, 6, tzinfo=UTC)))
+
+    def test_the_request_time_can_come_from_an_earlier_read(self):
+        self.main.at(datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)).user("hi")
+        first = self.parse()
+        self.assertEqual(first.last_user_ts, datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC))
+        self.main.at(datetime(2026, 9, 1, 12, 0, 9, tzinfo=UTC)).assistant("m1", [text_block("a")], usage(output=5))
+        second = transcripts.parse(self.main.path, first.end_offset, last_user_ts=first.last_user_ts)
+        self.assertEqual(second.messages[0].request_ts, datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC))
+        self.assertIsNone(second.last_user_ts)
+
+    def test_without_a_user_record_before_it_a_message_has_no_request_time(self):
+        self.main.assistant("m1", [text_block("a")], usage(output=5))
+        self.assertIsNone(self.only_message().request_ts)
+
+    def test_tool_calls_and_results_carry_their_time(self):
+        self.main.at(datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)).assistant(
+            "m1", [tool_use_block("t1", "Bash")], usage(output=1))
+        self.main.at(datetime(2026, 9, 1, 12, 0, 30, tzinfo=UTC)).tool_result("t1", "ok")
+        chunk = self.parse()
+        self.assertEqual(chunk.tool_calls[0].timestamp, datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC))
+        self.assertEqual(chunk.tool_results[0].timestamp, datetime(2026, 9, 1, 12, 0, 30, tzinfo=UTC))
+
+    def test_lines_an_edit_added_and_removed(self):
+        self.main.tool_result("t1", "edited", toolUseResult=edit_result(["+a", "-b", " c", "+d"], ["-e"]))
+        result = self.parse().tool_results[0]
+        self.assertEqual((result.lines_added, result.lines_removed), (2, 2))
+
+    def test_lines_of_a_created_file(self):
+        self.main.tool_result("t1", "created", toolUseResult=create_result("one\ntwo\nthree\n"))
+        result = self.parse().tool_results[0]
+        self.assertEqual((result.lines_added, result.lines_removed), (3, 0))
+
+    def test_other_results_change_no_lines(self):
+        self.main.tool_result("t1", "output", toolUseResult={"stdout": "+not a patch", "stderr": ""})
+        result = self.parse().tool_results[0]
+        self.assertEqual((result.lines_added, result.lines_removed), (0, 0))
 
 
 class AgentTest(ParseCase):
@@ -250,12 +320,54 @@ class CostStateTest(ParseCase):
         self.main.cost_state({"claude-sonnet-5": (1, 0, 0, 1, 0.1)})
         self.assertIsNone(self.parse(offset=first.end_offset).cost_state.snapshot_ts)
 
+    def test_run_totals_of_the_process(self):
+        self.main.user("hi")
+        self.main.cost_state({}, totalDuration=600000, totalAPIDuration=240000, totalAPIDurationWithoutRetries=200000,
+                             totalToolDuration=90000, totalLinesAdded=120, totalLinesRemoved=30)
+        state = self.parse().cost_state
+        self.assertEqual((state.duration_ms, state.api_ms, state.api_ms_without_retries, state.tool_ms,
+                          state.lines_added, state.lines_removed), (600000, 240000, 200000, 90000, 120, 30))
+
+    def test_missing_run_totals_count_as_0(self):
+        self.main.user("hi")
+        self.main.cost_state({}, totalDuration=None, totalLinesAdded="12")
+        state = self.parse().cost_state
+        self.assertEqual((state.duration_ms, state.api_ms, state.lines_added), (0, 0, 0))
+
     def test_broken_model_usage_is_skipped(self):
         self.main.user("hi")
         self.main.bare({"type": "cost-state", "sessionId": "s1",
                         "modelUsage": {"claude-x": "nonsense", "claude-y": {"outputTokens": None}}})
         models = self.parse().cost_state.models
         self.assertEqual([(model.model, model.output, model.cost_usd) for model in models], [("claude-y", 0, 0.0)])
+
+
+class ApiErrorTest(ParseCase):
+    def test_a_rate_limit_with_its_quota(self):
+        resets = datetime(2026, 9, 1, 17, 0, tzinfo=UTC)
+        self.main.at(datetime(2026, 9, 1, 14, 3, tzinfo=UTC)).api_error("e1", resets_at=resets)
+        chunk = self.parse()
+        self.assertEqual(chunk.api_errors, (transcripts.ApiError(
+            record_id="e1", timestamp=datetime(2026, 9, 1, 14, 3, tzinfo=UTC), error="rate_limit", status=429,
+            limit_type="five_hour", resets_at=resets),))
+        self.assertEqual(chunk.messages, ())
+
+    def test_a_server_error_without_quota(self):
+        self.main.api_error("e1", error="server_error", status=None, limit_type=None)
+        error = self.parse().api_errors[0]
+        self.assertEqual((error.error, error.status, error.limit_type, error.resets_at),
+                         ("server_error", None, None, None))
+
+    def test_ordinary_messages_are_no_api_errors(self):
+        self.main.assistant("m1", [text_block("a")], usage(output=5))
+        self.assertEqual(self.parse().api_errors, ())
+
+    def test_an_error_without_a_record_id_is_skipped(self):
+        record = self.main.api_error("e1")
+        self.main.path.write_text("", encoding="utf-8")
+        del record["uuid"]
+        self.main.bare(record)
+        self.assertEqual(self.parse().api_errors, ())
 
 
 class OffsetTest(ParseCase):
@@ -345,6 +457,129 @@ class FirstPromptTest(ParseCase):
     def test_missing_file_is_none(self):
         self.main.path.unlink()
         self.assertIsNone(transcripts.first_prompt(self.main.path))
+
+
+class ConversationTest(ParseCase):
+    """The conversation of a transcript as the session view shows it, read from the file on demand."""
+
+    def entries(self):
+        """(kind, text) of each entry."""
+        return [(entry.kind, entry.text) for entry in transcripts.conversation(self.main.path)]
+
+    def test_prompts_and_replies_in_order_with_their_time(self):
+        self.main.at(datetime(2026, 9, 1, 12, 0, tzinfo=UTC)).user("Fix the parser")
+        self.main.assistant("m1", [text_block("Looking."), text_block("Done.")], usage(output=5))
+        self.main.user("thanks", as_blocks=True)
+        entries = transcripts.conversation(self.main.path)
+        self.assertEqual([(entry.kind, entry.text) for entry in entries],
+                         [("prompt", "Fix the parser"), ("text", "Looking."), ("text", "Done."), ("prompt", "thanks")])
+        self.assertEqual(entries[0].timestamp, datetime(2026, 9, 1, 12, 0, tzinfo=UTC))
+        self.assertEqual(entries[1].model, DEFAULT_MODEL)
+
+    def test_injected_user_records_are_skipped(self):
+        self.main.user("skill text", isMeta=True)
+        self.main.user("more skill text", sourceToolUseID="toolu_1")
+        self.main.user("real prompt")
+        self.assertEqual(self.entries(), [("prompt", "real prompt")])
+
+    def test_a_tool_call_with_its_result(self):
+        self.main.assistant("m1", [tool_use_block("t1", "Bash", {"command": "make test", "timeout": 60})],
+                            usage(output=1))
+        self.main.tool_result("t1", "OK", is_error=False)
+        entry = transcripts.conversation(self.main.path)[0]
+        self.assertEqual((entry.kind, entry.tool, entry.summary, entry.result, entry.is_error),
+                         ("tool", "Bash", "make test", "OK", False))
+
+    def test_a_calls_input_comes_split_into_its_fields(self):
+        self.main.assistant("m1", [tool_use_block("t1", "Bash", {"command": "make test", "description": "Run tests",
+                                                                 "timeout": 60})], usage(output=1))
+        fields = transcripts.conversation(self.main.path)[0].tool_fields
+        self.assertEqual(fields, (transcripts.ToolField("command", "make test", 9, False),
+                                  transcripts.ToolField("description", "Run tests", 9, False),
+                                  transcripts.ToolField("timeout", "60", 2, True)))
+
+    def test_structured_values_are_json(self):
+        self.main.assistant("m1", [tool_use_block("t1", "mcp__srv__find", {"filter": {"kind": "fn", "limit": 3},
+                                                                           "names": ["a", "b"]})], usage(output=1))
+        fields = transcripts.conversation(self.main.path)[0].tool_fields
+        self.assertEqual([(field.name, field.is_json) for field in fields], [("filter", True), ("names", True)])
+        self.assertEqual(json.loads(fields[0].value), {"kind": "fn", "limit": 3})
+
+    def test_an_input_that_is_no_object_is_one_json_field(self):
+        self.main.assistant("m1", [tool_use_block("t1", "Odd", None)], usage(output=1))
+        self.main.path.write_text("", encoding="utf-8")
+        self.main.bare({"type": "assistant", "timestamp": "2026-09-01T12:00:00.000Z", "message": {
+            "id": "m1", "model": "claude-sonnet-5", "usage": usage(output=1),
+            "content": [{"type": "tool_use", "id": "t1", "name": "Odd", "input": [1, 2]}]}})
+        fields = transcripts.conversation(self.main.path)[0].tool_fields
+        self.assertEqual(fields, (transcripts.ToolField("input", "[\n  1,\n  2\n]", 12, True),))
+
+    def test_a_failed_call_and_one_without_a_result_yet(self):
+        self.main.assistant("m1", [tool_use_block("t1", "Read", {"file_path": "/x"}),
+                                   tool_use_block("t2", "mcp__srv__find", {"query": "q"})], usage(output=1))
+        self.main.tool_result("t1", "no such file", is_error=True)
+        first, second = transcripts.conversation(self.main.path)
+        self.assertEqual((first.summary, first.is_error), ("/x", True))
+        self.assertEqual((second.tool, second.summary, second.result), ("srv.find", "q", None))
+
+    def test_result_blocks_show_their_text_and_mark_images(self):
+        self.main.assistant("m1", [tool_use_block("t1", "Read")], usage(output=1))
+        self.main.tool_result("t1", [{"type": "text", "text": "abc"}, {"type": "image", "source": {}}])
+        self.assertEqual(transcripts.conversation(self.main.path)[0].result, "abc\n[image]")
+
+    def test_long_inputs_and_results_are_cut_with_their_full_length(self):
+        self.main.assistant("m1", [tool_use_block("t1", "Write", {"content": "x" * 10000})], usage(output=1))
+        self.main.tool_result("t1", "y" * 10000)
+        entry = transcripts.conversation(self.main.path)[0]
+        self.assertEqual((len(entry.result), entry.result_chars), (transcripts.CHAT_TOOL_LIMIT, 10000))
+        content = entry.tool_fields[0]
+        self.assertEqual((content.name, len(content.value), content.chars), ("content", transcripts.CHAT_TOOL_LIMIT,
+                                                                             10000))
+
+    def test_each_field_is_cut_on_its_own(self):
+        self.main.assistant("m1", [tool_use_block("t1", "Write", {"content": "x" * 10000, "file_path": "/a.py"})],
+                            usage(output=1))
+        fields = transcripts.conversation(self.main.path)[0].tool_fields
+        self.assertEqual(fields[1], transcripts.ToolField("file_path", "/a.py", 5, False))
+
+    def test_only_thinking_with_text_is_shown(self):
+        self.main.assistant("m1", [{"type": "thinking", "thinking": "", "signature": "s"},
+                                   {"type": "thinking", "thinking": "Let me see.", "signature": "s"}],
+                            usage(output=1))
+        self.assertEqual(self.entries(), [("thinking", "Let me see.")])
+
+    def test_compactions_and_api_errors_are_markers(self):
+        self.main.record("system", subtype="compact_boundary", content="Conversation compacted")
+        self.main.user("The summary of everything so far", isCompactSummary=True)
+        self.main.api_error("e1")
+        self.main.record("system", subtype="local_command", content="<command-name>/clear</command-name>")
+        self.assertEqual(self.entries(), [("compaction", "Conversation compacted"), ("error", "rate_limit (429)")])
+
+    def test_a_missing_file_raises(self):
+        with self.assertRaises(OSError):
+            transcripts.conversation(self.main.path.with_name("gone.jsonl"))
+
+    def test_replies_carry_their_effort_level(self):
+        self.main.assistant("m1", [text_block("a"), tool_use_block("t1", "Read")], usage(output=5), effort="max")
+        self.assertEqual([entry.effort for entry in transcripts.conversation(self.main.path)], ["max", "max"])
+
+    def test_the_last_entry_of_a_reply_carries_its_final_usage(self):
+        self.main.user("hi")
+        self.main.assistant("m1", [thinking_block("hm"), text_block("a"), tool_use_block("t1", "Read")],
+                            usage(new=10, cache_5m=100, cache_read=1000, output=50), effort="high")
+        self.main.tool_result("t1", "ok")
+        self.main.assistant("m2", [text_block("done")],
+                            dict(usage(output=7), server_tool_use={"web_search_requests": 2}))
+        entries = transcripts.conversation(self.main.path)
+        self.assertEqual([entry.usage is not None for entry in entries], [False, False, False, True, True])
+        first = entries[3].usage
+        self.assertEqual((first.new_input, first.cache_write_5m, first.cache_read, first.output, first.model,
+                          first.effort), (10, 100, 1000, 50, DEFAULT_MODEL, "high"))
+        self.assertEqual((entries[4].usage.output, entries[4].usage.web_searches), (7, 2))
+
+    def test_api_errors_carry_no_usage(self):
+        self.main.api_error("e1")
+        self.assertIsNone(transcripts.conversation(self.main.path)[0].usage)
 
 
 class FindTranscriptsTest(TempDirTestCase):

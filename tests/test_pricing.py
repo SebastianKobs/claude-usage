@@ -50,6 +50,19 @@ class LookupTest(unittest.TestCase):
                 self.assertIsNone(pricing.price_for(self.prices, model))
 
 
+class LongestPrefixTest(unittest.TestCase):
+    def test_the_longest_matching_prefix_wins(self):
+        table = {"claude-opus-5": 1, "claude-opus-5-5": 2, "default": 0}
+        self.assertEqual(pricing.longest_prefix(table, "claude-opus-5-5-20260101"), 2)
+        self.assertEqual(pricing.longest_prefix(table, "claude-opus-5"), 1)
+
+    def test_a_context_suffix_is_ignored(self):
+        self.assertEqual(pricing.longest_prefix({"claude-opus-5-5": 2}, "claude-opus-5-5[1m]"), 2)
+
+    def test_no_match_is_none(self):
+        self.assertIsNone(pricing.longest_prefix({"claude-opus": 1}, "claude-sonnet-5"))
+
+
 class CostTest(unittest.TestCase):
     def test_each_token_category_has_its_price(self):
         cases = {"new_input": 5.0, "cache_write_5m": 6.25, "cache_write_1h": 10.0, "cache_read": 0.5, "output": 25.0}

@@ -165,31 +165,44 @@ function timeBuckets(summary) {
           long: longHour};
 }
 
+// The columns' series: one per model and effort level. A model keeps its color slot ("Other" past the eighth) and
+// its effort levels are shades of that color, in stack order low to max within the model.
 function chartData(summary) {
   const metric = METRICS[state.metric];
   const buckets = timeBuckets(summary);
-  const models = [...new Set(buckets.rows.map(row => row.model))];
-  const slots = modelSlots(models);
-  // series: one per slot, plus "Other" for models past the eighth slot
-  const series = [];
+  const rows = buckets.unit === "hour" ? summary.hour_model_effort : summary.day_model_effort;
+  const slots = modelSlots([...new Set(rows.map(row => row.model))]);
   const bySeries = new Map();
-  for (const model of models) {
-    const slot = slots.get(model);
-    const key = slot === null ? "Other" : model;
-    if (!bySeries.has(key)) {
-      const entry = {key, slot, values: new Map()};
-      bySeries.set(key, entry);
-      series.push(entry);
-    }
-  }
-  series.sort((left, right) => (left.slot ?? SLOT_COUNT) - (right.slot ?? SLOT_COUNT));
-  for (const row of buckets.rows) {
+  for (const row of rows) {
     const slot = slots.get(row.model);
-    const entry = bySeries.get(slot === null ? "Other" : row.model);
-    const key = buckets.keyOf(row);
-    entry.values.set(key, (entry.values.get(key) || 0) + metric.value(row));
+    const model = slot === null ? "Other" : row.model;
+    const key = `${model} · ${effortName(row.effort)}`;
+    if (!bySeries.has(key)) {
+      bySeries.set(key, {key, model, effort: row.effort, slot, color: effortShade(slot, row.effort),
+                         values: new Map()});
+    }
+    const entry = bySeries.get(key);
+    const bucket = buckets.keyOf(row);
+    entry.values.set(bucket, (entry.values.get(bucket) || 0) + metric.value(row));
   }
+  // an unknown effort (background calls) first, as it wears the model's own color
+  const effortOrder = effort => (effort === null ? -1 : effortRank(effort));
+  const series = [...bySeries.values()].sort((left, right) =>
+    (left.slot ?? SLOT_COUNT) - (right.slot ?? SLOT_COUNT) || left.model.localeCompare(right.model) ||
+    effortOrder(left.effort) - effortOrder(right.effort) || String(left.effort).localeCompare(String(right.effort)));
   return {buckets, days: buckets.keys, series, metric};
+}
+
+// The series grouped by model, in stack order
+function modelGroups(series) {
+  const groups = [];
+  for (const entry of series) {
+    if (!groups.length || groups[groups.length - 1].model !== entry.model) {
+      groups.push({model: entry.model, entries: []});
+    }
+    groups[groups.length - 1].entries.push(entry);
+  }
+  return groups;
 }
 
 function niceMax(value) {
@@ -201,9 +214,12 @@ function niceMax(value) {
   return 10 * power;
 }
 
+// per model its name, then a swatch for each of its effort levels in the range
 function renderLegend(series) {
-  document.getElementById("legend").replaceChildren(...series.map(entry =>
-    el("span", {}, el("span", {class: "swatch", style: `background:${slotColor(entry.slot)}`}), entry.key)));
+  document.getElementById("legend").replaceChildren(...modelGroups(series).map(group =>
+    el("span", {class: "legend-group"}, el("strong", {text: group.model}),
+       ...group.entries.map(entry => el("span", {}, el("span", {class: "swatch", style: `background:${entry.color}`}),
+                                        entry.effort ?? "no effort level")))));
 }
 
 function columnPath(x, y, width, height, rounded) {
@@ -218,7 +234,7 @@ function renderChart(summary) {
   const container = document.getElementById("chart");
   const {buckets, days, series, metric} = chartData(summary);
   const title = document.getElementById("chart-title");
-  title.dataset.label = `Per ${buckets.unit}, by model`;
+  title.dataset.label = `Per ${buckets.unit}, by model and effort`;
   title.textContent = hype(title.dataset.label);
   renderLegend(series);
   renderChartTable(buckets, series, metric);
@@ -230,7 +246,9 @@ function renderChart(summary) {
   const band = plotWidth / days.length;
   const barWidth = Math.max(2, Math.min(BAR_MAX, band * 0.6));
   const root = svg("svg", {viewBox: `0 0 ${width} ${PLOT_HEIGHT + AXIS_BAND}`, height: PLOT_HEIGHT + AXIS_BAND,
-                          role: "img", "aria-label": `${metric.label} per ${buckets.unit} by model; table view available`});
+                          role: "img",
+                          "aria-label": `${metric.label} per ${buckets.unit} by model and effort level; ` +
+                                        "table view available"});
   // gridlines and y ticks
   for (let index = 0; index <= 4; index += 1) {
     const value = top * index / 4;
@@ -250,7 +268,8 @@ function renderChart(summary) {
     label.textContent = buckets.short(day);
     root.append(label);
   });
-  // stacked columns, 2px surface gap between segments, rounded data end on the top segment only
+  // stacked columns, a 2px surface gap between a model's shades and a wider one between models (the shades of two
+  // models can come close), rounded data end on the top segment only
   const peak = totals.indexOf(Math.max(...totals));
   days.forEach((day, index) => {
     const x = LEFT_AXIS + band * index + (band - barWidth) / 2;
@@ -258,11 +277,12 @@ function renderChart(summary) {
     let base = PLOT_HEIGHT;
     present.forEach((entry, position) => {
       const height = scale(entry.values.get(day));
-      const gap = position > 0 && height > GAP ? GAP : 0;
+      const wanted = position === 0 ? 0 : present[position - 1].model === entry.model ? GAP : MODEL_GAP;
+      const gap = height > wanted ? wanted : 0;
       const drawn = height - gap;
       if (drawn > 0) {
         root.append(svg("path", {d: columnPath(x, base - height, barWidth, drawn, position === present.length - 1),
-                                 fill: slotColor(entry.slot)}));
+                                 fill: entry.color}));
       }
       base -= height;
     });
@@ -287,16 +307,22 @@ function renderChart(summary) {
   container.replaceChildren(root, tooltip);
 }
 
+// The column's models in the fixed model order (flagship first), each a line with its total and its effort levels
+// indented below (max first), names left and values right-aligned in one column; a total line for several models
 function showTooltip(event, container, hit, heading, day, series, metric, total) {
   const tooltip = document.getElementById("tooltip");
-  const rows = series.filter(entry => entry.values.get(day)).reverse().map(entry =>
-    el("div", {class: "row"}, el("span", {class: "key", style: `background:${slotColor(entry.slot)}`}),
-       el("strong", {text: metric.format(entry.values.get(day))}), el("span", {class: "name", text: entry.key})));
-  tooltip.replaceChildren(el("div", {class: "when", text: heading}),
-                          ...(rows.length ? rows : [el("div", {class: "name", text: "No usage"})]),
-                          rows.length > 1 ? el("div", {class: "row"}, el("span", {class: "key"}),
-                                               el("strong", {text: metric.format(total)}),
-                                               el("span", {class: "name", text: "total"})) : null);
+  const groups = modelGroups(series.filter(entry => entry.values.get(day)));
+  const line = (className, name, value) => el("div", {class: `tip-line ${className}`}, name,
+                                              el("span", {class: "tip-value", text: metric.format(value)}));
+  const lines = groups.flatMap(group => [
+    line("tip-model", el("span", {text: group.model}),
+         group.entries.reduce((sum, entry) => sum + entry.values.get(day), 0)),
+    ...group.entries.slice().reverse().map(entry => line("tip-effort",
+      el("span", {}, el("span", {class: "swatch", style: `background:${entry.color}`}),
+         entry.effort ?? "no effort level"), entry.values.get(day)))]);
+  fill(tooltip, el("div", {class: "when", text: heading}),
+       ...(lines.length ? lines : [el("div", {class: "name", text: "No usage"})]),
+       groups.length > 1 ? line("tip-total", el("span", {text: "Total"}), total) : null);
   placeTooltip(tooltip, container, event, hit);
 }
 

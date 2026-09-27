@@ -4,27 +4,61 @@
 // --- figures -------------------------------------------------------------------------------------------------
 
 function renderKpis(summary) {
-  const totals = summary.totals;
+  document.getElementById("kpis").replaceChildren(...kpiTiles(summary.totals, rangeText(), summary.context,
+                                                              summary.compact_hint_tokens));
+}
+
+// The cost, input, turns and output tiles of a usage total: the range's on the page, a session's in its view.
+// context is the median and p90 context per main-thread turn, shown with the compact hint's threshold.
+function kpiTiles(totals, scope, context, hintTokens) {
   const parts = totals.cost_parts;
   const tile = (label, value, note) => el("div", {class: "card"},
-    el("div", {class: "label", text: label}), el("div", {class: "tile-value", text: value}),
-    note ? el("div", {class: "note", text: note}) : null);
+    themed("div", label, {class: "label"}), el("div", {class: "tile-value", text: value}), note);
   const notes = [totals.unpriced_turns ? `${whole(totals.unpriced_turns)} turns of models without a price are not included`
                                        : "at API list prices"];
   if (totals.web_searches) notes.push(`incl. ${whole(totals.web_searches)} web searches, ${money(parts.web_search)}`);
-  document.getElementById("kpis").replaceChildren(
+  return [
     el("div", {class: "card hero-card"},
-       el("div", {class: "label", text: `${hype("Estimated cost")}, ${rangeText()}`}),
+       el("div", {class: "label"}, themed("span", "Estimated cost"), `, ${scope}`),
        el("div", {class: "hero", text: money(totals.cost)}),
        el("div", {class: "note", text: notes.join(" · ")})),
-    inputSplit(totals, parts),
-    tile(hype("Turns"), whole(totals.turns), hype("API calls with usage")),
-    tile(hype("Output tokens"), compact(totals.output), `${money(parts.output)}`));
+    inputSplit(totals, parts, context, hintTokens),
+    tile("Turns", whole(totals.turns), themed("div", "API calls with usage", {class: "note"})),
+    tile("Output tokens", compact(totals.output), el("div", {class: "note", text: money(parts.output)}))];
+}
+
+function renderRuntime(summary) {
+  const runtime = summary.runtime;
+  const from = `${whole(runtime.sessions)} ${runtime.sessions === 1 ? "session" : "sessions"} that ended in the range`;
+  document.getElementById("runtime").replaceChildren(...runtimeTiles(runtime, from, runtime.cost_per_100_lines));
+}
+
+// Time and lines changed from Claude Code's cost records, of the sessions that ended in the range or of one
+// session. Four separate measures (the API and tool times overlap the wall-clock time and each other), so stat
+// tiles, not a chart. costPer100Lines is null without lines changed or a price. A session's totals estimated from
+// its transcripts (source "transcripts") don't show the retries, and their tool time runs from each call to its
+// result, so it includes waiting for permission.
+function runtimeTiles(runtime, from, costPer100Lines) {
+  const estimated = runtime.source === "transcripts";
+  const tile = (label, value, note) => el("div", {class: "card"},
+    themed("div", label, {class: "label"}), el("div", {class: "tile-value", text: value}),
+    el("div", {class: "note", text: note}));
+  const retries = runtime.api_ms_without_retries === null ? null : runtime.api_ms - runtime.api_ms_without_retries;
+  const retryNote = retries === null ? "retries are not in the transcripts"
+                                     : retries > 0 ? `${duration(retries)} of it retries` : "no time lost to retries";
+  const perLines = costPer100Lines === null ? "no lines changed" : `${money(costPer100Lines)} per 100 lines changed`;
+  return [
+    tile("Session time", duration(runtime.duration_ms), `wall-clock, ${from}`),
+    tile("Waiting on the API", duration(runtime.api_ms), retryNote),
+    tile("Running tools", duration(runtime.tool_ms),
+         estimated ? "from each call to its result, incl. waiting for permission"
+                   : `${percent(runtime.tool_ms, runtime.duration_ms)} of the session time`),
+    tile("Lines changed", `+${whole(runtime.lines_added)} / −${whole(runtime.lines_removed)}`, perLines)];
 }
 
 // Input tokens as processed (new input + cache writes, full price or more) vs. from cache (cache reads, 0.1x): two
 // parts of one whole, so two steps of one hue rather than two categorical colors. A compact tile in the KPI row.
-function inputSplit(totals, parts) {
+function inputSplit(totals, parts, context, hintTokens) {
   const input = inputTotal(totals);
   const segments = [
     {label: "Processed", tokens: totals.new_input + totals.cache_write, cost: parts.new_input + parts.cache_write,
@@ -39,12 +73,19 @@ function inputSplit(totals, parts) {
       el("span", {style: `flex-grow:${part.tokens};background:${part.color}`})));
   const rows = segments.map(part => el("div", {class: "split-row", title: part.note},
     el("span", {class: "swatch", style: `background:${part.color}`}),
-    el("span", {class: "split-label", text: hype(part.label)}),
+    themed("span", part.label, {class: "split-label"}),
     el("strong", {class: "split-number", text: compact(part.tokens)}),
     el("span", {class: "split-number secondary", text: percent(part.tokens, input)}),
     el("span", {class: "split-number", text: money(part.cost)})));
-  return el("div", {class: "card"}, el("div", {class: "label", text: hype("Input tokens")}),
-            el("div", {class: "tile-value", text: compact(input)}), bar, ...rows);
+  // what a compact hint threshold can be chosen by: the context each main-thread turn read
+  const contextNote = context && context.turns
+    ? el("div", {class: "note", title: "The context a main-thread turn reads: new input, cache writes and reads. " +
+                 "The conversation hints at compacting from the threshold on ([chat] compact_hint_tokens)."},
+         `median context ${compact(context.median)} per turn (p90 ${compact(context.p90)})` +
+         (hintTokens ? ` · compact hint at ${compact(hintTokens)}` : ""))
+    : null;
+  return el("div", {class: "card"}, themed("div", "Input tokens", {class: "label"}),
+            el("div", {class: "tile-value", text: compact(input)}), bar, ...rows, contextNote);
 }
 
 function rangeText() {

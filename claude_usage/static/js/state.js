@@ -8,6 +8,7 @@ const AXIS_BAND = 28;
 const LEFT_AXIS = 56;
 const BAR_MAX = 24;
 const GAP = 2;
+const MODEL_GAP = 4;                                      // between two models in a column, wider than between shades
 const CORNER = 4;
 const SLOT_COUNT = 8;
 // Fixed slots so a model keeps its color whatever the range: known ids first, others after in name order.
