@@ -15,12 +15,13 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
   pass temp paths via `--projects-dir` and `--store`. Real `~/.claude/projects` is only read to verify a change
   against real data, and only when the user asks. Print counts and totals then, never prompt or message text.
 - **Never store prompt text:** only token counts, tool names and sizes, titles and metadata. The drilldown reads the
-  first prompt, and the conversation (`transcripts.conversation`), from the transcript on demand. `last-prompt.lastPrompt` and `queue-operation.content` hold prompt
-  text too; never store them either.
+  first prompt, and the conversation (`transcripts.conversation`), from the transcript on demand.
+  `last-prompt.lastPrompt` and `queue-operation.content` hold prompt text too; never store them either.
 - **Keep the history:** never delete rows because a transcript is gone.
-  - Schema migrations only add: new tables, or `ALTER TABLE … ADD COLUMN` via `ADDED_COLUMNS`.
-  - A version bump may reset `read_offset` so the next scan reads every file again; the upserts make that
-    idempotent.
+  - Schema migrations only add: new tables, or `ALTER TABLE … ADD COLUMN` via `ADDED_COLUMNS`. They run under
+    `BEGIN IMMEDIATE`; indexes come after the added columns.
+  - A bump that needs data only a new read gives raises `REREAD_BELOW`: stores below it reset `read_offset` so
+    the next scan reads every file again. The upserts make that idempotent.
 - **Prices** come from the official pricing page (load the `claude-api` skill, or
   platform.claude.com/docs/en/about-claude/pricing), never from memory. Update `prices_checked` with them.
 
@@ -72,7 +73,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     may be missing, in which case the type is `?`.
   - `tool-results/`, `memory/` and anything else: ignore.
   - Paths sort a session's `subagents/` before its main file.
-- **Records:** one JSON object per line. Skip unreadable lines and non-objects.
+- **Records:** one JSON object per line. Skip unreadable lines (also nested too deeply to decode) and non-objects.
+  A timestamp without a zone counts as UTC; an epoch time out of range counts as missing.
   - Conversation records carry `timestamp` (ISO UTC with milliseconds), `sessionId`, `cwd`, `gitBranch` and
     `version`.
   - `ai-title` (`aiTitle`) and some other types have no timestamp.
@@ -107,6 +109,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - When Claude Code writes one: when its process ends. The record has no timestamp; the record before it marks
     the snapshot time.
   - `startTime` is the process start; the snapshot covers only that process's run.
+  - Checked 2026-09-27 (161 transcripts): repeated cost-states in a main file share one `startTime` and their
+    totals only grow, and no message id appears in two files. Keeping one cost-state per session and letting the
+    first file scanned own an id rest on that; re-check (counts only) if resumed or forked sessions change.
   - `modelUsage` has per-model `inputTokens`, `cacheCreationInputTokens` (no 5m/1h split),
     `cacheReadInputTokens`, `outputTokens`, `webSearchRequests` and `costUSD`. Model ids there may carry a `[1m]`
     suffix.
@@ -115,10 +120,14 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
 
 ## Design rules
 - **Incremental scan** (`store.scan`):
-  - An unchanged file (same size and mtime) is skipped; a grown one is read from `read_offset`, complete lines
-    only.
+  - An unchanged file (same size and mtime, for a subagent also the same meta-file mtime) is skipped; a grown
+    one is read from `read_offset`, complete lines only.
   - A file below its offset, or with a new first-line hash, was rewritten and is read again from 0.
   - One transaction per file; WAL mode so a cron scan can run while the server reads.
+  - A file that fails to read or parse goes into the scan's `errors` and is skipped; only a store error
+    (`sqlite3.Error`) stops the scan. One bad file must not keep the files after it out of the store.
+  - `day` is the local date in the scanning process's time zone, fixed at scan time; hours are grouped at query
+    time with SQLite's `localtime`. Cron and the server should run with the same `TZ`.
 - **Ownership:**
   - The file that stored a message id first owns it. Later reads of that file update its counters (the last
     usage wins); copies in forked or resumed sessions change nothing.
@@ -126,7 +135,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - Message rows keep only the path; project, session and agent come from `transcripts`.
 - **Background usage:**
   - After each scan, per touched session and model: the latest snapshot minus the transcripts between the
-    snapshot's `startTime` and its snapshot time, per category, never below 0.
+    snapshot's `startTime` and its snapshot time, per category, never below 0. A file's transaction marks its
+    session in `dirty_sessions`, so a scan that stops early leaves the recomputation to the next one.
   - It goes into `background`. The `usage_rows` view unites it with the messages as agent type `(background)`,
     without turns, filed under the snapshot's day.
 - **Run totals:** the latest cost-state per session, filed under its snapshot day. The summary sums the sessions that

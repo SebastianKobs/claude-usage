@@ -265,6 +265,13 @@ class SessionFieldsTest(ParseCase):
         self.main.record("user", message={"role": "user", "content": "hi"}, timestamp="yesterday")
         self.assertIsNone(self.parse().first_ts)
 
+    def test_a_timestamp_without_a_zone_counts_as_utc(self):
+        self.main.record("user", message={"role": "user", "content": "hi"}, timestamp="2026-09-02T10:00:00")
+        self.main.at(datetime(2026, 9, 2, 11, 0, tzinfo=UTC)).user("again")
+        chunk = self.parse()
+        self.assertEqual((chunk.first_ts, chunk.last_ts),
+                         (datetime(2026, 9, 2, 10, 0, tzinfo=UTC), datetime(2026, 9, 2, 11, 0, tzinfo=UTC)))
+
     def test_empty_file(self):
         chunk = self.parse()
         self.assertEqual((chunk.messages, chunk.tool_calls, chunk.tool_results, chunk.end_offset), ((), (), (), 0))
@@ -300,6 +307,10 @@ class CostStateTest(ParseCase):
         self.main.user("hi")
         self.main.cost_state({"claude-sonnet-5": (1, 0, 0, 1, 0.1)}, start=datetime(2026, 9, 2, 8, 30, tzinfo=UTC))
         self.assertEqual(self.parse().cost_state.start_ts, datetime(2026, 9, 2, 8, 30, tzinfo=UTC))
+
+    def test_a_start_time_out_of_range_is_none(self):
+        self.main.bare({"type": "cost-state", "sessionId": "s1", "startTime": 10 ** 20, "modelUsage": {}})
+        self.assertIsNone(self.parse().cost_state.start_ts)
 
     def test_missing_start_time_is_none(self):
         self.main.user("hi")
@@ -362,6 +373,13 @@ class ApiErrorTest(ParseCase):
         self.main.assistant("m1", [text_block("a")], usage(output=5))
         self.assertEqual(self.parse().api_errors, ())
 
+    def test_a_reset_time_in_milliseconds_is_none(self):
+        record = self.main.api_error("e1", resets_at=datetime(2026, 9, 1, 17, 0, tzinfo=UTC))
+        self.main.path.write_text("", encoding="utf-8")
+        record["quotaLimits"]["resetsAt"] *= 1000
+        self.main.bare(record)
+        self.assertIsNone(self.parse().api_errors[0].resets_at)
+
     def test_an_error_without_a_record_id_is_skipped(self):
         record = self.main.api_error("e1")
         self.main.path.write_text("", encoding="utf-8")
@@ -418,6 +436,11 @@ class OffsetTest(ParseCase):
         self.assertEqual(middle, self.main.path.stat().st_size)
         self.main.assistant("m1", [text_block("ä")], usage(output=3))
         self.assertEqual([message.output for message in self.parse(offset=middle).messages], [3])
+
+    def test_a_line_nested_too_deeply_is_skipped(self):
+        self.main.raw("[" * 100_000)
+        self.main.assistant("m1", [text_block("a")], usage(output=5))
+        self.assertEqual(len(self.parse().messages), 1)
 
     def test_invalid_utf8_bytes_are_replaced_not_fatal(self):
         with self.main.path.open("ab") as handle:

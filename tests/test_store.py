@@ -152,6 +152,15 @@ class ScanTest(StoreCase):
         self.assertEqual(self.rows("SELECT result_chars FROM tool_calls"), [(8,)])
         self.assertEqual(self.rows("SELECT title, git_branch FROM transcripts"), [("Late title", "feature")])
 
+    def test_a_later_read_without_attribution_keeps_the_stored_one(self):
+        main = self.projects.session("s1")
+        main.assistant("m1", [thinking_block()], usage(output=1), attributionSkill="dataviz",
+                       attributionMcpServer="github")
+        self.scan()
+        main.assistant("m1", [text_block("done")], usage(output=40))
+        self.scan()
+        self.assertEqual(self.rows("SELECT skill, mcp_server, output FROM messages"), [("dataviz", "github", 40)])
+
     def test_a_half_written_line_is_picked_up_once_complete(self):
         main = self.projects.session("s1")
         main.user("hi")
@@ -194,8 +203,8 @@ class ScanTest(StoreCase):
         self.scan()
         before = self.dump()
         main.assistant("s1-m3", [tool_use_block("s1-t9", "Bash")], usage(output=7))
-        with mock.patch.object(store, "insert_tool_calls", side_effect=RuntimeError("disk full")):
-            with self.assertRaises(RuntimeError):
+        with mock.patch.object(store, "insert_tool_calls", side_effect=sqlite3.OperationalError("disk full")):
+            with self.assertRaises(sqlite3.OperationalError):
                 self.scan()
         self.assertEqual(self.dump(), before)
         self.scan()
@@ -274,6 +283,17 @@ class ScanTest(StoreCase):
         self.scan()
         self.assertEqual(self.rows("SELECT agent_type FROM transcripts WHERE agent_id = 'a1'"), [("Explore",)])
 
+    def test_a_meta_file_that_appears_later_sets_the_agent_type(self):
+        agent = self.projects.subagent("s1", "a1", meta=False)
+        agent.assistant("m1", [text_block("a")], usage(output=5))
+        self.scan()
+        meta_path = agent.path.with_name("agent-a1.meta.json")
+        meta_path.write_text('{"agentType": "Explore"}', encoding="utf-8")
+        later = agent.path.stat().st_mtime_ns + 1_000_000_000
+        os.utime(meta_path, ns=(later, later))
+        self.scan()
+        self.assertEqual(self.rows("SELECT agent_type FROM transcripts WHERE agent_id = 'a1'"), [("Explore",)])
+
     def test_time_range_widens_across_reads(self):
         main = self.projects.session("s1")
         main.at(DAY_1).user("hi")
@@ -282,6 +302,25 @@ class ScanTest(StoreCase):
         self.scan()
         first, last = self.rows("SELECT first_ts, last_ts FROM transcripts")[0]
         self.assertEqual((datetime.fromisoformat(first), datetime.fromisoformat(last)), (DAY_1, DAY_3))
+
+    def test_a_file_that_fails_to_parse_is_reported_and_the_others_are_stored(self):
+        build_session(self.projects, "s1")
+        build_session(self.projects, "s2")
+        parse = store.transcripts.parse
+
+        def fail_for_s1(path, *arguments):
+            """Parse every file except s1's main transcript, which raises like a parser bug would."""
+            if path.name == "s1.jsonl":
+                raise ValueError("year 58692 is out of range")
+            return parse(path, *arguments)
+
+        with mock.patch.object(store.transcripts, "parse", side_effect=fail_for_s1):
+            result = self.scan()
+        self.assertEqual(len(result.errors), 1)
+        self.assertIn("year 58692", result.errors[0])
+        self.assertEqual(self.rows("SELECT session_id FROM transcripts WHERE agent_id IS NULL"), [("s2",)])
+        self.scan()
+        self.assertEqual(self.count("transcripts"), 4)
 
     def test_a_file_that_vanishes_during_the_scan_is_reported_and_skipped(self):
         build_session(self.projects)
@@ -325,6 +364,23 @@ class BackgroundTest(StoreCase):
         self.main.cost_state({"claude-sonnet-5": (10, 100, 1000, 80, 1.0)})
         self.scan()
         self.assertEqual(self.background(), [])
+
+    def test_an_interrupted_scan_still_gets_its_background_on_the_next(self):
+        self.main.cost_state({"claude-sonnet-5": (15, 100, 1000, 80, 1.0)})
+        self.projects.session("s2").assistant("m9", [text_block("c")], usage(output=5))
+        scan_file = store.scan_file
+
+        def lock_at_s2(usage_store, path, known):
+            """Scan every file until s2's, where the store is locked, as when another scan holds it too long."""
+            if path.name == "s2.jsonl":
+                raise sqlite3.OperationalError("database is locked")
+            return scan_file(usage_store, path, known)
+
+        with mock.patch.object(store, "scan_file", side_effect=lock_at_s2):
+            with self.assertRaises(sqlite3.OperationalError):
+                self.scan()
+        self.scan()                             # s1's files are unchanged now, so this scan skips them
+        self.assertEqual(self.background(), [("claude-sonnet-5", 5, 0, 0, 0)])
 
     def test_messages_after_the_snapshot_do_not_count(self):
         self.main.cost_state({"claude-sonnet-5": (10, 100, 1000, 100, 1.0)})
@@ -788,6 +844,33 @@ class SchemaTest(TempDirTestCase):
             self.assertEqual(store.scan(second, self.projects.root).files_scanned, 1)
             self.assertEqual(second.connection.execute("SELECT effort FROM messages").fetchone()[0], "max")
 
+    def test_a_version_9_store_gets_the_meta_mtime_column_without_reading_its_files_again(self):
+        main = self.projects.session("s1")
+        main.at(DAY_1).assistant("m1", [text_block("a")], usage(output=5))
+        with store.Store(self.store_path) as first:
+            store.scan(first, self.projects.root)
+            # what a version-9 store looks like: transcripts without meta_mtime_ns
+            first.connection.execute("ALTER TABLE transcripts DROP COLUMN meta_mtime_ns")
+            first.connection.execute("UPDATE meta SET value = '9' WHERE key = 'schema_version'")
+        with store.Store(self.store_path) as second:
+            self.assertEqual(store.scan(second, self.projects.root).files_scanned, 0)
+            columns = {row["name"] for row in second.connection.execute("PRAGMA table_info(transcripts)")}
+            self.assertIn("meta_mtime_ns", columns)
+
+    def test_reopening_leaves_the_schema_alone(self):
+        with store.Store(self.store_path) as first:
+            before = first.connection.execute("PRAGMA schema_version").fetchone()[0]
+        with store.Store(self.store_path) as second:
+            self.assertEqual(second.connection.execute("PRAGMA schema_version").fetchone()[0], before)
+
+    def test_an_outdated_view_is_replaced(self):
+        with store.Store(self.store_path) as first:
+            first.connection.execute("DROP VIEW usage_rows")
+            first.connection.execute("CREATE VIEW usage_rows AS SELECT 1 AS turn")
+        with store.Store(self.store_path) as second:
+            columns = [row["name"] for row in second.connection.execute("PRAGMA table_info(usage_rows)")]
+            self.assertIn("effort", columns)
+
     def test_a_newer_schema_is_refused(self):
         with store.Store(self.store_path):
             pass
@@ -797,6 +880,13 @@ class SchemaTest(TempDirTestCase):
         connection.close()
         with self.assertRaises(store.StoreError):
             store.Store(self.store_path)
+
+    def test_an_error_after_sqlite_rolled_back_by_itself_is_raised_as_it_is(self):
+        with store.Store(self.store_path) as opened:
+            with self.assertRaises(ValueError):
+                with opened.transaction():
+                    opened.connection.execute("ROLLBACK")        # as SQLite does itself on e.g. a full disk
+                    raise ValueError("the original error")
 
     def test_the_parent_folder_is_created(self):
         with store.Store(self.tmp / "data" / "nested" / "usage.sqlite"):

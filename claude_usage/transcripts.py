@@ -139,7 +139,7 @@ def decode_line(raw: bytes) -> Record | None:
     """The JSON object on one line, or None for blank, unreadable or non-object lines."""
     try:
         record = json.loads(raw.decode("utf-8", errors="replace"))
-    except ValueError:
+    except (ValueError, RecursionError):      # RecursionError: nested deeper than the decoder's stack
         return None
     if isinstance(record, dict):
         return record
@@ -188,13 +188,17 @@ def text_or_none(value: Any) -> str | None:
 
 
 def parse_timestamp(value: Any) -> datetime | None:
-    """An ISO timestamp like 2026-09-01T12:00:00.000Z, or None if it is missing or invalid."""
+    """An ISO timestamp like 2026-09-01T12:00:00.000Z, or None if it is missing or invalid. One without a zone
+    counts as UTC, so every timestamp compares with every other."""
     if not isinstance(value, str):
         return None
     try:
-        return datetime.fromisoformat(value)
+        moment = datetime.fromisoformat(value)
     except ValueError:
         return None
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=UTC)
+    return moment
 
 
 def message_of(record: Record) -> Record | None:
@@ -356,10 +360,14 @@ def tool_results(records: Iterable[Record]) -> list[ToolResult]:
 
 
 def epoch_seconds(value: Any) -> datetime | None:
-    """A time in seconds since the epoch as a UTC datetime, or None."""
+    """A time in seconds since the epoch as a UTC datetime, or None (also for one out of datetime's range, such as
+    milliseconds given as seconds)."""
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
         return None
-    return datetime.fromtimestamp(value, UTC)
+    try:
+        return datetime.fromtimestamp(value, UTC)
+    except (ValueError, OverflowError, OSError):
+        return None
 
 
 def api_errors(records: Iterable[Record]) -> list[ApiError]:
@@ -443,11 +451,15 @@ def parse_session_id(path: Path) -> str:
     return path.stem
 
 
+def meta_path(path: Path) -> Path:
+    """The agent-<id>.meta.json next to a subagent's transcript."""
+    return path.with_name(f"{path.stem}{META_SUFFIX}")
+
+
 def read_meta(path: Path) -> Record:
     """A subagent's agent-<id>.meta.json, or {} if it is missing or unreadable."""
-    meta_path = path.with_name(f"{path.stem}{META_SUFFIX}")
     try:
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta = json.loads(meta_path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     if isinstance(meta, dict):

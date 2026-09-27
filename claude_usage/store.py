@@ -11,8 +11,8 @@ cost_states; after each scan, the background table gets, per session and model, 
 the transcripts up to the snapshot time (per category, never below 0). The usage_rows view puts messages and
 background rows side by side, so every query includes both; background rows have no turns.
 """
-import json
 import hashlib
+import json
 import sqlite3
 import statistics
 import time
@@ -28,10 +28,12 @@ from typing import Any
 from claude_usage import pricing
 from claude_usage import transcripts
 
-SCHEMA_VERSION = 9                      # 2: cost_states and background; 3: web_searches; 4: start_ts;
+SCHEMA_VERSION = 10                     # 2: cost_states and background; 3: web_searches; 4: start_ts;
                                         # 5: the run totals of cost_states; 6: skill and mcp_server;
                                         # 7: api_errors; 8: the times and lines the run totals
-                                        # are estimated from without a cost record; 9: effort
+                                        # are estimated from without a cost record; 9: effort;
+                                        # 10: meta_mtime_ns
+REREAD_BELOW = 9                        # stores older than this lack data only a new read of every file gives
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -54,9 +56,9 @@ CREATE TABLE IF NOT EXISTS transcripts (
     head_hash TEXT,                 -- SHA-256 of the first line, to notice a rewritten file
     first_ts TEXT,
     last_ts TEXT,
-    last_user_ts TEXT               -- of the last user record read: the request of a reply in the next read
+    last_user_ts TEXT,              -- of the last user record read: the request of a reply in the next read
+    meta_mtime_ns INTEGER           -- of a subagent's meta file when it was read, NULL without one
 );
-CREATE INDEX IF NOT EXISTS transcripts_session ON transcripts (session_id);
 CREATE TABLE IF NOT EXISTS messages (
     message_id TEXT PRIMARY KEY,
     path TEXT NOT NULL,             -- the file that stored the id first owns it
@@ -76,8 +78,6 @@ CREATE TABLE IF NOT EXISTS messages (
     end_ts TEXT,                    -- of its last record: request_ts to end_ts is the time waiting on the API
     effort TEXT                     -- the effort level it ran at, e.g. medium, high, max
 );
-CREATE INDEX IF NOT EXISTS messages_path ON messages (path);
-CREATE INDEX IF NOT EXISTS messages_day ON messages (day);
 CREATE TABLE IF NOT EXISTS tool_calls (
     tool_use_id TEXT PRIMARY KEY,
     path TEXT NOT NULL,
@@ -89,7 +89,6 @@ CREATE TABLE IF NOT EXISTS tool_calls (
     lines_added INTEGER NOT NULL DEFAULT 0,             -- by an Edit or a Write
     lines_removed INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS tool_calls_path ON tool_calls (path);
 CREATE TABLE IF NOT EXISTS cost_states (
     session_id TEXT PRIMARY KEY,
     path TEXT NOT NULL,             -- the main transcript it was read from
@@ -128,12 +127,20 @@ CREATE TABLE IF NOT EXISTS api_errors (
     limit_type TEXT,                -- for a rate limit, the quota that was hit, e.g. five_hour
     resets_at TEXT                  -- and when it resets
 );
+CREATE TABLE IF NOT EXISTS dirty_sessions (
+    session_id TEXT PRIMARY KEY     -- a file of it was scanned, its background is not recomputed yet
+);
+"""
+# after ADDED_COLUMNS, so an index may use an added column
+INDEXES = """
+CREATE INDEX IF NOT EXISTS transcripts_session ON transcripts (session_id);
+CREATE INDEX IF NOT EXISTS messages_path ON messages (path);
+CREATE INDEX IF NOT EXISTS messages_day ON messages (day);
+CREATE INDEX IF NOT EXISTS tool_calls_path ON tool_calls (path);
 CREATE INDEX IF NOT EXISTS api_errors_day ON api_errors (day);
 """
-# A view holds no data, so it is simply recreated on every open.
-VIEW = """
-DROP VIEW IF EXISTS usage_rows;
-CREATE VIEW usage_rows AS
+# A view holds no data, so it is replaced whenever its definition here changes.
+VIEW = """CREATE VIEW usage_rows AS
 SELECT m.path AS path, t.session_id AS session_id, t.agent_id AS agent_id, t.agent_type AS agent_type,
        t.project AS project, t.slug AS slug, m.model AS model, m.speed AS speed, m.ts AS ts, m.day AS day,
        m.new_input AS new_input, m.cache_write_5m AS cache_write_5m, m.cache_write_1h AS cache_write_1h,
@@ -143,8 +150,7 @@ FROM messages m JOIN transcripts t ON t.path = m.path
 UNION ALL
 SELECT b.path, b.session_id, NULL, '(background)', t.project, t.slug, b.model, 'standard', b.ts, b.day,
        b.new_input, b.cache_write, 0, b.cache_read, b.output, b.web_searches, 0, NULL, NULL, NULL
-FROM background b JOIN transcripts t ON t.path = b.path;
-"""
+FROM background b JOIN transcripts t ON t.path = b.path"""
 BACKGROUND = "(background)"               # the agent type of background rows, as in VIEW
 # the run totals of a cost-state record, as cost_states columns and CostState fields
 RUN_FIELDS = ("duration_ms", "api_ms", "api_ms_without_retries", "tool_ms", "lines_added", "lines_removed")
@@ -163,6 +169,7 @@ ADDED_COLUMNS = (("messages", "web_searches", "INTEGER NOT NULL DEFAULT 0"),
                  ("tool_calls", "lines_added", "INTEGER NOT NULL DEFAULT 0"),
                  ("tool_calls", "lines_removed", "INTEGER NOT NULL DEFAULT 0"),
                  ("transcripts", "last_user_ts", "TEXT"),
+                 ("transcripts", "meta_mtime_ns", "INTEGER"),
                  *(("cost_states", column, "INTEGER NOT NULL DEFAULT 0") for column in RUN_FIELDS))
 TOKEN_FIELDS = ("new_input", "cache_write_5m", "cache_write_1h", "cache_read", "output")
 TOKEN_SUMS = ", ".join(f"SUM(u.{field}) AS {field}" for field in TOKEN_FIELDS)
@@ -230,20 +237,29 @@ class Store:
         """Create missing tables and check the schema version. Migrations only ever add."""
         self.connection.execute("PRAGMA journal_mode = WAL")      # a cron scan may run while the server reads
         self.connection.executescript(SCHEMA)
-        row = self.connection.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
-        if row is None:
-            self.connection.execute("INSERT INTO meta (key, value) VALUES ('schema_version', ?)",
-                                    (str(SCHEMA_VERSION),))
-        elif int(row["value"]) > SCHEMA_VERSION:
-            raise StoreError(f"{self.path} has schema version {row['value']}, newer than this tool's "
-                             f"{SCHEMA_VERSION}; update claude-usage")
-        elif int(row["value"]) < SCHEMA_VERSION:
-            self.add_missing_columns()
-            # older versions didn't keep all of the cost-state data: read every file again on the next scan
-            # (the upserts make that idempotent; no row is removed)
-            self.connection.execute("UPDATE transcripts SET read_offset = 0, size = -1")
-            self.connection.execute("UPDATE meta SET value = ? WHERE key = 'schema_version'", (str(SCHEMA_VERSION),))
-        self.connection.executescript(VIEW)
+        # one writer at a time: a cron scan and the server opening an old store together would both add columns
+        with self.transaction():
+            row = self.connection.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
+            if row is None:
+                self.connection.execute("INSERT INTO meta (key, value) VALUES ('schema_version', ?)",
+                                        (str(SCHEMA_VERSION),))
+            elif int(row["value"]) > SCHEMA_VERSION:
+                raise StoreError(f"{self.path} has schema version {row['value']}, newer than this tool's "
+                                 f"{SCHEMA_VERSION}; update claude-usage")
+            elif int(row["value"]) < SCHEMA_VERSION:
+                self.add_missing_columns()
+                if int(row["value"]) < REREAD_BELOW:
+                    # older versions didn't keep all of the data: read every file again on the next scan (the
+                    # upserts make that idempotent; no row is removed)
+                    self.connection.execute("UPDATE transcripts SET read_offset = 0, size = -1")
+                self.connection.execute("UPDATE meta SET value = ? WHERE key = 'schema_version'",
+                                        (str(SCHEMA_VERSION),))
+            view = self.connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'view' AND name = 'usage_rows'").fetchone()
+            if view is None or view["sql"] != VIEW:
+                self.connection.execute("DROP VIEW IF EXISTS usage_rows")
+                self.connection.execute(VIEW)
+        self.connection.executescript(INDEXES)
 
     def add_missing_columns(self) -> None:
         """Add the columns of ADDED_COLUMNS that a store from an older version lacks."""
@@ -259,7 +275,8 @@ class Store:
         try:
             yield
         except BaseException:
-            self.connection.execute("ROLLBACK")
+            if self.connection.in_transaction:        # SQLite may have rolled back by itself, e.g. on a full disk
+                self.connection.execute("ROLLBACK")
             raise
         self.connection.execute("COMMIT")
 
@@ -309,14 +326,16 @@ def head_hash(path: Path) -> str | None:
     return hashlib.sha256(line).hexdigest()
 
 
-def upsert_transcript(store: Store, chunk: transcripts.Chunk, size: int, mtime_ns: int, head: str | None) -> None:
+def upsert_transcript(store: Store, chunk: transcripts.Chunk, size: int, mtime_ns: int, meta_mtime_ns: int | None,
+                      head: str | None) -> None:
     """Insert or merge the file's row: title and branch take the newest value, cwd and first_ts the first one."""
     store.connection.execute("""
         INSERT INTO transcripts (path, slug, cwd, project, session_id, agent_id, agent_type, description, title,
-                                 git_branch, size, mtime_ns, read_offset, head_hash, first_ts, last_ts,
-                                 last_user_ts)
+                                 git_branch, size, mtime_ns, meta_mtime_ns, read_offset, head_hash, first_ts,
+                                 last_ts, last_user_ts)
         VALUES (:path, :slug, :cwd, COALESCE(:cwd, :slug), :session_id, :agent_id, :agent_type, :description,
-                :title, :git_branch, :size, :mtime_ns, :read_offset, :head_hash, :first_ts, :last_ts, :last_user_ts)
+                :title, :git_branch, :size, :mtime_ns, :meta_mtime_ns, :read_offset, :head_hash, :first_ts,
+                :last_ts, :last_user_ts)
         ON CONFLICT (path) DO UPDATE SET
             cwd = COALESCE(transcripts.cwd, excluded.cwd),
             project = COALESCE(transcripts.cwd, excluded.cwd, excluded.slug),
@@ -327,6 +346,7 @@ def upsert_transcript(store: Store, chunk: transcripts.Chunk, size: int, mtime_n
             git_branch = COALESCE(excluded.git_branch, transcripts.git_branch),
             size = excluded.size,
             mtime_ns = excluded.mtime_ns,
+            meta_mtime_ns = excluded.meta_mtime_ns,
             read_offset = excluded.read_offset,
             head_hash = excluded.head_hash,
             first_ts = MIN(COALESCE(transcripts.first_ts, excluded.first_ts),
@@ -337,6 +357,7 @@ def upsert_transcript(store: Store, chunk: transcripts.Chunk, size: int, mtime_n
         """, {"path": str(chunk.path), "slug": chunk.slug, "cwd": chunk.cwd, "session_id": chunk.session_id,
               "agent_id": chunk.agent_id, "agent_type": chunk.agent_type, "description": chunk.description,
               "title": chunk.title, "git_branch": chunk.git_branch, "size": size, "mtime_ns": mtime_ns,
+              "meta_mtime_ns": meta_mtime_ns,
               "read_offset": chunk.end_offset, "head_hash": head, "first_ts": iso(chunk.first_ts),
               "last_ts": iso(chunk.last_ts), "last_user_ts": iso(chunk.last_user_ts),
               "unknown": transcripts.UNKNOWN_AGENT_TYPE})
@@ -359,8 +380,8 @@ def upsert_messages(store: Store, chunk: transcripts.Chunk) -> int:
             cache_read = excluded.cache_read,
             output = excluded.output,
             web_searches = excluded.web_searches,
-            skill = excluded.skill,
-            mcp_server = excluded.mcp_server,
+            skill = COALESCE(excluded.skill, messages.skill),
+            mcp_server = COALESCE(excluded.mcp_server, messages.mcp_server),
             effort = COALESCE(excluded.effort, messages.effort),
             request_ts = COALESCE(messages.request_ts, excluded.request_ts),
             end_ts = MAX(COALESCE(messages.end_ts, excluded.end_ts), COALESCE(excluded.end_ts, messages.end_ts))
@@ -453,12 +474,25 @@ def update_background(store: Store, session_ids: set[str]) -> None:
                 (session_id, model, state["path"], state["snapshot_ts"], local_day(snapshot), *missing))
 
 
+def meta_modified_ns(path: Path) -> int | None:
+    """The mtime of a subagent's meta file, or None for a main transcript or a subagent without one (yet)."""
+    if not transcripts.is_subagent_file(path):
+        return None
+    try:
+        return transcripts.meta_path(path).stat().st_mtime_ns
+    except OSError:
+        return None
+
+
 def scan_file(store: Store, path: Path, known: sqlite3.Row | None) -> tuple[int, int] | None:
     """Read what's new in one file and merge it in one transaction; returns (messages upserted, bytes read), or
     None if the file is unchanged. A file that shrank below the stored offset or got a new first line was rewritten,
     so it's read again from the start (the upserts make that idempotent)."""
     stat = path.stat()
-    if known is not None and known["size"] == stat.st_size and known["mtime_ns"] == stat.st_mtime_ns:
+    meta_mtime_ns = meta_modified_ns(path)
+    # a meta file written after the transcript stopped growing still gets read
+    if (known is not None and known["size"] == stat.st_size and known["mtime_ns"] == stat.st_mtime_ns
+            and known["meta_mtime_ns"] == meta_mtime_ns):
         return None
     head = head_hash(path)
     offset = 0
@@ -472,11 +506,13 @@ def scan_file(store: Store, path: Path, known: sqlite3.Row | None) -> tuple[int,
     chunk = transcripts.parse(path, offset, last_user_ts)
     with store.transaction():
         upsert_cost_state(store, chunk, known["last_ts"] if known is not None else None)
-        upsert_transcript(store, chunk, stat.st_size, stat.st_mtime_ns, head)
+        upsert_transcript(store, chunk, stat.st_size, stat.st_mtime_ns, meta_mtime_ns, head)
         upserted = upsert_messages(store, chunk)
         insert_tool_calls(store, chunk)
         update_tool_results(store, chunk)
         insert_api_errors(store, chunk)
+        # with the file's data, so a scan that stops before update_background leaves the session for the next one
+        store.connection.execute("INSERT OR IGNORE INTO dirty_sessions (session_id) VALUES (?)", (chunk.session_id,))
     return upserted, chunk.end_offset - offset
 
 
@@ -487,8 +523,8 @@ def scan(store: Store, projects_dir: Path, project_filter: str | None = None) ->
         wanted = transcripts.slug_for(project_filter)
         paths = [path for path in paths if transcripts.project_slug(path) == wanted]
     known = {row["path"]: row for row in store.connection.execute(
-        "SELECT path, session_id, size, mtime_ns, read_offset, head_hash, last_ts, last_user_ts FROM transcripts")}
-    touched = set()
+        "SELECT path, session_id, size, mtime_ns, meta_mtime_ns, read_offset, head_hash, last_ts, last_user_ts "
+        "FROM transcripts")}
     scanned = 0
     skipped = 0
     upserted = 0
@@ -497,7 +533,10 @@ def scan(store: Store, projects_dir: Path, project_filter: str | None = None) ->
     for path in paths:
         try:
             outcome = scan_file(store, path, known.get(str(path)))
-        except OSError as exc:              # the file vanished or became unreadable between listing and reading
+        except sqlite3.Error:
+            raise                           # the store itself failed: every other file would fail the same way
+        except Exception as exc:            # this file only: it vanished, or holds something the parser trips on
+            # one bad file must not keep every file after it out of the store until Claude Code deletes them
             errors.append(f"{path}: {exc}")
             continue
         if outcome is None:
@@ -506,10 +545,11 @@ def scan(store: Store, projects_dir: Path, project_filter: str | None = None) ->
         scanned += 1
         upserted += outcome[0]
         bytes_read += outcome[1]
-        touched.add(transcripts.parse_session_id(path))
     # after all files, so every transcript of a touched session is in the store, whatever order they're listed in
     with store.transaction():
-        update_background(store, touched)
+        dirty = {row["session_id"] for row in store.connection.execute("SELECT session_id FROM dirty_sessions")}
+        update_background(store, dirty)
+        store.connection.execute("DELETE FROM dirty_sessions")
     return ScanResult(scanned, skipped, upserted, bytes_read, tuple(errors))
 
 
