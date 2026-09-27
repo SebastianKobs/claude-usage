@@ -6,6 +6,7 @@ consumed; a last line without "\\n" is still being written and waits for the nex
 and decoded one by one, so the offsets are exact byte positions whatever the text contains.
 """
 import json
+import re
 from collections.abc import Iterable
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -249,6 +250,11 @@ def tool_results(records: Iterable[Record]) -> list[ToolResult]:
 def is_subagent_file(path: Path) -> bool:
     """<slug>/<session-id>/subagents/agent-<id>.jsonl"""
     return path.parent.name == SUBAGENTS_DIR and path.name.startswith(AGENT_PREFIX)
+
+
+def slug_for(project_path: str) -> str:
+    """The <slug> folder Claude Code uses for a project path: every non-alphanumeric character replaced by "-"."""
+    return re.sub(r"[^A-Za-z0-9]", "-", project_path)
 
 
 def project_slug(path: Path) -> str:

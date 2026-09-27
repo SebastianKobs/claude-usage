@@ -132,13 +132,15 @@ claude-usage/
 
 ### `store.py`: SQLite, default path `data/usage.sqlite` (config `store`)
 - **Tables:**
-  - `transcripts(path PK, project, session_id, agent_id, agent_type, description, title, git_branch, size, mtime, offset, head_hash, first_ts, last_ts)`
-    - `offset`: bytes read so far
+  - `transcripts(path PK, slug, cwd, project, session_id, agent_id, agent_type, description, title, git_branch, size, mtime_ns, read_offset, head_hash, first_ts, last_ts)`
+    - `read_offset`: bytes read so far (`OFFSET` is an SQL keyword)
+    - `project`: the first `cwd`, else the slug; it switches to the cwd once one appears
     - `head_hash`: SHA-256 of the first line, to notice a file that was rewritten rather than appended to
-  - `messages(message_id PK, path, project, session_id, agent_id, agent_type, model, speed, ts, day, new_input, cache_write_5m, cache_write_1h, cache_read, output)`
-    - `day` = local date of `ts`
-  - `tool_calls(tool_use_id PK, path, session_id, agent_id, tool, result_chars)`: one row per call, summed per tool
-    in the queries
+  - `messages(message_id PK, path, model, speed, ts, day, new_input, cache_write_5m, cache_write_1h, cache_read, output)`
+    - `day` = local date of `ts`; `ts` keeps the first record's time
+  - `tool_calls(tool_use_id PK, path, tool, result_chars)`: one row per call, summed per tool in the queries
+  - Messages and tool calls keep only the file `path`. Project, session and agent type come from a join with
+    `transcripts`, so a cwd or meta file that appears later corrects every row at once.
   - `meta(schema_version)`: migrations only add. Never drop tables or rows on a version change, since the history
     can't be rebuilt once the transcripts are gone.
 - **`scan(store, projects_dir, project_filter=None) -> ScanResult`** (files scanned, skipped, messages upserted,
@@ -150,20 +152,31 @@ claude-usage/
       - Copies of the id in other files (forked or resumed sessions) change nothing. Otherwise old turns would move
         to the copy's session, or be counted twice.
     - Insert tool calls by `tool_use_id`, ignoring ids already stored.
-    - Set `result_chars` on the call's row, by id; a result without a known call is dropped.
-    - Transcript row: `title` and `git_branch` take the newest value seen. `project` (from the first `cwd`) and
-      `first_ts` keep their first value. `last_ts`, `size`, `mtime` and `offset` move on.
+    - Set `result_chars` on the call's row, by id, only from the owning file; a result without a known call is
+      dropped.
+    - Transcript row: `title` and `git_branch` take the newest value seen. `cwd` and `first_ts` keep their first
+      value. `agent_type` keeps its value when the meta file disappears (`?`). `last_ts`, `size`, `mtime_ns` and
+      `read_offset` move on.
+  - **Vanished files:** a file that disappears between listing and reading goes to `ScanResult.errors`, and the scan
+    carries on.
+  - **Concurrent access:** WAL mode, so a cron scan can run while the server reads.
   - **Truncated or rewritten file** (size below `offset`, or a different `head_hash`): read it again from 0. The
     upserts keep this idempotent.
   - **Per file, one transaction:** all rows and the new offset commit together, so an interrupted scan resumes at the
     last committed offset.
   - **Deleted transcripts:** never delete their rows; that's the history.
 - **Queries**, pure functions returning JSON-ready dicts:
-  - `totals_by(store, group, since, prices)` with group in `day | model | agent_type | project | day_model`:
-    tokens split into new, cache write and cache read, plus output, turns and cost.
-  - `live_sessions(store, projects_dir, minutes)`: sessions whose transcripts changed within `minutes` (by file
-    mtime, after a scan). Each entry has project, title, branch, tokens so far, last context and output, and the
-    subagents active within the window with their type and model.
+  - **Usage fields**, in every result: `turns`, `new_input`, `cache_write_5m`, `cache_write_1h`, `cache_write`,
+    `cache_read`, `output`, `cost`, `unpriced_turns`.
+    - Cost is summed per model and speed.
+    - A group containing an unpriced model reports the known part, and counts the rest in `unpriced_turns`.
+    - `cost` is None only if no turn had a price.
+  - `totals_by(store, group, since, prices)` with group in `day | model | agent_type | project | day_model`, ordered
+    by the key; `since` is a local date, inclusive.
+  - `live_sessions(store, minutes, prices, now=None)`: sessions whose transcripts changed within `minutes` (by the
+    mtime seen at the last scan), most recent first. Each entry has project, title, branch, tokens so far, last
+    context and output, and the subagents active within the window with their type and model.
+  - `recent_sessions(store, since, prices, limit=50)`: for the dashboard's session list, newest first.
   - `session_detail(store, session_id, prices)`: the main thread plus each subagent, with turns, context first →
     last, input split, output, tools and cost. Returns None for an unknown id.
 
@@ -242,7 +255,7 @@ Write the test first, then the implementation, for each step:
    - multi-byte UTF-8 and an unreadable line in the middle don't shift the offsets
    - a tool result in a later read than its call is still returned (as a `ToolResult`)
 3. ✅ **`test_pricing.py`:** prefix match, unknown model → None, the fast multiplier, the 1h cache-write price.
-4. **`test_store.py`:**
+4. ✅ **`test_store.py`:**
    - first scan fills the tables
    - unchanged file skipped
    - a grown file is read from its offset only: `bytes read` equals the appended bytes

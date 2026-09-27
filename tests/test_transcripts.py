@@ -142,6 +142,9 @@ class AgentTest(ParseCase):
         agent.assistant("m1", [text_block("a")], usage(output=1), model="claude-haiku-4-5")
         self.assertEqual(self.only_message(agent).model, "claude-haiku-4-5")
 
+    def test_slug_for_a_project_path(self):
+        self.assertEqual(transcripts.slug_for("/home/dev/my.app_2"), "-home-dev-my-app-2")
+
     def test_slug(self):
         agent = self.projects.subagent("s1", "a7", project="/home/dev/other.repo")
         self.assertEqual(self.parse().slug, slug("/home/dev/app"))
