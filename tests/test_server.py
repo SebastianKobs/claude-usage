@@ -15,8 +15,9 @@ from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
-from claude_usage import config
+from claude_usage import compact
 from claude_usage import pricing
+from claude_usage import scan
 from claude_usage import server
 from claude_usage import store
 from helpers import TempDirTestCase
@@ -423,7 +424,7 @@ class ChatTest(ServerCase):
                           {"name": "description", "value": "List", "chars": 4, "is_json": False}])
 
     def test_replies_carry_their_context_and_compact_hints(self):
-        self.app.compact = server.CompactSettings(hint_tokens=1000, warn_share=0.8, auto_compact={"default": 967_000})
+        self.app.compact = compact.CompactSettings(hint_tokens=1000, warn_share=0.8, auto_compact={"default": 967_000})
         self.main.assistant("m8", [text_block("big")], usage(new=10, cache_5m=90, cache_read=1400, output=1))
         _, payload = self.get_json("/api/session/s1/chat")
         entry = payload["entries"][-1]
@@ -460,101 +461,25 @@ class PageTest(unittest.TestCase):
         self.assertEqual(page, re.search(r"\((.+?)\)", server.SESSION_PATH.pattern).group(1))
 
 
-def reply(context, model="claude-sonnet-5", cache_read_cost=0.01):
-    """A conversation entry as the chat payload has it, with the usage fields compact_hints reads."""
-    return {"kind": "text",
-            "usage": {"context": context, "model": model, "cost_parts": {"cache_read": cache_read_cost}}}
+class DayNavigationTest(unittest.TestCase):
+    TODAY = date(2026, 9, 27)
 
+    def navigation(self, days, until, previous_day, next_day):
+        """day_navigation with a fixed today."""
+        return server.day_navigation(days, until, previous_day, next_day, today=self.TODAY)
 
-class CompactHintsTest(unittest.TestCase):
-    """Where the conversation hints at compacting: a configurable soft threshold, and near auto-compaction."""
+    def test_only_a_single_day_has_arrows(self):
+        self.assertEqual(self.navigation(7, date(2026, 9, 20), date(2026, 9, 1), date(2026, 9, 25)),
+                         {"previous_day": None, "next_day": None})
 
-    def setUp(self):
-        self.settings = server.CompactSettings(hint_tokens=200_000, warn_share=0.8,
-                                               auto_compact={"default": 967_000, "claude-haiku-4-5": 200_000})
+    def test_today_has_no_next_day(self):
+        self.assertEqual(self.navigation(1, self.TODAY, date(2026, 9, 25), None),
+                         {"previous_day": "2026-09-25", "next_day": None})
 
-    def hints(self, entries):
-        """The compact_hint of each entry, after compact_hints."""
-        server.compact_hints(entries, self.settings)
-        return [entry.get("compact_hint") for entry in entries]
-
-    def test_a_soft_hint_where_the_context_first_crosses_the_threshold(self):
-        hints = self.hints([reply(150_000), reply(250_000, cache_read_cost=0.03), reply(290_000)])
-        self.assertEqual(hints, [None, {"kind": "soft", "context": 250_000, "threshold": 200_000,
-                                        "reread_cost": 0.03}, None])
-
-    def test_soft_reminders_at_each_step_over_the_threshold(self):
-        hints = self.hints([reply(210_000), reply(290_000), reply(310_000), reply(350_000), reply(400_000)])
-        self.assertEqual([hint and hint["kind"] for hint in hints],
-                         ["soft", None, "soft_reminder", None, "soft_reminder"])
-        self.assertEqual(hints[2], {"kind": "soft_reminder", "context": 310_000, "threshold": 200_000, "times": 1.6})
-
-    def test_a_jump_past_several_steps_reminds_once(self):
-        hints = self.hints([reply(210_000), reply(520_000), reply(590_000), reply(600_000)])
-        self.assertEqual([hint and hint["kind"] for hint in hints], ["soft", "soft_reminder", None, "soft_reminder"])
-
-    def test_auto_reminders_at_each_step_of_the_auto_compact_point(self):
-        contexts = (780_000, 800_000, 825_000, 830_000, 875_000)      # 80.7, 82.7, 85.3, 85.8, 90.5 %
-        hints = self.hints([reply(context) for context in contexts])
-        self.assertEqual([hint and hint["kind"] for hint in hints],
-                         ["auto", None, "auto_reminder", None, "auto_reminder"])
-        self.assertEqual(hints[4], {"kind": "auto_reminder", "context": 875_000, "auto_compact": 967_000,
-                                    "share": 0.9})
-
-    def test_no_soft_reminders_once_the_auto_tier_announced(self):
-        hints = self.hints([reply(210_000), reply(790_000), reply(810_000)])
-        self.assertEqual([hint and hint["kind"] for hint in hints], ["soft", "auto", None])
-
-    def test_the_reminders_start_again_after_a_compaction(self):
-        hints = self.hints([reply(210_000), reply(310_000), {"kind": "compaction"}, reply(220_000), reply(300_000)])
-        self.assertEqual([hint and hint["kind"] for hint in hints],
-                         ["soft", "soft_reminder", None, "soft", "soft_reminder"])
-
-    def test_the_steps_come_from_the_settings(self):
-        self.settings = server.CompactSettings(hint_tokens=100_000, warn_share=0.8, auto_compact={"default": 967_000},
-                                               reminder_step=1.0, auto_reminder_step=0.1)
-        hints = self.hints([reply(100_000), reply(150_000), reply(200_000)])
-        self.assertEqual([hint and hint["kind"] for hint in hints], ["soft", None, "soft_reminder"])
-
-    def test_the_hint_comes_again_after_a_compaction(self):
-        hints = self.hints([reply(250_000), {"kind": "compaction"}, reply(40_000), reply(210_000)])
-        self.assertEqual([hint and hint["kind"] for hint in hints], ["soft", None, None, "soft"])
-
-    def test_near_the_auto_compact_point_of_the_model(self):
-        haiku = self.hints([reply(170_000, model="claude-haiku-4-5-20251001")])
-        self.assertEqual(haiku, [{"kind": "auto", "context": 170_000, "auto_compact": 200_000, "share": 0.85}])
-        default = self.hints([reply(700_000), reply(780_000)])
-        self.assertEqual([hint["kind"] for hint in default], ["soft", "auto"])
-        self.assertEqual(default[1]["auto_compact"], 967_000)
-
-    def test_crossing_both_at_once_warns_once(self):
-        hints = self.hints([reply(800_000), reply(810_000)])
-        self.assertEqual([hint and hint["kind"] for hint in hints], ["auto", None])
-
-    def test_entries_without_usage_are_left_alone(self):
-        self.assertEqual(self.hints([{"kind": "prompt", "usage": None}, {"kind": "tool"}]), [None, None])
-
-
-class CompactSettingsTest(unittest.TestCase):
-    def test_the_shipped_settings(self):
-        settings = server.parse_compact_settings(config.load(overrides=[]).values)
-        self.assertEqual((settings.hint_tokens, settings.warn_share), (200_000, 0.8))
-        self.assertEqual((settings.reminder_step, settings.auto_reminder_step), (0.5, 0.05))
-        self.assertEqual(server.auto_compact_point(settings, "claude-opus-5-5[1m]"), 967_000)
-        self.assertEqual(server.auto_compact_point(settings, "claude-haiku-4-5-20251001"), 200_000)
-
-    def test_missing_tables_take_the_defaults(self):
-        self.assertEqual(server.parse_compact_settings({}), server.DEFAULT_COMPACT)
-
-    def test_bad_values_raise(self):
-        for values in ({"chat": {"compact_hint_tokens": "lots"}}, {"chat": {"auto_compact_warn_share": 2}},
-                       {"auto_compact": {"default": -1}}, {"chat": {"compact_hint_tokens": True}},
-                       {"chat": {"compact_reminder_step": 0}}, {"chat": {"auto_compact_reminder_step": 1.5}},
-                       {"chat": {"compact_reminder_step": float("inf")}}, {"chat": {"auto_compact_warn_share": 5}},
-                       {"chat": 5}, {"auto_compact": "x"}):
-            with self.subTest(values=values):
-                with self.assertRaises(config.ConfigError):
-                    server.parse_compact_settings(values)
+    def test_an_earlier_day_always_reaches_today(self):
+        self.assertEqual(self.navigation(1, date(2026, 9, 20), None, None)["next_day"], "2026-09-27")
+        self.assertEqual(self.navigation(1, date(2026, 9, 20), None, date(2026, 9, 30))["next_day"], "2026-09-27")
+        self.assertEqual(self.navigation(1, date(2026, 9, 20), None, date(2026, 9, 22))["next_day"], "2026-09-22")
 
 
 class HostTest(ServerCase):
@@ -584,13 +509,13 @@ class HostTest(ServerCase):
 
 class ScanTest(ServerCase):
     def test_requests_scan_at_most_every_interval(self):
-        with mock.patch.object(server.store, "scan", wraps=store.scan) as scan:
+        with mock.patch.object(server.scan, "scan", wraps=scan.scan) as scanned:
             self.get("/api/live")
             self.get("/api/summary")
-            self.assertEqual(scan.call_count, 1)
+            self.assertEqual(scanned.call_count, 1)
             self.clock.now += server.SCAN_INTERVAL
             self.get("/api/live")
-            self.assertEqual(scan.call_count, 2)
+            self.assertEqual(scanned.call_count, 2)
 
     def test_new_data_shows_after_the_interval(self):
         self.get("/api/live")
@@ -612,7 +537,7 @@ class ScanTest(ServerCase):
         self.assertIn("projects folder not found", self.get_json("/api/summary")[1]["scan_errors"][0])
 
     def test_a_file_the_scan_skipped_is_reported(self):
-        with mock.patch.object(server.store.transcripts, "parse", side_effect=ValueError("bad line")):
+        with mock.patch.object(server.scan.transcripts, "parse", side_effect=ValueError("bad line")):
             with contextlib.redirect_stderr(io.StringIO()):
                 _, live = self.get_json("/api/live")
         self.assertEqual(len(live["scan_errors"]), 3)

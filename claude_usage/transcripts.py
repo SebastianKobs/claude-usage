@@ -10,7 +10,6 @@ import re
 from collections.abc import Iterable
 from collections.abc import Iterator
 from dataclasses import dataclass
-from dataclasses import replace
 from datetime import UTC
 from datetime import datetime
 from pathlib import Path
@@ -49,6 +48,11 @@ class MessageUsage:
     request_ts: datetime | None = None  # of the last user record before it (a prompt or a tool result): the request
     end_ts: datetime | None = None      # of its last record in this read: the end of the reply
     effort: str | None = None           # the effort level it ran at (effort), e.g. medium, high, max
+
+    @property
+    def context(self) -> int:
+        """New input plus cache writes and reads: the whole context the call sent, as CONTEXT in queries.py."""
+        return self.new_input + self.cache_write_5m + self.cache_write_1h + self.cache_read
 
 
 @dataclass(frozen=True)
@@ -265,45 +269,69 @@ def usage_of(message_id: str, timestamp: datetime | None, model: str, usage: Rec
                         effort=effort)
 
 
-def message_usages(records: Iterable[Record], last_user_ts: datetime | None = None) -> list[MessageUsage]:
+@dataclass
+class MessageTrack:
+    """What a MessageAccumulator keeps of one assistant message id while reading its records."""
+    timestamp: datetime | None          # of its first record
+    model: str
+    usage: Record                       # the latest; the last record of an id carries the final usage
+    request_ts: datetime | None
+    end_ts: datetime | None = None
+    attribution: tuple[str | None, str | None] = (None, None)
+    effort: str | None = None
+
+
+class MessageAccumulator:
     """The final usage per assistant message id, in order of first appearance. A message is stored as one record
     per content block; the last record of an id carries the final usage. Every record of an id carries the same
-    attribution and effort level; the last one set counts. A message's request is the last user record before it,
-    last_user_ts when that was in an earlier read. Synthetic messages are skipped."""
-    first_seen: dict[str, tuple[datetime | None, str]] = {}
-    last_usage: dict[str, Record] = {}
-    attributions: dict[str, tuple[str | None, str | None]] = {}
-    requests: dict[str, datetime | None] = {}
-    ends: dict[str, datetime | None] = {}
-    efforts: dict[str, str] = {}
-    for record in records:
-        if record.get("type") == "user":
-            last_user_ts = parse_timestamp(record.get("timestamp")) or last_user_ts
-        if record.get("type") != "assistant":
-            continue
+    attribution and effort level; the last one set counts. Synthetic messages are skipped."""
+
+    def __init__(self) -> None:
+        self.messages: dict[str, MessageTrack] = {}
+
+    def add(self, record: Record, request_ts: datetime | None = None) -> str | None:
+        """Take in one assistant record, whose request (the last user record before it) was at request_ts; returns
+        its message id, or None for a record without usage."""
         message = message_of(record)
         if message is None:
-            continue
+            return None
         message_id = text_or_none(message.get("id"))
         model = text_or_none(message.get("model")) or ""
         usage = message.get("usage")
         if message_id is None or model == SYNTHETIC_MODEL or not isinstance(usage, dict):
-            continue
-        first_seen.setdefault(message_id, (parse_timestamp(record.get("timestamp")), model))
-        requests.setdefault(message_id, last_user_ts)
-        ends[message_id] = parse_timestamp(record.get("timestamp")) or ends.get(message_id)
-        last_usage[message_id] = usage
+            return None
+        timestamp = parse_timestamp(record.get("timestamp"))
+        track = self.messages.setdefault(message_id, MessageTrack(timestamp, model, usage, request_ts))
+        track.end_ts = timestamp or track.end_ts
+        track.usage = usage
         skill = text_or_none(record.get("attributionSkill"))
         mcp_server = text_or_none(record.get("attributionMcpServer"))
         if skill or mcp_server:
-            attributions[message_id] = (skill, mcp_server)
-        effort = text_or_none(record.get("effort"))
-        if effort:
-            efforts[message_id] = effort
-    return [usage_of(message_id, timestamp, model, last_usage[message_id],
-                     attributions.get(message_id, (None, None)), (requests[message_id], ends[message_id]),
-                     efforts.get(message_id))
-            for message_id, (timestamp, model) in first_seen.items()]
+            track.attribution = (skill, mcp_server)
+        track.effort = text_or_none(record.get("effort")) or track.effort
+        return message_id
+
+    def usage(self, message_id: str) -> MessageUsage:
+        """The final usage of one message id taken in."""
+        track = self.messages[message_id]
+        return usage_of(message_id, track.timestamp, track.model, track.usage, track.attribution,
+                        (track.request_ts, track.end_ts), track.effort)
+
+    def usages(self) -> list[MessageUsage]:
+        """The final usage of every message id taken in, in order of first appearance."""
+        return [self.usage(message_id) for message_id in self.messages]
+
+
+def message_usages(records: Iterable[Record], last_user_ts: datetime | None = None) -> list[MessageUsage]:
+    """The final usage per assistant message id (see MessageAccumulator). A message's request is the last user
+    record before it, last_user_ts when that was in an earlier read."""
+    accumulator = MessageAccumulator()
+    for record in records:
+        if record.get("type") == "user":
+            last_user_ts = parse_timestamp(record.get("timestamp")) or last_user_ts
+        elif record.get("type") == "assistant":
+            accumulator.add(record, last_user_ts)
+    return accumulator.usages()
 
 
 def tool_calls(records: Iterable[Record]) -> list[ToolCall]:
@@ -549,175 +577,3 @@ def first_prompt(path: Path) -> str | None:
     except OSError:
         return None
     return None
-
-
-# --- the conversation, for the session view: read from the file on demand, never stored --------------------------
-
-CHAT_TOOL_LIMIT = 4000                  # characters of a tool's input or result the view gets
-CHAT_TEXT_LIMIT = 20000                 # of a prompt or reply (a pasted log can be huge)
-SUMMARY_LIMIT = 200
-# the input field that says what a call does, in order: the first one a call has is its summary
-SUMMARY_FIELDS = ("command", "file_path", "path", "pattern", "url", "query", "description", "skill", "prompt")
-
-
-@dataclass(frozen=True)
-class ToolField:
-    """One field of a tool call's input: a string as it is, anything else as indented JSON; cut to
-    CHAT_TOOL_LIMIT on its own, so one long field doesn't hide the others."""
-    name: str
-    value: str
-    chars: int                          # the full length
-    is_json: bool
-
-
-@dataclass(frozen=True)
-class ChatEntry:
-    """One step of a conversation: a prompt, a reply's text or thinking, a tool call with its result, or a marker
-    (a compaction, a failed API call)."""
-    kind: str                           # prompt, text, thinking, tool, compaction or error
-    timestamp: datetime | None
-    text: str | None = None             # of a prompt, text, thinking or marker, cut to CHAT_TEXT_LIMIT
-    model: str | None = None            # of a reply
-    tool: str | None = None             # display name of a call
-    summary: str | None = None          # what the call does, from its input
-    tool_fields: tuple[ToolField, ...] = ()  # the input, field by field
-    result: str | None = None           # None while the call has no result yet
-    result_chars: int = 0
-    is_error: bool = False
-    effort: str | None = None           # of a reply: the effort level it ran at
-    usage: MessageUsage | None = None   # on the last entry of an API call: its final token usage
-
-
-def cut(text: str, limit: int) -> str:
-    """text, cut to at most limit characters."""
-    return text[:limit]
-
-
-def result_text(content: Any) -> str:
-    """A tool result as text: a string, or its text blocks with a marker for every other block (an image)."""
-    if isinstance(content, str):
-        return content
-    if not isinstance(content, list):
-        return ""
-    parts = []
-    for block in content:
-        if not isinstance(block, dict):
-            continue
-        if block.get("type") == "text":
-            parts.append(block.get("text") or "")
-        else:
-            parts.append(f"[{block.get('type') or 'block'}]")
-    return "\n".join(parts)
-
-
-def call_summary(tool_input: Any) -> str | None:
-    """The first SUMMARY_FIELDS value of a call's input, as one short line."""
-    if not isinstance(tool_input, dict):
-        return None
-    for field in SUMMARY_FIELDS:
-        value = tool_input.get(field)
-        if isinstance(value, str) and value.strip():
-            return cut(value.strip().splitlines()[0], SUMMARY_LIMIT)
-    return None
-
-
-@dataclass
-class Reply:
-    """What conversation() tracks of one API call while reading: its last entry and its latest usage."""
-    timestamp: datetime | None
-    model: str
-    effort: str | None
-    usage: Record
-    last_entry: int | None = None
-
-
-def tool_fields(tool_input: Any) -> tuple[ToolField, ...]:
-    """A call's input field by field; an input that isn't an object is one JSON field named input."""
-    fields = tool_input.items() if isinstance(tool_input, dict) else [("input", tool_input)]
-    result = []
-    for name, value in fields:
-        is_json = not isinstance(value, str)
-        text = json.dumps(value, indent=2, ensure_ascii=False) if is_json else value
-        result.append(ToolField(str(name), cut(text, CHAT_TOOL_LIMIT), len(text), is_json))
-    return tuple(result)
-
-
-def reply_entries(record: Record, calls: dict[str, int], entries: list[ChatEntry],
-                  replies: dict[str, Reply]) -> None:
-    """Append an assistant record's blocks to entries; calls maps each tool_use id to its entry's index, replies
-    each message id to its Reply."""
-    message = message_of(record) or {}
-    timestamp = parse_timestamp(record.get("timestamp"))
-    model = text_or_none(message.get("model"))
-    effort = text_or_none(record.get("effort"))
-    start = len(entries)
-    for block in content_blocks(record):
-        kind = block.get("type")
-        if kind == "text" and text_or_none(block.get("text")):
-            entries.append(ChatEntry("text", timestamp, cut(block["text"], CHAT_TEXT_LIMIT), model=model,
-                                     effort=effort))
-        elif kind == "thinking" and text_or_none(block.get("thinking")):
-            entries.append(ChatEntry("thinking", timestamp, cut(block["thinking"], CHAT_TEXT_LIMIT), model=model,
-                                     effort=effort))
-        elif kind == "tool_use" and text_or_none(block.get("id")) and text_or_none(block.get("name")):
-            calls[block["id"]] = len(entries)
-            entries.append(ChatEntry("tool", timestamp, model=model, tool=display_name(block["name"]),
-                                     summary=call_summary(block.get("input")),
-                                     tool_fields=tool_fields(block.get("input")),
-                                     effort=effort))
-    message_id = text_or_none(message.get("id"))
-    usage = message.get("usage")
-    if message_id is None or model is None or model == SYNTHETIC_MODEL or not isinstance(usage, dict):
-        return
-    reply = replies.setdefault(message_id, Reply(timestamp, model, effort, usage))
-    reply.usage = usage                 # the last record of a message id carries the final usage
-    reply.effort = effort or reply.effort
-    if len(entries) > start:
-        reply.last_entry = len(entries) - 1
-
-
-def add_usage(entries: list[ChatEntry], replies: dict[str, Reply]) -> None:
-    """Put each API call's final usage on its last entry (a call without a shown entry has nowhere to go)."""
-    for message_id, reply in replies.items():
-        if reply.last_entry is not None:
-            usage = usage_of(message_id, reply.timestamp, reply.model, reply.usage, effort=reply.effort)
-            entries[reply.last_entry] = replace(entries[reply.last_entry], usage=usage)
-
-
-def add_results(record: Record, calls: dict[str, int], entries: list[ChatEntry]) -> None:
-    """Put a user record's tool results into the entries of their calls (a result without a call is dropped)."""
-    for block in content_blocks(record):
-        index = calls.get(text_or_none(block.get("tool_use_id")) or "")
-        if block.get("type") != "tool_result" or index is None:
-            continue
-        text = result_text(block.get("content"))
-        entries[index] = replace(entries[index], result=cut(text, CHAT_TOOL_LIMIT), result_chars=len(text),
-                                 is_error=block.get("is_error") is True)
-
-
-def conversation(path: Path) -> list[ChatEntry]:
-    """The conversation of one transcript file in order: prompts, reply text and thinking with text, tool calls
-    with their results, compactions and failed API calls. Injected user records (isMeta, skill text with
-    sourceToolUseID, compact summaries) are left out. The last entry of each API call carries its final usage.
-    Raises OSError if the file is gone."""
-    entries: list[ChatEntry] = []
-    calls: dict[str, int] = {}
-    replies: dict[str, Reply] = {}
-    for record in iter_lines(path):
-        kind = record.get("type")
-        timestamp = parse_timestamp(record.get("timestamp"))
-        if kind == "system" and record.get("subtype") == "compact_boundary":
-            entries.append(ChatEntry("compaction", timestamp, "Conversation compacted"))
-        elif kind == "assistant" and record.get("isApiErrorMessage") is True:
-            status = record.get("apiErrorStatus")
-            error = text_or_none(record.get("error")) or "unknown"
-            entries.append(ChatEntry("error", timestamp, f"{error} ({status})" if isinstance(status, int) else error))
-        elif kind == "assistant":
-            reply_entries(record, calls, entries, replies)
-        elif kind == "user" and not record.get("sourceToolUseID"):
-            add_results(record, calls, entries)
-            text = prompt_text(record)
-            if text and text.strip():
-                entries.append(ChatEntry("prompt", timestamp, cut(text, CHAT_TEXT_LIMIT)))
-    add_usage(entries, replies)
-    return entries

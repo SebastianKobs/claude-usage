@@ -27,7 +27,10 @@
     --shade-step-6: 13.8%; --shade-step-7: 19.7%; --shade-step-8: 19.7%; --shade-step-other: 13.6%;
   }
 }
-:root[data-theme="dark"] {
+/* The same palette when picked, and under the gimmick themes: they restyle the chrome (their files come later) and
+   keep these validated series, split, hint and code colors, so the numbers stay readable. Keep it equal to the block
+   above (a test checks). */
+:root[data-theme="dark"], :root[data-theme="hacker"], :root[data-theme="startup"], :root[data-theme="rgb"] {
   color-scheme: dark;
   --page: #0d0d0d;
   --surface: #1a1a19;

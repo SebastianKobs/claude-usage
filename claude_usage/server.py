@@ -9,7 +9,6 @@ Host header isn't a loopback name: that stops a web page from reading it through
 import dataclasses
 import ipaddress
 import json
-import math
 import re
 import socket
 import sqlite3
@@ -19,7 +18,6 @@ import time
 import traceback
 from collections.abc import Callable
 from datetime import date
-from datetime import timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
@@ -28,8 +26,11 @@ from typing import Any
 from urllib.parse import parse_qs
 from urllib.parse import urlsplit
 
-from claude_usage import config
+from claude_usage import compact
+from claude_usage import conversation
 from claude_usage import pricing
+from claude_usage import queries
+from claude_usage import scan
 from claude_usage import store
 from claude_usage import transcripts
 
@@ -41,7 +42,6 @@ ASSETS = {f"/static/{path.relative_to(STATIC).as_posix()}": path
           for folder in ("css", "js") for path in sorted((STATIC / folder).rglob("*")) if path.suffix in ASSET_TYPES}
 SCAN_INTERVAL = 5.0                     # seconds between scans triggered by requests
 CONNECTION_TIMEOUT = 30                 # seconds an idle connection may keep its handler thread
-DEFAULT_DAYS = 30
 MAX_DAYS = 3650
 SESSION_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})")
 CHAT_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})/chat")
@@ -58,6 +58,10 @@ class BadRequest(Exception):
     """The request is malformed; the message is sent back as the error."""
 
 
+class NotFound(Exception):
+    """Nothing answers to the request; the message is sent back as the error."""
+
+
 def is_loopback(host: str) -> bool:
     """True for localhost and loopback IP addresses (127.0.0.0/8, ::1)."""
     if host.lower() == "localhost":
@@ -72,7 +76,7 @@ def parse_days(query: str) -> int:
     """The days parameter of a query string (default 30); raises BadRequest if it isn't a whole number in range."""
     values = parse_qs(query).get("days")
     if not values:
-        return DEFAULT_DAYS
+        return queries.DEFAULT_DAYS
     text = values[-1]
     if not re.fullmatch(r"[0-9]{1,4}", text) or not 1 <= int(text) <= MAX_DAYS:
         raise BadRequest(f"days must be a whole number from 1 to {MAX_DAYS}, got {text!r}")
@@ -106,107 +110,6 @@ def parse_agent(query: str) -> str | None:
     return values[-1]
 
 
-@dataclasses.dataclass(frozen=True)
-class CompactSettings:
-    """When the conversation hints at compacting ([chat] and [auto_compact] in the config)."""
-    hint_tokens: int                    # the soft hint: a heuristic threshold, not an Anthropic number
-    warn_share: float                   # the stronger warning from this share of the auto-compact point on
-    auto_compact: dict[str, int]        # where Claude Code auto-compacts, by model id prefix, and "default"
-    reminder_step: float = 0.5          # a soft reminder at each further this share of hint_tokens
-    auto_reminder_step: float = 0.05    # an auto reminder at each further this share of the auto-compact point
-
-
-# about 967K on models with a native 1M window, 200K on 200K windows (code.claude.com/docs/en/model-config)
-DEFAULT_COMPACT = CompactSettings(hint_tokens=200_000, warn_share=0.8, auto_compact={"default": 967_000})
-
-
-def positive_number(owner: str, value: Any, whole: bool) -> float:
-    """value as a positive finite number (a whole one if whole); raises ConfigError naming owner otherwise."""
-    kinds = (int,) if whole else (int, float)
-    if isinstance(value, bool) or not isinstance(value, kinds) or not math.isfinite(value) or value <= 0:
-        raise config.ConfigError(f"{owner}: expected a positive {'whole ' if whole else ''}number, got {value!r}")
-    return value
-
-
-def parse_compact_settings(values: Payload) -> CompactSettings:
-    """The compact settings of the config's [chat] and [auto_compact] tables, missing values from
-    DEFAULT_COMPACT; raises ConfigError for a value that isn't a positive number (a share at most 1)."""
-    for table in ("chat", "auto_compact"):
-        if not isinstance(values.get(table, {}), dict):
-            raise config.ConfigError(f"{table}: expected a table, got {values[table]!r}")
-    chat = values.get("chat") or {}
-    hint = positive_number("chat.compact_hint_tokens", chat.get("compact_hint_tokens", DEFAULT_COMPACT.hint_tokens),
-                           whole=True)
-    share = positive_number("chat.auto_compact_warn_share",
-                            chat.get("auto_compact_warn_share", DEFAULT_COMPACT.warn_share), whole=False)
-    if share > 1:
-        raise config.ConfigError(f"chat.auto_compact_warn_share: expected a share up to 1, got {share!r}")
-    step = positive_number("chat.compact_reminder_step",
-                           chat.get("compact_reminder_step", DEFAULT_COMPACT.reminder_step), whole=False)
-    auto_step = positive_number("chat.auto_compact_reminder_step",
-                                chat.get("auto_compact_reminder_step", DEFAULT_COMPACT.auto_reminder_step),
-                                whole=False)
-    if auto_step > 1:
-        raise config.ConfigError(f"chat.auto_compact_reminder_step: expected a share up to 1, got {auto_step!r}")
-    points = {**DEFAULT_COMPACT.auto_compact}
-    for model, point in (values.get("auto_compact") or {}).items():
-        points[model] = int(positive_number(f"auto_compact.{model}", point, whole=True))
-    return CompactSettings(int(hint), float(share), points, float(step), float(auto_step))
-
-
-def auto_compact_point(settings: CompactSettings, model: str) -> int:
-    """Where Claude Code auto-compacts a conversation with this model: the longest prefix's, else the default."""
-    by_model = {prefix: point for prefix, point in settings.auto_compact.items() if prefix != "default"}
-    return pricing.longest_prefix(by_model, model) or settings.auto_compact["default"]
-
-
-def next_milestone(ratio: float, start: float, step: float) -> float:
-    """The first of start, start + step, start + 2 step, ... above ratio: where the next reminder is due."""
-    # the small tolerance keeps a ratio that lands exactly on a milestone from being taken for one below it
-    return start + (math.floor((ratio - start) / step + 1e-9) + 1) * step
-
-
-def compact_hints(entries: list[Payload], settings: CompactSettings) -> None:
-    """Set compact_hint on the conversation entries, per stretch between compactions, in two tiers:
-    - soft: "soft" where a call's context first reaches hint_tokens (with what re-reading it cost), then a
-      "soft_reminder" at each further reminder_step of hint_tokens (1.5x, 2x, ... by default);
-    - auto: "auto" where it first reaches warn_share of the model's auto-compact point, then an "auto_reminder"
-      at each further auto_reminder_step of that point (85 %, 90 %, ... by default).
-    A call gets at most one hint, the highest milestone it passed; once the auto tier has spoken the soft tier is
-    quiet, so the stronger one takes over."""
-    soft_next: float | None = None      # the next soft milestone, as a multiple of hint_tokens; None: not yet shown
-    auto_next: float | None = None      # the next auto milestone, as a share of the auto-compact point
-    for entry in entries:
-        if entry.get("kind") == "compaction":
-            soft_next = None
-            auto_next = None
-            continue
-        usage = entry.get("usage")
-        if not usage:
-            continue
-        context = usage["context"]
-        point = auto_compact_point(settings, usage["model"])
-        share = context / point
-        times = context / settings.hint_tokens
-        if auto_next is None and share >= settings.warn_share:
-            entry["compact_hint"] = {"kind": "auto", "context": context, "auto_compact": point,
-                                     "share": round(share, 2)}
-            auto_next = next_milestone(share, settings.warn_share, settings.auto_reminder_step)
-        elif auto_next is not None:
-            if share >= auto_next - 1e-9:
-                entry["compact_hint"] = {"kind": "auto_reminder", "context": context, "auto_compact": point,
-                                         "share": round(share, 2)}
-                auto_next = next_milestone(share, settings.warn_share, settings.auto_reminder_step)
-        elif soft_next is None and times >= 1:
-            entry["compact_hint"] = {"kind": "soft", "context": context, "threshold": settings.hint_tokens,
-                                     "reread_cost": usage["cost_parts"]["cache_read"]}
-            soft_next = next_milestone(times, 1.0, settings.reminder_step)
-        elif soft_next is not None and times >= soft_next - 1e-9:
-            entry["compact_hint"] = {"kind": "soft_reminder", "context": context, "threshold": settings.hint_tokens,
-                                     "times": round(times, 1)}
-            soft_next = next_milestone(times, 1.0, settings.reminder_step)
-
-
 def usage_payload(usage: transcripts.MessageUsage, prices: pricing.Prices) -> Payload:
     """One API call's tokens with their estimated cost per category; cost is None for a model without a price (the
     web-search fee counts either way, as in the totals)."""
@@ -214,18 +117,31 @@ def usage_payload(usage: transcripts.MessageUsage, prices: pricing.Prices) -> Pa
               "cache_write_1h": usage.cache_write_1h, "cache_read": usage.cache_read, "output": usage.output}
     fee = pricing.web_search_cost(prices, usage.web_searches)
     parts = pricing.cost_parts(prices, usage.model, usage.speed, **counts)
-    cost_parts = {**dict.fromkeys(store.COST_PARTS, 0.0), **(parts or {}), "web_search": fee}
-    context = usage.new_input + usage.cache_write_5m + usage.cache_write_1h + usage.cache_read
+    cost_parts = {**dict.fromkeys(queries.COST_PARTS, 0.0), **(parts or {}), "web_search": fee}
     return {**counts, "cache_write": usage.cache_write_5m + usage.cache_write_1h, "web_searches": usage.web_searches,
-            "context": context,
+            "context": usage.context,
             "model": usage.model, "speed": usage.speed, "effort": usage.effort,
             "cost": None if parts is None else sum(parts.values()) + fee, "cost_parts": cost_parts}
 
 
-def entry_payload(entry: transcripts.ChatEntry, prices: pricing.Prices) -> Payload:
+def entry_payload(entry: conversation.ChatEntry, prices: pricing.Prices) -> Payload:
     """A conversation entry as JSON-ready fields, a reply's usage with its cost."""
-    return {**dataclasses.asdict(entry), "timestamp": store.iso(entry.timestamp),
+    return {**dataclasses.asdict(entry), "timestamp": scan.iso(entry.timestamp),
             "usage": None if entry.usage is None else usage_payload(entry.usage, prices)}
+
+
+def day_navigation(days: int, until: date, previous_day: date | None, next_day: date | None,
+                   today: date) -> Payload:
+    """The Daily range's arrows as ISO days: the nearest days with usage before and after until, None for no arrow.
+    Only a single day has them. Today stays reachable without usage, and a day past it (a skewed clock) is not."""
+    if days != 1:
+        previous_day = None
+    if days != 1 or until >= today:
+        next_day = None
+    elif next_day is None or next_day > today:
+        next_day = today
+    return {name: None if day is None else day.isoformat()
+            for name, day in (("previous_day", previous_day), ("next_day", next_day))}
 
 
 class UsageApp:
@@ -233,7 +149,8 @@ class UsageApp:
 
     def __init__(self, usage_store: store.Store, projects_dir: Path, prices: pricing.Prices, live_minutes: float,
                  project: str | None = None, prices_checked: str | None = None,
-                 clock: Callable[[], float] = time.monotonic, compact: CompactSettings = DEFAULT_COMPACT) -> None:
+                 clock: Callable[[], float] = time.monotonic,
+                 compact: compact.CompactSettings = compact.DEFAULT_COMPACT) -> None:
         self.store = usage_store
         self.projects_dir = projects_dir
         self.prices = prices
@@ -253,7 +170,7 @@ class UsageApp:
         if self.last_scan is not None and now - self.last_scan < SCAN_INTERVAL:
             return
         try:
-            errors = store.scan(self.store, self.projects_dir, self.project).errors
+            errors = scan.scan(self.store, self.projects_dir, self.project).errors
         except (OSError, sqlite3.Error) as exc:     # no projects folder, or another scan holds the store too long
             errors = (str(exc),)
         if errors != self.scan_errors:
@@ -266,7 +183,7 @@ class UsageApp:
         """/api/live"""
         with self.lock:
             self.refresh()
-            sessions = store.live_sessions(self.store, self.live_minutes, self.prices, project=self.project)
+            sessions = queries.live_sessions(self.store, self.live_minutes, self.prices, project=self.project)
             scan_errors = list(self.scan_errors)
         return {"minutes": self.live_minutes, "sessions": sessions, "scan_errors": scan_errors}
 
@@ -275,55 +192,43 @@ class UsageApp:
         single day with the nearest days before and after it that have usage, the run totals of the sessions that
         ended in them, the failed API calls (rate limits), the newest sessions and the costliest."""
         until = until or date.today()
-        since = until - timedelta(days=days - 1)
+        since = queries.first_day(days, until)
+        single_day = days == 1
+
+        def totals(group: str) -> list[Payload]:
+            """The range's totals per group."""
+            return queries.totals_by(self.store, group, since, self.prices, project=self.project, until=until)
+
         with self.lock:
             self.refresh()
-            groups = {group: store.totals_by(self.store, group, since, self.prices, project=self.project,
-                                             until=until)
-                      for group in ("day_model", "agent_type", "project", "model", "model_effort")}
+            groups = {group: totals(group) for group in ("day_model", "agent_type", "project", "model",
+                                                         "model_effort", "day_model_effort")}
             # only the turns Claude Code attributes to a skill or an MCP server
             for group in ("skill", "mcp_server"):
-                groups[group] = [row for row in store.totals_by(self.store, group, since, self.prices,
-                                                                project=self.project, until=until)
-                                 if row[group] is not None]
+                groups[group] = [row for row in totals(group) if row[group] is not None]
             # hours only for a single day: the dashboard draws them instead of one point
-            groups["hour_model"] = (store.totals_by(self.store, "hour_model", since, self.prices,
-                                                    project=self.project, until=until)
-                                    if days == 1 else [])
-            # the by-model chart splits its columns by model or by effort level
-            groups["day_model_effort"] = store.totals_by(self.store, "day_model_effort", since, self.prices,
-                                                         project=self.project, until=until)
-            groups["hour_model_effort"] = (store.totals_by(self.store, "hour_model_effort", since, self.prices,
-                                                           project=self.project, until=until)
-                                           if days == 1 else [])
+            for group in ("hour_model", "hour_model_effort"):
+                groups[group] = totals(group) if single_day else []
             api_errors = {
-                "day": store.api_errors_by(self.store, "day", since, project=self.project, until=until),
-                "hour": (store.api_errors_by(self.store, "hour", since, project=self.project, until=until)
-                         if days == 1 else []),
-                "events": store.api_error_events(self.store, since, project=self.project, until=until),
+                "day": queries.api_errors_by(self.store, "day", since, project=self.project, until=until),
+                "hour": (queries.api_errors_by(self.store, "hour", since, project=self.project, until=until)
+                         if single_day else []),
+                "events": queries.api_error_events(self.store, since, project=self.project, until=until),
             }
-            context = store.context_stats(self.store, since, project=self.project, until=until)
-            runtime = store.runtime_totals(self.store, since, self.prices, project=self.project, until=until)
+            context = queries.context_stats(self.store, since, project=self.project, until=until)
+            runtime = queries.runtime_totals(self.store, since, self.prices, project=self.project, until=until)
             # every session of the range once: the newest for the list, the costliest for the ranking
-            sessions = store.recent_sessions(self.store, since, self.prices, limit=None, project=self.project,
-                                             until=until)
-            previous_day, next_day = (None, None)
-            if days == 1:
-                previous_day, next_day = store.nearest_days(self.store, until, project=self.project)
+            sessions = queries.recent_sessions(self.store, since, self.prices, limit=None, project=self.project,
+                                               until=until)
+            nearest = queries.nearest_days(self.store, until, project=self.project) if single_day else (None, None)
             scan_errors = list(self.scan_errors)
-        # today stays reachable without usage, and a day past it (a skewed clock) is not
-        if days != 1 or until >= date.today():
-            next_day = None
-        elif next_day is None or next_day > date.today():
-            next_day = date.today()
-        nearest = {name: None if day is None else day.isoformat()
-                   for name, day in (("previous_day", previous_day), ("next_day", next_day))}
-        return {"days": days, "since": since.isoformat(), "until": until.isoformat(), **nearest,
+        return {"days": days, "since": since.isoformat(), "until": until.isoformat(),
+                **day_navigation(days, until, *nearest, today=date.today()),
                 "project_filter": self.project,
-                "prices_checked": self.prices_checked, "totals": store.combined(groups["model"]), **groups,
+                "prices_checked": self.prices_checked, "totals": queries.combined(groups["model"]), **groups,
                 "runtime": runtime, "api_errors": api_errors, "context": context,
                 "compact_hint_tokens": self.compact.hint_tokens, "scan_errors": scan_errors,
-                "sessions": sessions[:store.DEFAULT_SESSION_LIMIT], "costly_sessions": store.costliest(sessions)}
+                "sessions": sessions[:queries.DEFAULT_SESSION_LIMIT], "costly_sessions": queries.costliest(sessions)}
 
     def chat(self, session_id: str, agent_id: str | None) -> Payload | None:
         """/api/session/<id>/chat[?agent=<id>]: the conversation of the main thread or a subagent, read from the
@@ -331,27 +236,62 @@ class UsageApp:
         deleted the file, it is unavailable."""
         with self.lock:
             self.refresh()
-            path = store.transcript_path(self.store, session_id, agent_id)
+            path = queries.transcript_path(self.store, session_id, agent_id)
         if path is None:
             return None
         try:
-            entries = [entry_payload(entry, self.prices) for entry in transcripts.conversation(path)]
+            entries = [entry_payload(entry, self.prices) for entry in conversation.conversation(path)]
         except OSError:
             return {"session_id": session_id, "agent_id": agent_id, "available": False, "entries": []}
-        compact_hints(entries, self.compact)
+        compact.compact_hints(entries, self.compact)
         return {"session_id": session_id, "agent_id": agent_id, "available": True, "entries": entries}
 
     def session(self, session_id: str) -> Payload | None:
         """/api/session/<id>, or None for an unknown id."""
         with self.lock:
             self.refresh()
-            detail = store.session_detail(self.store, session_id, self.prices, read_prompt=False)
-            path = store.transcript_path(self.store, session_id, None)
+            detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False)
+            path = queries.transcript_path(self.store, session_id, None)
         if detail is None:
             return None
         # a file read needn't hold up the other requests
         prompt = None if path is None else transcripts.first_prompt(path)
         return {**detail, "prompt": prompt, "compact_hint_tokens": self.compact.hint_tokens}
+
+
+def route_live(app: UsageApp, match: re.Match[str], query: str) -> Payload:
+    """/api/live"""
+    return app.live()
+
+
+def route_summary(app: UsageApp, match: re.Match[str], query: str) -> Payload:
+    """/api/summary?days=<n>&until=<day>"""
+    return app.summary(parse_days(query), parse_until(query))
+
+
+def route_chat(app: UsageApp, match: re.Match[str], query: str) -> Payload:
+    """/api/session/<id>/chat?agent=<id>"""
+    chat = app.chat(match.group(1), parse_agent(query))
+    if chat is None:
+        raise NotFound(f"unknown session or agent {match.group(1)}")
+    return chat
+
+
+def route_session(app: UsageApp, match: re.Match[str], query: str) -> Payload:
+    """/api/session/<id>"""
+    detail = app.session(match.group(1))
+    if detail is None:
+        raise NotFound(f"unknown session {match.group(1)}")
+    return detail
+
+
+# URL path -> what answers it, from the match and the query string; the first full match answers
+API_ROUTES: tuple[tuple[re.Pattern[str], Callable[[UsageApp, re.Match[str], str], Payload]], ...] = (
+    (re.compile(r"/api/live"), route_live),
+    (re.compile(r"/api/summary"), route_summary),
+    (CHAT_PATH, route_chat),
+    (SESSION_PATH, route_session),
+)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -374,31 +314,16 @@ class Handler(BaseHTTPRequestHandler):
             if url.path in ASSETS:
                 self.send_asset(ASSETS[url.path])
                 return
-            if url.path == "/api/live":
-                self.send_json(HTTPStatus.OK, app.live())
-                return
-            if url.path == "/api/summary":
-                self.send_json(HTTPStatus.OK, app.summary(parse_days(url.query), parse_until(url.query)))
-                return
-            match = CHAT_PATH.fullmatch(url.path)
-            if match:
-                chat = app.chat(match.group(1), parse_agent(url.query))
-                if chat is None:
-                    self.send_json(HTTPStatus.NOT_FOUND, {"error": f"unknown session or agent {match.group(1)}"})
-                else:
-                    self.send_json(HTTPStatus.OK, chat)
-                return
-            match = SESSION_PATH.fullmatch(url.path)
-            if match:
-                detail = app.session(match.group(1))
-                if detail is None:
-                    self.send_json(HTTPStatus.NOT_FOUND, {"error": f"unknown session {match.group(1)}"})
-                else:
-                    self.send_json(HTTPStatus.OK, detail)
-                return
-            self.send_json(HTTPStatus.NOT_FOUND, {"error": f"not found: {url.path}"})
+            for pattern, route in API_ROUTES:
+                match = pattern.fullmatch(url.path)
+                if match:
+                    self.send_json(HTTPStatus.OK, route(app, match, url.query))
+                    return
+            raise NotFound(f"not found: {url.path}")
         except BadRequest as exc:
             self.send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        except NotFound as exc:
+            self.send_json(HTTPStatus.NOT_FOUND, {"error": str(exc)})
         except (BrokenPipeError, ConnectionResetError):
             return                                      # the page went away mid-answer; nobody to tell
         except Exception as exc:                        # deliberately broad: answer as JSON, keep serving

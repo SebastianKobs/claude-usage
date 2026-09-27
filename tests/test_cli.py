@@ -221,9 +221,9 @@ class ServeCommandTest(CliCase):
         def scan(*arguments):
             """Note whether the URL is out already, as `make start` waits for it."""
             printed_before_scan.append("Serving http://127.0.0.1:" in sys.stdout.getvalue())
-            return server.store.ScanResult(0, 0, 0, 0, ())
+            return server.scan.ScanResult(0, 0, 0, 0, ())
 
-        with mock.patch.object(server.store, "scan", side_effect=scan):
+        with mock.patch.object(server.scan, "scan", side_effect=scan):
             with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
                 self.run_cli("serve", "--port", "0")
         self.assertEqual(printed_before_scan, [True])
@@ -295,7 +295,7 @@ class ArgumentTest(CliCase):
                 self.assertNotIn("Traceback", err)
 
     def test_ctrl_c_during_a_command_exits_130(self):
-        with mock.patch.object(cli.store, "scan", side_effect=KeyboardInterrupt):
+        with mock.patch.object(cli.scan, "scan", side_effect=KeyboardInterrupt):
             code, _, err = self.run_cli("scan")
         self.assertEqual(code, 130)
         self.assertIn("interrupted", err)

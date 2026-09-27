@@ -1,5 +1,6 @@
 /* Layout and components, for every theme; the themes only set the color roles and restyle the chrome. */
 
+:root { --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -86,9 +87,9 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
 .chart { position: relative; width: 100%; }
 .chart svg { display: block; width: 100%; overflow: visible; }
 .chart .hit { fill: transparent; cursor: default; outline: none; }
-.chart .hit:hover, .chart .hit:focus-visible { fill: var(--wash); }
-.chart .trend-hit:hover, .chart .trend-hit:focus-visible { fill: transparent; }  /* lines: the crosshair responds */
-/* the fill alone is too faint to find the keyboard focus by */
+/* the cursor layer stays clear: the crosshair, or a column's highlight, shows where it is */
+.chart .column-mark { fill: var(--wash); pointer-events: none; }
+/* the keyboard focus: an outline around the plot, the cursor layer being clear */
 .chart .hit:focus-visible { stroke: var(--text-secondary); stroke-width: 2; }
 .crosshair { stroke: var(--text-muted); stroke-width: 1; }
 .panel-title { fill: var(--text-secondary); font-size: 12px; }
@@ -176,7 +177,7 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 .tool-fields dt { color: var(--text-secondary); }
 .tool-fields dd { margin: 0; overflow-wrap: anywhere; }
 .tool-fields dd pre { margin: 0; }
-.chat-tool code.hljs { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.chat-tool code.hljs { font-family: var(--mono); }
 .hljs-keyword, .hljs-built_in, .hljs-type, .hljs-selector-tag, .hljs-doctag { color: var(--code-keyword); }
 .hljs-string, .hljs-regexp, .hljs-symbol, .hljs-template-tag, .hljs-link { color: var(--code-string); }
 .hljs-number, .hljs-literal, .hljs-bullet { color: var(--code-number); }
@@ -204,10 +205,10 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 .chat-markdown hr { border: 0; border-top: 1px solid var(--border); margin: 10px 0; }
 .chat-markdown a { color: var(--split-strong); }
 .chat-markdown :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--wash); font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  font-family: var(--mono); }
 .chat-markdown pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; padding: 8px;
   background: var(--wash); border-radius: 6px; font-size: 12px; }
-.chat-markdown pre code.hljs { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.chat-markdown pre code.hljs { font-family: var(--mono); }
 .chat-markdown table { border-collapse: collapse; display: block; overflow-x: auto; }
 .chat-markdown th, .chat-markdown td { border: 1px solid var(--border); padding: 3px 8px; text-align: left; }
 .chat-markdown th { font-weight: 600; }
@@ -236,5 +237,5 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
   font-weight: 600; }
 /* a prompt that was a slash command, as typed */
 .chat-command code { padding: 1px 6px; border-radius: 4px; background: var(--wash); font-size: 13px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  font-family: var(--mono); }
 .chat-user pre.code { background: var(--surface); }

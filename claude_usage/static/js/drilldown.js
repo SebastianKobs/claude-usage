@@ -125,11 +125,10 @@ function renderContext(detail) {
     container.replaceChildren(el("div", {class: "empty", text: "No turns in the main thread."}));
     return;
   }
-  const width = Math.max(320, container.clientWidth);
+  const width = chartWidth(container);
   const left = LEFT_AXIS;
   const right = width - RIGHT_PAD;
   const bottom = CONTEXT_TOP + CONTEXT_PLOT;
-  const height = bottom + AXIS_BAND;
   const last = turns.length - 1;
   const xOf = index => (last > 0 ? left + (right - left) * index / last : (left + right) / 2);
   const values = turns.map(turn => turn.context);
@@ -137,99 +136,55 @@ function renderContext(detail) {
   const max = niceMax(values[peak]);
   const yOf = value => bottom - CONTEXT_PLOT * value / max;
   const color = slotColor(0);
-  const root = svg("svg", {viewBox: `0 0 ${width} ${height}`, height, role: "img",
-                          "aria-label": `Context per turn of the main thread: ${turns.length} turns, peak ${compact(values[peak])}, last ${compact(values[last])}; table view available`});
-  for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
-    const y = Math.round(yOf(max * fraction)) + 0.5;
-    root.append(svg("line", {x1: left, x2: right, y1: y, y2: y, "stroke-width": 1,
-                             stroke: fraction === 0 ? "var(--axis)" : "var(--grid)"}));
-    const label = svg("text", {x: left - 8, y: y + 4, "text-anchor": "end", class: "axis-text"});
-    label.textContent = compact(max * fraction);
-    root.append(label);
-  }
-  const points = values.map((value, index) => `${xOf(index).toFixed(1)},${yOf(value).toFixed(1)}`);
-  root.append(svg("path", {d: `M${xOf(0)},${bottom}L${points.join("L")}L${xOf(last)},${bottom}Z`,
-                           fill: color, "fill-opacity": 0.1}));
-  root.append(svg("path", {d: `M${points.join("L")}`, fill: "none", stroke: color, "stroke-width": 2,
-                           "stroke-linejoin": "round", "stroke-linecap": "round"}));
+  const root = chartRoot(width, bottom + AXIS_BAND,
+                         `Context per turn of the main thread: ${turns.length} turns, peak ${compact(values[peak])}, ` +
+                         `last ${compact(values[last])}; table view available`);
+  drawYAxis(root, left, right, ticks(max, 4), yOf, compact);
+  drawAreaLine(root, values, xOf, yOf, bottom, color);
   // direct labels on the two values that matter: the peak and the latest turn
-  const labelled = peak === last ? [last] : [peak, last];
-  for (const index of labelled) {
-    root.append(svg("circle", {cx: xOf(index), cy: yOf(values[index]), r: 4, fill: color, stroke: "var(--surface)",
-                               "stroke-width": 2}));
+  for (const index of peak === last ? [last] : [peak, last]) {
+    root.append(pointDot(color, xOf(index), yOf(values[index])));
     const atEnd = index === last;
-    const label = svg("text", {x: atEnd ? xOf(index) + 9 : xOf(index), y: atEnd ? yOf(values[index]) + 4 : yOf(values[index]) - 8,
+    const label = svg("text", {x: atEnd ? xOf(index) + 9 : xOf(index),
+                               y: atEnd ? yOf(values[index]) + 4 : yOf(values[index]) - 8,
                                "text-anchor": atEnd ? "start" : "middle", class: "value-text"});
     label.textContent = atEnd ? compact(values[index]) : `peak ${compact(values[index])}`;
     root.append(label);
   }
   // x axis: turn numbers, about six of them
-  const every = Math.max(1, Math.ceil(turns.length / 6));
-  for (let index = 0; index <= last; index += every) {
-    const label = svg("text", {x: xOf(index), y: bottom + 18, "text-anchor": "middle", class: "axis-text"});
-    label.textContent = index === 0 ? "turn 1" : String(index + 1);
-    root.append(label);
-  }
-  // one hit layer: the crosshair snaps to the nearest turn; arrow keys, Page Up/Down, Home and End move it
+  drawXLabels(root, turns.length, xOf, bottom + 18, index => (index === 0 ? "turn 1" : String(index + 1)), 6);
   const crosshair = svg("line", {y1: CONTEXT_TOP, y2: bottom, class: "crosshair", visibility: "hidden"});
-  const marker = svg("circle", {r: 4, fill: color, stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden"});
-  const hit = svg("rect", {x: left, y: 0, width: Math.max(1, right - left), height: bottom, class: "hit trend-hit",
-                           tabindex: 0, "aria-label": "Context per turn; arrow keys step through the turns"});
-  const tooltip = el("div", {class: "tooltip", hidden: true});
-  let current = last;
-  const show = index => {
-    current = Math.min(Math.max(0, index), last);
-    const x = xOf(current);
-    crosshair.setAttribute("x1", x);
-    crosshair.setAttribute("x2", x);
-    crosshair.setAttribute("visibility", "visible");
-    marker.setAttribute("cx", x);
-    marker.setAttribute("cy", yOf(values[current]));
-    marker.setAttribute("visibility", "visible");
-    const effort = turns[current].effort ? ` · effort ${turns[current].effort}` : "";
-    tooltip.replaceChildren(
-      el("div", {class: "when",
-                 text: `Turn ${whole(current + 1)} of ${whole(turns.length)} · ${when(turns[current].ts)}${effort}`}),
-      el("div", {class: "row"}, el("span", {class: "key", style: `background:${color}`}),
-         el("strong", {text: compact(values[current])}), el("span", {class: "name", text: "context"})));
-    tooltip.hidden = false;
-    const scale = root.getBoundingClientRect().width / width || 1;
-    tooltip.style.left = `${Math.min(Math.max(0, x * scale + 12), container.clientWidth - tooltip.offsetWidth)}px`;
-    tooltip.style.top = "8px";
+  const marker = pointDot(color, 0, 0, true);
+  const tooltip = tooltipBox();
+  const turnText = index => {
+    const effort = turns[index].effort ? ` · effort ${turns[index].effort}` : "";
+    return `Turn ${whole(index + 1)} of ${whole(turns.length)} · ${when(turns[index].ts)}${effort}`;
   };
-  const hide = () => {
-    crosshair.setAttribute("visibility", "hidden");
-    marker.setAttribute("visibility", "hidden");
-    tooltip.hidden = true;
-  };
-  hit.addEventListener("pointermove", event => {
-    const bounds = root.getBoundingClientRect();
-    const x = (event.clientX - bounds.left) * width / bounds.width;
-    show(last > 0 ? Math.round((x - left) / (right - left) * last) : 0);
+  const cursor = chartCursor(root, width, {x: left, y: 0, width: right - left, height: bottom}, {
+    count: turns.length,
+    indexAt: nearestIndex(left, right, turns.length),
+    label: "Context per turn; arrow keys step through the turns",
+    valueText: index => `${turnText(index)}: context ${compact(values[index])}`,
+    show: index => {
+      moveMark(crosshair, {x1: xOf(index), x2: xOf(index)});
+      moveMark(marker, {cx: xOf(index), cy: yOf(values[index])});
+      tooltip.replaceChildren(el("div", {class: "when", text: turnText(index)}),
+                              tooltipRow(color, compact(values[index]), "context"));
+      placeTooltipAt(tooltip, container, root, width, xOf(index));
+    },
+    hide: () => {
+      hideMarks(crosshair, marker);
+      tooltip.hidden = true;
+    },
   });
-  hit.addEventListener("focus", () => show(current));
-  hit.addEventListener("keydown", event => {
-    const page = Math.max(1, Math.round(turns.length / 10));
-    const steps = {ArrowLeft: -1, ArrowRight: 1, PageUp: -page, PageDown: page};
-    if (event.key in steps) show(current + steps[event.key]);
-    else if (event.key === "Home") show(0);
-    else if (event.key === "End") show(last);
-    else return;
-    event.preventDefault();
-  });
-  hit.addEventListener("pointerleave", hide);
-  hit.addEventListener("blur", hide);
-  root.append(crosshair, marker, hit);
+  root.append(crosshair, marker, cursor);
   container.replaceChildren(root, tooltip);
 }
 
 function renderContextTable(turns) {
-  const head = el("tr", {}, el("th", {class: "num", text: "Turn"}), el("th", {text: "Time"}),
-                  el("th", {text: "Effort"}), el("th", {class: "num", text: "Context"}));
-  const rows = turns.map((turn, index) => el("tr", {}, el("td", {class: "num", text: whole(index + 1)}),
-    el("td", {text: when(turn.ts)}), el("td", {text: turn.effort || "–"}),
-    el("td", {class: "num", text: whole(turn.context)})));
+  const table = dataTable([headCell("Turn", true), headCell("Time"), headCell("Effort"), headCell("Context", true)],
+    turns.map((turn, index) => el("tr", {}, cell(whole(index + 1), true), cell(when(turn.ts)),
+                                  cell(turn.effort || "–"), cell(whole(turn.context), true))));
   document.getElementById("context-table").replaceChildren(
-    turns.length ? el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows))
-                 : el("div", {class: "empty", text: "No turns in the main thread."}));
+    turns.length ? table : el("div", {class: "empty", text: "No turns in the main thread."}));
 }

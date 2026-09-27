@@ -15,7 +15,7 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
   pass temp paths via `--projects-dir` and `--store`. Real `~/.claude/projects` is only read to verify a change
   against real data, and only when the user asks. Print counts and totals then, never prompt or message text.
 - **Never store prompt text:** only token counts, tool names and sizes, titles and metadata. The drilldown reads the
-  first prompt, and the conversation (`transcripts.conversation`), from the transcript on demand.
+  first prompt, and the conversation (`conversation.conversation`), from the transcript on demand.
   `last-prompt.lastPrompt` and `queue-operation.content` hold prompt text too; never store them either.
 - **Keep the history:** never delete rows because a transcript is gone.
   - Schema migrations only add: new tables, or `ALTER TABLE … ADD COLUMN` via `ADDED_COLUMNS`. They run under
@@ -45,22 +45,29 @@ Makefile                     start/stop/status of the dashboard, scan, report, s
                              cron-line
 claude_usage/
   __main__.py                CLI: scan | report | serve | backup
+  report.py                  the report as text (report without --json)
   config.py                  defaults in the package, user and checkout overrides, data folder
   config.toml                the defaults, including prices (shipped with the package)
   transcripts.py             parser: reads a transcript from a byte offset into a Chunk
-  store.py                   SQLite history: incremental scan, background usage, queries
+  conversation.py            a transcript's conversation for the session view, read on demand
+  store.py                   the SQLite history: schema, migrations, backup
+  scan.py                    incremental scan and background usage: transcripts into the store
+  queries.py                 what the report and the dashboard read from the store
   pricing.py                 prices by model prefix, cost per category, web-search fee
-  server.py                  loopback-only http.server + JSON API
+  compact.py                 the conversation's compact hints and their settings
+  server.py                  loopback-only http.server + JSON API (a route table)
   static/                    the page: vanilla JS, inline SVG, no external resources (three vendored libraries)
     dashboard.html           the markup only
     css/common.css           layout and components, for every theme
-    css/themes/              one file per theme (light, dark, hacker, startup, rgb), fun.css what the gimmicks share
-    js/                      classic scripts sharing one scope, loaded in order: util, state, figures, charts,
-                             tables, limits, highlight.js, marked, DOMPurify, chat, drilldown, themes, main
+    css/themes/              one file per theme (light, dark, hacker, startup, rgb); the gimmicks share dark's
+                             palette, fun.css their other rules
+    js/                      classic scripts sharing one scope, loaded in order: util, state, figures, chartkit,
+                             charts, tables, limits, highlight.js, marked, DOMPurify, chat, drilldown, themes, main
                              (calls setup())
       vendor/                highlight.js 11.11.2 (common build, BSD-3), marked 18.0.14 (UMD, MIT), DOMPurify
                              3.4.16 (MPL-2.0 or Apache-2.0), each with its license
-tests/                       helpers.py (projects-folder and transcript builders) and one test file per module
+tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
+                             module; test_static.py checks static/ without a browser
 .claude/hooks/project-guard/  the guard hook: a git submodule, see its README and CLAUDE.md
 ```
 
@@ -120,7 +127,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     `totalAPIDurationWithoutRetries`, `totalToolDuration` (all ms), `totalLinesAdded`, `totalLinesRemoved`.
 
 ## Design rules
-- **Incremental scan** (`store.scan`):
+- **Incremental scan** (`scan.scan`):
   - An unchanged file (same size and mtime, for a subagent also the same meta-file mtime) is skipped; a grown
     one is read from `read_offset`, complete lines only.
   - A file below its offset, or with a new first-line hash, was rewritten and is read again from 0.
@@ -134,7 +141,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     usage wins); copies in forked or resumed sessions change nothing.
   - Tool calls and result sizes follow the same rule.
   - Message rows keep only the path; project, session and agent come from `transcripts`.
-- **Queries:** optional filters come from `store.range_filter`, which writes only the clauses that are set: a
+- **Queries:** optional filters come from `queries.range_filter`, which writes only the clauses that are set: a
   `(:x IS NULL OR day >= :x)` clause keeps SQLite off the day index. A subquery doesn't reach into the
   `usage_rows` view, a list of values does, so per-session sums pass the ids as `IN (?, …)` in batches.
 - **Background usage:**
@@ -152,7 +159,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     since it includes waiting for permission, so the page says so. Retries are unknown.
 - **API errors:** one row per record uuid in `api_errors`, owned by the file that stored it first. The dashboard
   plots the rate limits in `--status-critical` with an icon and a label; other errors are only listed.
-- **Compact hints** (`server.compact_hints`, per chat request, nothing stored):
+- **Compact hints** (`compact.compact_hints`, per chat request, nothing stored):
   - A call's context is new input + cache writes + cache reads, like `CONTEXT` and Claude Code's `used_percentage`.
   - Anthropic publishes no "normal" context size; it only says quality degrades as the context fills
     (best-practices, context-windows docs). So `[chat] compact_hint_tokens` (200K, after Claude Code's
@@ -165,7 +172,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     threshold (1.5×, 2×, …), auto every further `auto_compact_reminder_step` of the auto-compact point (85 %,
     90 %, …). One hint per call, for the highest milestone passed; once the auto tier has spoken the soft tier is
     quiet.
-  - The Input tokens tile shows the median and p90 context per main-thread turn (`store.context_stats`) to choose
+  - The Input tokens tile shows the median and p90 context per main-thread turn (`queries.context_stats`) to choose
     the threshold by.
 - **Pricing:**
   - The longest model-id prefix wins, and a `[1m]` suffix is ignored.
@@ -179,7 +186,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - Relative default paths count from the data folder: `data/` in a checkout, else
     `~/.local/share/claude-usage`.
   - `config.settings()` refuses unknown keys and checks `[serve]`; `[prices]`/`[fees]` are checked in
-    `pricing.py`, `[chat]`/`[auto_compact]` in `server.py`. Numbers must be finite.
+    `pricing.py`, `[chat]`/`[auto_compact]` in `compact.py`. Numbers must be finite.
   - The version lives in `claude_usage/__init__.py`; `pyproject.toml` reads it from there.
   - `package-data` must cover every file under `static/` (a test checks it), or an installed copy misses it.
 - **Server:**
@@ -207,7 +214,10 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - Categorical colors come from its validated palette in a fixed order per model; past eight slots a model folds
     into "Other".
   - Never a second y-axis: cost and tokens get aligned panels, or a metric switch.
-  - Every chart has a legend, a table view and hover or focus tooltips.
+  - Every chart has a legend, a table view and hover or focus tooltips. Charts are built from `chartkit.js`
+    (axes, x labels, area line, tooltips, table shell). Each has one focusable cursor layer (`chartCursor`, a
+    slider): the pointer picks the bucket under it, arrow keys, Page Up/Down, Home and End step, and a screen
+    reader reads each bucket's values; a column chart highlights the band, a line chart shows a crosshair.
   - The Daily range shows one day (today by default, earlier ones with the ‹ › arrows via `until`) and plots its
     local hours (`hour_model`, up to now for today) instead of a single point. The arrows skip days without
     usage (`previous_day`, `next_day`); › always reaches today.

@@ -53,35 +53,19 @@ function renderLimits(summary) {
     container.replaceChildren(el("div", {class: "empty", text: "No rate limits or API errors in this range."}));
     return;
   }
-  const width = Math.max(320, container.clientWidth);
-  const plotWidth = width - LEFT_AXIS - 8;
+  const width = chartWidth(container);
+  const right = width - 8;
   // counts are whole, and so is the middle gridline: an even top of at least 2
   const top = Math.max(2, Math.ceil(niceMax(Math.max(...limits, 0)) / 2) * 2);
   const scale = value => LIMIT_PLOT * value / top;
-  const band = plotWidth / keys.length;
+  const band = (right - LEFT_AXIS) / keys.length;
   const barWidth = Math.max(2, Math.min(BAR_MAX, band * 0.6));
   const total = limits.reduce((sum, value) => sum + value, 0);
-  const root = svg("svg", {viewBox: `0 0 ${width} ${LIMIT_PLOT + AXIS_BAND}`, height: LIMIT_PLOT + AXIS_BAND,
-                          role: "img", "aria-label": `Rate-limit hits per ${buckets.unit}: ${whole(total)} in the ` +
-                                                     "range; table view available"});
-  for (let index = 0; index <= 2; index += 1) {
-    const value = top * index / 2;
-    const y = LIMIT_PLOT - scale(value) + 0.5;
-    root.append(svg("line", {x1: LEFT_AXIS, x2: width - 8, y1: y, y2: y,
-                             stroke: index === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1}));
-    const label = svg("text", {x: LEFT_AXIS - 8, y: y + 4, "text-anchor": "end", class: "axis-text"});
-    label.textContent = whole(value);
-    root.append(label);
-  }
-  const every = Math.max(1, Math.ceil(keys.length / 8));
-  keys.forEach((key, index) => {
-    if (index % every !== 0) return;
-    const label = svg("text", {x: LEFT_AXIS + band * (index + 0.5), y: LIMIT_PLOT + 18, "text-anchor": "middle",
-                               class: "axis-text"});
-    label.textContent = buckets.short(key);
-    root.append(label);
-  });
-  const tooltip = el("div", {class: "tooltip", hidden: true});
+  const root = chartRoot(width, LIMIT_PLOT + AXIS_BAND,
+                         `Rate-limit hits per ${buckets.unit}: ${whole(total)} in the range; table view available`);
+  drawYAxis(root, LEFT_AXIS, right, ticks(top, 2), value => LIMIT_PLOT - scale(value), whole);
+  drawXLabels(root, keys.length, index => LEFT_AXIS + band * (index + 0.5), LIMIT_PLOT + 18,
+              index => buckets.short(keys[index]));
   const peak = limits.indexOf(Math.max(...limits));
   keys.forEach((key, index) => {
     const x = LEFT_AXIS + band * index + (band - barWidth) / 2;
@@ -95,35 +79,36 @@ function renderLimits(summary) {
       label.textContent = whole(limits[index]);
       root.append(label);
     }
-    const summaryText = `${whole(limits[index])} rate-limit hits, ${whole(others[index])} other API errors`;
-    const hit = svg("rect", {x: LEFT_AXIS + band * index, y: 0, width: band, height: LIMIT_PLOT, class: "hit",
-                             tabindex: 0, "aria-label": `${buckets.short(key)}: ${summaryText}`});
-    const show = event => {
-      tooltip.replaceChildren(el("div", {class: "when", text: buckets.long(key)}),
-        el("div", {class: "row"}, el("span", {class: "key", style: `background:${LIMIT_COLOR}`}),
-           el("strong", {text: whole(limits[index])}),
-           el("span", {class: "name", text: `${LIMIT_ICON} rate-limit hits`})),
-        el("div", {class: "row"}, el("span", {class: "key"}), el("strong", {text: whole(others[index])}),
-           el("span", {class: "name", text: "other API errors"})));
-      placeTooltip(tooltip, container, event, hit);
-    };
-    const hide = () => { tooltip.hidden = true; };
-    hit.addEventListener("pointermove", show);
-    hit.addEventListener("focus", show);
-    hit.addEventListener("pointerleave", hide);
-    hit.addEventListener("blur", hide);
-    root.append(hit);
   });
+  const highlight = svg("rect", {y: 0, width: band, height: LIMIT_PLOT, class: "column-mark", visibility: "hidden"});
+  const tooltip = tooltipBox();
+  const counts = index => `${whole(limits[index])} rate-limit hits, ${whole(others[index])} other API errors`;
+  const cursor = chartCursor(root, width, {x: LEFT_AXIS, y: 0, width: right - LEFT_AXIS, height: LIMIT_PLOT}, {
+    count: keys.length,
+    indexAt: bandIndex(LEFT_AXIS, band),
+    label: `Rate-limit hits per ${buckets.unit}; arrow keys step through them`,
+    valueText: index => `${buckets.long(keys[index])}: ${counts(index)}`,
+    show: index => {
+      moveMark(highlight, {x: LEFT_AXIS + band * index});
+      tooltip.replaceChildren(el("div", {class: "when", text: buckets.long(keys[index])}),
+        tooltipRow(LIMIT_COLOR, whole(limits[index]), `${LIMIT_ICON} rate-limit hits`),
+        tooltipRow(null, whole(others[index]), "other API errors"));
+      placeTooltipAt(tooltip, container, root, width, LEFT_AXIS + band * (index + 0.5));
+    },
+    hide: () => {
+      hideMarks(highlight);
+      tooltip.hidden = true;
+    },
+  });
+  root.append(highlight, cursor);
   container.replaceChildren(root, tooltip);
 }
 
 function renderLimitsTable(buckets, at) {
-  const head = el("tr", {}, el("th", {text: buckets.heading}), el("th", {class: "num", text: "Rate-limit hits"}),
-                  el("th", {class: "num", text: "Other API errors"}));
-  const rows = buckets.keys.slice().reverse().map(key => el("tr", {}, el("td", {text: buckets.short(key)}),
-    el("td", {class: "num", text: whole(at(key).limits)}), el("td", {class: "num", text: whole(at(key).other)})));
-  document.getElementById("limits-table").replaceChildren(el("table", {}, el("thead", {}, head),
-                                                             el("tbody", {}, ...rows)));
+  fillTableView("limits-table",
+    [headCell(buckets.heading), headCell("Rate-limit hits", true), headCell("Other API errors", true)],
+    buckets.keys.slice().reverse().map(key => el("tr", {}, cell(buckets.short(key)),
+      cell(whole(at(key).limits), true), cell(whole(at(key).other), true))));
 }
 
 function renderLimitEvents(events) {

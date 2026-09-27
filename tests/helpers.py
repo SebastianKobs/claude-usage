@@ -1,5 +1,6 @@
 """Test support: a throwaway projects folder laid out like ~/.claude/projects under tests/.tmp/, and a builder that
-appends transcript records the way Claude Code writes them. Tests never read real transcripts."""
+appends transcript records the way Claude Code writes them, and StoreCase with a store over that folder. Tests never
+read real transcripts."""
 import json
 import re
 import shutil
@@ -9,6 +10,10 @@ from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
+
+from claude_usage import pricing
+from claude_usage import scan
+from claude_usage import store
 
 TESTS_DIR = Path(__file__).resolve().parent
 TMP_DIR = TESTS_DIR / ".tmp"
@@ -238,3 +243,73 @@ class TempDirTestCase(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp)
         self.projects = ProjectsDir(self.tmp / "projects")
         self.store_path = self.tmp / "usage.sqlite"
+
+
+# --- a store over the projects folder, for the store, scan and query tests -------------------------
+
+PRICES = pricing.parse_prices({
+    "claude-sonnet-5": {"input": 2.0, "cache_write_5m": 2.5, "cache_write_1h": 4.0, "cache_read": 0.2,
+                        "output": 10.0},
+    "claude-opus-5": {"input": 5.0, "cache_write_5m": 6.25, "cache_write_1h": 10.0, "cache_read": 0.5,
+                      "output": 25.0, "fast_multiplier": 2.0},
+    "claude-haiku-4-5": {"input": 1.0, "cache_write_5m": 1.25, "cache_write_1h": 2.0, "cache_read": 0.1,
+                         "output": 5.0},
+})
+HAIKU = "claude-haiku-4-5-20251001"
+MILLION = 1_000_000
+DAY_1 = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
+DAY_3 = datetime(2026, 9, 3, 12, 0, tzinfo=UTC)
+DATE_AFTER = datetime(2026, 9, 4, 9, 0, tzinfo=UTC)
+
+
+def local_day(moment):
+    """The local date string the store files a UTC timestamp under."""
+    return moment.astimezone().date().isoformat()
+
+
+def local_hour(moment):
+    """The local hour string the store groups a UTC timestamp under for hourly totals."""
+    return moment.astimezone().strftime("%Y-%m-%dT%H")
+
+
+class StoreCase(TempDirTestCase):
+    """A temp projects folder and an open store on self.store_path."""
+
+    def setUp(self):
+        super().setUp()
+        self.store = store.Store(self.store_path)
+        self.addCleanup(self.store.close)
+
+    def scan(self, project_filter=None):
+        """One incremental scan of the temp projects folder."""
+        return scan.scan(self.store, self.projects.root, project_filter)
+
+    def rows(self, sql, *parameters):
+        """All rows of a query as tuples."""
+        return [tuple(row) for row in self.store.connection.execute(sql, parameters)]
+
+    def count(self, table):
+        """The number of rows in a table."""
+        return self.rows(f"SELECT COUNT(*) FROM {table}")[0][0]
+
+    def dump(self):
+        """Every row of the data tables, for comparing two stores."""
+        return {table: self.rows(f"SELECT * FROM {table} ORDER BY 1")
+                for table in ("transcripts", "messages", "tool_calls")}
+
+
+def build_session(projects, session_id="s1", project="/home/dev/app"):
+    """A main transcript with two turns, a tool call and its result, a title, and one Explore subagent."""
+    main = projects.session(session_id, project=project)
+    main.user("Fix the parser")
+    main.ai_title("Parser fix")
+    main.assistant(f"{session_id}-m1", [thinking_block(), tool_use_block(f"{session_id}-t1", "Read")],
+                   usage(new=10, cache_5m=1000, cache_read=0, output=50))
+    main.tool_result(f"{session_id}-t1", "x" * 300)
+    main.assistant(f"{session_id}-m2", [text_block("done")], usage(new=5, cache_5m=200, cache_read=1000, output=20))
+    agent = projects.subagent(session_id, "a1", project=project, meta={"agentType": "Explore",
+                                                                        "description": "look around"})
+    agent.assistant(f"{session_id}-a1-m1", [tool_use_block(f"{session_id}-t2", "mcp__srv__find")],
+                    usage(new=3, cache_1h=400, output=30), model="claude-opus-5")
+    agent.tool_result(f"{session_id}-t2", [{"type": "text", "text": "abcd"}])
+    return main, agent

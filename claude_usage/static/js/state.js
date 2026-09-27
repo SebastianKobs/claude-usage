@@ -17,7 +17,7 @@ const KNOWN_MODELS = ["claude-opus-5-5", "claude-sonnet-5", "claude-opus-5", "cl
 const METRICS = {
   cost: {label: "Estimated cost", value: row => row.cost || 0, format: money},
   output: {label: "Output tokens", value: row => row.output, format: compact},
-  input: {label: "Input tokens", value: row => row.new_input + row.cache_write + row.cache_read, format: compact},
+  input: {label: "Input tokens", value: inputTotal, format: compact},
 };
 
 // day: the day the Daily range shows, as "YYYY-MM-DD"; null follows today, also past midnight

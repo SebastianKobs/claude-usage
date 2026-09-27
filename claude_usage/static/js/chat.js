@@ -289,7 +289,7 @@ function chatEntry(entry) {
   const hint = entry.compact_hint;
   // the first hint of each kind is a block with its advice; the reminders after it are chips in the badge
   const announced = hint && !hint.kind.endsWith("_reminder") ? compactHint(hint) : null;
-  return el("div", {class: "chat-step"}, shown, usageLine(entry.usage, hint), announced);
+  return el("div", {}, shown, usageLine(entry.usage, hint), announced);
 }
 
 function chatBlock(entry) {

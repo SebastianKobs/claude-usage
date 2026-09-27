@@ -24,7 +24,7 @@
   backdrop-filter: blur(12px);
 }
 [data-theme="startup"] .label {
-  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; text-transform: uppercase;
+  font-family: var(--mono); font-size: 11px; text-transform: uppercase;
   letter-spacing: 0.08em; color: var(--text-muted);
 }
 [data-theme="startup"] .hero {

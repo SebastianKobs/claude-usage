@@ -18,7 +18,7 @@ function kpiTiles(totals, scope, context, hintTokens) {
                                        : "at API list prices"];
   if (totals.web_searches) notes.push(`incl. ${whole(totals.web_searches)} web searches, ${money(parts.web_search)}`);
   return [
-    el("div", {class: "card hero-card"},
+    el("div", {class: "card"},
        el("div", {class: "label"}, themed("span", "Estimated cost"), `, ${scope}`),
        el("div", {class: "hero", text: money(totals.cost)}),
        el("div", {class: "note", text: notes.join(" · ")})),
@@ -73,7 +73,7 @@ function inputSplit(totals, parts, context, hintTokens) {
       el("span", {style: `flex-grow:${part.tokens};background:${part.color}`})));
   const rows = segments.map(part => el("div", {class: "split-row", title: part.note},
     el("span", {class: "swatch", style: `background:${part.color}`}),
-    themed("span", part.label, {class: "split-label"}),
+    themed("span", part.label),
     el("strong", {class: "split-number", text: compact(part.tokens)}),
     el("span", {class: "split-number secondary", text: percent(part.tokens, input)}),
     el("span", {class: "split-number", text: money(part.cost)})));

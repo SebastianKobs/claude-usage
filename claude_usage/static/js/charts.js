@@ -11,7 +11,6 @@ const TREND_PANELS = [
 const PANEL_TITLE = 22;
 const PANEL_PLOT = 76;
 const PANEL_GAP = 18;
-const RIGHT_PAD = 64;
 const NO_USAGE = {cost: 0, input: 0, output: 0};
 
 function bucketTotals(buckets) {
@@ -36,16 +35,15 @@ function renderTrend(summary) {
   document.getElementById("trend-note").textContent =
     `estimated cost, input and output tokens per ${buckets.unit}`;
   renderTrendTable(buckets, at);
-  const width = Math.max(320, container.clientWidth);
+  const width = chartWidth(container);
   const left = LEFT_AXIS;
   const right = width - RIGHT_PAD;
   const last = days.length - 1;
   const xOf = index => (last > 0 ? left + (right - left) * index / last : (left + right) / 2);
   const panelHeight = PANEL_TITLE + PANEL_PLOT + PANEL_GAP;
   const plotsBottom = panelHeight * TREND_PANELS.length - PANEL_GAP;
-  const height = plotsBottom + AXIS_BAND;
-  const root = svg("svg", {viewBox: `0 0 ${width} ${height}`, height, role: "img",
-                          "aria-label": `Estimated cost, input tokens and output tokens per ${buckets.unit}; table view available`});
+  const root = chartRoot(width, plotsBottom + AXIS_BAND,
+                         `Estimated cost, input tokens and output tokens per ${buckets.unit}; table view available`);
   const markers = [];
   TREND_PANELS.forEach((panel, position) => {
     const top = position * panelHeight + PANEL_TITLE;
@@ -60,84 +58,48 @@ function renderTrend(summary) {
     const title = svg("text", {x: left + 20, y: top - 6, class: "panel-title"});
     title.textContent = panel.label;
     root.append(title);
-    for (const fraction of [0, 0.5, 1]) {
-      const y = Math.round(yOf(max * fraction)) + 0.5;
-      root.append(svg("line", {x1: left, x2: right, y1: y, y2: y, "stroke-width": 1,
-                               stroke: fraction === 0 ? "var(--axis)" : "var(--grid)"}));
-      const label = svg("text", {x: left - 8, y: y + 4, "text-anchor": "end", class: "axis-text"});
-      label.textContent = panel.format(max * fraction);
-      root.append(label);
-    }
-    const points = values.map((value, index) => `${xOf(index).toFixed(1)},${yOf(value).toFixed(1)}`);
-    root.append(svg("path", {d: `M${xOf(0)},${bottom}L${points.join("L")}L${xOf(last)},${bottom}Z`,
-                             fill: color, "fill-opacity": 0.1}));
-    root.append(svg("path", {d: `M${points.join("L")}`, fill: "none", stroke: color, "stroke-width": 2,
-                             "stroke-linejoin": "round", "stroke-linecap": "round"}));
-    // end dot with a surface ring, and the one direct label: the latest value
-    root.append(svg("circle", {cx: xOf(last), cy: yOf(values[last]), r: 4, fill: color, stroke: "var(--surface)",
-                               "stroke-width": 2}));
+    drawYAxis(root, left, right, ticks(max, 2), yOf, panel.format);
+    drawAreaLine(root, values, xOf, yOf, bottom, color);
+    // end dot and the one direct label: the latest value
+    root.append(pointDot(color, xOf(last), yOf(values[last])));
     const end = svg("text", {x: xOf(last) + 9, y: yOf(values[last]) + 4, class: "value-text"});
     end.textContent = panel.format(values[last]);
     root.append(end);
-    const marker = svg("circle", {r: 4, fill: color, stroke: "var(--surface)", "stroke-width": 2,
-                                  visibility: "hidden"});
+    const marker = pointDot(color, 0, 0, true);
     markers.push({marker, yOf, values});
     root.append(marker);
   });
-  const every = Math.max(1, Math.ceil(days.length / 8));
-  days.forEach((day, index) => {
-    if (index % every !== 0) return;
-    const label = svg("text", {x: xOf(index), y: plotsBottom + 18, "text-anchor": "middle", class: "axis-text"});
-    label.textContent = buckets.short(day);
-    root.append(label);
-  });
-  // the crosshair finds the day or hour: each day owns the band up to the midpoints with its neighbours
+  drawXLabels(root, days.length, xOf, plotsBottom + 18, index => buckets.short(days[index]));
   const crosshair = svg("line", {y1: PANEL_TITLE - 4, y2: plotsBottom, class: "crosshair", visibility: "hidden"});
-  root.append(crosshair);
-  const tooltip = el("div", {class: "tooltip", hidden: true});
-  days.forEach((day, index) => {
-    const from = index === 0 ? left : (xOf(index - 1) + xOf(index)) / 2;
-    const to = index === last ? right : (xOf(index) + xOf(index + 1)) / 2;
-    const summaryText = TREND_PANELS.map(panel => `${panel.label} ${panel.format(panel.value(at(day)))}`).join(", ");
-    const hit = svg("rect", {x: from, y: 0, width: Math.max(1, to - from), height: plotsBottom,
-                             class: "hit trend-hit", tabindex: 0, "aria-label": `${buckets.short(day)}: ${summaryText}`});
-    const show = event => {
-      crosshair.setAttribute("x1", xOf(index));
-      crosshair.setAttribute("x2", xOf(index));
-      crosshair.setAttribute("visibility", "visible");
-      for (const {marker, yOf, values} of markers) {
-        marker.setAttribute("cx", xOf(index));
-        marker.setAttribute("cy", yOf(values[index]));
-        marker.setAttribute("visibility", "visible");
-      }
-      tooltip.replaceChildren(
-        el("div", {class: "when", text: buckets.long(day)}),
-        ...TREND_PANELS.map(panel => el("div", {class: "row"},
-          el("span", {class: "key", style: `background:${slotColor(panel.slot)}`}),
-          el("strong", {text: panel.format(panel.value(at(day)))}), el("span", {class: "name", text: panel.label}))));
-      placeTooltip(tooltip, container, event, hit);
-    };
-    const hide = () => {
-      crosshair.setAttribute("visibility", "hidden");
-      for (const {marker} of markers) marker.setAttribute("visibility", "hidden");
+  const tooltip = tooltipBox();
+  const values = day => TREND_PANELS.map(panel => `${panel.label} ${panel.format(panel.value(at(day)))}`).join(", ");
+  const cursor = chartCursor(root, width, {x: left, y: 0, width: right - left, height: plotsBottom}, {
+    count: days.length,
+    indexAt: nearestIndex(left, right, days.length),
+    label: `Estimated cost, input and output tokens per ${buckets.unit}; arrow keys step through them`,
+    valueText: index => `${buckets.long(days[index])}: ${values(days[index])}`,
+    show: index => {
+      const day = days[index];
+      moveMark(crosshair, {x1: xOf(index), x2: xOf(index)});
+      for (const {marker, yOf, values: series} of markers) moveMark(marker, {cx: xOf(index), cy: yOf(series[index])});
+      tooltip.replaceChildren(el("div", {class: "when", text: buckets.long(day)}),
+        ...TREND_PANELS.map(panel => tooltipRow(slotColor(panel.slot), panel.format(panel.value(at(day))),
+                                                panel.label)));
+      placeTooltipAt(tooltip, container, root, width, xOf(index));
+    },
+    hide: () => {
+      hideMarks(crosshair, ...markers.map(({marker}) => marker));
       tooltip.hidden = true;
-    };
-    hit.addEventListener("pointermove", show);
-    hit.addEventListener("focus", show);
-    hit.addEventListener("pointerleave", hide);
-    hit.addEventListener("blur", hide);
-    root.append(hit);
+    },
   });
+  root.append(crosshair, cursor);
   container.replaceChildren(root, tooltip);
 }
 
 function renderTrendTable(buckets, at) {
-  const head = el("tr", {}, el("th", {text: buckets.heading}),
-                  ...TREND_PANELS.map(panel => el("th", {class: "num", text: panel.label})));
-  const rows = buckets.keys.slice().reverse().map(day => el("tr", {}, el("td", {text: buckets.short(day)}),
-    ...TREND_PANELS.map(panel => el("td", {class: "num", text: panel.format(panel.value(at(day)))}))));
-  document.getElementById("trend-table").replaceChildren(el("table", {}, el("thead", {}, head),
-                                                            el("tbody", {}, ...rows)));
+  fillTableView("trend-table", [headCell(buckets.heading), ...TREND_PANELS.map(panel => headCell(panel.label, true))],
+    buckets.keys.slice().reverse().map(day => el("tr", {}, cell(buckets.short(day)),
+      ...TREND_PANELS.map(panel => cell(panel.format(panel.value(at(day))), true)))));
 }
 
 // --- daily chart ---------------------------------------------------------------------------------------------
@@ -205,29 +167,12 @@ function modelGroups(series) {
   return groups;
 }
 
-function niceMax(value) {
-  if (value <= 0) return 1;
-  const power = Math.pow(10, Math.floor(Math.log10(value)));
-  for (const step of [1, 2, 2.5, 5, 10]) {
-    if (value <= step * power) return step * power;
-  }
-  return 10 * power;
-}
-
 // per model its name, then a swatch for each of its effort levels in the range
 function renderLegend(series) {
   document.getElementById("legend").replaceChildren(...modelGroups(series).map(group =>
     el("span", {class: "legend-group"}, el("strong", {text: group.model}),
        ...group.entries.map(entry => el("span", {}, el("span", {class: "swatch", style: `background:${entry.color}`}),
                                         entry.effort ?? "no effort level")))));
-}
-
-function columnPath(x, y, width, height, rounded) {
-  const radius = rounded ? Math.min(CORNER, width / 2, height) : 0;
-  return `M${x},${y + height}V${y + radius}` +
-    (radius ? `Q${x},${y} ${x + radius},${y}H${x + width - radius}Q${x + width},${y} ${x + width},${y + radius}`
-            : `H${x + width}`) +
-    `V${y + height}Z`;
 }
 
 function renderChart(summary) {
@@ -237,37 +182,19 @@ function renderChart(summary) {
   title.dataset.label = `Per ${buckets.unit}, by model and effort`;
   title.textContent = hype(title.dataset.label);
   renderLegend(series);
-  renderChartTable(buckets, series, metric);
-  const width = Math.max(320, container.clientWidth);
-  const plotWidth = width - LEFT_AXIS - 8;
+  renderModelTable(buckets, series, metric);
+  const width = chartWidth(container);
+  const right = width - 8;
   const totals = days.map(day => series.reduce((sum, entry) => sum + (entry.values.get(day) || 0), 0));
   const top = niceMax(Math.max(...totals, 0));
   const scale = value => PLOT_HEIGHT * value / top;
-  const band = plotWidth / days.length;
+  const band = (right - LEFT_AXIS) / days.length;
   const barWidth = Math.max(2, Math.min(BAR_MAX, band * 0.6));
-  const root = svg("svg", {viewBox: `0 0 ${width} ${PLOT_HEIGHT + AXIS_BAND}`, height: PLOT_HEIGHT + AXIS_BAND,
-                          role: "img",
-                          "aria-label": `${metric.label} per ${buckets.unit} by model and effort level; ` +
-                                        "table view available"});
-  // gridlines and y ticks
-  for (let index = 0; index <= 4; index += 1) {
-    const value = top * index / 4;
-    const y = PLOT_HEIGHT - scale(value) + 0.5;
-    root.append(svg("line", {x1: LEFT_AXIS, x2: width - 8, y1: y, y2: y,
-                             stroke: index === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1}));
-    const label = svg("text", {x: LEFT_AXIS - 8, y: y + 4, "text-anchor": "end", class: "axis-text"});
-    label.textContent = metric.format(value);
-    root.append(label);
-  }
-  // x labels: at most about eight, evenly spaced
-  const every = Math.max(1, Math.ceil(days.length / 8));
-  days.forEach((day, index) => {
-    if (index % every !== 0) return;
-    const label = svg("text", {x: LEFT_AXIS + band * (index + 0.5), y: PLOT_HEIGHT + 18, "text-anchor": "middle",
-                               class: "axis-text"});
-    label.textContent = buckets.short(day);
-    root.append(label);
-  });
+  const root = chartRoot(width, PLOT_HEIGHT + AXIS_BAND,
+                         `${metric.label} per ${buckets.unit} by model and effort level; table view available`);
+  drawYAxis(root, LEFT_AXIS, right, ticks(top, 4), value => PLOT_HEIGHT - scale(value), metric.format);
+  drawXLabels(root, days.length, index => LEFT_AXIS + band * (index + 0.5), PLOT_HEIGHT + 18,
+              index => buckets.short(days[index]));
   // stacked columns, a 2px surface gap between a model's shades and a wider one between models (the shades of two
   // models can come close), rounded data end on the top segment only
   const peak = totals.indexOf(Math.max(...totals));
@@ -292,25 +219,32 @@ function renderChart(summary) {
       label.textContent = metric.format(totals[index]);
       root.append(label);
     }
-    // the whole column is the hit target, wider than the bar
-    const hit = svg("rect", {x: LEFT_AXIS + band * index, y: 0, width: band, height: PLOT_HEIGHT, class: "hit",
-                             tabindex: 0, "aria-label": `${buckets.short(day)}: ${metric.format(totals[index])}`});
-    const show = event => showTooltip(event, container, hit, buckets.long(day), day, series, metric,
-                                      totals[index]);
-    hit.addEventListener("pointermove", show);
-    hit.addEventListener("focus", show);
-    hit.addEventListener("pointerleave", hideTooltip);
-    hit.addEventListener("blur", hideTooltip);
-    root.append(hit);
   });
-  const tooltip = el("div", {class: "tooltip", id: "tooltip", hidden: true});
+  // the whole band is highlighted, wider than the column
+  const highlight = svg("rect", {y: 0, width: band, height: PLOT_HEIGHT, class: "column-mark", visibility: "hidden"});
+  const tooltip = tooltipBox();
+  const cursor = chartCursor(root, width, {x: LEFT_AXIS, y: 0, width: right - LEFT_AXIS, height: PLOT_HEIGHT}, {
+    count: days.length,
+    indexAt: bandIndex(LEFT_AXIS, band),
+    label: `${metric.label} per ${buckets.unit}; arrow keys step through them`,
+    valueText: index => `${buckets.long(days[index])}: ${metric.format(totals[index])}`,
+    show: index => {
+      moveMark(highlight, {x: LEFT_AXIS + band * index});
+      modelTooltip(tooltip, buckets.long(days[index]), days[index], series, metric, totals[index]);
+      placeTooltipAt(tooltip, container, root, width, LEFT_AXIS + band * (index + 0.5));
+    },
+    hide: () => {
+      hideMarks(highlight);
+      tooltip.hidden = true;
+    },
+  });
+  root.append(highlight, cursor);
   container.replaceChildren(root, tooltip);
 }
 
 // The column's models in the fixed model order (flagship first), each a line with its total and its effort levels
 // indented below (max first), names left and values right-aligned in one column; a total line for several models
-function showTooltip(event, container, hit, heading, day, series, metric, total) {
-  const tooltip = document.getElementById("tooltip");
+function modelTooltip(tooltip, heading, day, series, metric, total) {
   const groups = modelGroups(series.filter(entry => entry.values.get(day)));
   const line = (className, name, value) => el("div", {class: `tip-line ${className}`}, name,
                                               el("span", {class: "tip-value", text: metric.format(value)}));
@@ -323,35 +257,17 @@ function showTooltip(event, container, hit, heading, day, series, metric, total)
   fill(tooltip, el("div", {class: "when", text: heading}),
        ...(lines.length ? lines : [el("div", {class: "name", text: "No usage"})]),
        groups.length > 1 ? line("tip-total", el("span", {text: "Total"}), total) : null);
-  placeTooltip(tooltip, container, event, hit);
 }
 
-function placeTooltip(tooltip, container, event, hit, top = 8) {
-  tooltip.hidden = false;
-  const bounds = container.getBoundingClientRect();
-  const target = hit.getBoundingClientRect();
-  const anchor = event.clientX ? event.clientX - bounds.left : target.left - bounds.left + target.width / 2;
-  const left = Math.min(Math.max(0, anchor + 12), bounds.width - tooltip.offsetWidth);
-  tooltip.style.left = `${left}px`;
-  tooltip.style.top = `${top}px`;
-}
-
-function hideTooltip() {
-  const tooltip = document.getElementById("tooltip");
-  if (tooltip) tooltip.hidden = true;
-}
-
-function renderChartTable(buckets, series, metric) {
-  const head = el("tr", {}, el("th", {text: buckets.heading}), ...series.map(entry => el("th", {class: "num", text: entry.key})),
-                  el("th", {class: "num", text: "Total"}));
-  const rows = buckets.keys.slice().reverse().map(day => {
-    const values = series.map(entry => entry.values.get(day) || 0);
-    return el("tr", {}, el("td", {text: buckets.short(day)}),
-              ...values.map(value => el("td", {class: "num", text: value ? metric.format(value) : "–"})),
-              el("td", {class: "num", text: metric.format(values.reduce((sum, value) => sum + value, 0))}));
-  });
-  document.getElementById("chart-table").replaceChildren(el("table", {}, el("thead", {}, head),
-                                                            el("tbody", {}, ...rows)));
+function renderModelTable(buckets, series, metric) {
+  fillTableView("chart-table",
+    [headCell(buckets.heading), ...series.map(entry => headCell(entry.key, true)), headCell("Total", true)],
+    buckets.keys.slice().reverse().map(day => {
+      const values = series.map(entry => entry.values.get(day) || 0);
+      return el("tr", {}, cell(buckets.short(day)),
+                ...values.map(value => cell(value ? metric.format(value) : "–", true)),
+                cell(metric.format(values.reduce((sum, value) => sum + value, 0)), true));
+    }));
 }
 
 // --- cost per session: ranked horizontal bars, cache reads vs. the rest --------------------------------------
@@ -376,7 +292,7 @@ function renderCostly(sessions) {
     return;
   }
   const top = Math.max(...sessions.map(session => session.cost || 0)) || 1;
-  const tooltip = el("div", {class: "tooltip", hidden: true});
+  const tooltip = tooltipBox();
   const rows = sessions.map(session => {
     const cost = session.cost || 0;
     const parts = COSTLY_PARTS.map(part => ({...part, amount: part.value(session)}));
@@ -401,26 +317,19 @@ function renderCostly(sessions) {
         el("div", {class: "name", text: `${whole(session.turns)} turns · context avg ${compact(session.context_avg)}, peak ${compact(session.context_peak)}`}));
       placeTooltip(tooltip, container, event, row, row.offsetTop + row.offsetHeight + 4);
     };
-    row.addEventListener("pointermove", show);
-    row.addEventListener("focus", show);
-    row.addEventListener("pointerleave", () => { tooltip.hidden = true; });
-    row.addEventListener("blur", () => { tooltip.hidden = true; });
+    onHover(row, show, () => { tooltip.hidden = true; });
     return row;
   });
   container.replaceChildren(el("div", {class: "bars"}, ...rows), tooltip);
 }
 
 function renderCostlyTable(sessions) {
-  const head = el("tr", {}, el("th", {text: "Session"}), el("th", {class: "num", text: "Turns"}),
-                  el("th", {class: "num", text: "Avg context"}), el("th", {class: "num", text: "Peak context"}),
-                  ...COSTLY_PARTS.map(part => el("th", {class: "num", text: part.label})),
-                  el("th", {class: "num", text: "Cost"}));
-  const rows = sessions.map(session => el("tr", {},
-    el("td", {}, sessionLink(session), el("span", {class: "sub", text: session.project})),
-    el("td", {class: "num", text: whole(session.turns)}), el("td", {class: "num", text: compact(session.context_avg)}),
-    el("td", {class: "num", text: compact(session.context_peak)}),
-    ...COSTLY_PARTS.map(part => el("td", {class: "num", text: money(part.value(session))})),
-    el("td", {class: "num", text: money(session.cost)})));
-  document.getElementById("costly-table").replaceChildren(el("table", {}, el("thead", {}, head),
-                                                             el("tbody", {}, ...rows)));
+  fillTableView("costly-table",
+    [headCell("Session"), headCell("Turns", true), headCell("Avg context", true), headCell("Peak context", true),
+     ...COSTLY_PARTS.map(part => headCell(part.label, true)), headCell("Cost", true)],
+    sessions.map(session => el("tr", {},
+      el("td", {}, sessionLink(session), el("span", {class: "sub", text: session.project})),
+      cell(whole(session.turns), true), cell(compact(session.context_avg), true),
+      cell(compact(session.context_peak), true),
+      ...COSTLY_PARTS.map(part => cell(money(part.value(session)), true)), cell(money(session.cost), true))));
 }
