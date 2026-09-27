@@ -114,7 +114,7 @@
 }
 [data-theme="techbro"] .tile-value { font-weight: 900; text-shadow: 0 0 14px rgba(0, 229, 255, 0.6); }
 [data-theme="techbro"] .dot { background: #ff0033; box-shadow: 0 0 10px #ff0033; animation: hype-pulse 1.2s infinite; }
-[data-theme="techbro"] button {
+[data-theme="techbro"] button, [data-theme="techbro"] select {
   border-radius: 999px; border-color: var(--hype-pink); font-weight: 700;
   box-shadow: 0 0 12px rgba(255, 45, 149, 0.35);
 }
@@ -145,6 +145,11 @@ button {
   border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer;
 }
 button:hover { background: var(--wash); }
+select {
+  font: inherit; color: var(--text-primary); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer;
+}
+.theme-picker { display: inline-flex; align-items: center; gap: 6px; }
 button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-secondary); }
 .filters { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
 .segmented { display: inline-flex; gap: 4px; }
@@ -237,7 +242,14 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
     <span id="scope" class="muted"></span>
     <span class="spacer"></span>
     <span id="updated" class="muted"></span>
-    <button id="theme" type="button" title="Theme">Theme: auto</button>
+    <label class="theme-picker"><span class="muted">Theme</span>
+      <select id="theme">
+        <option value="auto">auto</option>
+        <option value="light">light</option>
+        <option value="dark">dark</option>
+        <option value="techbro">tech bro 🚀</option>
+      </select>
+    </label>
   </header>
 
   <div id="error" class="banner" role="alert"></div>
@@ -970,8 +982,7 @@ function readPreference(name) {
 
 // --- themes: auto (follows the system), light, dark, and the tech bro YouTube gimmick ----------------------
 
-const THEMES = [null, "light", "dark", "techbro"];
-const THEME_NAMES = {light: "light", dark: "dark", techbro: "tech bro 🚀"};
+const THEMES = ["light", "dark", "techbro"];             // besides "auto", which follows the system
 // "Tech bro YouTube mode" copy; everything not listed keeps its normal label
 const HYPE = {
   "Claude usage": "Claude usage 🔥 (not clickbait)",
@@ -995,9 +1006,9 @@ function isTechBro() { return document.documentElement.dataset.theme === "techbr
 function hype(label) { return isTechBro() && HYPE[label] ? HYPE[label] : label; }
 
 function applyTheme(theme) {
-  if (THEMES.includes(theme) && theme) document.documentElement.dataset.theme = theme;
+  if (THEMES.includes(theme)) document.documentElement.dataset.theme = theme;
   else delete document.documentElement.dataset.theme;
-  document.getElementById("theme").textContent = `Theme: ${THEME_NAMES[theme] || "auto"}`;
+  document.getElementById("theme").value = THEMES.includes(theme) ? theme : "auto";
   for (const node of document.querySelectorAll("[data-label]")) node.textContent = hype(node.dataset.label);
   renderSummary();                                        // the KPI labels follow the theme too
 }
@@ -1033,11 +1044,9 @@ function setup() {
       event.currentTarget.setAttribute("aria-pressed", String(!table.hidden));
     });
   }
-  document.getElementById("theme").addEventListener("click", () => {
-    const current = document.documentElement.dataset.theme || null;
-    const next = THEMES[(THEMES.indexOf(current) + 1) % THEMES.length];
-    savePreference("theme", next || "auto");
-    applyTheme(next);
+  document.getElementById("theme").addEventListener("change", event => {
+    savePreference("theme", event.target.value);
+    applyTheme(event.target.value);
   });
   window.addEventListener("hashchange", loadSession);
   const resize = new ResizeObserver(() => {

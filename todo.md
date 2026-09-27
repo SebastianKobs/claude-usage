@@ -280,8 +280,8 @@ claude-usage/
     - Chart: 2px gaps between segments, a rounded data end, a legend, a table view, a label at the peak day only,
       and a hover or focus tooltip on the whole column.
     - Drilldown: at `#session/<id>`.
-    - Refetch dims the previous render instead of clearing it. Theme: auto, light, dark or "tech bro YouTube mode",
-      remembered in localStorage.
+    - Refetch dims the previous render instead of clearing it. Theme dropdown: auto, light, dark or "tech bro
+      YouTube mode", remembered in localStorage.
       - Tech bro mode is a gimmick: neon glows, Impact-style gradient figures, a pulsing red live dot, and hype copy
         (`HYPE` map) for headings and KPI labels.
       - The chart series keep the validated dark-mode steps, so the data stays readable.
