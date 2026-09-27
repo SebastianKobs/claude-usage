@@ -52,12 +52,6 @@
       <button type="button" data-days="90">90 days</button>
       <button type="button" data-days="365">1 year</button>
     </div>
-    <span class="label">By-model chart</span>
-    <div class="segmented" id="metric">
-      <button type="button" data-metric="cost">Estimated cost</button>
-      <button type="button" data-metric="output">Output tokens</button>
-      <button type="button" data-metric="input">Input tokens</button>
-    </div>
   </div>
 
   <div id="summary">
@@ -83,6 +77,11 @@
     <section class="card" aria-labelledby="chart-title">
       <div class="chart-head">
         <h2 id="chart-title" data-label="Per day, by model">Per day, by model</h2>
+        <div class="segmented" id="metric" role="group" aria-label="Metric">
+          <button type="button" data-metric="cost">Estimated cost</button>
+          <button type="button" data-metric="output">Output tokens</button>
+          <button type="button" data-metric="input">Input tokens</button>
+        </div>
         <span class="spacer"></span>
         <button type="button" id="chart-table-toggle" aria-pressed="false">Table view</button>
       </div>
