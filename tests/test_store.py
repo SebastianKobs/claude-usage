@@ -1328,6 +1328,49 @@ class RecentSessionsTest(StoreCase):
     def test_no_limit_lists_every_session(self):
         self.assertEqual(len(store.recent_sessions(self.store, None, PRICES, limit=None)), 2)
 
+    def test_the_number_of_queries_does_not_grow_with_the_sessions(self):
+        for number in range(5):
+            self.projects.session(f"more{number}").at(DAY_3).assistant(f"n{number}", [text_block("x")],
+                                                                        usage(output=1))
+        self.scan()
+        statements = []
+        self.store.connection.set_trace_callback(statements.append)
+        self.addCleanup(self.store.connection.set_trace_callback, None)
+        sessions = store.recent_sessions(self.store, None, PRICES, limit=None)
+        self.assertEqual(len(sessions), 7)
+        self.assertLessEqual(len(statements), 3)
+
+
+class RangeFilterTest(StoreCase):
+    def plan(self, sql, parameters):
+        """The EXPLAIN QUERY PLAN details of a query, as one text."""
+        return " | ".join(row["detail"] for row in self.store.connection.execute(f"EXPLAIN QUERY PLAN {sql}",
+                                                                                 parameters))
+
+    def test_no_filter_is_always_true(self):
+        self.assertEqual(store.range_filter(store.USAGE_COLUMNS, None, None), ("1", {}))
+
+    def test_only_the_set_bounds_become_clauses(self):
+        condition, parameters = store.range_filter(store.USAGE_COLUMNS, date(2026, 9, 1), None,
+                                                   project="/home/dev/app")
+        self.assertEqual(condition, "u.day >= :since AND u.slug = :slug")
+        self.assertEqual(parameters, {"since": "2026-09-01", "slug": "-home-dev-app"})
+
+    def test_a_session_filter(self):
+        condition, parameters = store.range_filter(store.USAGE_COLUMNS, None, date(2026, 9, 3), session_id="s1")
+        self.assertEqual(condition, "u.day <= :until AND u.session_id = :session")
+        self.assertEqual(parameters, {"until": "2026-09-03", "session": "s1"})
+
+    def test_a_day_range_searches_the_day_index(self):
+        condition, parameters = store.range_filter(store.USAGE_COLUMNS, date(2026, 9, 1), date(2026, 9, 3))
+        self.assertIn("USING INDEX messages_day", self.plan(f"SELECT * FROM usage_rows u WHERE {condition}",
+                                                            parameters))
+
+    def test_an_error_range_searches_the_day_index(self):
+        condition, parameters = store.range_filter(store.ERROR_COLUMNS, date(2026, 9, 1), date(2026, 9, 3))
+        sql = f"SELECT * FROM api_errors e JOIN transcripts t ON t.path = e.path WHERE {condition}"
+        self.assertIn("USING INDEX api_errors_day", self.plan(sql, parameters))
+
 
 class SessionContextTest(StoreCase):
     def setUp(self):

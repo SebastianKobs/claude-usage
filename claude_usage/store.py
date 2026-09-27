@@ -206,6 +206,7 @@ ERROR_GROUPS = {
     "hour": ("strftime('%Y-%m-%dT%H', e.ts, 'localtime')", "hour"),
 }
 NO_LIMIT = -1                             # SQLite's LIMIT for all rows
+ID_BATCH = 500                            # ids per IN list: SQLite before 3.32 allows 999 variables
 # effort levels from least to most; others sort after them by name, as on the dashboard
 EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max")
 
@@ -639,11 +640,36 @@ def project_slug(project: str | None) -> str | None:
     return transcripts.slug_for(project)
 
 
-def since_text(since: date | None) -> str | None:
-    """A since or until date as the text the day column is compared with."""
-    if since is None:
-        return None
-    return since.isoformat()
+@dataclass(frozen=True)
+class FilterColumns:
+    """The columns a range filter compares: the local day, the project slug and the session id."""
+    day: str
+    slug: str
+    session: str
+
+
+USAGE_COLUMNS = FilterColumns("u.day", "u.slug", "u.session_id")
+ERROR_COLUMNS = FilterColumns("e.day", "t.slug", "t.session_id")
+MESSAGE_COLUMNS = FilterColumns("m.day", "t.slug", "t.session_id")
+COST_STATE_COLUMNS = FilterColumns("c.day", "t.slug", "t.session_id")
+
+
+def range_filter(columns: FilterColumns, since: date | None, until: date | None, project: str | None = None,
+                 session_id: str | None = None) -> tuple[str, Row]:
+    """An SQL condition and its parameters for the local days since up to until (both inclusive), one project path
+    and one session, each only if given ("1" without any). Only the set ones become clauses: a clause like
+    `(:since IS NULL OR day >= :since)` keeps SQLite from using the day index."""
+    clauses = []
+    parameters: Row = {}
+    for name, value, clause in (("since", since, f"{columns.day} >= :since"),
+                                ("until", until, f"{columns.day} <= :until"),
+                                ("slug", project_slug(project), f"{columns.slug} = :slug"),
+                                ("session", session_id, f"{columns.session} = :session")):
+        if value is None:
+            continue
+        clauses.append(clause)
+        parameters[name] = value.isoformat() if isinstance(value, date) else value
+    return " AND ".join(clauses) or "1", parameters
 
 
 def totals_by(store: Store, group: str, since: date | None, prices: pricing.Prices,
@@ -656,13 +682,10 @@ def totals_by(store: Store, group: str, since: date | None, prices: pricing.Pric
     columns = GROUPS[group]
     selected = ", ".join(f"{expression} AS {name}" for expression, name in columns)
     grouped = ", ".join(expression for expression, _ in columns)
+    condition, parameters = range_filter(USAGE_COLUMNS, since, until, project, session_id)
     rows = store.connection.execute(
         f"SELECT {selected}, u.model AS price_model, u.speed AS speed, {USAGE_SUMS} "
-        f"FROM usage_rows u WHERE (:since IS NULL OR u.day >= :since) AND (:until IS NULL OR u.day <= :until) "
-        f"AND (:slug IS NULL OR u.slug = :slug) AND (:session IS NULL OR u.session_id = :session) "
-        f"GROUP BY {grouped}, u.model, u.speed",
-        {"since": since_text(since), "until": since_text(until), "slug": project_slug(project),
-         "session": session_id})
+        f"FROM usage_rows u WHERE {condition} GROUP BY {grouped}, u.model, u.speed", parameters)
     sums: dict[tuple[Any, ...], UsageSum] = {}
     for row in rows:
         key = tuple(row[name] for _, name in columns)
@@ -675,17 +698,13 @@ def totals_by(store: Store, group: str, since: date | None, prices: pricing.Pric
 def nearest_days(store: Store, day: date, project: str | None = None) -> tuple[date | None, date | None]:
     """The closest local days before and after day that have usage (of one project path if given), None where
     there is none; for stepping through days without the empty ones."""
+    condition, parameters = range_filter(USAGE_COLUMNS, None, None, project)
     row = store.connection.execute(
-        "SELECT (SELECT MAX(u.day) FROM usage_rows u WHERE u.day < :day AND (:slug IS NULL OR u.slug = :slug)) "
-        "AS previous_day, "
-        "(SELECT MIN(u.day) FROM usage_rows u WHERE u.day > :day AND (:slug IS NULL OR u.slug = :slug)) AS next_day",
-        {"day": day.isoformat(), "slug": project_slug(project)}).fetchone()
+        f"SELECT (SELECT MAX(u.day) FROM usage_rows u WHERE u.day < :day AND {condition}) AS previous_day, "
+        f"(SELECT MIN(u.day) FROM usage_rows u WHERE u.day > :day AND {condition}) AS next_day",
+        {**parameters, "day": day.isoformat()}).fetchone()
     return tuple(None if value is None else date.fromisoformat(value)
                  for value in (row["previous_day"], row["next_day"]))
-
-
-ERROR_FILTER = ("(:since IS NULL OR e.day >= :since) AND (:until IS NULL OR e.day <= :until) "
-                "AND (:slug IS NULL OR t.slug = :slug) AND (:session IS NULL OR t.session_id = :session)")
 
 
 def api_errors_by(store: Store, group: str, since: date | None, project: str | None = None,
@@ -695,11 +714,11 @@ def api_errors_by(store: Store, group: str, since: date | None, project: str | N
     if group not in ERROR_GROUPS:
         raise ValueError(f"unknown group {group!r}; expected one of {', '.join(ERROR_GROUPS)}")
     expression, name = ERROR_GROUPS[group]
+    condition, parameters = range_filter(ERROR_COLUMNS, since, until, project)
     rows = store.connection.execute(
         f"SELECT {expression} AS {name}, e.error AS error, COUNT(*) AS count "
-        f"FROM api_errors e JOIN transcripts t ON t.path = e.path WHERE {ERROR_FILTER} "
-        f"GROUP BY 1, 2 ORDER BY 1, 2",
-        {"since": since_text(since), "until": since_text(until), "slug": project_slug(project), "session": None})
+        f"FROM api_errors e JOIN transcripts t ON t.path = e.path WHERE {condition} "
+        f"GROUP BY 1, 2 ORDER BY 1, 2", parameters)
     return [dict(row) for row in rows]
 
 
@@ -707,15 +726,14 @@ def api_error_events(store: Store, since: date | None, project: str | None = Non
                      limit: int = DEFAULT_EVENT_LIMIT, session_id: str | None = None) -> list[Row]:
     """The failed API calls of the range (of one project path or session if given), newest first, with the
     session, its title and the agent they hit."""
+    condition, parameters = range_filter(ERROR_COLUMNS, since, until, project, session_id)
     rows = store.connection.execute(
         "SELECT e.record_id AS record_id, e.ts AS ts, e.error AS error, e.status AS status, "
         "e.limit_type AS limit_type, e.resets_at AS resets_at, t.session_id AS session_id, t.project AS project, "
         "t.agent_type AS agent_type, (SELECT main.title FROM transcripts main WHERE main.session_id = t.session_id "
         "AND main.agent_id IS NULL AND main.title IS NOT NULL LIMIT 1) AS title "
-        f"FROM api_errors e JOIN transcripts t ON t.path = e.path WHERE {ERROR_FILTER} "
-        "ORDER BY e.ts DESC, e.rowid DESC LIMIT :limit",
-        {"since": since_text(since), "until": since_text(until), "slug": project_slug(project), "limit": limit,
-         "session": session_id})
+        f"FROM api_errors e JOIN transcripts t ON t.path = e.path WHERE {condition} "
+        "ORDER BY e.ts DESC, e.rowid DESC LIMIT :limit", {**parameters, "limit": limit})
     return [dict(row) for row in rows]
 
 
@@ -814,14 +832,15 @@ def agent_detail(store: Store, row: sqlite3.Row, prices: pricing.Prices) -> Row:
             "tools": [dict(tool) for tool in tools]}
 
 
-def session_detail(store: Store, session_id: str, prices: pricing.Prices) -> Row | None:
+def session_detail(store: Store, session_id: str, prices: pricing.Prices, read_prompt: bool = True) -> Row | None:
     """The main thread plus each subagent of a session, or None for an unknown id. The prompt is read from the
-    transcript on demand (never stored) and is None once the file is gone."""
+    transcript on demand (never stored) and is None once the file is gone, or without read_prompt: the server
+    reads it after letting go of the store."""
     rows = session_rows(store, session_id)
     if not rows:
         return None
     main = rows[0]
-    prompt = transcripts.first_prompt(Path(main["path"])) if main["agent_id"] is None else None
+    prompt = transcripts.first_prompt(Path(main["path"])) if read_prompt and main["agent_id"] is None else None
     return {"session_id": session_id, "project": main["project"], "title": main["title"],
             "git_branch": main["git_branch"],
             "first_ts": min((row["first_ts"] for row in rows if row["first_ts"]), default=None),
@@ -881,10 +900,9 @@ def runtime_totals(store: Store, since: date | None, prices: pricing.Prices, pro
     (of one project path if given), with those sessions' whole cost and the cost per 100 lines changed (None
     without changed lines or a price). A record covers the process that wrote it, so a session filed here counts
     its whole run."""
+    in_range, parameters = range_filter(COST_STATE_COLUMNS, since, until, project)
     condition = ("c.session_id IN (SELECT c.session_id FROM cost_states c JOIN transcripts t ON t.path = c.path "
-                 "WHERE (:since IS NULL OR c.day >= :since) AND (:until IS NULL OR c.day <= :until) "
-                 "AND (:slug IS NULL OR t.slug = :slug))")
-    parameters = {"since": since_text(since), "until": since_text(until), "slug": project_slug(project)}
+                 f"WHERE {in_range})")
     sums = ", ".join(f"COALESCE(SUM(c.{field}), 0) AS {field}" for field in RUN_FIELDS)
     row = store.connection.execute(f"SELECT COUNT(*) AS sessions, {sums} FROM cost_states c WHERE {condition}",
                                    parameters).fetchone()
@@ -916,52 +934,69 @@ def context_stats(store: Store, since: date | None, project: str | None = None, 
     """The median and 90th percentile of the context per main-thread turn (subagents start small and would pull it
     down) from the local day since up to until, of one project path or session if given; None values without
     turns. What a compact hint threshold can be chosen by."""
+    condition, parameters = range_filter(MESSAGE_COLUMNS, since, until, project, session_id)
     contexts = sorted(row["context"] for row in store.connection.execute(
         f"SELECT {CONTEXT} AS context FROM messages m JOIN transcripts t ON t.path = m.path "
-        "WHERE t.agent_id IS NULL AND (:since IS NULL OR m.day >= :since) AND (:until IS NULL OR m.day <= :until) "
-        "AND (:slug IS NULL OR t.slug = :slug) AND (:session IS NULL OR t.session_id = :session)",
-        {"since": since_text(since), "until": since_text(until), "slug": project_slug(project),
-         "session": session_id}))
+        f"WHERE t.agent_id IS NULL AND {condition}", parameters))
     if not contexts:
         return {"turns": 0, "median": None, "p90": None}
     p90 = contexts[0] if len(contexts) == 1 else statistics.quantiles(contexts, n=10, method="inclusive")[8]
     return {"turns": len(contexts), "median": round(statistics.median(contexts)), "p90": round(p90)}
 
 
-def main_context(store: Store, session_id: str) -> Row:
-    """The average and peak context per turn of the session's main thread (None without turns). Every turn reads
-    its whole context again, so these show how far a session grew before a /clear or a compaction."""
-    row = store.connection.execute(
-        f"SELECT AVG({CONTEXT}) AS average, MAX({CONTEXT}) AS peak FROM messages m "
-        "JOIN transcripts t ON t.path = m.path WHERE t.session_id = ? AND t.agent_id IS NULL",
-        (session_id,)).fetchone()
-    return {"context_avg": None if row["average"] is None else round(row["average"]), "context_peak": row["peak"]}
-
-
 def recent_sessions(store: Store, since: date | None, prices: pricing.Prices,
                     limit: int | None = DEFAULT_SESSION_LIMIT, project: str | None = None,
                     until: date | None = None) -> list[Row]:
     """Sessions with messages from the local day since up to the local day until (either end open without it),
-    newest first, with totals and the main thread's context; limit None lists every one."""
-    rows = store.connection.execute("""
-        SELECT session_id, MIN(first_ts) AS first_ts, MAX(last_ts) AS last_ts,
-               SUM(agent_id IS NOT NULL) AS subagents
-        FROM transcripts
-        WHERE (:slug IS NULL OR slug = :slug) AND ((:since IS NULL AND :until IS NULL) OR session_id IN (
-            SELECT u.session_id FROM usage_rows u
-            WHERE (:since IS NULL OR u.day >= :since) AND (:until IS NULL OR u.day <= :until)))
-        GROUP BY session_id
-        ORDER BY MAX(last_ts) DESC
-        LIMIT :limit
-        """, {"since": since_text(since), "until": since_text(until), "limit": NO_LIMIT if limit is None else limit,
-              "slug": project_slug(project)}).fetchall()
+    newest first, with their whole totals and the main thread's average and peak context per turn (None without
+    turns: every turn reads its whole context again, so these show how far a session grew before a /clear or a
+    compaction); limit None lists every one. One query, plus two per ID_BATCH sessions."""
+    days, parameters = range_filter(USAGE_COLUMNS, since, until)
+    conditions = []
+    if project is not None:
+        conditions.append("slug = :slug")
+        parameters["slug"] = project_slug(project)
+    if since is not None or until is not None:
+        conditions.append(f"session_id IN (SELECT u.session_id FROM usage_rows u WHERE {days})")
+    parameters["limit"] = NO_LIMIT if limit is None else limit
+    # project and title from the main thread, else the first subagent, as in session_rows
+    rows = store.connection.execute(f"""
+        WITH chosen AS (
+            SELECT session_id, MIN(first_ts) AS first_ts, MAX(last_ts) AS last_ts,
+                   SUM(agent_id IS NOT NULL) AS subagents
+            FROM transcripts WHERE {" AND ".join(conditions) or "1"}
+            GROUP BY session_id ORDER BY MAX(last_ts) DESC LIMIT :limit),
+        ranked AS (
+            SELECT session_id, project, title,
+                   ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY agent_id IS NOT NULL, first_ts, path) AS place
+            FROM transcripts WHERE session_id IN (SELECT session_id FROM chosen))
+        SELECT c.session_id AS session_id, r.project AS project, r.title AS title, c.first_ts AS first_ts,
+               c.last_ts AS last_ts, c.subagents AS subagents
+        FROM chosen c JOIN ranked r ON r.session_id = c.session_id AND r.place = 1
+        ORDER BY c.last_ts DESC""", parameters).fetchall()
+    ids = [row["session_id"] for row in rows]
+    sums: dict[str, UsageSum] = {session_id: UsageSum() for session_id in ids}
+    contexts: dict[str, sqlite3.Row] = {}
+    # a list of values, unlike a subquery, reaches into the usage_rows view and its indexes; in batches, under
+    # SQLite's limit on variables
+    for start in range(0, len(ids), ID_BATCH):
+        batch = ids[start:start + ID_BATCH]
+        placeholders = ", ".join("?" for _ in batch)
+        for row in store.connection.execute(
+                f"SELECT u.session_id AS session_id, u.model AS price_model, u.speed AS speed, {USAGE_SUMS} "
+                f"FROM usage_rows u WHERE u.session_id IN ({placeholders}) GROUP BY u.session_id, u.model, u.speed",
+                batch):
+            sums[row["session_id"]].add(row, prices)
+        contexts.update((row["session_id"], row) for row in store.connection.execute(
+            f"SELECT t.session_id AS session_id, AVG({CONTEXT}) AS average, MAX({CONTEXT}) AS peak "
+            "FROM messages m JOIN transcripts t ON t.path = m.path "
+            f"WHERE t.agent_id IS NULL AND t.session_id IN ({placeholders}) GROUP BY t.session_id", batch))
     sessions = []
     for row in rows:
-        main = session_rows(store, row["session_id"])[0]
-        sessions.append({"session_id": row["session_id"], "project": main["project"], "title": main["title"],
-                         "first_ts": row["first_ts"], "last_ts": row["last_ts"], "subagents": row["subagents"],
-                         **usage_where(store, "u.session_id = ?", (row["session_id"],), prices).as_dict(),
-                         **main_context(store, row["session_id"])})
+        context = contexts.get(row["session_id"])
+        average = None if context is None else round(context["average"])
+        sessions.append({**dict(row), **sums[row["session_id"]].as_dict(), "context_avg": average,
+                         "context_peak": None if context is None else context["peak"]})
     return sessions
 
 

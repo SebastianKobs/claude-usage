@@ -134,6 +134,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     usage wins); copies in forked or resumed sessions change nothing.
   - Tool calls and result sizes follow the same rule.
   - Message rows keep only the path; project, session and agent come from `transcripts`.
+- **Queries:** optional filters come from `store.range_filter`, which writes only the clauses that are set: a
+  `(:x IS NULL OR day >= :x)` clause keeps SQLite off the day index. A subquery doesn't reach into the
+  `usage_rows` view, a list of values does, so per-session sums pass the ids as `IN (?, …)` in batches.
 - **Background usage:**
   - After each scan, per touched session and model: the latest snapshot minus the transcripts between the
     snapshot's `startTime` and its snapshot time, per category, never below 0. A file's transaction marks its

@@ -277,6 +277,19 @@ class ApiTest(ServerCase):
         self.assertEqual([agent["agent_type"] for agent in payload["agents"]], ["main", "general-purpose"])
         self.assertEqual(payload["agents"][0]["tools"], [{"tool": "Read", "calls": 1, "result_chars": 3}])
 
+    def test_the_prompt_is_read_outside_the_lock(self):
+        held = []
+        read = server.transcripts.first_prompt
+
+        def spy(path):
+            """first_prompt, noting whether the app's lock was held meanwhile."""
+            held.append(self.app.lock.locked())
+            return read(path)
+
+        with mock.patch.object(server.transcripts, "first_prompt", side_effect=spy):
+            payload = self.app.session("s1")
+        self.assertEqual((payload["prompt"], held), ("Fix the parser", [False]))
+
     def test_summary_has_the_run_totals(self):
         self.main.cost_state({}, totalDuration=60000, totalLinesAdded=5, totalLinesRemoved=2)
         _, payload = self.get_json("/api/summary?days=7")

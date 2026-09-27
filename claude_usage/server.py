@@ -345,10 +345,13 @@ class UsageApp:
         """/api/session/<id>, or None for an unknown id."""
         with self.lock:
             self.refresh()
-            detail = store.session_detail(self.store, session_id, self.prices)
+            detail = store.session_detail(self.store, session_id, self.prices, read_prompt=False)
+            path = store.transcript_path(self.store, session_id, None)
         if detail is None:
             return None
-        return {**detail, "compact_hint_tokens": self.compact.hint_tokens}
+        # a file read needn't hold up the other requests
+        prompt = None if path is None else transcripts.first_prompt(path)
+        return {**detail, "prompt": prompt, "compact_hint_tokens": self.compact.hint_tokens}
 
 
 class Handler(BaseHTTPRequestHandler):
