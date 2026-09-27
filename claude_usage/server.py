@@ -33,8 +33,6 @@ SESSION_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})")
 HOST_WITH_PORT = re.compile(r"^\[?(?P<host>[^\]]*?)\]?(?::\d+)?$")
 DASHBOARD_POLICY = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
                     "connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
-USAGE_TOTAL_FIELDS = ("turns", "new_input", "cache_write_5m", "cache_write_1h", "cache_write", "cache_read",
-                      "output", "unpriced_turns")
 
 Payload = dict[str, Any]
 
@@ -51,14 +49,6 @@ def is_loopback(host: str) -> bool:
         return ipaddress.ip_address(host).is_loopback
     except ValueError:
         return False
-
-
-def combined(rows: list[Payload]) -> Payload:
-    """The sum of usage rows (e.g. all models) as one row; cost is None only if no turn had a price."""
-    total: Payload = {field: sum(row[field] for row in rows) for field in USAGE_TOTAL_FIELDS}
-    costs = [row["cost"] for row in rows if row["cost"] is not None]
-    total["cost"] = sum(costs) if costs or not rows else None
-    return total
 
 
 def parse_days(query: str) -> int:
@@ -112,7 +102,7 @@ class UsageApp:
                       for group in ("day_model", "agent_type", "project", "model")}
             sessions = store.recent_sessions(self.store, since, self.prices, project=self.project)
         return {"days": days, "since": since.isoformat(), "project_filter": self.project,
-                "prices_checked": self.prices_checked, "totals": combined(groups["model"]), **groups,
+                "prices_checked": self.prices_checked, "totals": store.combined(groups["model"]), **groups,
                 "sessions": sessions}
 
     def session(self, session_id: str) -> Payload | None:
@@ -179,10 +169,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def send_json(self, status: HTTPStatus, payload: Payload) -> None:
+        """Send a JSON response."""
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_body(status, "application/json; charset=utf-8", body, {})
 
     def send_dashboard(self) -> None:
+        """Send the dashboard page with its content security policy."""
         body = DASHBOARD.read_bytes()
         self.send_body(HTTPStatus.OK, "text/html; charset=utf-8", body,
                        {"Content-Security-Policy": DASHBOARD_POLICY, "Referrer-Policy": "no-referrer"})

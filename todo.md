@@ -242,10 +242,17 @@ claude-usage/
 ### `__main__.py` (CLI, argparse, `main(argv=None) -> int`)
 - `scan [--project PATH]`: one incremental scan, prints the `ScanResult`. Useful from cron, to keep history
   without the server running.
-- `report [--days N] [--by day|model|agent_type|project] [--session ID] [--json]`: text or JSON report.
-- `serve …`: as above.
-- **Global options:** `--projects-dir` (default `~/.claude/projects`) and `--store`, both overriding the config.
-  Tests pass temp paths.
+- `report [--days N] [--by day|model|agent_type|project] [--session ID] [--project PATH] [--json] [--no-scan]`:
+  text or JSON report.
+  - It scans first, so it agrees with tools that read the transcripts directly. `--no-scan` reports the stored
+    history only.
+  - `--days 0` means all time.
+  - An unknown session exits 1.
+- `serve …`: as above. It scans once before listening, so a bad projects folder fails at start. Ctrl+C stops it
+  with exit 0.
+- **Global options:** `--projects-dir` (default `~/.claude/projects`) and `--store`, both overriding the config,
+  before or after the command. Tests pass temp paths.
+- **Exit codes:** 0 on success, 1 on errors (printed as `claude-usage: …`, no traceback), 2 on bad arguments.
 
 ## Style (from the evopage8 toolkit, which this project comes from)
 - **Layout:** PEP 8, max 120 columns, one import per line (stdlib, then local).
@@ -297,7 +304,7 @@ Write the test first, then the implementation, for each step:
    - a server on port 0 in a thread; `/`, `/api/live`, `/api/summary` and `/api/session/<id>` return JSON of the right shape
    - 404s for unknown paths and ids
    - binding to a non-loopback host is refused
-6. **CLI tests:** `scan`, `report --json` and `--help` exit 0; an unknown option exits 2.
+6. ✅ **CLI tests:** `scan`, `report --json` and `--help` exit 0; an unknown option exits 2.
 
 ## Verification
 - `python3 -m unittest discover -s tests` passes.

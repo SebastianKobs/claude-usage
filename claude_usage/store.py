@@ -325,6 +325,17 @@ class UsageSum:
                 "cost": cost, "unpriced_turns": self.unpriced_turns}
 
 
+USAGE_FIELDS = ("turns", *TOKEN_FIELDS, "cache_write", "unpriced_turns")
+
+
+def combined(rows: list[Row]) -> Row:
+    """The sum of usage rows (e.g. the rows of all models) as one row; cost is None only if no turn had a price."""
+    total: Row = {field: sum(row[field] for row in rows) for field in USAGE_FIELDS}
+    costs = [row["cost"] for row in rows if row["cost"] is not None]
+    total["cost"] = sum(costs) if costs or not rows else None
+    return total
+
+
 def usage_where(store: Store, condition: str, parameters: tuple[Any, ...], prices: pricing.Prices) -> UsageSum:
     """The UsageSum of the messages matching an SQL condition over m (messages) and t (transcripts)."""
     total = UsageSum()
