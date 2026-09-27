@@ -6,6 +6,7 @@ import unittest
 from datetime import UTC
 from datetime import date
 from datetime import datetime
+from datetime import timedelta
 from unittest import mock
 
 from claude_usage import pricing
@@ -21,10 +22,14 @@ PRICES = pricing.parse_prices({
                         "output": 10.0},
     "claude-opus-5": {"input": 5.0, "cache_write_5m": 6.25, "cache_write_1h": 10.0, "cache_read": 0.5,
                       "output": 25.0, "fast_multiplier": 2.0},
+    "claude-haiku-4-5": {"input": 1.0, "cache_write_5m": 1.25, "cache_write_1h": 2.0, "cache_read": 0.1,
+                         "output": 5.0},
 })
+HAIKU = "claude-haiku-4-5-20251001"
 MILLION = 1_000_000
 DAY_1 = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
 DAY_3 = datetime(2026, 9, 3, 12, 0, tzinfo=UTC)
+DATE_AFTER = datetime(2026, 9, 4, 9, 0, tzinfo=UTC)
 
 
 def local_day(moment):
@@ -280,6 +285,111 @@ class ScanTest(StoreCase):
         self.assertEqual(self.count("transcripts"), 0)
 
 
+class BackgroundTest(StoreCase):
+    """Usage Claude Code's cost-state records show but no transcript does, per session and model."""
+
+    def setUp(self):
+        super().setUp()
+        self.main = self.projects.session("s1")
+        self.main.at(DAY_3).user("hi")
+        self.main.assistant("m1", [text_block("a")], usage(new=10, cache_5m=100, cache_read=1000, output=50))
+        agent = self.projects.subagent("s1", "a1")
+        agent.at(DAY_3).assistant("m2", [text_block("b")], usage(output=30))
+
+    def background(self):
+        """The background rows as (model, new_input, cache_write, cache_read, output)."""
+        return self.rows("SELECT model, new_input, cache_write, cache_read, output FROM background ORDER BY model")
+
+    def test_no_cost_state_no_background(self):
+        self.scan()
+        self.assertEqual(self.background(), [])
+
+    def test_the_snapshot_minus_main_thread_and_subagents(self):
+        self.main.cost_state({"claude-sonnet-5": (15, 100, 1500, 100, 1.0), HAIKU: (2000, 0, 0, 100, 0.01)})
+        self.scan()
+        self.assertEqual(self.background(), [(HAIKU, 2000, 0, 0, 100), ("claude-sonnet-5", 5, 0, 500, 20)])
+
+    def test_a_category_below_the_transcripts_counts_as_zero(self):
+        self.main.cost_state({"claude-sonnet-5": (0, 50, 1000, 90, 1.0)})
+        self.scan()
+        self.assertEqual(self.background(), [("claude-sonnet-5", 0, 0, 0, 10)])
+
+    def test_nothing_missing_means_no_row(self):
+        self.main.cost_state({"claude-sonnet-5": (10, 100, 1000, 80, 1.0)})
+        self.scan()
+        self.assertEqual(self.background(), [])
+
+    def test_messages_after_the_snapshot_do_not_count(self):
+        self.main.cost_state({"claude-sonnet-5": (10, 100, 1000, 100, 1.0)})
+        self.main.at(DATE_AFTER).user("resumed")
+        self.main.assistant("m3", [text_block("c")], usage(output=500))
+        self.scan()
+        self.assertEqual(self.background(), [("claude-sonnet-5", 0, 0, 0, 20)])
+
+    def test_a_cost_state_in_a_subagent_file_is_ignored(self):
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.scan()
+        agent = self.projects.subagent("s1", "a2")      # read after the main file's snapshot
+        agent.at(DAY_3).user("x")
+        agent.cost_state({HAIKU: (999, 0, 0, 999, 9.99)})
+        self.scan()
+        self.assertEqual(self.background(), [(HAIKU, 100, 0, 0, 10)])
+
+    def test_a_later_cost_state_replaces_the_earlier(self):
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.scan()
+        self.main.at(DATE_AFTER).user("resumed")
+        self.main.cost_state({HAIKU: (300, 0, 0, 30, 0.03)})
+        self.scan()
+        self.assertEqual(self.background(), [(HAIKU, 300, 0, 0, 30)])
+
+    def test_rescans_are_stable(self):
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.scan()
+        self.projects.session("s2").user("unrelated")
+        self.scan()
+        self.assertEqual(self.background(), [(HAIKU, 100, 0, 0, 10)])
+
+    def test_background_stays_after_the_transcripts_are_deleted(self):
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.scan()
+        self.main.path.unlink()
+        self.scan()
+        self.assertEqual(self.background(), [(HAIKU, 100, 0, 0, 10)])
+
+    def test_totals_include_background_without_turns(self):
+        self.main.cost_state({HAIKU: (1_000_000, 0, 0, 0, 1.0)})
+        self.scan()
+        by_agent = {row["agent_type"]: row for row in store.totals_by(self.store, "agent_type", None, PRICES)}
+        self.assertEqual((by_agent[store.BACKGROUND]["turns"], by_agent[store.BACKGROUND]["new_input"]),
+                         (0, 1_000_000))
+        by_model = {row["model"]: row for row in store.totals_by(self.store, "model", None, PRICES)}
+        self.assertAlmostEqual(by_model[HAIKU]["cost"], 1.0)
+        self.assertEqual(by_model["claude-sonnet-5"]["turns"], 2)
+
+    def test_background_is_filed_under_the_snapshot_day(self):
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.scan()
+        self.assertEqual(self.rows("SELECT day FROM background"), [(local_day(DAY_3 + timedelta(seconds=1)),)])
+
+    def test_session_detail_lists_background_last(self):
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.scan()
+        detail = store.session_detail(self.store, "s1", PRICES)
+        self.assertEqual([agent["agent_type"] for agent in detail["agents"]],
+                         ["main", "general-purpose", store.BACKGROUND])
+        background = detail["agents"][-1]
+        self.assertEqual((background["turns"], background["new_input"], background["models"]), (0, 100, [HAIKU]))
+        self.assertEqual(detail["agents"][0]["new_input"], 10)
+        self.assertEqual(detail["new_input"], 110)
+
+    def test_an_unpriced_background_model_has_no_cost(self):
+        self.main.cost_state({"claude-mystery-1": (100, 0, 0, 10, 0.01)})
+        self.scan()
+        by_model = {row["model"]: row for row in store.totals_by(self.store, "model", None, PRICES)}
+        self.assertIsNone(by_model["claude-mystery-1"]["cost"])
+
+
 class SchemaTest(TempDirTestCase):
     def test_data_survives_reopening(self):
         build_session(self.projects)
@@ -293,6 +403,25 @@ class SchemaTest(TempDirTestCase):
         with store.Store(self.store_path) as opened:
             version = opened.connection.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()[0]
         self.assertEqual(int(version), store.SCHEMA_VERSION)
+
+    def test_a_version_1_store_reads_its_files_again(self):
+        main = self.projects.session("s1")
+        main.at(DAY_1).user("hi")
+        main.assistant("m1", [text_block("a")], usage(output=5))
+        main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        with store.Store(self.store_path) as first:
+            store.scan(first, self.projects.root)
+            # what a version-1 store looks like: no cost states, and every file read to its end
+            first.connection.execute("DELETE FROM cost_states")
+            first.connection.execute("DELETE FROM background")
+            first.connection.execute("UPDATE meta SET value = '1' WHERE key = 'schema_version'")
+        with store.Store(self.store_path) as second:
+            result = store.scan(second, self.projects.root)
+            self.assertEqual(result.files_scanned, 1)
+            self.assertEqual(second.connection.execute("SELECT COUNT(*) FROM messages").fetchone()[0], 1)
+            self.assertEqual(second.connection.execute("SELECT model FROM background").fetchall()[0][0], HAIKU)
+            version = second.connection.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()[0]
+            self.assertEqual(int(version), store.SCHEMA_VERSION)
 
     def test_a_newer_schema_is_refused(self):
         with store.Store(self.store_path):

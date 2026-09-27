@@ -2,16 +2,15 @@
 matching prefix wins. The fast-mode multiplier applies to every token category, cache writes and reads included,
 because the cache multipliers stack on top of the fast-mode price. Not modelled: the 1.1x for US-only inference
 (`inference_geo`; not seen in real transcripts), the Batch API discount, and web search fees."""
-import re
 from dataclasses import dataclass
 from typing import Any
+
+from claude_usage import transcripts
 
 STANDARD_SPEED = "standard"
 PER_TOKENS = 1_000_000
 PRICE_FIELDS = ("input", "cache_write_5m", "cache_write_1h", "cache_read", "output")
 OPTIONAL_FIELDS = {"fast_multiplier": 1.0}
-# Claude Code's cost records name the 1M-context variant "claude-opus-5-5[1m]"; it is priced like the base id.
-CONTEXT_SUFFIX = re.compile(r"\[[^\]]*\]$")
 
 
 class PricingError(Exception):
@@ -60,7 +59,7 @@ def parse_prices(table: dict[str, Any]) -> Prices:
 
 def price_for(prices: Prices, model: str) -> Price | None:
     """The Price of the longest prefix of model (without a [1m]-style suffix), or None if no prefix matches."""
-    base = CONTEXT_SUFFIX.sub("", model)
+    base = transcripts.CONTEXT_SUFFIX.sub("", model)
     matches = [prefix for prefix in prices if prefix and base.startswith(prefix)]
     if not matches:
         return None

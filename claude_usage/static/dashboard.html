@@ -810,7 +810,8 @@ function renderSummary() {
   document.getElementById("scope").textContent = `· ${scope}`;
   document.getElementById("footer").textContent = "Estimated cost at Claude API list prices" +
     (summary.prices_checked ? ` (checked ${summary.prices_checked})` : "") +
-    ". Background calls that aren't in the transcripts are not included.";
+    ". “(background)” is usage Claude Code counted but no transcript shows (e.g. Haiku for titles), taken from its " +
+    "cost records when a session ends: it has no turns and is filed under the day the session ended.";
 }
 
 async function loadLive() {

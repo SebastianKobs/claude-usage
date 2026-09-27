@@ -73,8 +73,14 @@ are written out below, so this project doesn't depend on it.
 - **Not in the transcripts:** Claude Code's background calls, such as Haiku for titles and classifiers.
   - They only appear in `cost-state` records (`modelUsage` per model with tokens and `costUSD`, `totalCostUSD`).
   - Model ids there carry a `[1m]` suffix for the 1M context variant; the assistant records don't.
-  - Possible later addition: show them as "background" usage per session, and use `costUSD` to cross-check
-    `pricing.py`.
+  - When the records are written:
+    - Claude Code writes one at the end of a session, usually as the last line. A resumed session writes another
+      with the cumulative totals since `startTime`.
+    - The record has no timestamp of its own; the record before it marks the snapshot time.
+    - A running session has none yet.
+  - Token fields map one to one onto the assistant usage: `inputTokens` = new input, `cacheCreationInputTokens`
+    (no 5m/1h split), `cacheReadInputTokens`, `outputTokens`.
+  - Implemented as background usage (see `store.py`).
 
 ## Layout
 ```
@@ -125,7 +131,11 @@ claude-usage/
     slug come from the path.
   - `first_prompt(path)`: the prompt for the drilldown. It reads the file on demand and returns None once the file
     is gone. The prompt is never stored.
-  - `find_transcripts(projects_dir) -> list[Path]`: main and subagent files
+  - `find_transcripts(projects_dir) -> list[Path]`: main and subagent files, sorted as paths. That puts a
+    session's `subagents/` before its main file.
+  - `Chunk.cost_state`: the last `cost-state` record of the part as a `CostState`.
+    - Fields: `snapshot_ts` and one `ModelTotals` per model.
+    - Models are merged by their id without a `[1m]` suffix.
   - `project_slug(path)`, `display_name(tool)`
 - **Derived per agent** (in the store queries, from the `messages` rows): turns, context first → last, input
   total. This gives the numbers of the per-agent report.
@@ -141,8 +151,21 @@ claude-usage/
   - `tool_calls(tool_use_id PK, path, tool, result_chars)`: one row per call, summed per tool in the queries
   - Messages and tool calls keep only the file `path`. Project, session and agent type come from a join with
     `transcripts`, so a cwd or meta file that appears later corrects every row at once.
+  - `cost_states(session_id PK, path, snapshot_ts, models JSON)`: the latest snapshot per session, from main
+    transcripts only.
+  - `background(session_id, model, path, ts, day, new_input, cache_write, cache_read, output, PK(session_id, model))`
+    - Contents: per model and category, what the snapshot counts beyond the session's transcripts (main and
+      subagents) up to `snapshot_ts`, never below 0.
+    - It's recomputed after each scan for the sessions it touched, after all files, so the subagents are in.
+    - `ts` and `day` are the snapshot's; cache writes are priced as 5m.
+  - `usage_rows` view: messages and background rows side by side, so every query includes both.
+    - Background rows have agent type `(background)` and no turns.
+    - The drilldown lists them as a pseudo agent, after the subagents.
   - `meta(schema_version)`: migrations only add. Never drop tables or rows on a version change, since the history
     can't be rebuilt once the transcripts are gone.
+    - Version 2 added `cost_states` and `background`.
+    - Opening a version-1 store resets every `read_offset`, so the next scan reads each file again: idempotent,
+      and no row is removed.
 - **`scan(store, projects_dir, project_filter=None) -> ScanResult`** (files scanned, skipped, messages upserted,
   bytes read):
   - **Unchanged file:** skip it when `(size, mtime)` is unchanged.
@@ -335,6 +358,11 @@ Write the test first, then the implementation, for each step:
   - ✅ daily and model charts render in light and dark (confirmed 2026-09-27)
   - ✅ the drilldown of a doc-run session matches the report (confirmed 2026-09-27)
 - Optional: a cron entry `*/30 * * * * cd <folder> && python3 -m claude_usage scan` keeps the history even when the dashboard isn't running.
+
+- ✅ Background usage on the real data (2026-09-27): 28 snapshots, background usage in 25 sessions, $4.47 in total.
+  - Haiku: 871K input and 36K output tokens, $1.05. The rest are Sonnet and Opus calls that no transcript shows.
+  - The Haiku cost equals Claude Code's `costUSD` in 21 of 24 sessions. The other three differ by exactly $0.09,
+    $0.20 and $0.06: web searches at $10 per 1,000 (`webSearchRequests`), which aren't modelled yet.
 
 ## Note for the implementing session
 The tool reads `~/.claude/projects/`, which is outside the new project folder; that is its purpose. The session

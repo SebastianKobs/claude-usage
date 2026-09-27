@@ -4,7 +4,14 @@ scan() reads each transcript from where the last scan stopped (the stored byte o
 the rows it already has, in one transaction per file. Rows are never deleted: once Claude Code removes a transcript,
 the store is the only record of it. Message and tool rows keep only the file path; project, session and agent come
 from the transcripts table, so a cwd or meta file that shows up later corrects every row at once.
+
+Background usage: when a session ends, Claude Code writes a cost-state record with its cumulative usage per model,
+including calls no transcript shows (Haiku for titles, classifiers). The latest one per session is kept in
+cost_states; after each scan, the background table gets, per session and model, what that snapshot counts beyond
+the transcripts up to the snapshot time (per category, never below 0). The usage_rows view puts messages and
+background rows side by side, so every query includes both; background rows have no turns.
 """
+import json
 import hashlib
 import sqlite3
 import time
@@ -20,7 +27,7 @@ from typing import Any
 from claude_usage import pricing
 from claude_usage import transcripts
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2                      # 2: cost_states and background
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -67,19 +74,54 @@ CREATE TABLE IF NOT EXISTS tool_calls (
     result_chars INTEGER
 );
 CREATE INDEX IF NOT EXISTS tool_calls_path ON tool_calls (path);
+CREATE TABLE IF NOT EXISTS cost_states (
+    session_id TEXT PRIMARY KEY,
+    path TEXT NOT NULL,             -- the main transcript it was read from
+    snapshot_ts TEXT,
+    models TEXT NOT NULL            -- JSON: [[model, new_input, cache_write, cache_read, output, cost_usd], ...]
+);
+CREATE TABLE IF NOT EXISTS background (
+    session_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    path TEXT NOT NULL,
+    ts TEXT,
+    day TEXT,
+    new_input INTEGER NOT NULL,
+    cache_write INTEGER NOT NULL,   -- no 5m/1h split in cost-state records; priced as 5m
+    cache_read INTEGER NOT NULL,
+    output INTEGER NOT NULL,
+    PRIMARY KEY (session_id, model)
+);
 """
+# A view holds no data, so it is simply recreated on every open.
+VIEW = """
+DROP VIEW IF EXISTS usage_rows;
+CREATE VIEW usage_rows AS
+SELECT m.path AS path, t.session_id AS session_id, t.agent_id AS agent_id, t.agent_type AS agent_type,
+       t.project AS project, t.slug AS slug, m.model AS model, m.speed AS speed, m.ts AS ts, m.day AS day,
+       m.new_input AS new_input, m.cache_write_5m AS cache_write_5m, m.cache_write_1h AS cache_write_1h,
+       m.cache_read AS cache_read, m.output AS output, 1 AS turn
+FROM messages m JOIN transcripts t ON t.path = m.path
+UNION ALL
+SELECT b.path, b.session_id, NULL, '(background)', t.project, t.slug, b.model, 'standard', b.ts, b.day,
+       b.new_input, b.cache_write, 0, b.cache_read, b.output, 0
+FROM background b JOIN transcripts t ON t.path = b.path;
+"""
+BACKGROUND = "(background)"               # the agent type of background rows, as in VIEW
 TOKEN_FIELDS = ("new_input", "cache_write_5m", "cache_write_1h", "cache_read", "output")
-TOKEN_SUMS = ", ".join(f"SUM(m.{field}) AS {field}" for field in TOKEN_FIELDS)
+TOKEN_SUMS = ", ".join(f"SUM(u.{field}) AS {field}" for field in TOKEN_FIELDS)
+USAGE_SUMS = f"SUM(u.turn) AS turns, COUNT(*) AS row_count, {TOKEN_SUMS}"
 CONTEXT = "(m.new_input + m.cache_write_5m + m.cache_write_1h + m.cache_read)"
-MESSAGES_JOIN = "messages m JOIN transcripts t ON t.path = m.path"
 # group name -> the columns it groups by, as (SQL expression, result key)
 GROUPS = {
-    "day": (("m.day", "day"),),
-    "model": (("m.model", "model"),),
-    "agent_type": (("t.agent_type", "agent_type"),),
-    "project": (("t.project", "project"),),
-    "day_model": (("m.day", "day"), ("m.model", "model")),
+    "day": (("u.day", "day"),),
+    "model": (("u.model", "model"),),
+    "agent_type": (("u.agent_type", "agent_type"),),
+    "project": (("u.project", "project"),),
+    "day_model": (("u.day", "day"), ("u.model", "model")),
 }
+BACKGROUND_FIELDS = ("new_input", "cache_write", "cache_read", "output")
+BACKGROUND_DESCRIPTION = "calls Claude Code counted that no transcript shows, e.g. Haiku for titles"
 DEFAULT_SESSION_LIMIT = 50
 
 Row = dict[str, Any]
@@ -117,6 +159,12 @@ class Store:
         elif int(row["value"]) > SCHEMA_VERSION:
             raise StoreError(f"{self.path} has schema version {row['value']}, newer than this tool's "
                              f"{SCHEMA_VERSION}; update claude-usage")
+        elif int(row["value"]) < 2:
+            # version 1 didn't keep cost-state records: read every file again on the next scan (the upserts make
+            # that idempotent; no row is removed)
+            self.connection.execute("UPDATE transcripts SET read_offset = 0, size = -1")
+            self.connection.execute("UPDATE meta SET value = ? WHERE key = 'schema_version'", (str(SCHEMA_VERSION),))
+        self.connection.executescript(VIEW)
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
@@ -241,6 +289,51 @@ def update_tool_results(store: Store, chunk: transcripts.Chunk) -> None:
         [(result.chars, result.tool_use_id, str(chunk.path)) for result in chunk.tool_results])
 
 
+def upsert_cost_state(store: Store, chunk: transcripts.Chunk, previous_last_ts: str | None) -> None:
+    """Keep the session's newest cost-state snapshot (only main transcripts write them). Without a timestamped
+    record before it in this read, the snapshot time is the last one seen in earlier reads."""
+    cost_state = chunk.cost_state
+    if cost_state is None or chunk.agent_id is not None:
+        return
+    models = [[model.model, model.new_input, model.cache_write, model.cache_read, model.output, model.cost_usd]
+              for model in cost_state.models]
+    store.connection.execute("""
+        INSERT INTO cost_states (session_id, path, snapshot_ts, models) VALUES (?, ?, ?, ?)
+        ON CONFLICT (session_id) DO UPDATE SET path = excluded.path, snapshot_ts = excluded.snapshot_ts,
+                                               models = excluded.models
+        """, (chunk.session_id, str(chunk.path), iso(cost_state.snapshot_ts) or previous_last_ts, json.dumps(models)))
+
+
+def update_background(store: Store, session_ids: set[str]) -> None:
+    """Recompute the background rows of these sessions: per model and category, what the latest cost-state
+    snapshot counts beyond the session's transcripts up to the snapshot time, never below 0."""
+    for session_id in sorted(session_ids):
+        store.connection.execute("DELETE FROM background WHERE session_id = ?", (session_id,))
+        state = store.connection.execute("SELECT * FROM cost_states WHERE session_id = ?", (session_id,)).fetchone()
+        if state is None:
+            continue
+        seen = {row["model"]: row for row in store.connection.execute("""
+            SELECT m.model AS model, SUM(m.new_input) AS new_input,
+                   SUM(m.cache_write_5m + m.cache_write_1h) AS cache_write, SUM(m.cache_read) AS cache_read,
+                   SUM(m.output) AS output
+            FROM messages m JOIN transcripts t ON t.path = m.path
+            WHERE t.session_id = :session AND (:snapshot IS NULL OR m.ts <= :snapshot)
+            GROUP BY m.model""", {"session": session_id, "snapshot": state["snapshot_ts"]})}
+        snapshot = datetime.fromisoformat(state["snapshot_ts"]) if state["snapshot_ts"] else None
+        for entry in json.loads(state["models"]):
+            model = entry[0]
+            counted = entry[1:5]                # new_input, cache_write, cache_read, output
+            row = seen.get(model)
+            in_transcripts = [row[field] or 0 for field in BACKGROUND_FIELDS] if row else [0] * len(BACKGROUND_FIELDS)
+            missing = [max(0, total - known) for total, known in zip(counted, in_transcripts)]
+            if not any(missing):
+                continue
+            store.connection.execute(
+                "INSERT INTO background (session_id, model, path, ts, day, new_input, cache_write, cache_read, "
+                "output) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (session_id, model, state["path"], state["snapshot_ts"], local_day(snapshot), *missing))
+
+
 def scan_file(store: Store, path: Path, known: sqlite3.Row | None) -> tuple[int, int] | None:
     """Read what's new in one file and merge it in one transaction; returns (messages upserted, bytes read), or
     None if the file is unchanged. A file that shrank below the stored offset or got a new first line was rewritten,
@@ -257,6 +350,7 @@ def scan_file(store: Store, path: Path, known: sqlite3.Row | None) -> tuple[int,
             offset = known["read_offset"]
     chunk = transcripts.parse(path, offset)
     with store.transaction():
+        upsert_cost_state(store, chunk, known["last_ts"] if known is not None else None)
         upsert_transcript(store, chunk, stat.st_size, stat.st_mtime_ns, head)
         upserted = upsert_messages(store, chunk)
         insert_tool_calls(store, chunk)
@@ -271,7 +365,8 @@ def scan(store: Store, projects_dir: Path, project_filter: str | None = None) ->
         wanted = transcripts.slug_for(project_filter)
         paths = [path for path in paths if transcripts.project_slug(path) == wanted]
     known = {row["path"]: row for row in store.connection.execute(
-        "SELECT path, size, mtime_ns, read_offset, head_hash FROM transcripts")}
+        "SELECT path, session_id, size, mtime_ns, read_offset, head_hash, last_ts FROM transcripts")}
+    touched = set()
     scanned = 0
     skipped = 0
     upserted = 0
@@ -289,6 +384,10 @@ def scan(store: Store, projects_dir: Path, project_filter: str | None = None) ->
         scanned += 1
         upserted += outcome[0]
         bytes_read += outcome[1]
+        touched.add(transcripts.parse_session_id(path))
+    # after all files, so every transcript of a touched session is in the store, whatever order they're listed in
+    with store.transaction():
+        update_background(store, touched)
     return ScanResult(scanned, skipped, upserted, bytes_read, tuple(errors))
 
 
@@ -301,11 +400,12 @@ class UsageSum:
         self.turns = 0
         self.tokens = dict.fromkeys(TOKEN_FIELDS, 0)
         self.cost = 0.0
-        self.priced_turns = 0
+        self.priced_rows = 0
+        self.unpriced_rows = 0
         self.unpriced_turns = 0
 
     def add(self, row: sqlite3.Row, prices: pricing.Prices) -> None:
-        """Add one row with turns, the TOKEN_FIELDS sums, price_model and speed."""
+        """Add one row with turns, row_count, the TOKEN_FIELDS sums, price_model and speed."""
         counts = {field: row[field] or 0 for field in TOKEN_FIELDS}
         for field, value in counts.items():
             self.tokens[field] += value
@@ -313,13 +413,14 @@ class UsageSum:
         cost = pricing.cost(prices, row["price_model"], row["speed"], **counts)
         if cost is None:
             self.unpriced_turns += row["turns"]
+            self.unpriced_rows += row["row_count"]
         else:
             self.cost += cost
-            self.priced_turns += row["turns"]
+            self.priced_rows += row["row_count"]
 
     def as_dict(self) -> Row:
-        """The sums as JSON-ready fields; cost is None only if no turn had a price."""
-        cost = None if self.priced_turns == 0 and self.unpriced_turns > 0 else self.cost
+        """The sums as JSON-ready fields; cost is None only if nothing had a price."""
+        cost = None if self.priced_rows == 0 and self.unpriced_rows > 0 else self.cost
         return {"turns": self.turns, **self.tokens,
                 "cache_write": self.tokens["cache_write_5m"] + self.tokens["cache_write_1h"],
                 "cost": cost, "unpriced_turns": self.unpriced_turns}
@@ -337,11 +438,11 @@ def combined(rows: list[Row]) -> Row:
 
 
 def usage_where(store: Store, condition: str, parameters: tuple[Any, ...], prices: pricing.Prices) -> UsageSum:
-    """The UsageSum of the messages matching an SQL condition over m (messages) and t (transcripts)."""
+    """The UsageSum of the usage rows (messages and background) matching an SQL condition over u."""
     total = UsageSum()
     rows = store.connection.execute(
-        f"SELECT m.model AS price_model, m.speed AS speed, COUNT(*) AS turns, {TOKEN_SUMS} "
-        f"FROM {MESSAGES_JOIN} WHERE {condition} GROUP BY m.model, m.speed", parameters)
+        f"SELECT u.model AS price_model, u.speed AS speed, {USAGE_SUMS} "
+        f"FROM usage_rows u WHERE {condition} GROUP BY u.model, u.speed", parameters)
     for row in rows:
         total.add(row, prices)
     return total
@@ -371,9 +472,9 @@ def totals_by(store: Store, group: str, since: date | None, prices: pricing.Pric
     selected = ", ".join(f"{expression} AS {name}" for expression, name in columns)
     grouped = ", ".join(expression for expression, _ in columns)
     rows = store.connection.execute(
-        f"SELECT {selected}, m.model AS price_model, m.speed AS speed, COUNT(*) AS turns, {TOKEN_SUMS} "
-        f"FROM {MESSAGES_JOIN} WHERE (:since IS NULL OR m.day >= :since) AND (:slug IS NULL OR t.slug = :slug) "
-        f"GROUP BY {grouped}, m.model, m.speed", {"since": since_text(since), "slug": project_slug(project)})
+        f"SELECT {selected}, u.model AS price_model, u.speed AS speed, {USAGE_SUMS} "
+        f"FROM usage_rows u WHERE (:since IS NULL OR u.day >= :since) AND (:slug IS NULL OR u.slug = :slug) "
+        f"GROUP BY {grouped}, u.model, u.speed", {"since": since_text(since), "slug": project_slug(project)})
     sums: dict[tuple[Any, ...], UsageSum] = {}
     for row in rows:
         key = tuple(row[name] for _, name in columns)
@@ -429,7 +530,7 @@ def live_sessions(store: Store, minutes: float, prices: pricing.Prices, now: flo
         last_ns = max(row["mtime_ns"] for row in rows)
         sessions.append({"session_id": session_id, "project": main["project"], "title": main["title"],
                          "git_branch": main["git_branch"], "last_activity": activity_time(last_ns),
-                         **usage_where(store, "t.session_id = ?", (session_id,), prices).as_dict(),
+                         **usage_where(store, "u.session_id = ?", (session_id,), prices).as_dict(),
                          "last_context": main_turns[-1]["context"] if main_turns else None,
                          "last_output": main_turns[-1]["output"] if main_turns else None,
                          "subagents": subagents, "_last_ns": last_ns})
@@ -448,7 +549,7 @@ def agent_detail(store: Store, row: sqlite3.Row, prices: pricing.Prices) -> Row:
     return {"agent_id": row["agent_id"], "agent_type": row["agent_type"], "description": row["description"],
             "first_ts": row["first_ts"], "last_ts": row["last_ts"],
             "models": sorted({turn["model"] for turn in turns}),
-            **usage_where(store, "t.path = ?", (row["path"],), prices).as_dict(),
+            **usage_where(store, "u.path = ? AND u.turn = 1", (row["path"],), prices).as_dict(),
             "context_first": turns[0]["context"] if turns else None,
             "context_last": turns[-1]["context"] if turns else None,
             "input_total": sum(turn["context"] for turn in turns),
@@ -467,8 +568,21 @@ def session_detail(store: Store, session_id: str, prices: pricing.Prices) -> Row
             "git_branch": main["git_branch"],
             "first_ts": min((row["first_ts"] for row in rows if row["first_ts"]), default=None),
             "last_ts": max((row["last_ts"] for row in rows if row["last_ts"]), default=None),
-            "prompt": prompt, **usage_where(store, "t.session_id = ?", (session_id,), prices).as_dict(),
-            "agents": [agent_detail(store, row, prices) for row in rows]}
+            "prompt": prompt, **usage_where(store, "u.session_id = ?", (session_id,), prices).as_dict(),
+            "agents": [agent_detail(store, row, prices) for row in rows] + background_detail(store, session_id, prices)}
+
+
+def background_detail(store: Store, session_id: str, prices: pricing.Prices) -> list[Row]:
+    """The session's background usage as one pseudo agent, or [] if there is none."""
+    rows = store.connection.execute("SELECT * FROM background WHERE session_id = ? ORDER BY model",
+                                    (session_id,)).fetchall()
+    if not rows:
+        return []
+    usage = usage_where(store, "u.session_id = ? AND u.turn = 0", (session_id,), prices).as_dict()
+    return [{"agent_id": None, "agent_type": BACKGROUND, "description": BACKGROUND_DESCRIPTION,
+             "first_ts": rows[0]["ts"], "last_ts": rows[0]["ts"], "models": [row["model"] for row in rows],
+             **usage, "context_first": None, "context_last": None,
+             "input_total": usage["new_input"] + usage["cache_write"] + usage["cache_read"], "tools": []}]
 
 
 def recent_sessions(store: Store, since: date | None, prices: pricing.Prices, limit: int = DEFAULT_SESSION_LIMIT,
@@ -479,7 +593,7 @@ def recent_sessions(store: Store, since: date | None, prices: pricing.Prices, li
                SUM(agent_id IS NOT NULL) AS subagents
         FROM transcripts
         WHERE (:slug IS NULL OR slug = :slug) AND (:since IS NULL OR session_id IN (
-            SELECT t.session_id FROM messages m JOIN transcripts t ON t.path = m.path WHERE m.day >= :since))
+            SELECT u.session_id FROM usage_rows u WHERE u.day >= :since))
         GROUP BY session_id
         ORDER BY MAX(last_ts) DESC
         LIMIT :limit
@@ -489,5 +603,5 @@ def recent_sessions(store: Store, since: date | None, prices: pricing.Prices, li
         main = session_rows(store, row["session_id"])[0]
         sessions.append({"session_id": row["session_id"], "project": main["project"], "title": main["title"],
                          "first_ts": row["first_ts"], "last_ts": row["last_ts"], "subagents": row["subagents"],
-                         **usage_where(store, "t.session_id = ?", (row["session_id"],), prices).as_dict()})
+                         **usage_where(store, "u.session_id = ?", (row["session_id"],), prices).as_dict()})
     return sessions

@@ -22,6 +22,9 @@ SUBAGENTS_DIR = "subagents"
 AGENT_PREFIX = "agent-"
 META_SUFFIX = ".meta.json"
 MCP_PREFIX = "mcp__"
+COST_STATE = "cost-state"
+# Claude Code's cost records name the 1M-context variant "claude-opus-5-5[1m]"; assistant records don't.
+CONTEXT_SUFFIX = re.compile(r"\[[^\]]*\]$")
 
 Record = dict[str, Any]
 
@@ -55,6 +58,25 @@ class ToolResult:
 
 
 @dataclass(frozen=True)
+class ModelTotals:
+    """One model's cumulative usage in a cost-state record."""
+    model: str                          # without a [1m]-style suffix
+    new_input: int
+    cache_write: int                    # no 5m/1h split in cost-state records
+    cache_read: int
+    output: int
+    cost_usd: float                     # Claude Code's own estimate
+
+
+@dataclass(frozen=True)
+class CostState:
+    """The cumulative usage Claude Code records when a session ends (again with the new totals after a resume).
+    It includes calls that no transcript shows, such as Haiku for titles."""
+    snapshot_ts: datetime | None        # of the last timestamped record before it in the same read
+    models: tuple[ModelTotals, ...]
+
+
+@dataclass(frozen=True)
 class Chunk:
     """What one read of a transcript file found, from start_offset up to end_offset. Fields that the part doesn't
     contain are None (or empty)."""
@@ -74,6 +96,7 @@ class Chunk:
     tool_results: tuple[ToolResult, ...]
     first_ts: datetime | None
     last_ts: datetime | None
+    cost_state: CostState | None = None  # the last one in this part
 
 
 # --- reading -----------------------------------------------------------------------------------------------------
@@ -245,6 +268,31 @@ def tool_results(records: Iterable[Record]) -> list[ToolResult]:
     return list(results.values())
 
 
+def cost_usd(value: Any) -> float:
+    """A dollar amount; missing or non-numeric values count as 0."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return 0.0
+
+
+def cost_state_of(record: Record, snapshot_ts: datetime | None) -> CostState:
+    """A CostState from a cost-state record; models are merged by their id without a [1m]-style suffix."""
+    totals: dict[str, list[float]] = {}
+    model_usage = record.get("modelUsage")
+    for model, values in (model_usage.items() if isinstance(model_usage, dict) else []):
+        if not isinstance(values, dict) or not isinstance(model, str):
+            continue
+        sums = totals.setdefault(CONTEXT_SUFFIX.sub("", model), [0, 0, 0, 0, 0.0])
+        sums[0] += count(values.get("inputTokens"))
+        sums[1] += count(values.get("cacheCreationInputTokens"))
+        sums[2] += count(values.get("cacheReadInputTokens"))
+        sums[3] += count(values.get("outputTokens"))
+        sums[4] += cost_usd(values.get("costUSD"))
+    models = tuple(ModelTotals(model, int(sums[0]), int(sums[1]), int(sums[2]), int(sums[3]), sums[4])
+                   for model, sums in totals.items())
+    return CostState(snapshot_ts, models)
+
+
 # --- files -------------------------------------------------------------------------------------------------------
 
 def is_subagent_file(path: Path) -> bool:
@@ -262,6 +310,13 @@ def project_slug(path: Path) -> str:
     if is_subagent_file(path):
         return path.parents[2].name
     return path.parent.name
+
+
+def parse_session_id(path: Path) -> str:
+    """The session a transcript belongs to, from its path."""
+    if is_subagent_file(path):
+        return path.parents[1].name
+    return path.stem
 
 
 def read_meta(path: Path) -> Record:
@@ -290,12 +345,12 @@ def parse(path: Path, offset: int = 0) -> Chunk:
     records, end_offset = read_lines(path, offset)
     if is_subagent_file(path):
         meta = read_meta(path)
-        session_id = path.parents[1].name
+        session_id = parse_session_id(path)
         agent_id: str | None = path.stem[len(AGENT_PREFIX):]
         agent_type = text_or_none(meta.get("agentType")) or UNKNOWN_AGENT_TYPE
         description = text_or_none(meta.get("description"))
     else:
-        session_id = path.stem
+        session_id = parse_session_id(path)
         agent_id = None
         agent_type = MAIN_AGENT_TYPE
         description = None
@@ -303,12 +358,16 @@ def parse(path: Path, offset: int = 0) -> Chunk:
     cwd = None
     git_branch = None
     title = None
+    cost_state = None
     timestamps = []
     for record in records:
         cwd = cwd or text_or_none(record.get("cwd"))
         git_branch = text_or_none(record.get("gitBranch")) or git_branch
         if record.get("type") == "ai-title":
             title = text_or_none(record.get("aiTitle")) or title
+        if record.get("type") == COST_STATE:
+            # the record has no timestamp of its own; the one before it marks when the totals were taken
+            cost_state = cost_state_of(record, timestamps[-1] if timestamps else None)
         timestamp = parse_timestamp(record.get("timestamp"))
         if timestamp is not None:
             timestamps.append(timestamp)
@@ -319,7 +378,8 @@ def parse(path: Path, offset: int = 0) -> Chunk:
                  messages=tuple(message_usages(records)),
                  tool_calls=tuple(tool_calls(records)),
                  tool_results=tuple(tool_results(records)),
-                 first_ts=min(timestamps, default=None), last_ts=max(timestamps, default=None))
+                 first_ts=min(timestamps, default=None), last_ts=max(timestamps, default=None),
+                 cost_state=cost_state)
 
 
 def prompt_text(record: Record) -> str | None:

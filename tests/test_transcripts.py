@@ -196,6 +196,44 @@ class SessionFieldsTest(ParseCase):
         self.assertIsNone(chunk.cwd)
 
 
+class CostStateTest(ParseCase):
+    def test_no_cost_state_is_none(self):
+        self.main.user("hi")
+        self.assertIsNone(self.parse().cost_state)
+
+    def test_the_last_cost_state_with_its_snapshot_time(self):
+        self.main.at(datetime(2026, 9, 2, 10, 0, tzinfo=UTC)).user("hi")
+        self.main.cost_state({"claude-sonnet-5": (1, 2, 3, 4, 0.5)})
+        self.main.at(datetime(2026, 9, 2, 11, 0, tzinfo=UTC)).user("resumed")
+        self.main.cost_state({"claude-sonnet-5": (10, 20, 30, 40, 5.0)})
+        state = self.parse().cost_state
+        self.assertEqual(state.snapshot_ts, datetime(2026, 9, 2, 11, 0, tzinfo=UTC))
+        self.assertEqual([(model.model, model.new_input, model.cache_write, model.cache_read, model.output,
+                           model.cost_usd) for model in state.models],
+                         [("claude-sonnet-5", 10, 20, 30, 40, 5.0)])
+
+    def test_context_suffixes_are_merged_into_the_base_id(self):
+        self.main.user("hi")
+        self.main.cost_state({"claude-opus-5-5[1m]": (1, 0, 0, 2, 0.1), "claude-opus-5-5": (3, 0, 0, 4, 0.2)})
+        models = self.parse().cost_state.models
+        self.assertEqual([(model.model, model.new_input, model.output) for model in models],
+                         [("claude-opus-5-5", 4, 6)])
+        self.assertAlmostEqual(models[0].cost_usd, 0.3)
+
+    def test_without_an_earlier_timestamp_in_the_read_the_snapshot_time_is_none(self):
+        self.main.user("hi")
+        first = self.parse()
+        self.main.cost_state({"claude-sonnet-5": (1, 0, 0, 1, 0.1)})
+        self.assertIsNone(self.parse(offset=first.end_offset).cost_state.snapshot_ts)
+
+    def test_broken_model_usage_is_skipped(self):
+        self.main.user("hi")
+        self.main.bare({"type": "cost-state", "sessionId": "s1",
+                        "modelUsage": {"claude-x": "nonsense", "claude-y": {"outputTokens": None}}})
+        models = self.parse().cost_state.models
+        self.assertEqual([(model.model, model.output, model.cost_usd) for model in models], [("claude-y", 0, 0.0)])
+
+
 class OffsetTest(ParseCase):
     def test_full_read_ends_at_the_file_size(self):
         self.main.user("hi")
