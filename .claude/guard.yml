@@ -1,0 +1,51 @@
+# Settings for the guard hook (.claude/hooks/guard.py). The file is optional: every key has a default in
+# guard.py (DEFAULTS), and a key given here replaces it. All paths are relative to the project directory unless
+# noted.
+#
+# Per-developer overrides: create .claude/guard.local.yml (gitignored) with the same sections and keys. Local values
+# win; nested mappings are merged key by key, lists are replaced, and a key without a value keeps the default.
+
+shared:
+  # Never read, list, follow or write these (e.g. a symlink to a production system, secrets, customer data).
+  # The guard hook forces a permission prompt for them.
+  never_access: []
+
+hooks:
+  # Paths outside the project that tools may use without a permission prompt. Placeholders: ~ (home), {uid}
+  # (numeric user id), {slug} (project path with every non-alphanumeric character replaced by "-", as Claude Code
+  # names its per-project directories).
+
+  # Claude Code's own session directories: memory, scratchpad, subagent output files.
+  session_paths:
+    - ~/.claude/projects/{slug}
+    - /tmp/claude-{uid}/{slug}
+
+  # Further absolute paths (and everything below them). Add personal ones in .claude/guard.local.yml.
+  extra_allowed_paths: []
+
+  # Exact paths (not prefixes) any tool may use.
+  allowed_exact:
+    - /dev/null
+    - /dev/stdin
+    - /dev/stdout
+    - /dev/stderr
+    - /dev/tty
+
+  # Bash only: program and library locations, so commands like /usr/bin/env python3 run without a prompt.
+  # Data locations (~, /etc, /var, /tmp, other repos, ..) still prompt.
+  bash_system_prefixes: [/usr, /bin, /sbin, /lib, /lib32, /lib64, /libx32, /opt, /snap, /dev]
+
+  # Where subagents not listed in agent_scopes may write with the edit tools (Write, Edit, MultiEdit,
+  # NotebookEdit); anything else is denied. "." is the project directory; [] means nowhere. Their Bash is left to
+  # the boundary check above. Built in and not configurable: no subagent may write the guard's own files (the
+  # Claude Code settings, .claude/hooks/, this file), whatever its scope says.
+  subagent_write: ["."]
+
+  # Stricter scopes for single subagents (by the event's agent_type). Per agent: `write` = paths the edit tools may
+  # write (and everything below them), `commands` = the only Bash commands it may run, exactly; none means no Bash.
+  # In a command, {paths} stands for one or more paths below `write`. {name.key} refers to another config value: a
+  # section of this file, or else config/<name>.yml. The main session is left alone. Example:
+  #   test-writer:
+  #     write: [tests]
+  #     commands: ["python3 -m unittest {paths}"]
+  agent_scopes: {}

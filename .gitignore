@@ -1,0 +1,16 @@
+# usage history and local settings
+data/
+config.local.toml
+
+# test scratch directories
+tests/.tmp/
+.claude/tests/.tmp/
+
+# per-developer Claude Code and guard settings
+.claude/settings.local.json
+.claude/guard.local.yml
+
+__pycache__/
+*.egg-info/
+build/
+dist/

@@ -1,0 +1,15 @@
+# Defaults for claude-usage. Override any key in config.local.toml (gitignored): tables are merged key by key,
+# everything else is replaced. Relative paths are taken from the directory of this file.
+
+# Claude Code's transcripts, one folder per project.
+projects_dir = "~/.claude/projects"
+
+# The SQLite usage history. It keeps what Claude Code deletes after its cleanup period.
+store = "data/usage.sqlite"
+
+[serve]
+port = 8765
+live_minutes = 5        # a session counts as live if its transcript changed within this many minutes
+
+# Prices in $ per million tokens, by model id prefix (longest match wins); filled in with TDD step 3.
+[prices]
