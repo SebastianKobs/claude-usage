@@ -213,7 +213,7 @@ claude-usage/
 
 ## TDD order
 Write the test first, then the implementation, for each step:
-1. **`test_config.py`:** defaults, local override deep-merged, broken TOML raises with the file name.
+1. ✅ **`test_config.py`:** defaults, local override deep-merged, broken TOML raises with the file name.
 2. **`test_transcripts.py`**, with `helpers.Transcript` building records one per content block:
    - last usage per message id; `<synthetic>` skipped
    - 5m/1h split, and the fallback when `cache_creation` is missing
