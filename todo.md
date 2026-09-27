@@ -323,10 +323,10 @@ Write the test first, then the implementation, for each step:
     are the same.
   - The one difference is the model list of one subagent: 3 of its 49 turns ran on `claude-opus-4-8`, and we list
     both models where agent_usage.py shows one.
-- `python3 -m claude_usage serve`, then open `http://127.0.0.1:8765`:
+- ✅ `python3 -m claude_usage serve`, then open `http://127.0.0.1:8765`:
   - ✅ the current session shows as live, and a running subagent appears within 5 s (confirmed 2026-09-27)
-  - daily and model charts render in light and dark
-  - the drilldown of a doc-run session matches the report
+  - ✅ daily and model charts render in light and dark (confirmed 2026-09-27)
+  - ✅ the drilldown of a doc-run session matches the report (confirmed 2026-09-27)
 - Optional: a cron entry `*/30 * * * * cd <folder> && python3 -m claude_usage scan` keeps the history even when the dashboard isn't running.
 
 ## Note for the implementing session
