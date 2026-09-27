@@ -64,6 +64,66 @@
   --split-soft: #1c5cab;
 }
 
+/* "Tech bro YouTube mode": a gimmick theme. Thumbnail looks around the data; the chart series keep the validated
+   dark-mode steps (the surface stays near-black), so the numbers stay readable. */
+:root[data-theme="techbro"] {
+  color-scheme: dark;
+  --page: #07060d;
+  --surface: #110f1f;
+  --text-primary: #ffffff;
+  --text-secondary: #d6d0ff;
+  --text-muted: #9a93d6;
+  --grid: #231f3d;
+  --axis: #3d3670;
+  --border: rgba(168, 85, 247, 0.45);
+  --wash: rgba(168, 85, 247, 0.14);
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+  --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+  --series-other: #6b6a64;
+  --split-strong: #86b6ef;
+  --split-soft: #1c5cab;
+  --hype-pink: #ff2d95;
+  --hype-yellow: #ffd400;
+  --hype-cyan: #00e5ff;
+}
+[data-theme="techbro"] body {
+  background:
+    radial-gradient(1100px 600px at 5% -10%, rgba(255, 45, 149, 0.22), transparent 60%),
+    radial-gradient(900px 520px at 105% 0%, rgba(0, 229, 255, 0.18), transparent 60%),
+    var(--page);
+  background-attachment: fixed;
+}
+[data-theme="techbro"] h1 {
+  font: 900 30px/1.1 Impact, Haettenschweiler, "Arial Narrow Bold", system-ui, sans-serif;
+  text-transform: uppercase; letter-spacing: 0.02em;
+  background: linear-gradient(90deg, var(--hype-pink), var(--hype-yellow), var(--hype-cyan));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+[data-theme="techbro"] h2 { text-transform: uppercase; letter-spacing: 0.04em; font-weight: 800; }
+[data-theme="techbro"] .card {
+  border-color: var(--border);
+  box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.25), 0 0 28px rgba(168, 85, 247, 0.22);
+}
+[data-theme="techbro"] .label { color: var(--hype-yellow); text-transform: uppercase; font-weight: 800;
+  letter-spacing: 0.04em; }
+[data-theme="techbro"] .hero {
+  font: 900 56px/1.05 Impact, Haettenschweiler, "Arial Narrow Bold", system-ui, sans-serif;
+  background: linear-gradient(90deg, var(--hype-pink), var(--hype-yellow));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 12px rgba(255, 45, 149, 0.55));
+}
+[data-theme="techbro"] .tile-value { font-weight: 900; text-shadow: 0 0 14px rgba(0, 229, 255, 0.6); }
+[data-theme="techbro"] .dot { background: #ff0033; box-shadow: 0 0 10px #ff0033; animation: hype-pulse 1.2s infinite; }
+[data-theme="techbro"] button {
+  border-radius: 999px; border-color: var(--hype-pink); font-weight: 700;
+  box-shadow: 0 0 12px rgba(255, 45, 149, 0.35);
+}
+[data-theme="techbro"] button[aria-pressed="true"] { background: var(--hype-pink); color: #ffffff; }
+[data-theme="techbro"] .tooltip { border-color: var(--hype-cyan); box-shadow: 0 0 18px rgba(0, 229, 255, 0.35); }
+[data-theme="techbro"] .chart svg path[stroke] { filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.35)); }
+@keyframes hype-pulse { 50% { transform: scale(1.35); opacity: 0.6; } }
+@media (prefers-reduced-motion: reduce) { [data-theme="techbro"] * { animation: none !important; } }
+
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -173,7 +233,7 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 <body>
 <main>
   <header>
-    <h1>Claude usage</h1>
+    <h1 data-label="Claude usage">Claude usage</h1>
     <span id="scope" class="muted"></span>
     <span class="spacer"></span>
     <span id="updated" class="muted"></span>
@@ -205,13 +265,13 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
     <div class="kpis stack" id="kpis"></div>
 
     <section class="card" aria-labelledby="live-title">
-      <h2 id="live-title">Live sessions <span id="live-window" class="muted"></span></h2>
+      <h2 id="live-title"><span data-label="Live sessions">Live sessions</span> <span id="live-window" class="muted"></span></h2>
       <div id="live"></div>
     </section>
 
     <section class="card" aria-labelledby="trend-title">
       <div class="chart-head">
-        <h2 id="trend-title">Over time</h2>
+        <h2 id="trend-title" data-label="Over time">Over time</h2>
         <span class="muted">estimated cost, input and output tokens per day</span>
         <span class="spacer"></span>
         <button type="button" id="trend-table-toggle" aria-pressed="false">Table view</button>
@@ -222,7 +282,7 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 
     <section class="card" aria-labelledby="chart-title">
       <div class="chart-head">
-        <h2 id="chart-title">Per day, by model</h2>
+        <h2 id="chart-title" data-label="Per day, by model">Per day, by model</h2>
         <span class="spacer"></span>
         <button type="button" id="chart-table-toggle" aria-pressed="false">Table view</button>
       </div>
@@ -232,11 +292,11 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
     </section>
 
     <div class="grid-2 stack">
-      <section class="card"><h2>By agent type</h2><div id="by-agent" class="table-wrap"></div></section>
-      <section class="card"><h2>By model</h2><div id="by-model" class="table-wrap"></div></section>
+      <section class="card"><h2 data-label="By agent type">By agent type</h2><div id="by-agent" class="table-wrap"></div></section>
+      <section class="card"><h2 data-label="By model">By model</h2><div id="by-model" class="table-wrap"></div></section>
     </div>
-    <section class="card"><h2>By project</h2><div id="by-project" class="table-wrap"></div></section>
-    <section class="card"><h2>Sessions</h2><div id="sessions" class="table-wrap"></div></section>
+    <section class="card"><h2 data-label="By project">By project</h2><div id="by-project" class="table-wrap"></div></section>
+    <section class="card"><h2 data-label="Sessions">Sessions</h2><div id="sessions" class="table-wrap"></div></section>
   </div>
 
   <footer id="footer"></footer>
@@ -378,12 +438,12 @@ function renderKpis(summary) {
   if (totals.web_searches) notes.push(`incl. ${whole(totals.web_searches)} web searches, ${money(parts.web_search)}`);
   document.getElementById("kpis").replaceChildren(
     el("div", {class: "card hero-card"},
-       el("div", {class: "label", text: `Estimated cost, ${rangeText()}`}),
+       el("div", {class: "label", text: `${hype("Estimated cost")}, ${rangeText()}`}),
        el("div", {class: "hero", text: money(totals.cost)}),
        el("div", {class: "note", text: notes.join(" · ")})),
     inputSplit(totals, parts),
-    tile("Turns", whole(totals.turns), "API calls with usage"),
-    tile("Output tokens", compact(totals.output), `${money(parts.output)}`));
+    tile(hype("Turns"), whole(totals.turns), hype("API calls with usage")),
+    tile(hype("Output tokens"), compact(totals.output), `${money(parts.output)}`));
 }
 
 // Input tokens as processed (new input + cache writes, full price or more) vs. from cache (cache reads, 0.1x): two
@@ -403,11 +463,11 @@ function inputSplit(totals, parts) {
       el("span", {style: `flex-grow:${part.tokens};background:${part.color}`})));
   const rows = segments.map(part => el("div", {class: "split-row", title: part.note},
     el("span", {class: "swatch", style: `background:${part.color}`}),
-    el("span", {class: "split-label", text: part.label}),
+    el("span", {class: "split-label", text: hype(part.label)}),
     el("strong", {class: "split-number", text: compact(part.tokens)}),
     el("span", {class: "split-number secondary", text: percent(part.tokens, input)}),
     el("span", {class: "split-number", text: money(part.cost)})));
-  return el("div", {class: "card"}, el("div", {class: "label", text: "Input tokens"}),
+  return el("div", {class: "card"}, el("div", {class: "label", text: hype("Input tokens")}),
             el("div", {class: "tile-value", text: compact(input)}), bar, ...rows);
 }
 
@@ -864,7 +924,8 @@ function renderSummary() {
   document.getElementById("footer").textContent = "Estimated cost at Claude API list prices" +
     (summary.prices_checked ? ` (checked ${summary.prices_checked})` : "") +
     ". “(background)” is usage Claude Code counted but no transcript shows (e.g. Haiku for titles), taken from its " +
-    "cost records when a session ends: it has no turns and is filed under the day the session ended.";
+    "cost records when a session ends: it has no turns and is filed under the day the session ended." +
+    (isTechBro() ? " Like & subscribe for more token content 🔔" : "");
 }
 
 async function loadLive() {
@@ -907,10 +968,38 @@ function readPreference(name) {
   try { return localStorage.getItem(`claude-usage.${name}`); } catch (error) { return null; }
 }
 
+// --- themes: auto (follows the system), light, dark, and the tech bro YouTube gimmick ----------------------
+
+const THEMES = [null, "light", "dark", "techbro"];
+const THEME_NAMES = {light: "light", dark: "dark", techbro: "tech bro 🚀"};
+// "Tech bro YouTube mode" copy; everything not listed keeps its normal label
+const HYPE = {
+  "Claude usage": "Claude usage 🔥 (not clickbait)",
+  "Estimated cost": "💸 Money obliterated",
+  "Input tokens": "🧠 Context absorbed",
+  "Turns": "⚡ API calls (insane)",
+  "API calls with usage": "every single one of them",
+  "Output tokens": "🚀 Tokens shipped",
+  "Processed": "Raw grind",
+  "From cache": "Work smarter",
+  "Live sessions": "🔴 Live right now",
+  "Over time": "📈 To the moon",
+  "Per day, by model": "🤖 Which model cooked",
+  "By agent type": "🕵️ Agent leaderboard",
+  "By model": "🏆 Model tier list",
+  "By project": "💼 Side hustles",
+  "Sessions": "🎬 All episodes",
+};
+
+function isTechBro() { return document.documentElement.dataset.theme === "techbro"; }
+function hype(label) { return isTechBro() && HYPE[label] ? HYPE[label] : label; }
+
 function applyTheme(theme) {
-  if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+  if (THEMES.includes(theme) && theme) document.documentElement.dataset.theme = theme;
   else delete document.documentElement.dataset.theme;
-  document.getElementById("theme").textContent = `Theme: ${theme || "auto"}`;
+  document.getElementById("theme").textContent = `Theme: ${THEME_NAMES[theme] || "auto"}`;
+  for (const node of document.querySelectorAll("[data-label]")) node.textContent = hype(node.dataset.label);
+  renderSummary();                                        // the KPI labels follow the theme too
 }
 
 function setup() {
@@ -945,9 +1034,8 @@ function setup() {
     });
   }
   document.getElementById("theme").addEventListener("click", () => {
-    const order = [null, "light", "dark"];
     const current = document.documentElement.dataset.theme || null;
-    const next = order[(order.indexOf(current) + 1) % order.length];
+    const next = THEMES[(THEMES.indexOf(current) + 1) % THEMES.length];
     savePreference("theme", next || "auto");
     applyTheme(next);
   });
