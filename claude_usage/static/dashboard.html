@@ -381,9 +381,9 @@ function renderKpis(summary) {
        el("div", {class: "label", text: `Estimated cost, ${rangeText()}`}),
        el("div", {class: "hero", text: money(totals.cost)}),
        el("div", {class: "note", text: notes.join(" · ")})),
+    inputSplit(totals, parts),
     tile("Turns", whole(totals.turns), "API calls with usage"),
-    tile("Output tokens", compact(totals.output), `${money(parts.output)}`),
-    inputSplit(totals, parts));
+    tile("Output tokens", compact(totals.output), `${money(parts.output)}`));
 }
 
 // Input tokens as processed (new input + cache writes, full price or more) vs. from cache (cache reads, 0.1x): two

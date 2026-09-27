@@ -259,10 +259,10 @@ claude-usage/
   - As built:
     - KPI row: four equal tiles (two columns below 900px, one below 480px):
       - the estimated cost of the range as the hero figure, with web searches and their cost in its note
-      - turns
-      - output tokens with their cost
       - input tokens, split into processed (new input and cache writes, billed at full price or more) and from
         cache (cache reads, 0.1×)
+      - turns
+      - output tokens with their cost
     - The input split: a two-step bar of one hue, validated as an ordinal ramp in both modes. Each part has tokens,
       share and cost; the explanation is in the row's hover text. The totals carry `cost_parts` per category for
       this.
