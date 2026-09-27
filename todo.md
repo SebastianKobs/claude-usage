@@ -228,6 +228,13 @@ claude-usage/
   - Load the `dataviz` skill before writing the chart code.
   - As built:
     - Hero figure: the estimated cost of the range, plus stat tiles for turns, output, input and cache-read share.
+    - "Over time", the first chart: estimated cost, input tokens and output tokens per day as three aligned line
+      panels.
+      - Each panel has its own y-axis and a shared time axis, so there's never a second axis on one plot.
+      - Colors are series 1–3, the only three that validate for every pair.
+      - One crosshair and one tooltip cover all three panels.
+      - Each line gets an area wash, an end dot and the latest value as its direct label; the chart has a table
+        view.
     - Filter row: range (today, 7, 30, 90 days, 1 year) and chart metric (cost, output or input tokens). Only one
       metric at a time, so there's never a second y-axis.
     - Model colors: fixed slots from the validated reference palette. Known model ids come first; past eight slots
