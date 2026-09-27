@@ -113,7 +113,7 @@ claude-usage/
   - `ToolCall` (frozen): `tool_use_id`, `tool` (display name). `ToolResult` (frozen): `tool_use_id`, `chars`.
     They are kept apart because a result can arrive in a later read than its call.
   - `Chunk` (frozen): what one read of a transcript file found.
-    - Fields: `path`, `start_offset`, `end_offset`, `session_id`, `agent_id` (None = main), `agent_type` (`main`
+    - Fields: `path`, `start_offset`, `end_offset`, `slug`, `session_id`, `agent_id` (None = main), `agent_type` (`main`
       for the main thread), `description`, `cwd`, `git_branch`, `title`, `messages`, `tool_calls`, `tool_results`,
       `first_ts`, `last_ts`.
     - Fields not seen in this part are None. `title` is the last `ai-title` of the part, and `cwd` the first seen.
@@ -121,11 +121,12 @@ claude-usage/
   - `read_lines(path, offset=0) -> tuple[list[dict], int]`: records from `offset` up to the last complete line,
     and the offset after it.
   - `message_usages(records)`, `tool_calls(records)`, `tool_results(records)`
-  - `parse(path, projects_dir, offset=0) -> Chunk`, with the agent meta read from `agent-<id>.meta.json`
+  - `parse(path, offset=0) -> Chunk`, with the agent meta read from `agent-<id>.meta.json`. Session, agent and
+    slug come from the path.
   - `first_prompt(path)`: the prompt for the drilldown. It reads the file on demand and returns None once the file
     is gone. The prompt is never stored.
   - `find_transcripts(projects_dir) -> list[Path]`: main and subagent files
-  - `project_slug(path)`
+  - `project_slug(path)`, `display_name(tool)`
 - **Derived per agent** (in the store queries, from the `messages` rows): turns, context first → last, input
   total. This gives the numbers of the per-agent report.
 
@@ -214,7 +215,7 @@ claude-usage/
 ## TDD order
 Write the test first, then the implementation, for each step:
 1. ✅ **`test_config.py`:** defaults, local override deep-merged, broken TOML raises with the file name.
-2. **`test_transcripts.py`**, with `helpers.Transcript` building records one per content block:
+2. ✅ **`test_transcripts.py`**, with `helpers.Transcript` building records one per content block:
    - last usage per message id; `<synthetic>` skipped
    - 5m/1h split, and the fallback when `cache_creation` is missing
    - null counters count as 0

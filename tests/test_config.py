@@ -23,6 +23,8 @@ output = 15.0
 
 
 class ConfigCase(TempDirTestCase):
+    """Config files written into the test's temp folder."""
+
     def write(self, name, text):
         """Write a config file into the test's folder."""
         (self.tmp / name).write_text(text, encoding="utf-8")
