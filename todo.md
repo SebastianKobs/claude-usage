@@ -280,12 +280,16 @@ claude-usage/
     - Chart: 2px gaps between segments, a rounded data end, a legend, a table view, a label at the peak day only,
       and a hover or focus tooltip on the whole column.
     - Drilldown: at `#session/<id>`.
-    - Refetch dims the previous render instead of clearing it. Theme dropdown: auto, light, dark or "tech bro
-      YouTube mode", remembered in localStorage.
-      - Tech bro mode is a gimmick: neon glows, Impact-style gradient figures, a pulsing red live dot, and hype copy
-        (`HYPE` map) for headings and KPI labels.
+    - Refetch dims the previous render instead of clearing it.
+    - Theme dropdown, remembered in localStorage: auto, light, dark, and three gimmicks under "Just for fun":
+      - terminal hacker: phosphor green and amber on black, monospace, shell-prompt headings with a blinking
+        cursor, scanlines
+      - startup flex: black and white, frosted cards with a violet-to-blue edge, mono labels
+      - RGB battlestation: navy, cycling magenta/cyan/lime card edges, a glitching hero number. It replaces the
+        earlier "tech bro" theme; a saved `techbro` becomes `rgb`.
+      - Each gimmick has its own copy for headings, KPI labels and the footer (`COPY` map).
       - The chart series keep the validated dark-mode steps, so the data stays readable.
-      - Its animations stop under `prefers-reduced-motion`.
+      - Animations stop under `prefers-reduced-motion`.
     - All data goes into the DOM through `textContent`.
 
 ### `__main__.py` (CLI, argparse, `main(argv=None) -> int`)
