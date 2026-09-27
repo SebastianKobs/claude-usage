@@ -3,7 +3,20 @@
 
 // --- loading -------------------------------------------------------------------------------------------------
 
+// An unchanged payload isn't drawn again, which keeps focus and scroll position inside it. Today's date and hour
+// count too: the charts run up to now.
+function drawnKey(payload) {
+  const now = new Date();
+  return `${dayText(now)}T${now.getHours()} ${JSON.stringify(payload)}`;
+}
+
+// A note in a container that has nothing drawn yet: "Loading…", or why it failed
+function placeholder(id, text) {
+  document.getElementById(id).replaceChildren(el("div", {class: "empty", text}));
+}
+
 let summaryRequest = 0;
+let summaryKey = null;
 async function loadSummary() {
   const container = document.getElementById("summary");
   container.classList.add("loading");                      // keep the previous render, dimmed
@@ -13,11 +26,18 @@ async function loadSummary() {
   try {
     const summary = await fetchJson(`/api/summary?days=${state.days}${until}`);
     if (request !== summaryRequest) return;
-    state.summary = summary;
-    renderSummary();
-    showError("");
+    showError("summary", "");
+    showScanErrors(summary);
+    const key = drawnKey(summary);
+    if (key !== summaryKey) {
+      summaryKey = key;
+      state.summary = summary;
+      renderSummary();
+    }
   } catch (error) {
-    if (request === summaryRequest) showError(error.message);
+    if (request !== summaryRequest) return;
+    showError("summary", error.message);
+    if (!state.summary) placeholder("kpis", "Could not load the summary.");
   } finally {
     if (request === summaryRequest) container.classList.remove("loading");
   }
@@ -42,31 +62,96 @@ function renderSummary() {
     (themeCopy().footer || "");
 }
 
+let liveKey = null;
 async function loadLive() {
   try {
-    state.live = await fetchJson("/api/live");
-    renderLive(state.live);
+    const live = await fetchJson("/api/live");
+    showError("live", "");
+    showScanErrors(live);
+    const key = JSON.stringify(live);
+    if (key !== liveKey) {
+      liveKey = key;
+      renderLive(live);
+    } else {
+      refreshAgo();
+    }
     document.getElementById("updated").textContent = `updated ${new Date().toLocaleTimeString()}`;
-    showError("");
+    return true;
   } catch (error) {
-    showError(error.message);
+    showError("live", error.message);
+    if (liveKey === null) placeholder("live", "Could not load the live sessions.");
+    return false;
   }
 }
 
+// The next request goes out after the previous answer, so a slow server never gets two at once. A hidden tab asks
+// nothing; showing it again asks at once. Timers are cleared before they are set, so two chains merge into one.
+let liveTimer = null;
+let summaryTimer = null;
+async function pollLive() {
+  const ok = await loadLive();
+  // the server is back: the summary needn't wait for its next turn
+  if (ok && errors.has("summary")) pollSummary();
+  clearTimeout(liveTimer);
+  if (!document.hidden) liveTimer = setTimeout(pollLive, LIVE_INTERVAL_MS);
+}
+async function pollSummary() {
+  await loadSummary();
+  clearTimeout(summaryTimer);
+  if (!document.hidden) summaryTimer = setTimeout(pollSummary, SUMMARY_INTERVAL_MS);
+}
+function pollWhileVisible() {
+  clearTimeout(liveTimer);
+  clearTimeout(summaryTimer);
+  if (document.hidden) return;
+  pollLive();
+  pollSummary();
+}
+
+// the server's session-id pattern: anything else isn't a session link
+const SESSION_HASH = /^#session\/([A-Za-z0-9_-]{1,128})$/;
+let sessionRequest = 0;
+// the link that opened the session, and where the page was scrolled: closing the session returns to both
+let opener = null;
+
 async function loadSession() {
-  const match = location.hash.match(/^#session\/(.+)$/);
+  const request = ++sessionRequest;                       // a late answer for a session left since doesn't render
+  const match = location.hash.match(SESSION_HASH);
   if (!match) {
+    showError("session", location.hash.startsWith("#session/") ? "Not a session link." : "");
+    const wasOpen = state.session !== null;
     state.session = null;
     renderDrilldown(null);
+    if (wasOpen) returnToOpener();
     return;
   }
-  try {
-    state.session = await fetchJson(`/api/session/${match[1]}`);
-    renderDrilldown(state.session);
-    document.getElementById("drilldown").scrollIntoView({block: "start"});
-  } catch (error) {
-    showError(error.message);
+  if (state.session === null && opener === null) {
+    const active = document.activeElement;
+    opener = {href: active && active.getAttribute("href"), element: active, scroll: window.scrollY};
   }
+  try {
+    const session = await fetchJson(`/api/session/${encodeURIComponent(match[1])}`);
+    if (request !== sessionRequest) return;
+    showError("session", "");
+    state.session = session;
+    renderDrilldown(session);
+    document.getElementById("drilldown").scrollIntoView({block: "start"});
+    document.getElementById("drilldown-title").focus({preventScroll: true});
+  } catch (error) {
+    if (request === sessionRequest) showError("session", error.message);
+  }
+}
+
+function returnToOpener() {
+  if (!opener) return;
+  const {href, element, scroll} = opener;
+  opener = null;
+  window.scrollTo(0, scroll);
+  // the summary may have been drawn again meanwhile: then the same link in the new render
+  const target = element && element.isConnected ? element
+               : href ? [...document.querySelectorAll("a[href]")].find(link => link.getAttribute("href") === href)
+               : null;
+  if (target) target.focus({preventScroll: true});
 }
 
 // --- controls ------------------------------------------------------------------------------------------------
@@ -125,6 +210,10 @@ function setup() {
     applyTheme(event.target.value);
   });
   window.addEventListener("hashchange", loadSession);
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && state.session && !event.defaultPrevented) location.hash = "";
+  });
+  document.addEventListener("visibilitychange", pollWhileVisible);
   const resize = new ResizeObserver(() => {
     if (state.session) renderContext(state.session);
     if (!state.summary) return;
@@ -137,11 +226,10 @@ function setup() {
   resize.observe(document.getElementById("limits"));
   resize.observe(document.getElementById("drilldown"));
 
-  loadLive();
-  loadSummary();
+  placeholder("kpis", "Loading…");
+  placeholder("live", "Loading…");
   loadSession();
-  setInterval(loadLive, LIVE_INTERVAL_MS);
-  setInterval(loadSummary, SUMMARY_INTERVAL_MS);
+  pollWhileVisible();
 }
 
 setup();

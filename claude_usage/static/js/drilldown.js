@@ -5,6 +5,7 @@
 
 function renderDrilldown(detail) {
   const panel = document.getElementById("drilldown");
+  chatRequest++;                                          // a conversation still loading belongs to the old view
   // an open session is all the page shows: the range's filters, figures, charts and tables come back on close
   for (const id of ["filters", "summary"]) document.getElementById(id).hidden = Boolean(detail);
   if (!detail) {
@@ -38,8 +39,10 @@ function renderDrilldown(detail) {
          el("tbody", {}, ...toolRows))
     : el("div", {class: "empty", text: "No tool calls."});
   fill(panel,
-    el("div", {class: "chart-head"}, el("h2", {text: detail.title || "Untitled session"}), el("span", {class: "spacer"}),
-       el("a", {href: "#", text: "Close"})),
+    el("div", {class: "chart-head"},
+       el("h2", {id: "drilldown-title", tabindex: -1, text: detail.title || "Untitled session"}),
+       el("span", {class: "spacer"}),
+       el("a", {href: "#", text: "Close", "aria-keyshortcuts": "Escape"})),
     detail.prompt ? el("div", {class: "prompt", text: detail.prompt}) : null,
     el("div", {class: "muted", text: `${detail.project}${detail.git_branch ? " · " + detail.git_branch : ""} · ${when(detail.first_ts)} – ${when(detail.last_ts)} · ${detail.session_id}`}),
     // the page's tile rows with this session's numbers: its whole usage, main thread, subagents and background

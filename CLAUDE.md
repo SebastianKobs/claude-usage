@@ -208,14 +208,18 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - The Daily range shows one day (today by default, earlier ones with the ‹ › arrows via `until`) and plots its
     local hours (`hour_model`, up to now for today) instead of a single point. The arrows skip days without
     usage (`previous_day`, `next_day`); › always reaches today.
+  - Polling: live every 5 s, the summary every 60 s, each after the previous answer, none while the tab is hidden.
+    An unchanged payload isn't drawn again, so focus stays put. The banner keeps one message per source (live,
+    summary, session, scan), and a response only renders if it answers the newest request.
+  - The session view takes focus on open; Escape or Close returns focus and scroll to the link that opened it.
   - All data goes into the DOM via `textContent`. Two exceptions, both in `chat.js`:
     - `highlighted()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans
       with classes.
     - `markdown()` inserts Claude's answers and the user's prompts (line breaks kept; a slash command shown as
       typed, a whole-JSON prompt highlighted) as marked's HTML after DOMPurify. That keeps only `MARKDOWN_TAGS` and
-      `MARKDOWN_ATTRIBUTES`: no images, styles, forms or event attributes, and links only to http, https and
-      mailto, opened with `noopener noreferrer`. Checked in jsdom against scripts, `onerror`, `javascript:` links
-      and `<style>`.
+      `MARKDOWN_ATTRIBUTES`: no images, styles, forms or event attributes, `class` only as `language-*` on
+      `code`, and links only to http, https and mailto, opened with `noopener noreferrer`. Checked in jsdom
+      against scripts, `onerror`, `javascript:` links and `<style>` (the `class` rule not yet).
   - highlight.js is vendored, not fetched: `static/js/vendor/highlight.min.js`, the cdnjs "common" build of
     11.11.2 (sha256 `62960a35…7d5a`). To update: download the new `highlight.min.js` and LICENSE from
     cdnjs / the tag, check its output still escapes `<`, `>` and `&`, and update the version here and in

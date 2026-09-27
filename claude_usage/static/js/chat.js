@@ -31,15 +31,15 @@ async function loadChat(sessionId, agentId, button) {
   try {
     const chat = await fetchJson(`/api/session/${encodeURIComponent(sessionId)}/chat${query}`);
     if (request !== chatRequest) return;
-    renderChat(chat);
+    renderChat(container, chat);
     button.textContent = "Reload";
   } catch (error) {
     if (request === chatRequest) container.replaceChildren(el("div", {class: "empty", text: error.message}));
   }
 }
 
-function renderChat(chat) {
-  const container = document.getElementById("chat");
+// into the container loadChat started with, never into a session view opened since
+function renderChat(container, chat) {
   if (!chat.available) {
     container.replaceChildren(el("div", {class: "empty",
       text: "The transcript is gone: Claude Code deleted it after its cleanup period. The usage history stays."}));
@@ -97,6 +97,8 @@ function highlighted(code, language, inline = false) {
 const MARKDOWN_TAGS = ["p", "br", "strong", "em", "del", "code", "pre", "ul", "ol", "li", "blockquote", "hr", "a",
                        "h1", "h2", "h3", "h4", "h5", "h6", "table", "thead", "tbody", "tr", "th", "td"];
 const MARKDOWN_ATTRIBUTES = ["href", "title", "class", "align", "start"];
+// classes only name a fenced block's language: others could dress transcript text up as the page's own notes
+const MARKDOWN_CLASS = /^language-[\w+-]+$/;
 const MARKDOWN_LINKS = /^(?:https?|mailto):/i;
 let markdownReady = false;
 
@@ -111,6 +113,9 @@ function setupMarkdown() {
   });
   // links open in a new tab and pass nothing on
   DOMPurify.addHook("afterSanitizeAttributes", node => {
+    if (node.hasAttribute("class") && !(node.tagName === "CODE" && MARKDOWN_CLASS.test(node.getAttribute("class")))) {
+      node.removeAttribute("class");
+    }
     if (node.tagName === "A") {
       node.setAttribute("target", "_blank");
       node.setAttribute("rel", "noopener noreferrer");

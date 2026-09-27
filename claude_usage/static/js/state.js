@@ -21,4 +21,4 @@ const METRICS = {
 };
 
 // day: the day the Daily range shows, as "YYYY-MM-DD"; null follows today, also past midnight
-const state = {days: 30, day: null, metric: "cost", summary: null, live: null, session: null};
+const state = {days: 30, day: null, metric: "cost", summary: null, session: null};

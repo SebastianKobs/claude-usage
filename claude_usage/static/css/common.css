@@ -29,7 +29,7 @@ select {
 .theme-picker { display: inline-flex; align-items: center; gap: 6px; }
 button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-secondary); }
 .filters { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
-.segmented { display: inline-flex; gap: 4px; }
+.segmented { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .day-nav { display: inline-flex; gap: 4px; align-items: center; margin-right: 8px; }
 .day-nav[hidden] { display: none; }
 .filters[hidden] { display: none; }
@@ -39,12 +39,13 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
   background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
   padding: 16px; margin-bottom: 16px; min-width: 0;
 }
-.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 16px; }
 .grid-2 > .card { margin-bottom: 0; }
 .stack { margin-bottom: 16px; }
 .banner { border-left: 3px solid var(--status-critical); padding: 8px 12px; margin-bottom: 16px;
-  background: var(--surface); }
+  background: var(--surface); white-space: pre-line; overflow-wrap: anywhere; }
 .banner:empty { display: none; }
+.kpis > .empty { grid-column: 1 / -1; }
 
 /* figures */
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
@@ -67,7 +68,7 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
 
 
 /* live */
-.live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
 .live-card { border: 1px solid var(--border); border-radius: 8px; padding: 12px; background: var(--page); }
 .live-card .title { font-weight: 600; overflow-wrap: anywhere; }
 .live-card .numbers { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
@@ -87,6 +88,8 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
 .chart .hit { fill: transparent; cursor: default; outline: none; }
 .chart .hit:hover, .chart .hit:focus-visible { fill: var(--wash); }
 .chart .trend-hit:hover, .chart .trend-hit:focus-visible { fill: transparent; }  /* lines: the crosshair responds */
+/* the fill alone is too faint to find the keyboard focus by */
+.chart .hit:focus-visible { stroke: var(--text-secondary); stroke-width: 2; }
 .crosshair { stroke: var(--text-muted); stroke-width: 1; }
 .panel-title { fill: var(--text-secondary); font-size: 12px; }
 .axis-text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }

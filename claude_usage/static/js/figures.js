@@ -4,7 +4,7 @@
 // --- figures -------------------------------------------------------------------------------------------------
 
 function renderKpis(summary) {
-  document.getElementById("kpis").replaceChildren(...kpiTiles(summary.totals, rangeText(), summary.context,
+  document.getElementById("kpis").replaceChildren(...kpiTiles(summary.totals, rangeText(summary), summary.context,
                                                               summary.compact_hint_tokens));
 }
 
@@ -88,9 +88,10 @@ function inputSplit(totals, parts, context, hintTokens) {
             el("div", {class: "tile-value", text: compact(input)}), bar, ...rows, contextNote);
 }
 
-function rangeText() {
-  if (state.days !== 1) return `last ${state.days} days`;
-  return state.day === null ? "today" : longDay(state.day);
+// the range the summary covers, from the summary itself: the controls may already ask for another one
+function rangeText(summary) {
+  if (summary.days !== 1) return `last ${summary.days} days`;
+  return summary.until === dayText(new Date()) ? "today" : longDay(summary.until);
 }
 
 // The summary of the shown day, which names the nearest days with usage; null while another day is loading
@@ -133,11 +134,14 @@ function renderLive(live) {
       ? el("ul", {}, ...session.subagents.map(agent => el("li", {},
           el("strong", {text: agent.agent_type}), " ",
           el("span", {class: "secondary", text: agent.description || ""}),
-          el("span", {class: "sub muted", text: `${agent.model || "–"} · ${whole(agent.turns)} turns · context ${compact(agent.last_context)} · ${ago(agent.last_activity)}`}))))
+          el("span", {class: "sub muted"},
+             `${agent.model || "–"} · ${whole(agent.turns)} turns · context ${compact(agent.last_context)} · `,
+             agoSpan(agent.last_activity)))))
       : el("div", {class: "note", text: "No subagent running"});
     return el("div", {class: "live-card"},
       el("div", {class: "title"}, el("span", {class: "dot", "aria-hidden": "true"}), sessionLink(session)),
-      el("div", {class: "muted", text: `${session.project}${session.git_branch ? " · " + session.git_branch : ""} · ${ago(session.last_activity)}`}),
+      el("div", {class: "muted"}, `${session.project}${session.git_branch ? " · " + session.git_branch : ""} · `,
+         agoSpan(session.last_activity)),
       el("div", {class: "numbers"}, number("Turns", whole(session.turns)), number("Output", compact(session.output)),
          number("Last context", compact(session.last_context)), number("Cost", money(session.cost))),
       agents);

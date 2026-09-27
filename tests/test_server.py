@@ -12,6 +12,7 @@ from datetime import UTC
 from datetime import date
 from datetime import datetime
 from datetime import timedelta
+from pathlib import Path
 from unittest import mock
 
 from claude_usage import config
@@ -437,6 +438,13 @@ class ChatTest(ServerCase):
         status, payload = self.get_json("/api/session/s1/chat?agent=..%2Fx")
         self.assertEqual(status, 400)
         self.assertIn("agent", payload["error"])
+
+
+class PageTest(unittest.TestCase):
+    def test_the_page_accepts_exactly_the_servers_session_ids(self):
+        main = (Path(server.__file__).parent / "static" / "js" / "main.js").read_text(encoding="utf-8")
+        page = re.search(r"const SESSION_HASH = /\^#session\\/\((.+?)\)\$/;", main).group(1)
+        self.assertEqual(page, re.search(r"\((.+?)\)", server.SESSION_PATH.pattern).group(1))
 
 
 def reply(context, model="claude-sonnet-5", cache_read_cost=0.01):

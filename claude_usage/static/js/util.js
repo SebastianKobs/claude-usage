@@ -104,6 +104,13 @@ function ago(iso) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
   return when(iso);
 }
+// "12 s ago" that refreshAgo() keeps current, so an unchanged live list needn't be drawn again
+function agoSpan(iso) {
+  return el("span", {"data-ago": iso || "", text: ago(iso)});
+}
+function refreshAgo() {
+  for (const span of document.querySelectorAll("[data-ago]")) span.textContent = ago(span.dataset.ago || null);
+}
 function sessionLink(session) {
   return el("a", {href: `#session/${encodeURIComponent(session.session_id)}`,
                   text: session.title || "Untitled session"});
@@ -121,7 +128,20 @@ async function fetchJson(path) {
   return payload;
 }
 
-function showError(message) { document.getElementById("error").textContent = message || ""; }
+// One message per source (live, summary, session, scan), so one source's success doesn't hide another's failure
+const errors = new Map();
+function showError(source, message) {
+  if (message) errors.set(source, message);
+  else errors.delete(source);
+  document.getElementById("error").textContent = [...errors.values()].join("\n");
+}
+
+// Files the last scan skipped, or why it failed: the page still shows the stored history
+function showScanErrors(payload) {
+  const found = payload.scan_errors || [];
+  const more = found.length > 1 ? ` (and ${found.length - 1} more, see the server's log)` : "";
+  showError("scan", found.length ? `Scan: ${found[0]}${more}` : "");
+}
 
 // --- colors --------------------------------------------------------------------------------------------------
 
