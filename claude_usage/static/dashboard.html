@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude usage</title>
+<style>
+/* Color roles from the validated reference palette (dataviz skill, references/palette.md). The categorical order
+   passes the adjacent CVD and normal-vision checks in both modes; three light slots are below 3:1 contrast, so
+   the chart always has a legend and a table view. */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --wash: rgba(11, 11, 11, 0.04);
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+  --series-5: #e87ba4; --series-6: #008300; --series-7: #4a3aa7; --series-8: #e34948;
+  --series-other: #a3a29b;
+  --status-good: #0ca30c;
+  --status-critical: #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --wash: rgba(255, 255, 255, 0.05);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+    --series-other: #6b6a64;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --wash: rgba(255, 255, 255, 0.05);
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+  --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+  --series-other: #6b6a64;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+h1 { font-size: 20px; font-weight: 600; margin: 0; }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+h3 { font-size: 14px; font-weight: 600; margin: 16px 0 8px; }
+a { color: inherit; }
+.muted { color: var(--text-muted); }
+.secondary { color: var(--text-secondary); }
+.spacer { flex: 1; }
+button {
+  font: inherit; color: var(--text-primary); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+}
+button:hover { background: var(--wash); }
+button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-secondary); }
+.filters { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.segmented { display: inline-flex; gap: 4px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; margin-bottom: 16px; min-width: 0;
+}
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.grid-2 > .card { margin-bottom: 0; }
+.stack { margin-bottom: 16px; }
+.banner { border-left: 3px solid var(--status-critical); padding: 8px 12px; margin-bottom: 16px;
+  background: var(--surface); }
+.banner:empty { display: none; }
+
+/* figures */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; }
+@media (min-width: 700px) { .kpis .hero-card { grid-column: span 2; } }
+.kpis .card { margin-bottom: 0; }
+.label { color: var(--text-secondary); font-size: 13px; }
+.hero { font-size: 48px; font-weight: 600; line-height: 1.1; margin-top: 4px; }
+.tile-value { font-size: 24px; font-weight: 600; margin-top: 4px; }
+.note { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
+/* live */
+.live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.live-card { border: 1px solid var(--border); border-radius: 8px; padding: 12px; background: var(--page); }
+.live-card .title { font-weight: 600; overflow-wrap: anywhere; }
+.live-card .numbers { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+.live-card .numbers div span { display: block; }
+.live-card ul { margin: 8px 0 0; padding-left: 18px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--status-good);
+  margin-right: 6px; vertical-align: middle; }
+
+/* chart */
+.chart-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 8px; color: var(--text-secondary);
+  font-size: 13px; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px;
+  vertical-align: -1px; }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart .hit { fill: transparent; cursor: default; outline: none; }
+.chart .hit:hover, .chart .hit:focus-visible { fill: var(--wash); }
+.axis-text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.value-text { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tooltip {
+  position: absolute; pointer-events: none; z-index: 2; min-width: 170px; padding: 8px 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); font-size: 12px;
+}
+.tooltip[hidden] { display: none; }
+.tooltip .when { color: var(--text-secondary); margin-bottom: 4px; }
+.tooltip .row { display: flex; align-items: center; gap: 8px; }
+.tooltip .row strong { font-variant-numeric: tabular-nums; min-width: 64px; }
+.tooltip .key { display: inline-block; width: 12px; height: 2px; border-radius: 1px; }
+.tooltip .name { color: var(--text-secondary); }
+
+/* tables */
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--text-secondary); font-weight: 500; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tbody tr:hover { background: var(--wash); }
+.sub { display: block; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.loading { opacity: 0.55; transition: opacity 0.2s; }
+.empty { color: var(--text-muted); padding: 8px 0; }
+.prompt { color: var(--text-secondary); font-style: italic; overflow-wrap: anywhere; }
+footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Claude usage</h1>
+    <span id="scope" class="muted"></span>
+    <span class="spacer"></span>
+    <span id="updated" class="muted"></span>
+    <button id="theme" type="button" title="Theme">Theme: auto</button>
+  </header>
+
+  <div id="error" class="banner" role="alert"></div>
+
+  <section id="drilldown" class="card" hidden></section>
+
+  <div class="filters" role="group" aria-label="Filters">
+    <span class="label">Range</span>
+    <div class="segmented" id="range">
+      <button type="button" data-days="1">Today</button>
+      <button type="button" data-days="7">7 days</button>
+      <button type="button" data-days="30">30 days</button>
+      <button type="button" data-days="90">90 days</button>
+      <button type="button" data-days="365">1 year</button>
+    </div>
+    <span class="label">Chart</span>
+    <div class="segmented" id="metric">
+      <button type="button" data-metric="cost">Estimated cost</button>
+      <button type="button" data-metric="output">Output tokens</button>
+      <button type="button" data-metric="input">Input tokens</button>
+    </div>
+  </div>
+
+  <div id="summary">
+    <div class="kpis stack" id="kpis"></div>
+
+    <section class="card" aria-labelledby="live-title">
+      <h2 id="live-title">Live sessions <span id="live-window" class="muted"></span></h2>
+      <div id="live"></div>
+    </section>
+
+    <section class="card" aria-labelledby="chart-title">
+      <div class="chart-head">
+        <h2 id="chart-title">Per day, by model</h2>
+        <span class="spacer"></span>
+        <button type="button" id="chart-table-toggle" aria-pressed="false">Table view</button>
+      </div>
+      <div id="legend" class="legend"></div>
+      <div id="chart" class="chart"></div>
+      <div id="chart-table" class="table-wrap" hidden></div>
+    </section>
+
+    <div class="grid-2 stack">
+      <section class="card"><h2>By agent type</h2><div id="by-agent" class="table-wrap"></div></section>
+      <section class="card"><h2>By model</h2><div id="by-model" class="table-wrap"></div></section>
+    </div>
+    <section class="card"><h2>By project</h2><div id="by-project" class="table-wrap"></div></section>
+    <section class="card"><h2>Sessions</h2><div id="sessions" class="table-wrap"></div></section>
+  </div>
+
+  <footer id="footer"></footer>
+</main>
+
+<script>
+"use strict";
+
+const LIVE_INTERVAL_MS = 5000;
+const SUMMARY_INTERVAL_MS = 60000;
+const PLOT_HEIGHT = 220;
+const AXIS_BAND = 28;
+const LEFT_AXIS = 56;
+const BAR_MAX = 24;
+const GAP = 2;
+const CORNER = 4;
+const SLOT_COUNT = 8;
+// Fixed slots so a model keeps its color whatever the range: known ids first, others after in name order.
+const KNOWN_MODELS = ["claude-opus-5-5", "claude-sonnet-5", "claude-opus-5", "claude-haiku-4-5",
+                      "claude-fable-5-1", "claude-opus-4-8", "claude-fable-5", "claude-sonnet-4-6"];
+const METRICS = {
+  cost: {label: "Estimated cost", value: row => row.cost || 0, format: money},
+  output: {label: "Output tokens", value: row => row.output, format: compact},
+  input: {label: "Input tokens", value: row => row.new_input + row.cache_write + row.cache_read, format: compact},
+};
+
+const state = {days: 30, metric: "cost", summary: null, live: null, session: null};
+
+// --- helpers -------------------------------------------------------------------------------------------------
+
+function el(tag, attributes, ...children) {
+  const node = document.createElement(tag);
+  for (const [name, value] of Object.entries(attributes || {})) {
+    if (value === null || value === undefined || value === false) continue;
+    if (name === "text") node.textContent = value;
+    else if (name === "class") node.className = value;
+    else node.setAttribute(name, value === true ? "" : value);
+  }
+  for (const child of children) {
+    if (child === null || child === undefined) continue;
+    node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return node;
+}
+
+function svg(tag, attributes) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [name, value] of Object.entries(attributes || {})) node.setAttribute(name, value);
+  return node;
+}
+
+const compactFormat = new Intl.NumberFormat("en", {notation: "compact", maximumFractionDigits: 1});
+const wholeFormat = new Intl.NumberFormat("en");
+function compact(value) { return value === null || value === undefined ? "–" : compactFormat.format(value); }
+function whole(value) { return value === null || value === undefined ? "–" : wholeFormat.format(value); }
+function money(value) {
+  if (value === null || value === undefined) return "–";
+  if (Math.abs(value) >= 1000) return "$" + compactFormat.format(value);
+  return "$" + value.toFixed(value >= 100 ? 0 : 2);
+}
+function percent(part, total) { return total ? Math.round(100 * part / total) + "%" : "–"; }
+function inputTotal(row) { return row.new_input + row.cache_write + row.cache_read; }
+
+function parseDay(text) {
+  const [year, month, day] = text.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+function dayText(date) {
+  const pad = number => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+function shortDay(text) {
+  return parseDay(text).toLocaleDateString(undefined, {month: "short", day: "numeric"});
+}
+function when(iso) {
+  if (!iso) return "–";
+  return new Date(iso).toLocaleString(undefined, {month: "short", day: "numeric", hour: "2-digit",
+                                                  minute: "2-digit"});
+}
+function ago(iso) {
+  if (!iso) return "–";
+  const seconds = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (seconds < 60) return `${seconds} s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  return when(iso);
+}
+function sessionLink(session) {
+  return el("a", {href: `#session/${encodeURIComponent(session.session_id)}`,
+                  text: session.title || "Untitled session"});
+}
+
+async function fetchJson(path) {
+  const response = await fetch(path, {cache: "no-store"});
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    throw new Error(`${path}: HTTP ${response.status}, not JSON`);
+  }
+  if (!response.ok) throw new Error(`${path}: ${payload.error || "HTTP " + response.status}`);
+  return payload;
+}
+
+function showError(message) { document.getElementById("error").textContent = message || ""; }
+
+// --- colors --------------------------------------------------------------------------------------------------
+
+function modelSlots(models) {
+  const slots = new Map();
+  const ordered = [...KNOWN_MODELS.filter(model => models.includes(model)),
+                   ...models.filter(model => !KNOWN_MODELS.includes(model)).sort()];
+  for (const model of KNOWN_MODELS) {
+    if (models.includes(model)) slots.set(model, KNOWN_MODELS.indexOf(model));
+  }
+  const free = [...Array(SLOT_COUNT).keys()].filter(slot => ![...slots.values()].includes(slot));
+  for (const model of ordered) {
+    if (slots.has(model)) continue;
+    slots.set(model, free.length ? free.shift() : null);        // null: folded into "Other"
+  }
+  return slots;
+}
+function slotColor(slot) { return slot === null ? "var(--series-other)" : `var(--series-${slot + 1})`; }
+
+// --- figures -------------------------------------------------------------------------------------------------
+
+function renderKpis(summary) {
+  const totals = summary.totals;
+  const input = inputTotal(totals);
+  const tile = (label, value, note) => el("div", {class: "card"},
+    el("div", {class: "label", text: label}), el("div", {class: "tile-value", text: value}),
+    note ? el("div", {class: "note", text: note}) : null);
+  const heroNote = totals.unpriced_turns
+    ? `${whole(totals.unpriced_turns)} turns of models without a price are not included`
+    : "at API list prices";
+  document.getElementById("kpis").replaceChildren(
+    el("div", {class: "card hero-card"}, el("div", {class: "label", text: `Estimated cost, ${rangeText()}`}),
+       el("div", {class: "hero", text: money(totals.cost)}), el("div", {class: "note", text: heroNote})),
+    tile("Turns", whole(totals.turns), "API calls with usage"),
+    tile("Output tokens", compact(totals.output)),
+    tile("Input tokens", compact(input), "new + cache writes + cache reads"),
+    tile("Cache reads", percent(totals.cache_read, input), "of input tokens"));
+}
+
+function rangeText() { return state.days === 1 ? "today" : `last ${state.days} days`; }
+
+// --- live ----------------------------------------------------------------------------------------------------
+
+function renderLive(live) {
+  document.getElementById("live-window").textContent = `· changed in the last ${live.minutes} min`;
+  const container = document.getElementById("live");
+  if (!live.sessions.length) {
+    container.replaceChildren(el("div", {class: "empty", text: `No session active in the last ${live.minutes} minutes.`}));
+    return;
+  }
+  const cards = live.sessions.map(session => {
+    const number = (label, value) => el("div", {}, el("span", {class: "label", text: label}),
+                                        el("strong", {text: value}));
+    const agents = session.subagents.length
+      ? el("ul", {}, ...session.subagents.map(agent => el("li", {},
+          el("strong", {text: agent.agent_type}), " ",
+          el("span", {class: "secondary", text: agent.description || ""}),
+          el("span", {class: "sub muted", text: `${agent.model || "–"} · ${whole(agent.turns)} turns · context ${compact(agent.last_context)} · ${ago(agent.last_activity)}`}))))
+      : el("div", {class: "note", text: "No subagent running"});
+    return el("div", {class: "live-card"},
+      el("div", {class: "title"}, el("span", {class: "dot", "aria-hidden": "true"}), sessionLink(session)),
+      el("div", {class: "muted", text: `${session.project}${session.git_branch ? " · " + session.git_branch : ""} · ${ago(session.last_activity)}`}),
+      el("div", {class: "numbers"}, number("Turns", whole(session.turns)), number("Output", compact(session.output)),
+         number("Last context", compact(session.last_context)), number("Cost", money(session.cost))),
+      agents);
+  });
+  container.replaceChildren(el("div", {class: "live-grid"}, ...cards));
+}
+
+// --- daily chart ---------------------------------------------------------------------------------------------
+
+function chartData(summary) {
+  const metric = METRICS[state.metric];
+  const days = [];
+  for (let day = parseDay(summary.since); day <= new Date(); day.setDate(day.getDate() + 1)) {
+    days.push(dayText(day));
+  }
+  const models = [...new Set(summary.day_model.map(row => row.model))];
+  const slots = modelSlots(models);
+  // series: one per slot, plus "Other" for models past the eighth slot
+  const series = [];
+  const bySeries = new Map();
+  for (const model of models) {
+    const slot = slots.get(model);
+    const key = slot === null ? "Other" : model;
+    if (!bySeries.has(key)) {
+      const entry = {key, slot, values: new Map()};
+      bySeries.set(key, entry);
+      series.push(entry);
+    }
+  }
+  series.sort((left, right) => (left.slot ?? SLOT_COUNT) - (right.slot ?? SLOT_COUNT));
+  for (const row of summary.day_model) {
+    const slot = slots.get(row.model);
+    const entry = bySeries.get(slot === null ? "Other" : row.model);
+    entry.values.set(row.day, (entry.values.get(row.day) || 0) + metric.value(row));
+  }
+  return {days, series, metric};
+}
+
+function niceMax(value) {
+  if (value <= 0) return 1;
+  const power = Math.pow(10, Math.floor(Math.log10(value)));
+  for (const step of [1, 2, 2.5, 5, 10]) {
+    if (value <= step * power) return step * power;
+  }
+  return 10 * power;
+}
+
+function renderLegend(series) {
+  document.getElementById("legend").replaceChildren(...series.map(entry =>
+    el("span", {}, el("span", {class: "swatch", style: `background:${slotColor(entry.slot)}`}), entry.key)));
+}
+
+function columnPath(x, y, width, height, rounded) {
+  const radius = rounded ? Math.min(CORNER, width / 2, height) : 0;
+  return `M${x},${y + height}V${y + radius}` +
+    (radius ? `Q${x},${y} ${x + radius},${y}H${x + width - radius}Q${x + width},${y} ${x + width},${y + radius}`
+            : `H${x + width}`) +
+    `V${y + height}Z`;
+}
+
+function renderChart(summary) {
+  const container = document.getElementById("chart");
+  const {days, series, metric} = chartData(summary);
+  renderLegend(series);
+  renderChartTable(days, series, metric);
+  const width = Math.max(320, container.clientWidth);
+  const plotWidth = width - LEFT_AXIS - 8;
+  const totals = days.map(day => series.reduce((sum, entry) => sum + (entry.values.get(day) || 0), 0));
+  const top = niceMax(Math.max(...totals, 0));
+  const scale = value => PLOT_HEIGHT * value / top;
+  const band = plotWidth / days.length;
+  const barWidth = Math.max(2, Math.min(BAR_MAX, band * 0.6));
+  const root = svg("svg", {viewBox: `0 0 ${width} ${PLOT_HEIGHT + AXIS_BAND}`, height: PLOT_HEIGHT + AXIS_BAND,
+                          role: "img", "aria-label": `${metric.label} per day by model; table view available`});
+  // gridlines and y ticks
+  for (let index = 0; index <= 4; index += 1) {
+    const value = top * index / 4;
+    const y = PLOT_HEIGHT - scale(value) + 0.5;
+    root.append(svg("line", {x1: LEFT_AXIS, x2: width - 8, y1: y, y2: y,
+                             stroke: index === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1}));
+    const label = svg("text", {x: LEFT_AXIS - 8, y: y + 4, "text-anchor": "end", class: "axis-text"});
+    label.textContent = metric.format(value);
+    root.append(label);
+  }
+  // x labels: at most about eight, evenly spaced
+  const every = Math.max(1, Math.ceil(days.length / 8));
+  days.forEach((day, index) => {
+    if (index % every !== 0) return;
+    const label = svg("text", {x: LEFT_AXIS + band * (index + 0.5), y: PLOT_HEIGHT + 18, "text-anchor": "middle",
+                               class: "axis-text"});
+    label.textContent = shortDay(day);
+    root.append(label);
+  });
+  // stacked columns, 2px surface gap between segments, rounded data end on the top segment only
+  const peak = totals.indexOf(Math.max(...totals));
+  days.forEach((day, index) => {
+    const x = LEFT_AXIS + band * index + (band - barWidth) / 2;
+    const present = series.filter(entry => (entry.values.get(day) || 0) > 0);
+    let base = PLOT_HEIGHT;
+    present.forEach((entry, position) => {
+      const height = scale(entry.values.get(day));
+      const gap = position > 0 && height > GAP ? GAP : 0;
+      const drawn = height - gap;
+      if (drawn > 0) {
+        root.append(svg("path", {d: columnPath(x, base - height, barWidth, drawn, position === present.length - 1),
+                                 fill: slotColor(entry.slot)}));
+      }
+      base -= height;
+    });
+    if (index === peak && totals[index] > 0) {
+      const label = svg("text", {x: x + barWidth / 2, y: PLOT_HEIGHT - scale(totals[index]) - 6,
+                                 "text-anchor": "middle", class: "value-text"});
+      label.textContent = metric.format(totals[index]);
+      root.append(label);
+    }
+    // the whole column is the hit target, wider than the bar
+    const hit = svg("rect", {x: LEFT_AXIS + band * index, y: 0, width: band, height: PLOT_HEIGHT, class: "hit",
+                             tabindex: 0, "aria-label": `${shortDay(day)}: ${metric.format(totals[index])}`});
+    const show = event => showTooltip(event, container, hit, day, series, metric, totals[index]);
+    hit.addEventListener("pointermove", show);
+    hit.addEventListener("focus", show);
+    hit.addEventListener("pointerleave", hideTooltip);
+    hit.addEventListener("blur", hideTooltip);
+    root.append(hit);
+  });
+  const tooltip = el("div", {class: "tooltip", id: "tooltip", hidden: true});
+  container.replaceChildren(root, tooltip);
+}
+
+function showTooltip(event, container, hit, day, series, metric, total) {
+  const tooltip = document.getElementById("tooltip");
+  const rows = series.filter(entry => entry.values.get(day)).reverse().map(entry =>
+    el("div", {class: "row"}, el("span", {class: "key", style: `background:${slotColor(entry.slot)}`}),
+       el("strong", {text: metric.format(entry.values.get(day))}), el("span", {class: "name", text: entry.key})));
+  tooltip.replaceChildren(el("div", {class: "when", text: parseDay(day).toLocaleDateString(undefined,
+                                {weekday: "short", month: "short", day: "numeric"})}),
+                          ...(rows.length ? rows : [el("div", {class: "name", text: "No usage"})]),
+                          rows.length > 1 ? el("div", {class: "row"}, el("span", {class: "key"}),
+                                               el("strong", {text: metric.format(total)}),
+                                               el("span", {class: "name", text: "total"})) : null);
+  tooltip.hidden = false;
+  const bounds = container.getBoundingClientRect();
+  const target = hit.getBoundingClientRect();
+  const anchor = event.clientX ? event.clientX - bounds.left : target.left - bounds.left + target.width / 2;
+  const left = Math.min(Math.max(0, anchor + 12), bounds.width - tooltip.offsetWidth);
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = "8px";
+}
+
+function hideTooltip() {
+  const tooltip = document.getElementById("tooltip");
+  if (tooltip) tooltip.hidden = true;
+}
+
+function renderChartTable(days, series, metric) {
+  const head = el("tr", {}, el("th", {text: "Day"}), ...series.map(entry => el("th", {class: "num", text: entry.key})),
+                  el("th", {class: "num", text: "Total"}));
+  const rows = days.slice().reverse().map(day => {
+    const values = series.map(entry => entry.values.get(day) || 0);
+    return el("tr", {}, el("td", {text: shortDay(day)}),
+              ...values.map(value => el("td", {class: "num", text: value ? metric.format(value) : "–"})),
+              el("td", {class: "num", text: metric.format(values.reduce((sum, value) => sum + value, 0))}));
+  });
+  document.getElementById("chart-table").replaceChildren(el("table", {}, el("thead", {}, head),
+                                                            el("tbody", {}, ...rows)));
+}
+
+// --- tables --------------------------------------------------------------------------------------------------
+
+function usageTable(rows, nameHeader, nameCell) {
+  if (!rows.length) return el("div", {class: "empty", text: "No usage in this range."});
+  const sorted = rows.slice().sort((left, right) => (right.cost ?? -1) - (left.cost ?? -1) || right.turns - left.turns);
+  const head = el("tr", {}, el("th", {text: nameHeader}), el("th", {class: "num", text: "Turns"}),
+                  el("th", {class: "num", text: "Input"}), el("th", {class: "num", text: "Cache read %"}),
+                  el("th", {class: "num", text: "Output"}), el("th", {class: "num", text: "Cost"}));
+  const body = sorted.map(row => el("tr", {}, el("td", {}, nameCell(row)),
+    el("td", {class: "num", text: whole(row.turns)}), el("td", {class: "num", text: compact(inputTotal(row))}),
+    el("td", {class: "num", text: percent(row.cache_read, inputTotal(row))}),
+    el("td", {class: "num", text: compact(row.output)}), el("td", {class: "num", text: money(row.cost)})));
+  return el("table", {}, el("thead", {}, head), el("tbody", {}, ...body));
+}
+
+function renderTables(summary) {
+  const slots = modelSlots([...new Set(summary.day_model.map(row => row.model))]);
+  document.getElementById("by-agent").replaceChildren(usageTable(summary.agent_type, "Agent type",
+    row => row.agent_type));
+  document.getElementById("by-model").replaceChildren(usageTable(summary.model, "Model", row =>
+    el("span", {}, el("span", {class: "swatch", style: `background:${slotColor(slots.has(row.model) ? slots.get(row.model) : null)}`}), row.model)));
+  document.getElementById("by-project").replaceChildren(usageTable(summary.project, "Project",
+    row => row.project));
+  renderSessions(summary.sessions);
+}
+
+function renderSessions(sessions) {
+  const container = document.getElementById("sessions");
+  if (!sessions.length) {
+    container.replaceChildren(el("div", {class: "empty", text: "No sessions in this range."}));
+    return;
+  }
+  const head = el("tr", {}, el("th", {text: "Last activity"}), el("th", {text: "Session"}),
+                  el("th", {class: "num", text: "Subagents"}), el("th", {class: "num", text: "Turns"}),
+                  el("th", {class: "num", text: "Output"}), el("th", {class: "num", text: "Cost"}));
+  const rows = sessions.map(session => el("tr", {},
+    el("td", {class: "num", text: when(session.last_ts)}),
+    el("td", {}, sessionLink(session), el("span", {class: "sub", text: session.project})),
+    el("td", {class: "num", text: whole(session.subagents)}), el("td", {class: "num", text: whole(session.turns)}),
+    el("td", {class: "num", text: compact(session.output)}), el("td", {class: "num", text: money(session.cost)})));
+  container.replaceChildren(el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows)));
+}
+
+// --- drilldown -----------------------------------------------------------------------------------------------
+
+function renderDrilldown(detail) {
+  const panel = document.getElementById("drilldown");
+  if (!detail) {
+    panel.hidden = true;
+    panel.replaceChildren();
+    return;
+  }
+  const head = el("tr", {}, el("th", {text: "Agent"}), el("th", {text: "Model"}),
+                  el("th", {class: "num", text: "Turns"}), el("th", {class: "num", text: "Context first → last"}),
+                  el("th", {class: "num", text: "Input total"}), el("th", {class: "num", text: "Cache read %"}),
+                  el("th", {class: "num", text: "Output"}), el("th", {class: "num", text: "Cost"}));
+  const agents = detail.agents.map(agent => el("tr", {},
+    el("td", {}, el("strong", {text: agent.agent_type}), el("span", {class: "sub", text: agent.description || ""})),
+    el("td", {text: agent.models.join(", ") || "–"}), el("td", {class: "num", text: whole(agent.turns)}),
+    el("td", {class: "num", text: `${compact(agent.context_first)} → ${compact(agent.context_last)}`}),
+    el("td", {class: "num", text: compact(agent.input_total)}),
+    el("td", {class: "num", text: percent(agent.cache_read, agent.input_total)}),
+    el("td", {class: "num", text: compact(agent.output)}), el("td", {class: "num", text: money(agent.cost)})));
+  const toolRows = detail.agents.flatMap(agent => agent.tools.map(tool => el("tr", {},
+    el("td", {text: agent.agent_type}), el("td", {text: tool.tool}), el("td", {class: "num", text: whole(tool.calls)}),
+    el("td", {class: "num", text: compact(tool.result_chars)}))));
+  const tools = toolRows.length
+    ? el("table", {}, el("thead", {}, el("tr", {}, el("th", {text: "Agent"}), el("th", {text: "Tool"}),
+                                          el("th", {class: "num", text: "Calls"}),
+                                          el("th", {class: "num", text: "Result characters"}))),
+         el("tbody", {}, ...toolRows))
+    : el("div", {class: "empty", text: "No tool calls."});
+  panel.replaceChildren(
+    el("div", {class: "chart-head"}, el("h2", {text: detail.title || "Untitled session"}), el("span", {class: "spacer"}),
+       el("a", {href: "#", text: "Close"})),
+    detail.prompt ? el("div", {class: "prompt", text: detail.prompt}) : null,
+    el("div", {class: "muted", text: `${detail.project}${detail.git_branch ? " · " + detail.git_branch : ""} · ${when(detail.first_ts)} – ${when(detail.last_ts)} · ${detail.session_id}`}),
+    el("div", {class: "numbers secondary", style: "margin-top:8px"},
+       `${whole(detail.turns)} turns · output ${compact(detail.output)} · input ${compact(inputTotal(detail))} · cost ${money(detail.cost)}`),
+    el("h3", {text: "Main thread and subagents"}), el("div", {class: "table-wrap"}, el("table", {},
+       el("thead", {}, head), el("tbody", {}, ...agents))),
+    el("h3", {text: "Tools"}), el("div", {class: "table-wrap"}, tools));
+  panel.hidden = false;
+}
+
+// --- loading -------------------------------------------------------------------------------------------------
+
+async function loadSummary() {
+  const container = document.getElementById("summary");
+  container.classList.add("loading");                      // keep the previous render, dimmed
+  try {
+    state.summary = await fetchJson(`/api/summary?days=${state.days}`);
+    renderSummary();
+    showError("");
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    container.classList.remove("loading");
+  }
+}
+
+function renderSummary() {
+  const summary = state.summary;
+  if (!summary) return;
+  renderKpis(summary);
+  renderChart(summary);
+  renderTables(summary);
+  const scope = summary.project_filter ? `project ${summary.project_filter}` : "all projects";
+  document.getElementById("scope").textContent = `· ${scope}`;
+  document.getElementById("footer").textContent = "Estimated cost at Claude API list prices" +
+    (summary.prices_checked ? ` (checked ${summary.prices_checked})` : "") +
+    ". Background calls that aren't in the transcripts are not included.";
+}
+
+async function loadLive() {
+  try {
+    state.live = await fetchJson("/api/live");
+    renderLive(state.live);
+    document.getElementById("updated").textContent = `updated ${new Date().toLocaleTimeString()}`;
+    showError("");
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+async function loadSession() {
+  const match = location.hash.match(/^#session\/(.+)$/);
+  if (!match) {
+    renderDrilldown(null);
+    return;
+  }
+  try {
+    renderDrilldown(await fetchJson(`/api/session/${match[1]}`));
+    document.getElementById("drilldown").scrollIntoView({block: "start"});
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+// --- controls ------------------------------------------------------------------------------------------------
+
+function pressed(groupId, attribute, value) {
+  for (const button of document.querySelectorAll(`#${groupId} button`)) {
+    button.setAttribute("aria-pressed", String(button.dataset[attribute] === String(value)));
+  }
+}
+
+function savePreference(name, value) {
+  try { localStorage.setItem(`claude-usage.${name}`, value); } catch (error) { /* storage unavailable */ }
+}
+function readPreference(name) {
+  try { return localStorage.getItem(`claude-usage.${name}`); } catch (error) { return null; }
+}
+
+function applyTheme(theme) {
+  if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+  else delete document.documentElement.dataset.theme;
+  document.getElementById("theme").textContent = `Theme: ${theme || "auto"}`;
+}
+
+function setup() {
+  const days = Number(readPreference("days"));
+  if ([1, 7, 30, 90, 365].includes(days)) state.days = days;
+  if (METRICS[readPreference("metric")]) state.metric = readPreference("metric");
+  applyTheme(readPreference("theme"));
+  pressed("range", "days", state.days);
+  pressed("metric", "metric", state.metric);
+
+  document.getElementById("range").addEventListener("click", event => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    state.days = Number(button.dataset.days);
+    savePreference("days", state.days);
+    pressed("range", "days", state.days);
+    loadSummary();
+  });
+  document.getElementById("metric").addEventListener("click", event => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    state.metric = button.dataset.metric;
+    savePreference("metric", state.metric);
+    pressed("metric", "metric", state.metric);
+    if (state.summary) renderChart(state.summary);
+  });
+  document.getElementById("chart-table-toggle").addEventListener("click", event => {
+    const table = document.getElementById("chart-table");
+    table.hidden = !table.hidden;
+    event.currentTarget.setAttribute("aria-pressed", String(!table.hidden));
+  });
+  document.getElementById("theme").addEventListener("click", () => {
+    const order = [null, "light", "dark"];
+    const current = document.documentElement.dataset.theme || null;
+    const next = order[(order.indexOf(current) + 1) % order.length];
+    savePreference("theme", next || "auto");
+    applyTheme(next);
+  });
+  window.addEventListener("hashchange", loadSession);
+  new ResizeObserver(() => { if (state.summary) renderChart(state.summary); })
+    .observe(document.getElementById("chart"));
+
+  loadLive();
+  loadSummary();
+  loadSession();
+  setInterval(loadLive, LIVE_INTERVAL_MS);
+  setInterval(loadSummary, SUMMARY_INTERVAL_MS);
+}
+
+setup();
+</script>
+</body>
+</html>

@@ -336,6 +336,13 @@ def usage_where(store: Store, condition: str, parameters: tuple[Any, ...], price
     return total
 
 
+def project_slug(project: str | None) -> str | None:
+    """The slug a project path filter compares with, or None for no filter."""
+    if project is None:
+        return None
+    return transcripts.slug_for(project)
+
+
 def since_text(since: date | None) -> str | None:
     """A since date as the text the day column is compared with."""
     if since is None:
@@ -343,9 +350,10 @@ def since_text(since: date | None) -> str | None:
     return since.isoformat()
 
 
-def totals_by(store: Store, group: str, since: date | None, prices: pricing.Prices) -> list[Row]:
-    """Totals per day, model, agent_type, project or day_model (from the local day since, inclusive), ordered by
-    the group key."""
+def totals_by(store: Store, group: str, since: date | None, prices: pricing.Prices,
+              project: str | None = None) -> list[Row]:
+    """Totals per day, model, agent_type, project or day_model (from the local day since, inclusive, and of one
+    project path if given), ordered by the group key."""
     if group not in GROUPS:
         raise ValueError(f"unknown group {group!r}; expected one of {', '.join(GROUPS)}")
     columns = GROUPS[group]
@@ -353,8 +361,8 @@ def totals_by(store: Store, group: str, since: date | None, prices: pricing.Pric
     grouped = ", ".join(expression for expression, _ in columns)
     rows = store.connection.execute(
         f"SELECT {selected}, m.model AS price_model, m.speed AS speed, COUNT(*) AS turns, {TOKEN_SUMS} "
-        f"FROM {MESSAGES_JOIN} WHERE (:since IS NULL OR m.day >= :since) "
-        f"GROUP BY {grouped}, m.model, m.speed", {"since": since_text(since)})
+        f"FROM {MESSAGES_JOIN} WHERE (:since IS NULL OR m.day >= :since) AND (:slug IS NULL OR t.slug = :slug) "
+        f"GROUP BY {grouped}, m.model, m.speed", {"since": since_text(since), "slug": project_slug(project)})
     sums: dict[tuple[Any, ...], UsageSum] = {}
     for row in rows:
         key = tuple(row[name] for _, name in columns)
@@ -383,13 +391,15 @@ def session_rows(store: Store, session_id: str) -> list[sqlite3.Row]:
         "ORDER BY agent_id IS NOT NULL, first_ts, path", (session_id,)).fetchall()
 
 
-def live_sessions(store: Store, minutes: float, prices: pricing.Prices, now: float | None = None) -> list[Row]:
+def live_sessions(store: Store, minutes: float, prices: pricing.Prices, now: float | None = None,
+                  project: str | None = None) -> list[Row]:
     """Sessions with a transcript changed within `minutes` (by the mtime seen at the last scan), most recent first,
     with their totals so far, the main thread's last context and output, and the subagents active in the window."""
     moment = time.time() if now is None else now
     cutoff_ns = int((moment - minutes * 60) * 1e9)
     session_ids = [row["session_id"] for row in store.connection.execute(
-        "SELECT DISTINCT session_id FROM transcripts WHERE mtime_ns >= ?", (cutoff_ns,))]
+        "SELECT DISTINCT session_id FROM transcripts WHERE mtime_ns >= ? AND (? IS NULL OR slug = ?)",
+        (cutoff_ns, project_slug(project), project_slug(project)))]
     sessions = []
     for session_id in session_ids:
         rows = session_rows(store, session_id)
@@ -450,19 +460,19 @@ def session_detail(store: Store, session_id: str, prices: pricing.Prices) -> Row
             "agents": [agent_detail(store, row, prices) for row in rows]}
 
 
-def recent_sessions(store: Store, since: date | None, prices: pricing.Prices,
-                    limit: int = DEFAULT_SESSION_LIMIT) -> list[Row]:
+def recent_sessions(store: Store, since: date | None, prices: pricing.Prices, limit: int = DEFAULT_SESSION_LIMIT,
+                    project: str | None = None) -> list[Row]:
     """Sessions with messages from the local day since on (all without since), newest first, with totals."""
     rows = store.connection.execute("""
         SELECT session_id, MIN(first_ts) AS first_ts, MAX(last_ts) AS last_ts,
                SUM(agent_id IS NOT NULL) AS subagents
         FROM transcripts
-        WHERE :since IS NULL OR session_id IN (
-            SELECT t.session_id FROM messages m JOIN transcripts t ON t.path = m.path WHERE m.day >= :since)
+        WHERE (:slug IS NULL OR slug = :slug) AND (:since IS NULL OR session_id IN (
+            SELECT t.session_id FROM messages m JOIN transcripts t ON t.path = m.path WHERE m.day >= :since))
         GROUP BY session_id
         ORDER BY MAX(last_ts) DESC
         LIMIT :limit
-        """, {"since": since_text(since), "limit": limit}).fetchall()
+        """, {"since": since_text(since), "limit": limit, "slug": project_slug(project)}).fetchall()
     sessions = []
     for row in rows:
         main = session_rows(store, row["session_id"])[0]

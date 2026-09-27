@@ -202,12 +202,21 @@ claude-usage/
   - Haiku background calls are missing entirely ($1.40 over all sessions).
 
 ### `server.py` + `static/dashboard.html`
-- **Server:** `ThreadingHTTPServer` on `127.0.0.1` only (refuse other hosts). Command:
+- **Server:** `ThreadingHTTPServer` on a loopback address only (`make_server` refuses other hosts). Command:
   `serve [--port 8765] [--live-minutes 5] [--project PATH]`.
+  - It also refuses requests whose `Host` header isn't a loopback name (403). Otherwise a web page could read the
+    API, which includes session titles and first prompts, through DNS rebinding.
+  - `--project` scopes the scan and every query (by slug).
+  - The dashboard is served with a strict CSP (`default-src 'none'`, inline script and style only); JSON is
+    `no-store`.
 - **Endpoints:**
   - `/` serves `dashboard.html`.
   - `/api/live`
-  - `/api/summary?days=30` returns `day_model`, `agent_type`, `project` and `model` totals.
+  - `/api/summary?days=30` (1–3650, else 400) returns:
+    - the `day_model`, `agent_type`, `project` and `model` totals
+    - `totals` for the whole range
+    - `sessions`, the newest 50
+    - `days`, `since`, `project_filter` and `prices_checked`
   - `/api/session/<id>`: 404 for an unknown id.
   - Unknown paths get 404, and errors come back as JSON `{"error": …}`.
 - **Scanning:** each API request runs an incremental scan behind a lock, at most every 5 s.
@@ -217,6 +226,18 @@ claude-usage/
   - Updates: it polls `/api/live` every 5 s and the summary every 60 s.
   - Views: live cards; a stacked bar chart per day by model; tables by agent type (main vs subagents), project and model; a session list that links to the drilldown.
   - Load the `dataviz` skill before writing the chart code.
+  - As built:
+    - Hero figure: the estimated cost of the range, plus stat tiles for turns, output, input and cache-read share.
+    - Filter row: range (today, 7, 30, 90 days, 1 year) and chart metric (cost, output or input tokens). Only one
+      metric at a time, so there's never a second y-axis.
+    - Model colors: fixed slots from the validated reference palette. Known model ids come first; past eight slots
+      a model folds into "Other".
+    - Chart: 2px gaps between segments, a rounded data end, a legend, a table view, a label at the peak day only,
+      and a hover or focus tooltip on the whole column.
+    - Drilldown: at `#session/<id>`.
+    - Refetch dims the previous render instead of clearing it. Theme: auto, light or dark, remembered in
+      localStorage.
+    - All data goes into the DOM through `textContent`.
 
 ### `__main__.py` (CLI, argparse, `main(argv=None) -> int`)
 - `scan [--project PATH]`: one incremental scan, prints the `ScanResult`. Useful from cron, to keep history
@@ -272,7 +293,7 @@ Write the test first, then the implementation, for each step:
    - `live_sessions` by mtime, set with `os.utime`
    - `session_detail` for a known and an unknown id
    - project filter
-5. **`test_server.py`:**
+5. ✅ **`test_server.py`:**
    - a server on port 0 in a thread; `/`, `/api/live`, `/api/summary` and `/api/session/<id>` return JSON of the right shape
    - 404s for unknown paths and ids
    - binding to a non-loopback host is refused

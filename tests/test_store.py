@@ -383,6 +383,10 @@ class TotalsTest(StoreCase):
         with self.assertRaises(ValueError):
             store.totals_by(self.store, "weekday", None, PRICES)
 
+    def test_project_filter(self):
+        rows = store.totals_by(self.store, "model", None, PRICES, project="/home/dev/other")
+        self.assertEqual([(row["model"], row["turns"]) for row in rows], [("claude-mystery-9", 1)])
+
     def test_fast_mode_is_priced(self):
         fast = self.projects.session("s3")
         fast.at(DAY_1).assistant("m5", [text_block("e")], usage(output=MILLION, speed="fast"), model="claude-opus-5")
@@ -448,6 +452,14 @@ class LiveSessionsTest(StoreCase):
         self.age(self.old, 10)
         self.assertEqual([session["session_id"] for session in self.live()], ["s-old", "s1"])
 
+    def test_project_filter(self):
+        for transcript in (self.main, self.agent, self.old):
+            self.age(transcript, 30)
+        self.scan()
+        self.assertEqual(store.live_sessions(self.store, 5, PRICES, now=self.now, project="/home/dev/other"), [])
+        live = store.live_sessions(self.store, 5, PRICES, now=self.now, project="/home/dev/app")
+        self.assertEqual(len(live), 2)
+
     def test_window_in_minutes(self):
         for transcript in (self.main, self.agent, self.old):
             self.age(transcript, 600)
@@ -504,13 +516,18 @@ class RecentSessionsTest(StoreCase):
         first.at(DAY_1).assistant("m1", [text_block("a")], usage(output=10))
         second = self.projects.session("s2", project="/home/dev/other")
         second.at(DAY_3).assistant("m2", [text_block("b")], usage(output=20))
-        self.projects.subagent("s2", "a1").at(DAY_3).assistant("m3", [text_block("c")], usage(output=5))
+        self.projects.subagent("s2", "a1", project="/home/dev/other").at(DAY_3).assistant(
+            "m3", [text_block("c")], usage(output=5))
         self.scan()
 
     def test_newest_first_with_totals(self):
         sessions = store.recent_sessions(self.store, None, PRICES)
         self.assertEqual([(session["session_id"], session["subagents"], session["output"]) for session in sessions],
                          [("s2", 1, 25), ("s1", 0, 10)])
+
+    def test_project_filter(self):
+        sessions = store.recent_sessions(self.store, None, PRICES, project="/home/dev/app")
+        self.assertEqual([session["session_id"] for session in sessions], ["s1"])
 
     def test_limit_and_since(self):
         self.assertEqual(len(store.recent_sessions(self.store, None, PRICES, limit=1)), 1)
