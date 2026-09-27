@@ -83,6 +83,27 @@ class CostTest(unittest.TestCase):
         self.assertEqual(cost("claude-opus-5"), 0.0)
 
 
+class WebSearchTest(unittest.TestCase):
+    def test_default_fee(self):
+        self.assertEqual(pricing.parse_prices(TABLE).web_search_per_1000, pricing.DEFAULT_WEB_SEARCH_PER_1000)
+        self.assertEqual(pricing.DEFAULT_WEB_SEARCH_PER_1000, 10.0)
+
+    def test_web_search_cost(self):
+        prices = pricing.parse_prices(TABLE, {"web_search_per_1000": 12.0})
+        self.assertAlmostEqual(pricing.web_search_cost(prices, 250), 3.0)
+        self.assertEqual(pricing.web_search_cost(prices, 0), 0.0)
+
+    def test_broken_fees_raise(self):
+        for fees in ({"web_search_per_1000": -1}, {"web_search_per_1000": "10"}, {"websearch": 1.0}, "10"):
+            with self.subTest(fees=fees):
+                with self.assertRaises(pricing.PricingError):
+                    pricing.parse_prices(TABLE, fees)
+
+    def test_prices_still_look_up_by_model(self):
+        prices = pricing.parse_prices(TABLE, {"web_search_per_1000": 12.0})
+        self.assertEqual(prices["claude-sonnet-5"].output, 10.0)
+
+
 class ParseTest(unittest.TestCase):
     def test_missing_field_raises_with_model_and_field(self):
         broken = {"claude-x": {"input": 1.0, "cache_write_5m": 1.0, "cache_read": 0.1, "output": 5.0}}
@@ -117,6 +138,10 @@ class ShippedPricesTest(unittest.TestCase):
         with (REPO / "config.toml").open("rb") as handle:
             self.config = tomllib.load(handle)
         self.prices = pricing.parse_prices(self.config["prices"])
+
+    def test_web_search_fee(self):
+        prices = pricing.parse_prices(self.config["prices"], self.config["fees"])
+        self.assertEqual(prices.web_search_per_1000, 10.0)
 
     def test_prices_are_dated(self):
         self.assertIsInstance(self.config["prices_checked"], date)

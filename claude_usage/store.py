@@ -27,7 +27,7 @@ from typing import Any
 from claude_usage import pricing
 from claude_usage import transcripts
 
-SCHEMA_VERSION = 2                      # 2: cost_states and background
+SCHEMA_VERSION = 4                      # 2: cost_states and background; 3: web_searches; 4: start_ts
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS messages (
     cache_write_5m INTEGER NOT NULL,
     cache_write_1h INTEGER NOT NULL,
     cache_read INTEGER NOT NULL,
-    output INTEGER NOT NULL
+    output INTEGER NOT NULL,
+    web_searches INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS messages_path ON messages (path);
 CREATE INDEX IF NOT EXISTS messages_day ON messages (day);
@@ -78,7 +79,9 @@ CREATE TABLE IF NOT EXISTS cost_states (
     session_id TEXT PRIMARY KEY,
     path TEXT NOT NULL,             -- the main transcript it was read from
     snapshot_ts TEXT,
-    models TEXT NOT NULL            -- JSON: [[model, new_input, cache_write, cache_read, output, cost_usd], ...]
+    start_ts TEXT,                  -- when the process that wrote it started: the snapshot covers only that run
+    models TEXT NOT NULL            -- JSON: [[model, new_input, cache_write, cache_read, output, cost_usd,
+                                    --         web_searches], ...]
 );
 CREATE TABLE IF NOT EXISTS background (
     session_id TEXT NOT NULL,
@@ -90,6 +93,7 @@ CREATE TABLE IF NOT EXISTS background (
     cache_write INTEGER NOT NULL,   -- no 5m/1h split in cost-state records; priced as 5m
     cache_read INTEGER NOT NULL,
     output INTEGER NOT NULL,
+    web_searches INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (session_id, model)
 );
 """
@@ -100,17 +104,21 @@ CREATE VIEW usage_rows AS
 SELECT m.path AS path, t.session_id AS session_id, t.agent_id AS agent_id, t.agent_type AS agent_type,
        t.project AS project, t.slug AS slug, m.model AS model, m.speed AS speed, m.ts AS ts, m.day AS day,
        m.new_input AS new_input, m.cache_write_5m AS cache_write_5m, m.cache_write_1h AS cache_write_1h,
-       m.cache_read AS cache_read, m.output AS output, 1 AS turn
+       m.cache_read AS cache_read, m.output AS output, m.web_searches AS web_searches, 1 AS turn
 FROM messages m JOIN transcripts t ON t.path = m.path
 UNION ALL
 SELECT b.path, b.session_id, NULL, '(background)', t.project, t.slug, b.model, 'standard', b.ts, b.day,
-       b.new_input, b.cache_write, 0, b.cache_read, b.output, 0
+       b.new_input, b.cache_write, 0, b.cache_read, b.output, b.web_searches, 0
 FROM background b JOIN transcripts t ON t.path = b.path;
 """
 BACKGROUND = "(background)"               # the agent type of background rows, as in VIEW
+# columns added after version 1, for stores created before them: (table, column, declaration)
+ADDED_COLUMNS = (("messages", "web_searches", "INTEGER NOT NULL DEFAULT 0"),
+                 ("background", "web_searches", "INTEGER NOT NULL DEFAULT 0"),
+                 ("cost_states", "start_ts", "TEXT"))
 TOKEN_FIELDS = ("new_input", "cache_write_5m", "cache_write_1h", "cache_read", "output")
 TOKEN_SUMS = ", ".join(f"SUM(u.{field}) AS {field}" for field in TOKEN_FIELDS)
-USAGE_SUMS = f"SUM(u.turn) AS turns, COUNT(*) AS row_count, {TOKEN_SUMS}"
+USAGE_SUMS = f"SUM(u.turn) AS turns, COUNT(*) AS row_count, SUM(u.web_searches) AS web_searches, {TOKEN_SUMS}"
 CONTEXT = "(m.new_input + m.cache_write_5m + m.cache_write_1h + m.cache_read)"
 # group name -> the columns it groups by, as (SQL expression, result key)
 GROUPS = {
@@ -120,7 +128,7 @@ GROUPS = {
     "project": (("u.project", "project"),),
     "day_model": (("u.day", "day"), ("u.model", "model")),
 }
-BACKGROUND_FIELDS = ("new_input", "cache_write", "cache_read", "output")
+BACKGROUND_FIELDS = ("new_input", "cache_write", "cache_read", "output", "web_searches")
 BACKGROUND_DESCRIPTION = "calls Claude Code counted that no transcript shows, e.g. Haiku for titles"
 DEFAULT_SESSION_LIMIT = 50
 
@@ -159,12 +167,20 @@ class Store:
         elif int(row["value"]) > SCHEMA_VERSION:
             raise StoreError(f"{self.path} has schema version {row['value']}, newer than this tool's "
                              f"{SCHEMA_VERSION}; update claude-usage")
-        elif int(row["value"]) < 2:
-            # version 1 didn't keep cost-state records: read every file again on the next scan (the upserts make
-            # that idempotent; no row is removed)
+        elif int(row["value"]) < SCHEMA_VERSION:
+            self.add_missing_columns()
+            # versions 1 and 2 didn't keep (all of) the cost-state data: read every file again on the next scan
+            # (the upserts make that idempotent; no row is removed)
             self.connection.execute("UPDATE transcripts SET read_offset = 0, size = -1")
             self.connection.execute("UPDATE meta SET value = ? WHERE key = 'schema_version'", (str(SCHEMA_VERSION),))
         self.connection.executescript(VIEW)
+
+    def add_missing_columns(self) -> None:
+        """Add the columns of ADDED_COLUMNS that a store from an older version lacks."""
+        for table, column, declaration in ADDED_COLUMNS:
+            existing = {row["name"] for row in self.connection.execute(f"PRAGMA table_info({table})")}
+            if column not in existing:
+                self.connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
@@ -258,8 +274,8 @@ def upsert_messages(store: Store, chunk: transcripts.Chunk) -> int:
     id in another file (a forked or resumed session) changes nothing, and ts keeps the first record's time."""
     cursor = store.connection.executemany("""
         INSERT INTO messages (message_id, path, model, speed, ts, day, new_input, cache_write_5m, cache_write_1h,
-                              cache_read, output)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              cache_read, output, web_searches)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (message_id) DO UPDATE SET
             model = excluded.model,
             speed = excluded.speed,
@@ -267,11 +283,12 @@ def upsert_messages(store: Store, chunk: transcripts.Chunk) -> int:
             cache_write_5m = excluded.cache_write_5m,
             cache_write_1h = excluded.cache_write_1h,
             cache_read = excluded.cache_read,
-            output = excluded.output
+            output = excluded.output,
+            web_searches = excluded.web_searches
         WHERE messages.path = excluded.path
         """, [(message.message_id, str(chunk.path), message.model, message.speed, iso(message.timestamp),
                local_day(message.timestamp), message.new_input, message.cache_write_5m, message.cache_write_1h,
-               message.cache_read, message.output) for message in chunk.messages])
+               message.cache_read, message.output, message.web_searches) for message in chunk.messages])
     return max(cursor.rowcount, 0)
 
 
@@ -295,18 +312,20 @@ def upsert_cost_state(store: Store, chunk: transcripts.Chunk, previous_last_ts: 
     cost_state = chunk.cost_state
     if cost_state is None or chunk.agent_id is not None:
         return
-    models = [[model.model, model.new_input, model.cache_write, model.cache_read, model.output, model.cost_usd]
-              for model in cost_state.models]
+    models = [[model.model, model.new_input, model.cache_write, model.cache_read, model.output, model.cost_usd,
+               model.web_searches] for model in cost_state.models]
     store.connection.execute("""
-        INSERT INTO cost_states (session_id, path, snapshot_ts, models) VALUES (?, ?, ?, ?)
+        INSERT INTO cost_states (session_id, path, snapshot_ts, start_ts, models) VALUES (?, ?, ?, ?, ?)
         ON CONFLICT (session_id) DO UPDATE SET path = excluded.path, snapshot_ts = excluded.snapshot_ts,
-                                               models = excluded.models
-        """, (chunk.session_id, str(chunk.path), iso(cost_state.snapshot_ts) or previous_last_ts, json.dumps(models)))
+                                               start_ts = excluded.start_ts, models = excluded.models
+        """, (chunk.session_id, str(chunk.path), iso(cost_state.snapshot_ts) or previous_last_ts,
+              iso(cost_state.start_ts), json.dumps(models)))
 
 
 def update_background(store: Store, session_ids: set[str]) -> None:
     """Recompute the background rows of these sessions: per model and category, what the latest cost-state
-    snapshot counts beyond the session's transcripts up to the snapshot time, never below 0."""
+    snapshot counts beyond the session's transcripts between the process start and the snapshot time (the span the
+    snapshot covers), never below 0."""
     for session_id in sorted(session_ids):
         store.connection.execute("DELETE FROM background WHERE session_id = ?", (session_id,))
         state = store.connection.execute("SELECT * FROM cost_states WHERE session_id = ?", (session_id,)).fetchone()
@@ -315,14 +334,16 @@ def update_background(store: Store, session_ids: set[str]) -> None:
         seen = {row["model"]: row for row in store.connection.execute("""
             SELECT m.model AS model, SUM(m.new_input) AS new_input,
                    SUM(m.cache_write_5m + m.cache_write_1h) AS cache_write, SUM(m.cache_read) AS cache_read,
-                   SUM(m.output) AS output
+                   SUM(m.output) AS output, SUM(m.web_searches) AS web_searches
             FROM messages m JOIN transcripts t ON t.path = m.path
             WHERE t.session_id = :session AND (:snapshot IS NULL OR m.ts <= :snapshot)
-            GROUP BY m.model""", {"session": session_id, "snapshot": state["snapshot_ts"]})}
+              AND (:start IS NULL OR m.ts >= :start)
+            GROUP BY m.model""", {"session": session_id, "snapshot": state["snapshot_ts"], "start": state["start_ts"]})}
         snapshot = datetime.fromisoformat(state["snapshot_ts"]) if state["snapshot_ts"] else None
         for entry in json.loads(state["models"]):
             model = entry[0]
-            counted = entry[1:5]                # new_input, cache_write, cache_read, output
+            # new_input, cache_write, cache_read, output, then web_searches after cost_usd
+            counted = [*entry[1:5], entry[6] if len(entry) > 6 else 0]
             row = seen.get(model)
             in_transcripts = [row[field] or 0 for field in BACKGROUND_FIELDS] if row else [0] * len(BACKGROUND_FIELDS)
             missing = [max(0, total - known) for total, known in zip(counted, in_transcripts)]
@@ -330,7 +351,7 @@ def update_background(store: Store, session_ids: set[str]) -> None:
                 continue
             store.connection.execute(
                 "INSERT INTO background (session_id, model, path, ts, day, new_input, cache_write, cache_read, "
-                "output) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "output, web_searches) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (session_id, model, state["path"], state["snapshot_ts"], local_day(snapshot), *missing))
 
 
@@ -399,17 +420,22 @@ class UsageSum:
     def __init__(self) -> None:
         self.turns = 0
         self.tokens = dict.fromkeys(TOKEN_FIELDS, 0)
+        self.web_searches = 0
         self.cost = 0.0
         self.priced_rows = 0
         self.unpriced_rows = 0
         self.unpriced_turns = 0
 
     def add(self, row: sqlite3.Row, prices: pricing.Prices) -> None:
-        """Add one row with turns, row_count, the TOKEN_FIELDS sums, price_model and speed."""
+        """Add one row with turns, row_count, web_searches, the TOKEN_FIELDS sums, price_model and speed. The
+        web-search fee counts whether or not the model has a price."""
         counts = {field: row[field] or 0 for field in TOKEN_FIELDS}
         for field, value in counts.items():
             self.tokens[field] += value
         self.turns += row["turns"]
+        searches = row["web_searches"] or 0
+        self.web_searches += searches
+        self.cost += pricing.web_search_cost(prices, searches)
         cost = pricing.cost(prices, row["price_model"], row["speed"], **counts)
         if cost is None:
             self.unpriced_turns += row["turns"]
@@ -423,10 +449,10 @@ class UsageSum:
         cost = None if self.priced_rows == 0 and self.unpriced_rows > 0 else self.cost
         return {"turns": self.turns, **self.tokens,
                 "cache_write": self.tokens["cache_write_5m"] + self.tokens["cache_write_1h"],
-                "cost": cost, "unpriced_turns": self.unpriced_turns}
+                "web_searches": self.web_searches, "cost": cost, "unpriced_turns": self.unpriced_turns}
 
 
-USAGE_FIELDS = ("turns", *TOKEN_FIELDS, "cache_write", "unpriced_turns")
+USAGE_FIELDS = ("turns", *TOKEN_FIELDS, "cache_write", "web_searches", "unpriced_turns")
 
 
 def combined(rows: list[Row]) -> Row:

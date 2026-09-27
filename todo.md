@@ -80,6 +80,9 @@ are written out below, so this project doesn't depend on it.
     - A running session has none yet.
   - Token fields map one to one onto the assistant usage: `inputTokens` = new input, `cacheCreationInputTokens`
     (no 5m/1h split), `cacheReadInputTokens`, `outputTokens`.
+  - `startTime` is when the *process* that wrote the record started, so a snapshot covers only that run. A
+    session continued in a new process has usage before `startTime` that the snapshot doesn't count.
+  - `webSearchRequests` per model: web searches, e.g. by Claude Code's WebSearch tool on Haiku, at $10 per 1,000.
   - Implemented as background usage (see `store.py`).
 
 ## Layout
@@ -151,11 +154,11 @@ claude-usage/
   - `tool_calls(tool_use_id PK, path, tool, result_chars)`: one row per call, summed per tool in the queries
   - Messages and tool calls keep only the file `path`. Project, session and agent type come from a join with
     `transcripts`, so a cwd or meta file that appears later corrects every row at once.
-  - `cost_states(session_id PK, path, snapshot_ts, models JSON)`: the latest snapshot per session, from main
-    transcripts only.
+  - `cost_states(session_id PK, path, snapshot_ts, start_ts, models JSON)`: the latest snapshot per session, from
+    main transcripts only.
   - `background(session_id, model, path, ts, day, new_input, cache_write, cache_read, output, PK(session_id, model))`
-    - Contents: per model and category, what the snapshot counts beyond the session's transcripts (main and
-      subagents) up to `snapshot_ts`, never below 0.
+    - Contents: per model and category (tokens and web searches), what the snapshot counts beyond the session's
+      transcripts (main and subagents) between `start_ts` and `snapshot_ts`, never below 0.
     - It's recomputed after each scan for the sessions it touched, after all files, so the subagents are in.
     - `ts` and `day` are the snapshot's; cache writes are priced as 5m.
   - `usage_rows` view: messages and background rows side by side, so every query includes both.
@@ -163,7 +166,8 @@ claude-usage/
     - The drilldown lists them as a pseudo agent, after the subagents.
   - `meta(schema_version)`: migrations only add. Never drop tables or rows on a version change, since the history
     can't be rebuilt once the transcripts are gone.
-    - Version 2 added `cost_states` and `background`.
+    - Version 2 added `cost_states` and `background`, version 3 `web_searches` (messages, background), version 4
+      `cost_states.start_ts`. Missing columns are added with `ALTER TABLE … ADD COLUMN`.
     - Opening a version-1 store resets every `read_offset`, so the next scan reads each file again: idempotent,
       and no row is removed.
 - **`scan(store, projects_dir, project_filter=None) -> ScanResult`** (files scanned, skipped, messages upserted,
@@ -210,12 +214,15 @@ claude-usage/
 - **Lookup:** by longest prefix match on the model id; a `[1m]`-style suffix is ignored. An unknown model gets
   `cost = None`, and the page shows "–".
   - Dated-only models get a prefix like `claude-opus-4-20`, so it can't catch unknown 4.x ids.
+- **Web searches:** `[fees] web_search_per_1000` (default $10), a flat fee not multiplied by fast mode.
+  - The counts come from `usage.server_tool_use.web_search_requests` of assistant records and from
+    `webSearchRequests` in cost-state records.
 - **Fast mode:** any speed other than `standard`. The multiplier (2x on Opus 5.5, Opus 5 and Opus 4.8) applies to
   every category, cache included. Without one, a fast request costs standard rates (Opus 4.6 does that).
 - **Not modelled:**
   - the 1.1x for US-only inference: `usage.inference_geo` is always `not_available` in the real data
   - long-context surcharges: there are none on 4.6 and later models
-  - the Batch discount and web search fees
+  - the Batch discount
 - **Prices:** from the official pricing page (checked 2026-09-27 via the `claude-api` skill and
   platform.claude.com/docs/en/about-claude/pricing), not from memory.
 - **Cross-check against real data:** in 29 sessions with a `cost-state` record, our cost equals Claude Code's own
@@ -359,10 +366,12 @@ Write the test first, then the implementation, for each step:
   - ✅ the drilldown of a doc-run session matches the report (confirmed 2026-09-27)
 - Optional: a cron entry `*/30 * * * * cd <folder> && python3 -m claude_usage scan` keeps the history even when the dashboard isn't running.
 
-- ✅ Background usage on the real data (2026-09-27): 28 snapshots, background usage in 25 sessions, $4.47 in total.
-  - Haiku: 871K input and 36K output tokens, $1.05. The rest are Sonnet and Opus calls that no transcript shows.
-  - The Haiku cost equals Claude Code's `costUSD` in 21 of 24 sessions. The other three differ by exactly $0.09,
-    $0.20 and $0.06: web searches at $10 per 1,000 (`webSearchRequests`), which aren't modelled yet.
+- ✅ Background usage on the real data (2026-09-27): 28 snapshots, background usage in 25 sessions, $4.84 in total.
+  - Haiku: $1.40 including 35 web searches, equal to Claude Code's own `costUSD`. The rest are Sonnet and Opus calls
+    that no transcript shows.
+  - Per session, transcripts plus background within the snapshot's span (`start_ts` to `snapshot_ts`) equal Claude
+    Code's total to within half a cent in 26 of 28 sessions.
+  - In the other two, the transcripts show slightly more than Claude Code counted: +$0.06 and +$0.01.
 
 ## Note for the implementing session
 The tool reads `~/.claude/projects/`, which is outside the new project folder; that is its purpose. The session

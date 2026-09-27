@@ -118,16 +118,20 @@ class Transcript:
         """An ai-title record: only type, aiTitle and sessionId, no timestamp."""
         return self.bare({"type": "ai-title", "aiTitle": title, "sessionId": self.session_id})
 
-    def cost_state(self, model_usage):
-        """A cost-state record as Claude Code writes it when a session ends: no timestamp, cumulative totals per
-        model. model_usage maps a model id to (input, cache_write, cache_read, output, cost_usd)."""
-        usage_by_model = {model: {"inputTokens": new_input, "outputTokens": output, "thinkingTokens": 0,
-                                  "cacheReadInputTokens": cache_read, "cacheCreationInputTokens": cache_write,
-                                  "webSearchRequests": 0, "costUSD": cost}
-                          for model, (new_input, cache_write, cache_read, output, cost) in model_usage.items()}
+    def cost_state(self, model_usage, start=START):
+        """A cost-state record as Claude Code writes it when a process ends: no timestamp, the totals since the
+        process started (start) per model. model_usage maps a model id to
+        (input, cache_write, cache_read, output, cost_usd[, web_searches])."""
+        usage_by_model = {}
+        for model, values in model_usage.items():
+            new_input, cache_write, cache_read, output, cost = values[:5]
+            web_searches = values[5] if len(values) > 5 else 0
+            usage_by_model[model] = {"inputTokens": new_input, "outputTokens": output, "thinkingTokens": 0,
+                                     "cacheReadInputTokens": cache_read, "cacheCreationInputTokens": cache_write,
+                                     "webSearchRequests": web_searches, "costUSD": cost}
         return self.bare({"type": "cost-state", "sessionId": self.session_id,
                           "totalCostUSD": sum(values["costUSD"] for values in usage_by_model.values()),
-                          "startTime": int(START.timestamp() * 1000), "modelUsage": usage_by_model,
+                          "startTime": int(start.timestamp() * 1000), "modelUsage": usage_by_model,
                           "hasUnknownModelCost": False})
 
     def queue_operation(self, operation="enqueue"):

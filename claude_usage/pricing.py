@@ -1,7 +1,8 @@
 """Estimated cost from the [prices] table of the config: $ per million tokens per model-id prefix, the longest
 matching prefix wins. The fast-mode multiplier applies to every token category, cache writes and reads included,
-because the cache multipliers stack on top of the fast-mode price. Not modelled: the 1.1x for US-only inference
-(`inference_geo`; not seen in real transcripts), the Batch API discount, and web search fees."""
+because the cache multipliers stack on top of the fast-mode price. Web searches are a flat fee per search
+([fees] web_search_per_1000), not multiplied by fast mode. Not modelled: the 1.1x for US-only inference
+(`inference_geo`; not seen in real transcripts) and the Batch API discount."""
 from dataclasses import dataclass
 from typing import Any
 
@@ -11,6 +12,8 @@ STANDARD_SPEED = "standard"
 PER_TOKENS = 1_000_000
 PRICE_FIELDS = ("input", "cache_write_5m", "cache_write_1h", "cache_read", "output")
 OPTIONAL_FIELDS = {"fast_multiplier": 1.0}
+DEFAULT_WEB_SEARCH_PER_1000 = 10.0      # $ per 1,000 web searches (Claude API)
+FEE_FIELDS = ("web_search_per_1000",)
 
 
 class PricingError(Exception):
@@ -28,18 +31,37 @@ class Price:
     fast_multiplier: float = 1.0
 
 
-Prices = dict[str, Price]
+class Prices(dict[str, Price]):
+    """The Price per model prefix, plus the flat web-search fee."""
+
+    def __init__(self, models: dict[str, Price], web_search_per_1000: float) -> None:
+        super().__init__(models)
+        self.web_search_per_1000 = web_search_per_1000
 
 
-def parse_number(model: str, field: str, value: Any) -> float:
+def parse_number(owner: str, field: str, value: Any) -> float:
     """A price field as a float; raises PricingError for non-numbers and negatives."""
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-        raise PricingError(f'prices."{model}".{field} must be a non-negative number, got {value!r}')
+        where = owner if owner == "fees" else f'prices."{owner}"'
+        raise PricingError(f"{where}.{field} must be a non-negative number, got {value!r}")
     return float(value)
 
 
-def parse_prices(table: dict[str, Any]) -> Prices:
-    """The Price per model prefix from the config's [prices] table; raises PricingError for a broken entry."""
+def parse_fees(fees: Any) -> float:
+    """The web-search fee from the config's [fees] table (default if absent); raises PricingError if broken."""
+    if fees is None:
+        return DEFAULT_WEB_SEARCH_PER_1000
+    if not isinstance(fees, dict):
+        raise PricingError(f"fees must be a table with {', '.join(FEE_FIELDS)}")
+    unknown = sorted(set(fees) - set(FEE_FIELDS))
+    if unknown:
+        raise PricingError(f"fees has unknown fields {', '.join(unknown)}")
+    return parse_number("fees", "web_search_per_1000", fees.get("web_search_per_1000", DEFAULT_WEB_SEARCH_PER_1000))
+
+
+def parse_prices(table: dict[str, Any], fees: Any = None) -> Prices:
+    """The Price per model prefix from the config's [prices] table and the fee from [fees]; raises PricingError
+    for a broken entry."""
     prices = {}
     for model, entry in table.items():
         if not isinstance(entry, dict):
@@ -54,7 +76,7 @@ def parse_prices(table: dict[str, Any]) -> Prices:
         for field, default in OPTIONAL_FIELDS.items():
             values[field] = parse_number(model, field, entry.get(field, default))
         prices[model] = Price(**values)
-    return prices
+    return Prices(prices, parse_fees(fees))
 
 
 def price_for(prices: Prices, model: str) -> Price | None:
@@ -78,3 +100,8 @@ def cost(prices: Prices, model: str, speed: str, *, new_input: int, cache_write_
     if speed != STANDARD_SPEED:
         total *= price.fast_multiplier
     return total
+
+
+def web_search_cost(prices: Prices, searches: int) -> float:
+    """The fee in $ for a number of web searches."""
+    return searches * prices.web_search_per_1000 / 1000

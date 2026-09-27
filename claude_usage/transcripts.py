@@ -10,6 +10,7 @@ import re
 from collections.abc import Iterable
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import UTC
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,7 @@ class MessageUsage:
     cache_write_1h: int
     cache_read: int
     output: int
+    web_searches: int = 0               # server-side web search requests of this call
 
 
 @dataclass(frozen=True)
@@ -66,14 +68,17 @@ class ModelTotals:
     cache_read: int
     output: int
     cost_usd: float                     # Claude Code's own estimate
+    web_searches: int = 0
 
 
 @dataclass(frozen=True)
 class CostState:
-    """The cumulative usage Claude Code records when a session ends (again with the new totals after a resume).
-    It includes calls that no transcript shows, such as Haiku for titles."""
+    """The usage Claude Code records when its process ends: the totals since that process started (a session run
+    over several processes gets one per process). It includes calls that no transcript shows, such as Haiku for
+    titles."""
     snapshot_ts: datetime | None        # of the last timestamped record before it in the same read
     models: tuple[ModelTotals, ...]
+    start_ts: datetime | None = None    # when the process started (startTime)
 
 
 @dataclass(frozen=True)
@@ -204,6 +209,7 @@ def result_chars(content: Any) -> int:
 
 def usage_of(message_id: str, timestamp: datetime | None, model: str, usage: Record) -> MessageUsage:
     """A MessageUsage from a message.usage block; without the 5m/1h split all cache writes count as 5m."""
+    server_tools = usage.get("server_tool_use") if isinstance(usage.get("server_tool_use"), dict) else {}
     split = usage.get("cache_creation")
     if isinstance(split, dict):
         cache_write_5m = count(split.get("ephemeral_5m_input_tokens"))
@@ -216,7 +222,8 @@ def usage_of(message_id: str, timestamp: datetime | None, model: str, usage: Rec
                         new_input=count(usage.get("input_tokens")),
                         cache_write_5m=cache_write_5m, cache_write_1h=cache_write_1h,
                         cache_read=count(usage.get("cache_read_input_tokens")),
-                        output=count(usage.get("output_tokens")))
+                        output=count(usage.get("output_tokens")),
+                        web_searches=count(server_tools.get("web_search_requests")))
 
 
 def message_usages(records: Iterable[Record]) -> list[MessageUsage]:
@@ -275,6 +282,13 @@ def cost_usd(value: Any) -> float:
     return 0.0
 
 
+def start_time(value: Any) -> datetime | None:
+    """A cost-state startTime (milliseconds since the epoch) as a UTC datetime, or None."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        return None
+    return datetime.fromtimestamp(value / 1000, UTC)
+
+
 def cost_state_of(record: Record, snapshot_ts: datetime | None) -> CostState:
     """A CostState from a cost-state record; models are merged by their id without a [1m]-style suffix."""
     totals: dict[str, list[float]] = {}
@@ -282,15 +296,16 @@ def cost_state_of(record: Record, snapshot_ts: datetime | None) -> CostState:
     for model, values in (model_usage.items() if isinstance(model_usage, dict) else []):
         if not isinstance(values, dict) or not isinstance(model, str):
             continue
-        sums = totals.setdefault(CONTEXT_SUFFIX.sub("", model), [0, 0, 0, 0, 0.0])
+        sums = totals.setdefault(CONTEXT_SUFFIX.sub("", model), [0, 0, 0, 0, 0.0, 0])
         sums[0] += count(values.get("inputTokens"))
         sums[1] += count(values.get("cacheCreationInputTokens"))
         sums[2] += count(values.get("cacheReadInputTokens"))
         sums[3] += count(values.get("outputTokens"))
         sums[4] += cost_usd(values.get("costUSD"))
-    models = tuple(ModelTotals(model, int(sums[0]), int(sums[1]), int(sums[2]), int(sums[3]), sums[4])
+        sums[5] += count(values.get("webSearchRequests"))
+    models = tuple(ModelTotals(model, int(sums[0]), int(sums[1]), int(sums[2]), int(sums[3]), sums[4], int(sums[5]))
                    for model, sums in totals.items())
-    return CostState(snapshot_ts, models)
+    return CostState(snapshot_ts, models, start_time(record.get("startTime")))
 
 
 # --- files -------------------------------------------------------------------------------------------------------

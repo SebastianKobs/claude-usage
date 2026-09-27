@@ -326,6 +326,14 @@ class BackgroundTest(StoreCase):
         self.scan()
         self.assertEqual(self.background(), [("claude-sonnet-5", 0, 0, 0, 20)])
 
+    def test_messages_before_the_process_start_do_not_count(self):
+        # the snapshot covers only the process that wrote it: started after m1 (DAY_3), before the resume
+        self.main.at(DATE_AFTER).user("resumed")
+        self.main.assistant("m3", [text_block("c")], usage(output=30))
+        self.main.cost_state({"claude-sonnet-5": (0, 0, 0, 100, 1.0)}, start=DATE_AFTER - timedelta(minutes=1))
+        self.scan()
+        self.assertEqual(self.background(), [("claude-sonnet-5", 0, 0, 0, 70)])
+
     def test_a_cost_state_in_a_subagent_file_is_ignored(self):
         self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
         self.scan()
@@ -383,6 +391,20 @@ class BackgroundTest(StoreCase):
         self.assertEqual(detail["agents"][0]["new_input"], 10)
         self.assertEqual(detail["new_input"], 110)
 
+    def test_background_web_searches_are_counted_and_priced(self):
+        self.main.cost_state({HAIKU: (0, 0, 0, 0, 0.09, 9)})
+        self.scan()
+        self.assertEqual(self.rows("SELECT model, web_searches FROM background"), [(HAIKU, 9)])
+        by_model = {row["model"]: row for row in store.totals_by(self.store, "model", None, PRICES)}
+        self.assertEqual(by_model[HAIKU]["web_searches"], 9)
+        self.assertAlmostEqual(by_model[HAIKU]["cost"], 0.09)
+
+    def test_web_searches_in_the_transcripts_are_subtracted(self):
+        self.main.assistant("m9", [text_block("w")], dict(usage(output=0), server_tool_use={"web_search_requests": 2}))
+        self.main.cost_state({"claude-sonnet-5": (10, 100, 1000, 80, 1.0, 5)})
+        self.scan()
+        self.assertEqual(self.rows("SELECT web_searches FROM background"), [(3,)])
+
     def test_an_unpriced_background_model_has_no_cost(self):
         self.main.cost_state({"claude-mystery-1": (100, 0, 0, 10, 0.01)})
         self.scan()
@@ -422,6 +444,25 @@ class SchemaTest(TempDirTestCase):
             self.assertEqual(second.connection.execute("SELECT model FROM background").fetchall()[0][0], HAIKU)
             version = second.connection.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()[0]
             self.assertEqual(int(version), store.SCHEMA_VERSION)
+
+    def test_a_version_2_store_gets_web_search_columns_and_reads_its_files_again(self):
+        main = self.projects.session("s1")
+        main.at(DAY_1).user("hi")
+        main.assistant("m1", [text_block("a")], usage(output=5))
+        main.cost_state({HAIKU: (100, 0, 0, 10, 0.02, 1)})
+        with store.Store(self.store_path) as first:
+            store.scan(first, self.projects.root)
+            # what a version-2 store looks like: no web_searches columns, snapshots without them
+            first.connection.execute("DROP VIEW usage_rows")
+            first.connection.execute("ALTER TABLE messages DROP COLUMN web_searches")
+            first.connection.execute("ALTER TABLE background DROP COLUMN web_searches")
+            first.connection.execute("DELETE FROM cost_states")
+            first.connection.execute("DELETE FROM background")
+            first.connection.execute("UPDATE meta SET value = '2' WHERE key = 'schema_version'")
+        with store.Store(self.store_path) as second:
+            self.assertEqual(store.scan(second, self.projects.root).files_scanned, 1)
+            self.assertEqual(second.connection.execute("SELECT web_searches FROM background").fetchall()[0][0], 1)
+            self.assertEqual(second.connection.execute("SELECT web_searches FROM messages").fetchall()[0][0], 0)
 
     def test_a_newer_schema_is_refused(self):
         with store.Store(self.store_path):
@@ -515,6 +556,16 @@ class TotalsTest(StoreCase):
     def test_project_filter(self):
         rows = store.totals_by(self.store, "model", None, PRICES, project="/home/dev/other")
         self.assertEqual([(row["model"], row["turns"]) for row in rows], [("claude-mystery-9", 1)])
+
+    def test_web_searches_of_messages_are_priced_without_the_fast_multiplier(self):
+        searcher = self.projects.session("s4")
+        searcher.at(DAY_1).assistant("m6", [text_block("w")],
+                                     dict(usage(speed="fast"), server_tool_use={"web_search_requests": 100}),
+                                     model="claude-opus-5")
+        self.scan()
+        row = {row["project"]: row for row in store.totals_by(self.store, "project", None, PRICES)}["/home/dev/app"]
+        self.assertEqual(row["web_searches"], 100)
+        self.assertAlmostEqual(row["cost"], 12.0 + 16.75 + 25.0 + 1.0)
 
     def test_fast_mode_is_priced(self):
         fast = self.projects.session("s3")

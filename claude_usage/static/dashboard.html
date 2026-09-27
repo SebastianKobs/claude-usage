@@ -351,9 +351,10 @@ function renderKpis(summary) {
   const tile = (label, value, note) => el("div", {class: "card"},
     el("div", {class: "label", text: label}), el("div", {class: "tile-value", text: value}),
     note ? el("div", {class: "note", text: note}) : null);
-  const heroNote = totals.unpriced_turns
-    ? `${whole(totals.unpriced_turns)} turns of models without a price are not included`
-    : "at API list prices";
+  const notes = [totals.unpriced_turns ? `${whole(totals.unpriced_turns)} turns of models without a price are not included`
+                                       : "at API list prices"];
+  if (totals.web_searches) notes.push(`incl. ${whole(totals.web_searches)} web searches`);
+  const heroNote = notes.join(" · ");
   document.getElementById("kpis").replaceChildren(
     el("div", {class: "card hero-card"}, el("div", {class: "label", text: `Estimated cost, ${rangeText()}`}),
        el("div", {class: "hero", text: money(totals.cost)}), el("div", {class: "note", text: heroNote})),
@@ -750,17 +751,22 @@ function renderDrilldown(detail) {
     panel.replaceChildren();
     return;
   }
+  const searches = detail.agents.some(agent => agent.web_searches);
   const head = el("tr", {}, el("th", {text: "Agent"}), el("th", {text: "Model"}),
                   el("th", {class: "num", text: "Turns"}), el("th", {class: "num", text: "Context first → last"}),
                   el("th", {class: "num", text: "Input total"}), el("th", {class: "num", text: "Cache read %"}),
-                  el("th", {class: "num", text: "Output"}), el("th", {class: "num", text: "Cost"}));
+                  el("th", {class: "num", text: "Output"}),
+                  searches ? el("th", {class: "num", text: "Web searches"}) : null,
+                  el("th", {class: "num", text: "Cost"}));
   const agents = detail.agents.map(agent => el("tr", {},
     el("td", {}, el("strong", {text: agent.agent_type}), el("span", {class: "sub", text: agent.description || ""})),
     el("td", {text: agent.models.join(", ") || "–"}), el("td", {class: "num", text: whole(agent.turns)}),
     el("td", {class: "num", text: `${compact(agent.context_first)} → ${compact(agent.context_last)}`}),
     el("td", {class: "num", text: compact(agent.input_total)}),
     el("td", {class: "num", text: percent(agent.cache_read, agent.input_total)}),
-    el("td", {class: "num", text: compact(agent.output)}), el("td", {class: "num", text: money(agent.cost)})));
+    el("td", {class: "num", text: compact(agent.output)}),
+    searches ? el("td", {class: "num", text: whole(agent.web_searches)}) : null,
+    el("td", {class: "num", text: money(agent.cost)})));
   const toolRows = detail.agents.flatMap(agent => agent.tools.map(tool => el("tr", {},
     el("td", {text: agent.agent_type}), el("td", {text: tool.tool}), el("td", {class: "num", text: whole(tool.calls)}),
     el("td", {class: "num", text: compact(tool.result_chars)}))));

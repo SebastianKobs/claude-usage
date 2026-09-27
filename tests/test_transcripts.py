@@ -79,6 +79,11 @@ class MessageUsageTest(ParseCase):
         self.main.assistant("m2", [text_block("b")], usage(speed="fast"))
         self.assertEqual([message.speed for message in self.parse().messages], ["standard", "fast"])
 
+    def test_web_searches_of_the_message(self):
+        self.main.assistant("m1", [text_block("a")], dict(usage(output=1), server_tool_use={"web_search_requests": 3}))
+        self.main.assistant("m2", [text_block("b")], usage(output=1))
+        self.assertEqual([message.web_searches for message in self.parse().messages], [3, 0])
+
     def test_assistant_record_without_usage_or_id_is_skipped(self):
         self.main.record("assistant", message={"id": "m1", "model": DEFAULT_MODEL, "content": []})
         self.main.record("assistant", message={"model": DEFAULT_MODEL, "content": [], "usage": usage(output=1)})
@@ -211,6 +216,25 @@ class CostStateTest(ParseCase):
         self.assertEqual([(model.model, model.new_input, model.cache_write, model.cache_read, model.output,
                            model.cost_usd) for model in state.models],
                          [("claude-sonnet-5", 10, 20, 30, 40, 5.0)])
+
+    def test_web_searches_of_the_snapshot(self):
+        self.main.user("hi")
+        record = self.main.cost_state({"claude-haiku-4-5": (1, 0, 0, 1, 0.1)})
+        self.main.path.write_text("", encoding="utf-8")
+        self.main.user("hi")
+        record["modelUsage"]["claude-haiku-4-5"]["webSearchRequests"] = 7
+        self.main.bare(record)
+        self.assertEqual(self.parse().cost_state.models[0].web_searches, 7)
+
+    def test_start_time_of_the_process(self):
+        self.main.user("hi")
+        self.main.cost_state({"claude-sonnet-5": (1, 0, 0, 1, 0.1)}, start=datetime(2026, 9, 2, 8, 30, tzinfo=UTC))
+        self.assertEqual(self.parse().cost_state.start_ts, datetime(2026, 9, 2, 8, 30, tzinfo=UTC))
+
+    def test_missing_start_time_is_none(self):
+        self.main.user("hi")
+        self.main.bare({"type": "cost-state", "sessionId": "s1", "modelUsage": {}})
+        self.assertIsNone(self.parse().cost_state.start_ts)
 
     def test_context_suffixes_are_merged_into_the_base_id(self):
         self.main.user("hi")

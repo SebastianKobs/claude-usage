@@ -33,7 +33,7 @@ class Context:
     def __init__(self, args: argparse.Namespace, settings: config.Config) -> None:
         self.args = args
         self.settings = settings
-        self.prices = pricing.parse_prices(settings.values.get("prices") or {})
+        self.prices = pricing.parse_prices(settings.values.get("prices") or {}, settings.values.get("fees"))
         self.projects_dir = path_option(args.projects_dir) or settings.path("projects_dir")
         self.store_path = path_option(args.store) or settings.path("store")
 
@@ -113,6 +113,8 @@ def totals_text(payload: dict[str, Any]) -> str:
     lines = [f"Usage by {group}, {scope}" + (f", project {payload['project_filter']}"
                                             if payload["project_filter"] else ""),
              "", table([group, *USAGE_HEADERS], rows, set(range(1, 6)))]
+    if payload["totals"]["web_searches"]:
+        lines.append(f"\nIncluding {payload['totals']['web_searches']:,} web searches.")
     if payload["totals"]["unpriced_turns"]:
         lines.append(f"\n{payload['totals']['unpriced_turns']:,} turns of models without a price have no cost.")
     return "\n".join(lines)
@@ -137,7 +139,8 @@ def session_text(detail: dict[str, Any]) -> str:
                         agent_rows, {2, 3, 4, 5, 6})]
     if tool_rows:
         lines += ["", table(["Agent", "Tool", "Calls", "Result chars"], tool_rows, {2, 3})]
-    lines += ["", f"Total: {whole(detail['turns'])} turns, {whole(detail['output'])} output tokens, "
+    searches = f", {whole(detail['web_searches'])} web searches" if detail["web_searches"] else ""
+    lines += ["", f"Total: {whole(detail['turns'])} turns, {whole(detail['output'])} output tokens{searches}, "
                   f"{money(detail['cost'])}"]
     return "\n".join(lines)
 
