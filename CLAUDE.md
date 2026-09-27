@@ -7,9 +7,9 @@ Local dashboard and persistent SQLite history for Claude Code token usage. The s
 - **TDD:** write the test first, then the implementation, one step of `todo.md` at a time.
 - **Stdlib only:** Python ≥ 3.12, no dependencies (`sqlite3`, `http.server`, `json`, `tomllib`, `argparse`,
   `unittest`).
-- **Tests:**
-  - the app: `python3 -m unittest discover -s tests`
-  - the guard hook: `python3 -m unittest discover -s .claude/tests`
+- **Tests:** `make test` runs both suites.
+  - the app: `python3 -m unittest discover -s tests` (`make test-app`)
+  - the guard hook: `python3 -m unittest discover -s .claude/tests` (`make test-guard`)
 - **Never read real transcripts in tests.** Tests build their own under `tests/.tmp/` (see `tests/helpers.py`) and
   pass temp paths via `--projects-dir` and `--store`. Real `~/.claude/projects` is only read for the verification
   steps in `todo.md`, and only when the user asks.

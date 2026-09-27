@@ -8,12 +8,24 @@ Python ≥ 3.12, standard library only; nothing to install.
 
 ## Usage
 ```
-python3 -m claude_usage scan                  # read new transcript data into data/usage.sqlite
-python3 -m claude_usage report --days 7       # totals as text (--json for JSON)
-python3 -m claude_usage serve                 # dashboard on http://127.0.0.1:8765
+make start                     # dashboard on http://127.0.0.1:8765 in the background (PORT=, LIVE_MINUTES=)
+make status | stop | restart | logs
+make scan                      # read new transcript data into data/usage.sqlite
+make report ARGS="--days 7 --by project"
+make session ID=<session-id>   # one session: main thread, subagents, background, tools
+make test                      # the app's and the guard hook's tests
+make help                      # everything else
 ```
 
-To keep the history without the dashboard running, scan from cron:
+The same without make:
+```
+python3 -m claude_usage scan
+python3 -m claude_usage report --days 7       # totals as text (--json for JSON)
+python3 -m claude_usage serve                 # dashboard in the foreground, Ctrl+C to stop
+```
+
+To keep the history without the dashboard running, scan from cron (`make cron-line` prints this line for your
+checkout):
 ```
 */30 * * * * cd /path/to/usage-inspector && python3 -m claude_usage scan
 ```
