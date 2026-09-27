@@ -24,29 +24,57 @@ are written out below, so this project doesn't depend on it.
 - **Layout under `~/.claude/projects/<slug>/`,** where `<slug>` is the project path with every non-alphanumeric
   character replaced by `-`:
   - `<session-id>.jsonl`: the main session
-  - `<session-id>/subagents/agent-<id>.jsonl` + `agent-<id>.meta.json`: subagents. The meta file holds `agentType`, `description`, `model` and `spawnDepth`, and may be missing, in which case the type is `?`.
-  - `<session-id>/tool-results/`: ignore.
-- **Records:** one JSON object per line; skip unreadable lines and non-objects. Each record has `type`
-  (`user`, `assistant`, `attachment`, `ai-title`, `mode`, …) plus `timestamp` (ISO UTC), `sessionId`, `cwd`,
-  `gitBranch` and `version`.
+  - `<session-id>/subagents/agent-<id>.jsonl` + `agent-<id>.meta.json`: subagents.
+    - The meta file holds `agentType`, `description`, `toolUseId` (the parent's Agent call), `spawnDepth` and, when
+      nested, `parentAgentId`.
+    - `model` is often missing (38 of 111 files), so take the model from the messages.
+    - The meta file may be missing, in which case the type is `?`.
+  - `<session-id>/tool-results/`, `memory/` and anything else that isn't a transcript: ignore.
+  - Checked against the real data (2026-09-27, 34 main and 111 subagent transcripts).
+- **Records:** one JSON object per line; skip unreadable lines (the real data has one) and non-objects.
+  - Types: `assistant`, `user`, `attachment`, `ai-title`, `last-prompt`, `atis-latch`, `queue-operation`, `mode`,
+    `file-history-*`, `cost-state`, `system`.
+  - Conversation records (`assistant`, `user`, `attachment`, `system`) carry `timestamp` (ISO UTC,
+    `2026-09-01T12:00:00.000Z`), `sessionId`, `cwd`, `gitBranch` and `version`. The others carry only some of these:
+    `ai-title` has no timestamp, so `first_ts`/`last_ts` come from records that have one.
+  - Records of a subagent carry `agentId` (the id in the file name), `isSidechain: true` and the parent's
+    `sessionId`.
 - **Assistant messages:**
   - A message is stored as **one record per content block**, all with the same `message.id`. The **last**
     record of an id carries the final `message.usage`, so keep the last usage per id.
-  - Skip `message.model == "<synthetic>"`.
+    - Real data: exactly one block per record, and 1 to 6+ records per id.
+    - The last record's output was never below an earlier one's.
+  - Skip `message.model == "<synthetic>"`. Those records are API errors, with `null` in the usage fields.
 - **The `message.usage` block:**
   - `input_tokens` (new input), `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens`
   - `cache_creation.ephemeral_5m_input_tokens` / `ephemeral_1h_input_tokens`: the split of cache writes, with
     different prices. If it's missing, count all cache writes as 5m.
-  - `speed` (`standard` or fast mode), `output_tokens_details.thinking_tokens`
+  - `speed`: `standard`, or missing in older transcripts (treat that as standard).
+    - Fast mode hasn't been seen in the real data yet, so count any other value as fast.
+  - `output_tokens_details.thinking_tokens`
   - Any counter may be missing or `null`; treat it as 0.
+  - Ignore these, because the real data shows nothing to add:
+    - `iterations`: always one entry, equal to the top-level counters.
+    - `server_tool_use` (`web_search_requests`, `web_fetch_requests`): always 0.
+    - `service_tier` and `inference_geo`.
 - **Context per turn** = `input_tokens + cache_creation_input_tokens + cache_read_input_tokens`. The input total
   of an agent is the sum over its turns, because every turn re-sends the context.
 - **Tool calls:** `tool_use` blocks in assistant content (`id`, `name`). The results are `tool_result` blocks in
-  `user` records (`tool_use_id`, `content` as a string or text blocks). Count calls and result characters per
-  tool. Show `mcp__<server>__<tool>` as `<server>.<tool>`.
-- **Session title:** the last `ai-title` record. Prompt: the first line of the first `user` record without tool
-  results. Use it only for the drilldown; **never store prompt text**.
-- **Project label:** the `cwd` of the first record that has one, falling back to the slug.
+  `user` records (`tool_use_id`, `content` as a string or a list of blocks).
+  - Count calls and result characters per tool. For characters, count only the `text` blocks of a list and skip
+    `image` and `tool_reference`.
+  - Show `mcp__<server>__<tool>` as `<server>.<tool>`.
+- **Session title:** `aiTitle` of the last `ai-title` record.
+- **Prompt:** the first line of the first `user` record that isn't `isMeta`, `isCompactSummary` or a tool result.
+  Its content is a string or text blocks. Use it only for the drilldown; **never store prompt text**. The same goes
+  for `last-prompt.lastPrompt` and `queue-operation.content`: never store them.
+- **Project label:** the `cwd` of the first record that has one, falling back to the slug. Many main transcripts
+  start with a `queue-operation` or `mode` record that has no `cwd`.
+- **Not in the transcripts:** Claude Code's background calls, such as Haiku for titles and classifiers.
+  - They only appear in `cost-state` records (`modelUsage` per model with tokens and `costUSD`, `totalCostUSD`).
+  - Model ids there carry a `[1m]` suffix for the 1M context variant; the assistant records don't.
+  - Possible later addition: show them as "background" usage per session, and use `costUSD` to cross-check
+    `pricing.py`.
 
 ## Layout
 ```

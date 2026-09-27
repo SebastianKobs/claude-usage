@@ -68,6 +68,34 @@ class RecordTest(TempDirTestCase):
         transcript.partial('{"type": "us')
         self.assertFalse(transcript.path.read_text(encoding="utf-8").endswith("\n"))
 
+    def test_subagent_records_carry_agent_id(self):
+        transcript = self.projects.subagent("s1", "a1")
+        transcript.user("go")
+        record = read_lines(transcript.path)[0]
+        self.assertEqual((record["agentId"], record["isSidechain"], record["sessionId"]), ("a1", True, "s1"))
+
+    def test_ai_title_has_no_timestamp(self):
+        transcript = self.projects.session("s1")
+        transcript.ai_title("A title")
+        self.assertEqual(read_lines(transcript.path), [{"type": "ai-title", "aiTitle": "A title", "sessionId": "s1"}])
+
+    def test_queue_operation_has_no_cwd(self):
+        transcript = self.projects.session("s1")
+        transcript.queue_operation()
+        record = read_lines(transcript.path)[0]
+        self.assertNotIn("cwd", record)
+        self.assertIn("timestamp", record)
+
+    def test_meta_and_block_prompts(self):
+        transcript = self.projects.session("s1")
+        meta = transcript.user("caveat", isMeta=True)
+        blocks = transcript.user("hello", as_blocks=True)
+        self.assertTrue(meta["isMeta"])
+        self.assertEqual(blocks["message"]["content"], [{"type": "text", "text": "hello"}])
+
+    def test_usage_without_speed(self):
+        self.assertNotIn("speed", usage(speed=None))
+
     def test_tool_result_record(self):
         transcript = self.projects.session("s1")
         record = transcript.tool_result("t1", [{"type": "text", "text": "abc"}])

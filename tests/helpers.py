@@ -23,14 +23,16 @@ def slug(project_path):
 
 
 def usage(new=0, cache_5m=0, cache_1h=0, cache_read=0, output=0, speed="standard", thinking=None, split=True):
-    """A message.usage block. split=False leaves out the cache_creation split, as older transcripts do."""
+    """A message.usage block. split=False leaves out the cache_creation split and speed=None the speed, as older
+    transcripts do."""
     block = {
         "input_tokens": new,
         "cache_creation_input_tokens": cache_5m + cache_1h,
         "cache_read_input_tokens": cache_read,
         "output_tokens": output,
-        "speed": speed,
     }
+    if speed is not None:
+        block["speed"] = speed
     if split:
         block["cache_creation"] = {"ephemeral_5m_input_tokens": cache_5m, "ephemeral_1h_input_tokens": cache_1h}
     if thinking is not None:
@@ -54,12 +56,14 @@ def tool_use_block(tool_use_id, name, tool_input=None):
 
 
 class Transcript:
-    """Appends records to one transcript file, one JSON object per line, with the common fields Claude Code sets.
-    The clock starts at START and moves one second per record."""
+    """Appends records to one transcript file, one JSON object per line, with the common fields Claude Code sets
+    (plus agentId and isSidechain in a subagent's file). The clock starts at START and moves one second per
+    timestamped record."""
 
-    def __init__(self, path, session_id, cwd=DEFAULT_PROJECT, git_branch="main", version="2.1.0"):
+    def __init__(self, path, session_id, cwd=DEFAULT_PROJECT, git_branch="main", version="2.1.0", agent_id=None):
         self.path = path
         self.session_id = session_id
+        self.agent_id = agent_id
         self.cwd = cwd
         self.git_branch = git_branch
         self.version = version
@@ -92,16 +96,32 @@ class Transcript:
         self.write_text(text)
 
     def record(self, record_type, **fields):
-        """Append a record of the given type with the common fields; returns it."""
+        """Append a conversation record of the given type with the common fields; returns it."""
         record = {"type": record_type, "timestamp": self.timestamp(), "sessionId": self.session_id,
                   "cwd": self.cwd, "gitBranch": self.git_branch, "version": self.version}
+        if self.agent_id is not None:
+            record.update(agentId=self.agent_id, isSidechain=True)
         record.update(fields)
+        return self.bare(record)
+
+    def bare(self, record):
+        """Append a record exactly as given (no common fields); returns it."""
         self.raw(json.dumps(record, ensure_ascii=False))
         return record
 
-    def user(self, text):
-        """A user prompt."""
-        return self.record("user", message={"role": "user", "content": text})
+    def user(self, text, as_blocks=False, **fields):
+        """A user prompt, its content a string or (as_blocks) one text block; fields adds e.g. isMeta=True."""
+        content = [text_block(text)] if as_blocks else text
+        return self.record("user", message={"role": "user", "content": content}, **fields)
+
+    def ai_title(self, title):
+        """An ai-title record: only type, aiTitle and sessionId, no timestamp."""
+        return self.bare({"type": "ai-title", "aiTitle": title, "sessionId": self.session_id})
+
+    def queue_operation(self, operation="enqueue"):
+        """A queue-operation record: timestamp and sessionId, but no cwd (main transcripts often start with one)."""
+        return self.bare({"type": "queue-operation", "operation": operation, "timestamp": self.timestamp(),
+                          "sessionId": self.session_id})
 
     def tool_result(self, tool_use_id, content):
         """A user record carrying a tool result; content is a string or a list of text blocks."""
@@ -140,12 +160,14 @@ class ProjectsDir:
 
     def subagent(self, session_id, agent_id, project=DEFAULT_PROJECT, meta=None, **options):
         """A subagent transcript <slug>/<session-id>/subagents/agent-<id>.jsonl. meta is written to the
-        agent-<id>.meta.json next to it; meta=False writes none (the type is then "?")."""
+        agent-<id>.meta.json next to it (without model, as often in real data); meta=False writes none (the type
+        is then "?")."""
         folder = self.project_dir(project) / session_id / "subagents"
-        transcript = Transcript(folder / f"agent-{agent_id}.jsonl", session_id, cwd=project, **options)
+        transcript = Transcript(folder / f"agent-{agent_id}.jsonl", session_id, cwd=project, agent_id=agent_id,
+                                **options)
         if meta is not False:
-            meta_values = {"agentType": "general-purpose", "description": "a subagent", "model": DEFAULT_MODEL,
-                           "spawnDepth": 1}
+            meta_values = {"agentType": "general-purpose", "description": "a subagent",
+                           "toolUseId": f"toolu_{agent_id}", "spawnDepth": 1}
             meta_values.update(meta or {})
             meta_path = folder / f"agent-{agent_id}.meta.json"
             meta_path.write_text(json.dumps(meta_values), encoding="utf-8")
