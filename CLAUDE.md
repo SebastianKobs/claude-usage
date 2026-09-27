@@ -33,7 +33,7 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
   - f-strings only; regex flags spelled out
 - **Types and records:** type hints, `@dataclass(frozen=True)` for records.
 - **Errors:** library functions raise; only `main()` prints errors and picks the exit code (0 ok, 1 error without a
-  traceback, 2 bad arguments).
+  traceback, 2 bad arguments, 130 interrupted).
 - **Files and docs:** `pathlib.Path` with `encoding="utf-8"`; a docstring on every function and class; comments
   explain why.
 - **Tests:** stdlib `unittest`, one behaviour per test method, no type hints. Temp dirs go under `tests/.tmp/`,
@@ -41,9 +41,10 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
 
 ## Layout
 ```
-Makefile                     start/stop/status of the dashboard, scan, report, session, test, clean, cron-line
+Makefile                     start/stop/status of the dashboard, scan, report, session, backup, test, clean,
+                             cron-line
 claude_usage/
-  __main__.py                CLI: scan | report | serve
+  __main__.py                CLI: scan | report | serve | backup
   config.py                  defaults in the package, user and checkout overrides, data folder
   config.toml                the defaults, including prices (shipped with the package)
   transcripts.py             parser: reads a transcript from a byte offset into a Chunk
@@ -174,13 +175,21 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     `config.local.toml` in a checkout.
   - Relative default paths count from the data folder: `data/` in a checkout, else
     `~/.local/share/claude-usage`.
+  - `config.settings()` refuses unknown keys and checks `[serve]`; `[prices]`/`[fees]` are checked in
+    `pricing.py`, `[chat]`/`[auto_compact]` in `server.py`. Numbers must be finite.
+  - The version lives in `claude_usage/__init__.py`; `pyproject.toml` reads it from there.
+  - `package-data` must cover every file under `static/` (a test checks it), or an installed copy misses it.
 - **Server:**
   - It binds to loopback only, and refuses requests whose `Host` header isn't a loopback name. The API exposes
     titles and first prompts, so this blocks DNS rebinding.
   - The page is served with a strict CSP: no inline scripts or stylesheets, only style attributes. JSON is
     `no-store`.
   - Only files under `static/css` and `static/js` are served, a list fixed at start: a new one needs a restart.
-  - Each request scans at most every 5 s, behind one lock.
+  - Each request scans at most every 5 s, behind one lock. A failed scan (no projects folder, a locked store)
+    or a skipped file doesn't fail the request: the stored history is served with `scan_errors`, and new errors
+    go to stderr. Unexpected errors answer a JSON 500 and log their traceback.
+  - `serve` prints "Serving …" before its first scan (a new store's reads every file), since `make start` waits
+    for that line; SIGTERM (`make stop`) stops it like Ctrl+C.
   - `/api/session/<id>/chat[?agent=<id>]` reads the conversation from the transcript per request, with tool inputs
     and results cut to `CHAT_TOOL_LIMIT`. Each reply carries its effort level, and the last entry of each API call
     its final usage with the cost at the configured prices, both computed per request. Nothing of it is stored,

@@ -1,6 +1,7 @@
 """The local dashboard: a ThreadingHTTPServer on a loopback address only, serving static/dashboard.html with its
-stylesheets and scripts, and a small JSON API. Every API request first runs an incremental scan, at most every SCAN_INTERVAL seconds, behind a lock that
-also serializes all store access (one SQLite connection shared by the handler threads).
+stylesheets and scripts, and a small JSON API. Every API request first runs an incremental scan, at most every
+SCAN_INTERVAL seconds, behind a lock that also serializes all store access (one SQLite connection shared by the
+handler threads). A scan that fails still leaves the stored history to serve; its errors go into the payload.
 
 The API exposes session titles and first prompts, so besides binding to loopback the server refuses requests whose
 Host header isn't a loopback name: that stops a web page from reading it through DNS rebinding.
@@ -11,8 +12,11 @@ import json
 import math
 import re
 import socket
+import sqlite3
+import sys
 import threading
 import time
+import traceback
 from collections.abc import Callable
 from datetime import date
 from datetime import timedelta
@@ -36,6 +40,7 @@ ASSET_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; chars
 ASSETS = {f"/static/{path.relative_to(STATIC).as_posix()}": path
           for folder in ("css", "js") for path in sorted((STATIC / folder).rglob("*")) if path.suffix in ASSET_TYPES}
 SCAN_INTERVAL = 5.0                     # seconds between scans triggered by requests
+CONNECTION_TIMEOUT = 30                 # seconds an idle connection may keep its handler thread
 DEFAULT_DAYS = 30
 MAX_DAYS = 3650
 SESSION_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})")
@@ -69,7 +74,7 @@ def parse_days(query: str) -> int:
     if not values:
         return DEFAULT_DAYS
     text = values[-1]
-    if not text.isdigit() or not 1 <= int(text) <= MAX_DAYS:
+    if not re.fullmatch(r"[0-9]{1,4}", text) or not 1 <= int(text) <= MAX_DAYS:
         raise BadRequest(f"days must be a whole number from 1 to {MAX_DAYS}, got {text!r}")
     return int(text)
 
@@ -116,9 +121,9 @@ DEFAULT_COMPACT = CompactSettings(hint_tokens=200_000, warn_share=0.8, auto_comp
 
 
 def positive_number(owner: str, value: Any, whole: bool) -> float:
-    """value as a positive number (a whole one if whole); raises ConfigError naming owner otherwise."""
+    """value as a positive finite number (a whole one if whole); raises ConfigError naming owner otherwise."""
     kinds = (int,) if whole else (int, float)
-    if isinstance(value, bool) or not isinstance(value, kinds) or value <= 0:
+    if isinstance(value, bool) or not isinstance(value, kinds) or not math.isfinite(value) or value <= 0:
         raise config.ConfigError(f"{owner}: expected a positive {'whole ' if whole else ''}number, got {value!r}")
     return value
 
@@ -126,6 +131,9 @@ def positive_number(owner: str, value: Any, whole: bool) -> float:
 def parse_compact_settings(values: Payload) -> CompactSettings:
     """The compact settings of the config's [chat] and [auto_compact] tables, missing values from
     DEFAULT_COMPACT; raises ConfigError for a value that isn't a positive number (a share at most 1)."""
+    for table in ("chat", "auto_compact"):
+        if not isinstance(values.get(table, {}), dict):
+            raise config.ConfigError(f"{table}: expected a table, got {values[table]!r}")
     chat = values.get("chat") or {}
     hint = positive_number("chat.compact_hint_tokens", chat.get("compact_hint_tokens", DEFAULT_COMPACT.hint_tokens),
                            whole=True)
@@ -236,13 +244,22 @@ class UsageApp:
         self.compact = compact
         self.lock = threading.Lock()
         self.last_scan: float | None = None
+        self.scan_errors: tuple[str, ...] = ()
 
     def refresh(self) -> None:
-        """Scan if the last scan is SCAN_INTERVAL or more ago. Call with the lock held."""
+        """Scan if the last scan is SCAN_INTERVAL or more ago. Call with the lock held. A failure keeps the stored
+        history servable: the history matters most once the transcripts are gone. New errors go to stderr."""
         now = self.clock()
         if self.last_scan is not None and now - self.last_scan < SCAN_INTERVAL:
             return
-        store.scan(self.store, self.projects_dir, self.project)
+        try:
+            errors = store.scan(self.store, self.projects_dir, self.project).errors
+        except (OSError, sqlite3.Error) as exc:     # no projects folder, or another scan holds the store too long
+            errors = (str(exc),)
+        if errors != self.scan_errors:
+            for error in errors:
+                print(f"scan: {error}", file=sys.stderr, flush=True)
+        self.scan_errors = errors
         self.last_scan = now
 
     def live(self) -> Payload:
@@ -250,7 +267,8 @@ class UsageApp:
         with self.lock:
             self.refresh()
             sessions = store.live_sessions(self.store, self.live_minutes, self.prices, project=self.project)
-        return {"minutes": self.live_minutes, "sessions": sessions}
+            scan_errors = list(self.scan_errors)
+        return {"minutes": self.live_minutes, "sessions": sessions, "scan_errors": scan_errors}
 
     def summary(self, days: int, until: date | None = None) -> Payload:
         """/api/summary: totals of the `days` local days up to until (default today, included), per hour too for a
@@ -292,6 +310,7 @@ class UsageApp:
             previous_day, next_day = (None, None)
             if days == 1:
                 previous_day, next_day = store.nearest_days(self.store, until, project=self.project)
+            scan_errors = list(self.scan_errors)
         # today stays reachable without usage, and a day past it (a skewed clock) is not
         if days != 1 or until >= date.today():
             next_day = None
@@ -303,7 +322,7 @@ class UsageApp:
                 "project_filter": self.project,
                 "prices_checked": self.prices_checked, "totals": store.combined(groups["model"]), **groups,
                 "runtime": runtime, "api_errors": api_errors, "context": context,
-                "compact_hint_tokens": self.compact.hint_tokens,
+                "compact_hint_tokens": self.compact.hint_tokens, "scan_errors": scan_errors,
                 "sessions": sessions[:store.DEFAULT_SESSION_LIMIT], "costly_sessions": store.costliest(sessions)}
 
     def chat(self, session_id: str, agent_id: str | None) -> Payload | None:
@@ -336,6 +355,7 @@ class Handler(BaseHTTPRequestHandler):
     """GET only: the dashboard at /, its stylesheets and scripts under /static/, the JSON API under /api/."""
     server: "UsageServer"
     server_version = "claude-usage"
+    timeout = CONNECTION_TIMEOUT
 
     def do_GET(self) -> None:
         """Route one request; every error is answered as JSON {"error": ...}."""
@@ -376,7 +396,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.NOT_FOUND, {"error": f"not found: {url.path}"})
         except BadRequest as exc:
             self.send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        except (BrokenPipeError, ConnectionResetError):
+            return                                      # the page went away mid-answer; nobody to tell
         except Exception as exc:                        # deliberately broad: answer as JSON, keep serving
+            traceback.print_exc()                       # into the log: the page only gets the message
             self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"{type(exc).__name__}: {exc}"})
 
     def host_is_loopback(self) -> bool:
@@ -401,7 +424,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def send_json(self, status: HTTPStatus, payload: Payload) -> None:
         """Send a JSON response."""
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        body = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")   # the page's JSON has no NaN
         self.send_body(status, "application/json; charset=utf-8", body, {})
 
     def send_dashboard(self) -> None:

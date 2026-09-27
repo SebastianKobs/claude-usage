@@ -1,6 +1,7 @@
 """config.py: defaults shipped in the package, overrides merged over them in order, and where paths point to."""
 import tomllib
 import unittest
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 from claude_usage import config
@@ -151,6 +152,47 @@ class LocationTest(TempDirTestCase):
         self.assertEqual(config.data_home({}), REPO / "data")
 
 
+class SettingsTest(ConfigCase):
+    def settings(self):
+        """The checked settings of the defaults with the overrides."""
+        return config.settings(self.load())
+
+    def assert_refused(self, override, *words):
+        """An override config.settings refuses, with every word in the message."""
+        self.write(self.user, override)
+        with self.assertRaises(config.ConfigError) as caught:
+            self.settings()
+        for word in words:
+            self.assertIn(word, str(caught.exception))
+
+    def test_the_settings_of_the_defaults(self):
+        settings = self.settings()
+        self.assertEqual((settings.store, settings.port, settings.live_minutes, settings.prices_checked),
+                         (self.data / "usage.sqlite", 8765, 5.0, None))
+
+    def test_prices_checked_is_text(self):
+        self.write(self.user, "prices_checked = 2026-09-27\n")
+        self.assertEqual(self.settings().prices_checked, "2026-09-27")
+
+    def test_an_unknown_key_is_refused_with_its_name(self):
+        self.assert_refused('projcts_dir = "/tmp"\n', "projcts_dir", str(self.user))
+
+    def test_an_unknown_key_in_a_table_is_refused(self):
+        self.assert_refused("[serve]\nlive_minute = 3\n", "serve.live_minute")
+
+    def test_a_table_given_as_a_value_is_refused(self):
+        for key in ("prices", "chat", "serve", "fees", "auto_compact"):
+            with self.subTest(key=key):
+                self.assert_refused(f"{key} = 5\n", key, "table")
+
+    def test_bad_port_or_live_minutes_are_refused(self):
+        for override in ('[serve]\nport = "8765"\n', "[serve]\nport = 70000\n", "[serve]\nport = true\n",
+                         "[serve]\nlive_minutes = nan\n", "[serve]\nlive_minutes = 0\n",
+                         "[serve]\nlive_minutes = inf\n"):
+            with self.subTest(override=override):
+                self.assert_refused(override, "serve.")
+
+
 class ShippedConfigTest(unittest.TestCase):
     def test_the_defaults_ship_inside_the_package(self):
         self.assertEqual(config.DEFAULTS_FILE, REPO / "claude_usage" / "config.toml")
@@ -165,12 +207,32 @@ class ShippedConfigTest(unittest.TestCase):
         self.assertIsInstance(values["serve"]["live_minutes"], int)
         self.assertIsInstance(values["prices"], dict)
 
-    def test_the_package_data_includes_the_defaults(self):
+    def package_data(self):
+        """The package-data globs of claude_usage in pyproject.toml."""
         with (REPO / "pyproject.toml").open("rb") as handle:
-            package_data = tomllib.load(handle)["tool"]["setuptools"]["package-data"]["claude_usage"]
-        self.assertIn("config.toml", package_data)
-        self.assertIn("static/*.html", package_data)
+            return tomllib.load(handle)["tool"]["setuptools"]["package-data"]["claude_usage"]
 
+    def test_the_version_comes_from_the_package(self):
+        with (REPO / "pyproject.toml").open("rb") as handle:
+            pyproject = tomllib.load(handle)
+        self.assertEqual(pyproject["project"]["dynamic"], ["version"])
+        self.assertEqual(pyproject["tool"]["setuptools"]["dynamic"]["version"], {"attr": "claude_usage.__version__"})
+
+    def test_the_package_data_includes_the_defaults(self):
+        self.assertIn("config.toml", self.package_data())
+
+    def test_every_file_of_the_page_is_packaged(self):
+        patterns = [tuple(pattern.split("/")) for pattern in self.package_data()]
+        package = REPO / "claude_usage"
+        files = [path.relative_to(package) for path in sorted((package / "static").rglob("*")) if path.is_file()]
+
+        def packaged(relative):
+            """Whether a glob matches: setuptools globs don't cross "/", so it needs as many parts as the path."""
+            return any(len(parts) == len(relative.parts)
+                       and all(fnmatchcase(part, glob) for part, glob in zip(relative.parts, parts))
+                       for parts in patterns)
+
+        self.assertEqual([relative.as_posix() for relative in files if not packaged(relative)], [])
 
 if __name__ == "__main__":
     unittest.main()

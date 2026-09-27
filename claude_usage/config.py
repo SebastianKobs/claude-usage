@@ -8,7 +8,12 @@ Tables are merged key by key, at any depth, so an override can change one price 
 replaced. Relative paths in an override count from that file's folder; relative paths in the defaults count from the
 data folder: data/ in a source checkout (so the history stays next to the code), else
 ~/.local/share/claude-usage ($XDG_DATA_HOME respected). A checkout is recognized by its pyproject.toml.
+
+settings() checks the merged values: an unknown key is refused rather than ignored, so a typo doesn't silently
+leave a default in place. The [prices], [fees] and [chat]/[auto_compact] values are checked where they are parsed
+(pricing.py, server.py).
 """
+import math
 import os
 import tomllib
 from collections.abc import Mapping
@@ -24,6 +29,16 @@ USER_CONFIG_FILE = "config.toml"
 LOCAL_CONFIG_FILE = "config.local.toml"
 CHECKOUT_MARKER = "pyproject.toml"
 CHECKOUT_DATA_DIR = "data"
+MAX_PORT = 65535
+# the tables the tool reads with their keys; None for tables keyed by model-id prefix
+TABLES: dict[str, tuple[str, ...] | None] = {
+    "serve": ("port", "live_minutes"),
+    "fees": ("web_search_per_1000",),
+    "chat": ("compact_hint_tokens", "auto_compact_warn_share", "compact_reminder_step", "auto_compact_reminder_step"),
+    "auto_compact": None,
+    "prices": None,
+}
+VALUES = ("projects_dir", "store", "prices_checked")
 
 Values = dict[str, Any]
 
@@ -49,6 +64,48 @@ class Config:
         if path.is_absolute():
             return path
         return self.bases[key] / path
+
+
+@dataclass(frozen=True)
+class Settings:
+    """The checked settings the commands use besides prices and compact hints."""
+    projects_dir: Path
+    store: Path
+    port: int                           # 0 for any free port
+    live_minutes: float                 # a session is live if its transcript changed within this many minutes
+    prices_checked: str | None          # when the prices were last checked, as the config gives it
+
+
+def check_keys(config: Config) -> None:
+    """Raise ConfigError for an unknown key, or a table given as a plain value."""
+    files = ", ".join(str(source) for source in config.sources)
+    for key, value in config.values.items():
+        if key not in TABLES and key not in VALUES:
+            raise ConfigError(f"{key}: unknown setting in {files}")
+        if key not in TABLES:
+            continue
+        if not isinstance(value, dict):
+            raise ConfigError(f"{key}: expected a table in {files}, got {value!r}")
+        known = TABLES[key]
+        unknown = [name for name in value if known is not None and name not in known]
+        if unknown:
+            raise ConfigError(f"{key}.{unknown[0]}: unknown setting in {files}")
+
+
+def settings(config: Config) -> Settings:
+    """The checked Settings of a Config; raises ConfigError naming the key for an unknown or bad value."""
+    check_keys(config)
+    serve = config.values.get("serve") or {}
+    port = serve.get("port")
+    if isinstance(port, bool) or not isinstance(port, int) or not 0 <= port <= MAX_PORT:
+        raise ConfigError(f"serve.port: expected a whole number from 0 to {MAX_PORT}, got {port!r}")
+    live_minutes = serve.get("live_minutes")
+    if (isinstance(live_minutes, bool) or not isinstance(live_minutes, (int, float))
+            or not math.isfinite(live_minutes) or live_minutes <= 0):
+        raise ConfigError(f"serve.live_minutes: expected a number above 0, got {live_minutes!r}")
+    checked = config.values.get("prices_checked")
+    return Settings(projects_dir=config.path("projects_dir"), store=config.path("store"), port=port,
+                    live_minutes=float(live_minutes), prices_checked=str(checked) if checked else None)
 
 
 def is_checkout(directory: Path = CHECKOUT_DIR) -> bool:

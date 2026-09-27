@@ -1,4 +1,6 @@
 """server.py: the JSON API and the dashboard page, on a real server bound to a free loopback port."""
+import contextlib
+import io
 import json
 import re
 import shutil
@@ -261,7 +263,7 @@ class ApiTest(ServerCase):
                 self.assertIn("until", payload["error"])
 
     def test_summary_rejects_bad_days(self):
-        for days in ("abc", "0", "-3", "100000", "7.5"):
+        for days in ("abc", "0", "-3", "100000", "7.5", "%C2%B2"):     # the last one is "²", a digit to isdigit()
             with self.subTest(days=days):
                 status, payload = self.get_json(f"/api/summary?days={days}")
                 self.assertEqual(status, 400)
@@ -526,7 +528,9 @@ class CompactSettingsTest(unittest.TestCase):
     def test_bad_values_raise(self):
         for values in ({"chat": {"compact_hint_tokens": "lots"}}, {"chat": {"auto_compact_warn_share": 2}},
                        {"auto_compact": {"default": -1}}, {"chat": {"compact_hint_tokens": True}},
-                       {"chat": {"compact_reminder_step": 0}}, {"chat": {"auto_compact_reminder_step": 1.5}}):
+                       {"chat": {"compact_reminder_step": 0}}, {"chat": {"auto_compact_reminder_step": 1.5}},
+                       {"chat": {"compact_reminder_step": float("inf")}}, {"chat": {"auto_compact_warn_share": 5}},
+                       {"chat": 5}, {"auto_compact": "x"}):
             with self.subTest(values=values):
                 with self.assertRaises(config.ConfigError):
                     server.parse_compact_settings(values)
@@ -574,11 +578,40 @@ class ScanTest(ServerCase):
         self.clock.now += server.SCAN_INTERVAL
         self.assertEqual(self.get_json("/api/session/s1")[1]["turns"], 3)
 
-    def test_a_failing_scan_is_a_json_500(self):
+    def test_a_failing_scan_still_serves_the_history_with_its_error(self):
+        self.get("/api/live")
         shutil.rmtree(self.projects.root)
-        status, payload = self.get_json("/api/live")
-        self.assertEqual(status, 500)
-        self.assertIn("projects folder not found", payload["error"])
+        self.clock.now += server.SCAN_INTERVAL
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            status, live = self.get_json("/api/live")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(live["sessions"]), 2)
+        self.assertIn("projects folder not found", live["scan_errors"][0])
+        self.assertIn("projects folder not found", err.getvalue())
+        self.assertIn("projects folder not found", self.get_json("/api/summary")[1]["scan_errors"][0])
+
+    def test_a_file_the_scan_skipped_is_reported(self):
+        with mock.patch.object(server.store.transcripts, "parse", side_effect=ValueError("bad line")):
+            with contextlib.redirect_stderr(io.StringIO()):
+                _, live = self.get_json("/api/live")
+        self.assertEqual(len(live["scan_errors"]), 3)
+        self.assertIn("bad line", live["scan_errors"][0])
+
+    def test_a_clean_scan_has_no_errors(self):
+        self.assertEqual(self.get_json("/api/live")[1]["scan_errors"], [])
+
+
+class ErrorTest(ServerCase):
+    def test_an_unexpected_error_is_a_json_500_and_its_traceback_is_logged(self):
+        with mock.patch.object(self.app, "live", side_effect=RuntimeError("boom")):
+            with contextlib.redirect_stderr(io.StringIO()) as err:
+                status, payload = self.get_json("/api/live")
+        self.assertEqual((status, payload), (500, {"error": "RuntimeError: boom"}))
+        self.assertIn("Traceback", err.getvalue())
+        self.assertIn("boom", err.getvalue())
+
+    def test_idle_connections_time_out(self):
+        self.assertEqual(server.Handler.timeout, server.CONNECTION_TIMEOUT)
 
 
 class ProjectFilterTest(ServerCase):

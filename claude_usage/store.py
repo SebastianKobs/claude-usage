@@ -291,6 +291,15 @@ class Store:
         self.close()
 
 
+def backup(store: Store, target: Path) -> None:
+    """A consistent copy of the store in a new file (VACUUM INTO, safe while others read or scan); raises
+    StoreError if target exists, so a backup never overwrites anything."""
+    if target.exists():
+        raise StoreError(f"{target} exists; pick a new file for the backup")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    store.connection.execute("VACUUM INTO ?", (str(target),))
+
+
 # --- scanning ----------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)

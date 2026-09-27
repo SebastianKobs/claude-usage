@@ -1,8 +1,11 @@
-"""Command line: scan | report | serve. Settings come from the package's config.toml with the user's overrides
+"""Command line: scan | report | serve | backup. Settings come from the package's config.toml with the user's overrides
 (see config.py); --projects-dir and --store override them, before or after the command. Only main() prints errors
-and picks the exit code: 0 on success, 1 on an error, 2 on bad arguments."""
+and picks the exit code: 0 on success, 1 on an error, 2 on bad arguments, 130 when interrupted."""
 import argparse
 import json
+import math
+import re
+import signal
 import sqlite3
 import sys
 from collections.abc import Callable
@@ -11,6 +14,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
+import claude_usage
 from claude_usage import config
 from claude_usage import pricing
 from claude_usage import server
@@ -18,9 +22,8 @@ from claude_usage import store
 
 REPORT_GROUPS = ("day", "model", "agent_type", "project", "skill", "mcp_server", "effort")
 DEFAULT_DAYS = 30
-DEFAULT_PORT = 8765
-DEFAULT_LIVE_MINUTES = 5
 HOST = "127.0.0.1"
+INTERRUPTED = 130                       # the shell's exit code for a command stopped by Ctrl+C (128 + SIGINT)
 
 
 class CliError(Exception):
@@ -28,21 +31,16 @@ class CliError(Exception):
 
 
 class Context:
-    """What every command needs: the parsed arguments, settings, prices and the two paths."""
+    """What every command needs: the parsed arguments, the config and its checked settings, prices and the two
+    paths."""
 
-    def __init__(self, args: argparse.Namespace, settings: config.Config) -> None:
+    def __init__(self, args: argparse.Namespace, loaded: config.Config) -> None:
         self.args = args
-        self.settings = settings
-        self.prices = pricing.parse_prices(settings.values.get("prices") or {}, settings.values.get("fees"))
-        self.projects_dir = path_option(args.projects_dir) or settings.path("projects_dir")
-        self.store_path = path_option(args.store) or settings.path("store")
-
-    def setting(self, table: str, key: str, default: Any) -> Any:
-        """A value from a table of the config, or default."""
-        values = self.settings.values.get(table)
-        if isinstance(values, dict) and key in values:
-            return values[key]
-        return default
+        self.config = loaded
+        self.settings = config.settings(loaded)
+        self.prices = pricing.parse_prices(loaded.values.get("prices") or {}, loaded.values.get("fees"))
+        self.projects_dir = path_option(args.projects_dir) or self.settings.projects_dir
+        self.store_path = path_option(args.store) or self.settings.store
 
 
 # --- formatting --------------------------------------------------------------------------------------------------
@@ -236,37 +234,72 @@ def run_report(context: Context) -> int:
 def run_serve(context: Context) -> int:
     """serve: the dashboard on 127.0.0.1 until Ctrl+C."""
     args = context.args
-    port = args.port if args.port is not None else context.setting("serve", "port", DEFAULT_PORT)
-    live_minutes = (args.live_minutes if args.live_minutes is not None
-                    else context.setting("serve", "live_minutes", DEFAULT_LIVE_MINUTES))
-    checked = context.settings.values.get("prices_checked")
-    compact = server.parse_compact_settings(context.settings.values)       # fails before the store is opened
+    port = args.port if args.port is not None else context.settings.port
+    live_minutes = args.live_minutes if args.live_minutes is not None else context.settings.live_minutes
+    compact = server.parse_compact_settings(context.config.values)         # fails before the store is opened
     with store.Store(context.store_path, check_same_thread=False) as usage_store:
         app = server.UsageApp(usage_store, context.projects_dir, context.prices, live_minutes, project=args.project,
-                              prices_checked=str(checked) if checked else None, compact=compact)
-        with app.lock:
-            app.refresh()                  # fail early on a bad projects folder; the first page load is quick
+                              prices_checked=context.settings.prices_checked, compact=compact)
         httpd = server.make_server(app, HOST, port)
+        previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
         try:
+            # before the first scan, which reads every file of a new store: `make start` waits for this line
             print(f"Serving http://{HOST}:{httpd.server_address[1]}  (Ctrl+C to stop)", flush=True)
+            with app.lock:
+                app.refresh()              # so the first page load is quick; scan errors go to stderr
             httpd.serve_forever()
         except KeyboardInterrupt:
             print("Stopped.")
         finally:
+            signal.signal(signal.SIGTERM, previous)
             httpd.server_close()
     return 0
 
 
-COMMANDS: dict[str, Callable[[Context], int]] = {"scan": run_scan, "report": run_report, "serve": run_serve}
+def stop_on_sigterm(signum: int, frame: object) -> None:
+    """`make stop` sends SIGTERM: stop like Ctrl+C, so the server closes and a scan's transaction rolls back."""
+    raise KeyboardInterrupt
+
+
+def run_backup(context: Context) -> int:
+    """backup: a copy of the store in a new file, e.g. outside a checkout whose data/ `git clean` would remove."""
+    target = context.args.target.expanduser()
+    with store.Store(context.store_path) as usage_store:
+        store.backup(usage_store, target)
+    print(f"backed up {context.store_path} to {target} ({size(target.stat().st_size)})")
+    return 0
+
+
+COMMANDS: dict[str, Callable[[Context], int]] = {"scan": run_scan, "report": run_report, "serve": run_serve,
+                                                 "backup": run_backup}
 
 
 # --- arguments ---------------------------------------------------------------------------------------------------
 
 def days_option(text: str) -> int:
-    """--days: a whole number of days, 0 for all time."""
-    if not text.isdigit():
-        raise argparse.ArgumentTypeError(f"days must be a whole number, 0 for all time; got {text!r}")
+    """--days: a whole number of days up to server.MAX_DAYS, 0 for all time."""
+    if not re.fullmatch(r"[0-9]+", text) or int(text) > server.MAX_DAYS:
+        raise argparse.ArgumentTypeError(f"days must be a whole number up to {server.MAX_DAYS}, 0 for all time; "
+                                         f"got {text!r}")
     return int(text)
+
+
+def port_option(text: str) -> int:
+    """--port: 0 (any free port) to config.MAX_PORT."""
+    if not re.fullmatch(r"[0-9]+", text) or int(text) > config.MAX_PORT:
+        raise argparse.ArgumentTypeError(f"port must be a whole number from 0 to {config.MAX_PORT}; got {text!r}")
+    return int(text)
+
+
+def minutes_option(text: str) -> float:
+    """--live-minutes: a finite number above 0."""
+    try:
+        minutes = float(text)
+    except ValueError:
+        minutes = math.nan
+    if not math.isfinite(minutes) or minutes <= 0:
+        raise argparse.ArgumentTypeError(f"live minutes must be a number above 0; got {text!r}")
+    return minutes
 
 
 def add_path_options(parser: argparse.ArgumentParser, default: Any) -> None:
@@ -282,6 +315,7 @@ def build_parser() -> argparse.ArgumentParser:
     """The argument parser with the scan, report and serve commands."""
     parser = argparse.ArgumentParser(prog="claude-usage",
                                      description="Persistent history and a local dashboard for Claude Code usage.")
+    parser.add_argument("--version", action="version", version=f"claude-usage {claude_usage.__version__}")
     add_path_options(parser, None)
     paths = argparse.ArgumentParser(add_help=False)
     add_path_options(paths, argparse.SUPPRESS)
@@ -300,10 +334,15 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--no-scan", action="store_true", help="report the stored history without scanning")
 
     serve = commands.add_parser("serve", parents=[paths], help="the dashboard on http://127.0.0.1")
-    serve.add_argument("--port", type=int, help=f"port (default: serve.port in the config, {DEFAULT_PORT})")
-    serve.add_argument("--live-minutes", type=float,
-                       help=f"a session is live if changed within this many minutes (default {DEFAULT_LIVE_MINUTES})")
+    serve.add_argument("--port", type=port_option,
+                       help="port (default: serve.port in the config, 8765)")
+    serve.add_argument("--live-minutes", type=minutes_option,
+                       help="a session is live if changed within this many minutes (default: serve.live_minutes "
+                            "in the config, 5)")
     serve.add_argument("--project", metavar="PATH", help="only this project")
+
+    backup = commands.add_parser("backup", parents=[paths], help="copy the store into a new file")
+    backup.add_argument("target", type=Path, metavar="FILE", help="the copy; must not exist yet")
     return parser
 
 
@@ -319,6 +358,9 @@ def main(argv: list[str] | None = None) -> int:
     except (CliError, config.ConfigError, pricing.PricingError, store.StoreError, sqlite3.Error, OSError) as exc:
         print(f"claude-usage: {exc}", file=sys.stderr)
         return 1
+    except KeyboardInterrupt:              # a scan's transaction has rolled back; the store is as before it
+        print("claude-usage: interrupted", file=sys.stderr)
+        return INTERRUPTED
 
 
 if __name__ == "__main__":

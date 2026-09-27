@@ -4,6 +4,8 @@ import io
 import json
 import os
 import shutil
+import signal
+import sqlite3
 import subprocess
 import sys
 import unittest
@@ -12,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
+import claude_usage
 from claude_usage import __main__ as cli
 from claude_usage import config
 from claude_usage import server
@@ -28,6 +31,10 @@ class CliCase(TempDirTestCase):
 
     def setUp(self):
         super().setUp()
+        # only the shipped defaults: the developer's own config.toml or config.local.toml must not change the output
+        patcher = mock.patch.object(config, "override_files", return_value=[])
+        patcher.start()
+        self.addCleanup(patcher.stop)
         now = datetime.now(UTC)
         self.main = self.projects.session("s1", project="/home/dev/app").at(now)
         self.main.user("Fix the parser")
@@ -182,6 +189,25 @@ class ReportCommandTest(CliCase):
         self.assertIn("days", err)
 
 
+class BackupCommandTest(CliCase):
+    def test_backup_copies_the_history_into_a_new_file(self):
+        self.run_cli("scan")
+        target = self.tmp / "backups" / "usage-copy.sqlite"
+        code, out, _ = self.run_cli("backup", str(target))
+        self.assertEqual(code, 0)
+        self.assertIn(str(target), out)
+        with contextlib.closing(sqlite3.connect(target)) as copy:
+            self.assertEqual(copy.execute("SELECT COUNT(*) FROM messages").fetchone()[0], 2)
+
+    def test_backup_never_overwrites_a_file(self):
+        target = self.tmp / "existing.sqlite"
+        target.write_text("keep me", encoding="utf-8")
+        code, _, err = self.run_cli("backup", str(target))
+        self.assertEqual(code, 1)
+        self.assertIn("exists", err)
+        self.assertEqual(target.read_text(encoding="utf-8"), "keep me")
+
+
 class ServeCommandTest(CliCase):
     def test_serve_prints_the_url_and_stops_on_ctrl_c(self):
         with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
@@ -189,12 +215,44 @@ class ServeCommandTest(CliCase):
         self.assertEqual(code, 0)
         self.assertIn("http://127.0.0.1:", out)
 
+    def test_serve_prints_the_url_before_the_first_scan(self):
+        printed_before_scan = []
+
+        def scan(*arguments):
+            """Note whether the URL is out already, as `make start` waits for it."""
+            printed_before_scan.append("Serving http://127.0.0.1:" in sys.stdout.getvalue())
+            return server.store.ScanResult(0, 0, 0, 0, ())
+
+        with mock.patch.object(server.store, "scan", side_effect=scan):
+            with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
+                self.run_cli("serve", "--port", "0")
+        self.assertEqual(printed_before_scan, [True])
+
+    def test_serve_without_a_projects_folder_serves_the_history_and_says_why(self):
+        self.run_cli("scan")
+        shutil.rmtree(self.projects.root)
+        with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
+            code, _, err = self.run_cli("serve", "--port", "0")
+        self.assertEqual(code, 0)
+        self.assertIn("projects folder not found", err)
+
     def test_port_in_use_exits_1(self):
         with mock.patch.object(server, "make_server", side_effect=OSError("Address already in use")):
             code, _, err = self.run_cli("serve", "--port", "8765")
         self.assertEqual(code, 1)
         self.assertIn("Address already in use", err)
 
+    def test_serve_stops_cleanly_on_sigterm(self):
+        def terminate():
+            """What `make stop` does to the running server."""
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        before = signal.getsignal(signal.SIGTERM)
+        with mock.patch.object(server.UsageServer, "serve_forever", side_effect=terminate):
+            code, out, _ = self.run_cli("serve", "--port", "0")
+        self.assertEqual(code, 0)
+        self.assertIn("Stopped.", out)
+        self.assertIs(signal.getsignal(signal.SIGTERM), before)
 
     def test_a_bad_compact_setting_exits_1_without_a_traceback(self):
         settings = config.load(overrides=[])
@@ -212,6 +270,10 @@ class ArgumentTest(CliCase):
             with self.subTest(arguments=arguments):
                 self.assertEqual(self.run_cli(*arguments, paths=False)[0], 0)
 
+    def test_version(self):
+        code, out, _ = self.run_cli("--version", paths=False)
+        self.assertEqual((code, out.strip()), (0, f"claude-usage {claude_usage.__version__}"))
+
     def test_unknown_option_exits_2(self):
         self.assertEqual(self.run_cli("scan", "--frobnicate")[0], 2)
 
@@ -221,6 +283,22 @@ class ArgumentTest(CliCase):
 
     def test_unknown_group_exits_2(self):
         self.assertEqual(self.run_cli("report", "--by", "weekday")[0], 2)
+
+    def test_out_of_range_numbers_exit_2(self):
+        for arguments in (["report", "--days", "99999999"], ["report", "--days", "²"],
+                          ["serve", "--port", "70000"], ["serve", "--port", "-1"],
+                          ["serve", "--live-minutes", "0"], ["serve", "--live-minutes", "nan"],
+                          ["serve", "--live-minutes", "inf"]):
+            with self.subTest(arguments=arguments):
+                code, _, err = self.run_cli(*arguments)
+                self.assertEqual(code, 2)
+                self.assertNotIn("Traceback", err)
+
+    def test_ctrl_c_during_a_command_exits_130(self):
+        with mock.patch.object(cli.store, "scan", side_effect=KeyboardInterrupt):
+            code, _, err = self.run_cli("scan")
+        self.assertEqual(code, 130)
+        self.assertIn("interrupted", err)
 
 
 class InstalledCopyTest(CliCase):

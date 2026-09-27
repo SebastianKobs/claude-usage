@@ -151,7 +151,7 @@ class ParseTest(unittest.TestCase):
         self.assertIn("cache_write_1h", str(caught.exception))
 
     def test_non_numeric_or_negative_price_raises(self):
-        for value in ("5", -1.0, True):
+        for value in ("5", -1.0, True, float("nan"), float("inf")):
             with self.subTest(value=value):
                 entry = dict(TABLE["claude-sonnet-5"], output=value)
                 with self.assertRaises(pricing.PricingError):

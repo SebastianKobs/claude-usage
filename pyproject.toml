@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claude-usage"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Local dashboard and persistent history for Claude Code token usage"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -16,5 +16,9 @@ claude-usage = "claude_usage.__main__:main"
 [tool.setuptools]
 packages = ["claude_usage"]
 
+[tool.setuptools.dynamic]
+version = {attr = "claude_usage.__version__"}
+
 [tool.setuptools.package-data]
-claude_usage = ["static/*.html", "static/css/*.css", "static/css/themes/*.css", "static/js/*.js", "config.toml"]
+claude_usage = ["static/*.html", "static/css/*.css", "static/css/themes/*.css", "static/js/*.js",
+                "static/js/vendor/*", "config.toml"]

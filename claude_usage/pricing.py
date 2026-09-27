@@ -3,6 +3,7 @@ matching prefix wins. The fast-mode multiplier applies to every token category, 
 because the cache multipliers stack on top of the fast-mode price. Web searches are a flat fee per search
 ([fees] web_search_per_1000), not multiplied by fast mode. Not modelled: the 1.1x for US-only inference
 (`inference_geo`; not seen in real transcripts) and the Batch API discount."""
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -41,8 +42,8 @@ class Prices(dict[str, Price]):
 
 
 def parse_number(owner: str, field: str, value: Any) -> float:
-    """A price field as a float; raises PricingError for non-numbers and negatives."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+    """A price field as a float; raises PricingError for non-numbers, negatives, NaN and infinity."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
         where = owner if owner == "fees" else f'prices."{owner}"'
         raise PricingError(f"{where}.{field} must be a non-negative number, got {value!r}")
     return float(value)
