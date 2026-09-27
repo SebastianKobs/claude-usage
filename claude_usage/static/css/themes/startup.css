@@ -1,0 +1,39 @@
+/* Startup flex: black and white, frosted cards with a thin violet-to-blue edge, small mono labels */
+:root[data-theme="startup"] {
+  --page: #000000;
+  --surface: #0a0a0c;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #85858e;
+  --grid: #1f1f23;
+  --axis: #2e2e33;
+  --border: rgba(255, 255, 255, 0.10);
+  --wash: rgba(255, 255, 255, 0.05);
+  --flex-violet: #7c5cff;
+  --flex-blue: #3b82f6;
+}
+[data-theme="startup"] body {
+  background: radial-gradient(900px 420px at 50% -8%, rgba(124, 92, 255, 0.28), transparent 70%), var(--page);
+  background-attachment: fixed;
+}
+[data-theme="startup"] h1, [data-theme="startup"] h2 { letter-spacing: -0.02em; }
+[data-theme="startup"] .card {
+  border: 1px solid transparent; border-radius: 14px;
+  background: linear-gradient(rgba(10, 10, 12, 0.82), rgba(10, 10, 12, 0.82)) padding-box,
+              linear-gradient(135deg, rgba(124, 92, 255, 0.7), rgba(59, 130, 246, 0.25) 40%, rgba(255, 255, 255, 0.06)) border-box;
+  backdrop-filter: blur(12px);
+}
+[data-theme="startup"] .label {
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-muted);
+}
+[data-theme="startup"] .hero {
+  font-weight: 600; letter-spacing: -0.04em;
+  background: linear-gradient(180deg, #ffffff, #a1a1aa); -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+[data-theme="startup"] button, [data-theme="startup"] select { border-radius: 8px; background: #111114; }
+[data-theme="startup"] button:hover, [data-theme="startup"] select:hover { border-color: var(--flex-violet); }
+[data-theme="startup"] button[aria-pressed="true"] { border-color: var(--flex-violet); color: #ffffff;
+  box-shadow: 0 0 0 1px var(--flex-violet); }
+[data-theme="startup"] .dot { background: var(--flex-violet); box-shadow: 0 0 10px var(--flex-violet); }

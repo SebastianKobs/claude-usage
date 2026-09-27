@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude usage</title>
+<link rel="stylesheet" href="/static/css/themes/light.css">
+<link rel="stylesheet" href="/static/css/themes/dark.css">
+<link rel="stylesheet" href="/static/css/themes/fun.css">
+<link rel="stylesheet" href="/static/css/themes/hacker.css">
+<link rel="stylesheet" href="/static/css/themes/startup.css">
+<link rel="stylesheet" href="/static/css/themes/rgb.css">
+<link rel="stylesheet" href="/static/css/common.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1 data-label="Claude usage">Claude usage</h1>
+    <span id="scope" class="muted"></span>
+    <span class="spacer"></span>
+    <span id="updated" class="muted"></span>
+    <label class="theme-picker"><span class="muted">Theme</span>
+      <select id="theme">
+        <option value="auto">auto</option>
+        <option value="light">light</option>
+        <option value="dark">dark</option>
+        <optgroup label="Just for fun">
+          <option value="hacker">terminal hacker 💻</option>
+          <option value="startup">startup flex ✨</option>
+          <option value="rgb">RGB battlestation 🌈</option>
+        </optgroup>
+      </select>
+    </label>
+  </header>
+
+  <div id="error" class="banner" role="alert"></div>
+
+  <section id="drilldown" class="card" hidden></section>
+
+  <div class="filters" role="group" aria-label="Filters">
+    <span class="label">Range</span>
+    <div class="segmented" id="range">
+      <button type="button" data-days="1">Daily</button>
+      <!-- right after Daily, and only while it is selected -->
+      <div class="day-nav" id="day-nav" role="group" aria-label="Day" hidden>
+        <button type="button" id="day-prev" aria-label="Previous day">‹</button>
+        <output id="day-label" aria-live="polite"></output>
+        <button type="button" id="day-next" aria-label="Next day">›</button>
+      </div>
+      <button type="button" data-days="7">7 days</button>
+      <button type="button" data-days="30">30 days</button>
+      <button type="button" data-days="90">90 days</button>
+      <button type="button" data-days="365">1 year</button>
+    </div>
+    <span class="label">By-model chart</span>
+    <div class="segmented" id="metric">
+      <button type="button" data-metric="cost">Estimated cost</button>
+      <button type="button" data-metric="output">Output tokens</button>
+      <button type="button" data-metric="input">Input tokens</button>
+    </div>
+  </div>
+
+  <div id="summary">
+    <div class="kpis stack" id="kpis"></div>
+
+    <section class="card" aria-labelledby="live-title">
+      <h2 id="live-title"><span data-label="Live sessions">Live sessions</span> <span id="live-window" class="muted"></span></h2>
+      <div id="live"></div>
+    </section>
+
+    <section class="card" aria-labelledby="trend-title">
+      <div class="chart-head">
+        <h2 id="trend-title" data-label="Over time">Over time</h2>
+        <span class="muted" id="trend-note">estimated cost, input and output tokens per day</span>
+        <span class="spacer"></span>
+        <button type="button" id="trend-table-toggle" aria-pressed="false">Table view</button>
+      </div>
+      <div id="trend" class="chart"></div>
+      <div id="trend-table" class="table-wrap" hidden></div>
+    </section>
+
+    <section class="card" aria-labelledby="chart-title">
+      <div class="chart-head">
+        <h2 id="chart-title" data-label="Per day, by model">Per day, by model</h2>
+        <span class="spacer"></span>
+        <button type="button" id="chart-table-toggle" aria-pressed="false">Table view</button>
+      </div>
+      <div id="legend" class="legend"></div>
+      <div id="chart" class="chart"></div>
+      <div id="chart-table" class="table-wrap" hidden></div>
+    </section>
+
+    <section class="card" aria-labelledby="costly-title">
+      <div class="chart-head">
+        <h2 id="costly-title" data-label="Cost per session">Cost per session</h2>
+        <span class="muted">the costliest sessions of the range, with their subagents</span>
+        <span class="spacer"></span>
+        <button type="button" id="costly-table-toggle" aria-pressed="false">Table view</button>
+      </div>
+      <div id="costly-legend" class="legend"></div>
+      <div id="costly" class="chart"></div>
+      <div id="costly-table" class="table-wrap" hidden></div>
+    </section>
+
+    <div class="grid-2 stack">
+      <section class="card"><h2 data-label="By agent type">By agent type</h2><div id="by-agent" class="table-wrap"></div></section>
+      <section class="card"><h2 data-label="By model">By model</h2><div id="by-model" class="table-wrap"></div></section>
+    </div>
+    <section class="card"><h2 data-label="By project">By project</h2><div id="by-project" class="table-wrap"></div></section>
+    <section class="card"><h2 data-label="Sessions">Sessions</h2><div id="sessions" class="table-wrap"></div></section>
+  </div>
+
+  <footer id="footer"></footer>
+</main>
+
+<script src="/static/js/util.js" defer></script>
+<script src="/static/js/state.js" defer></script>
+<script src="/static/js/figures.js" defer></script>
+<script src="/static/js/charts.js" defer></script>
+<script src="/static/js/tables.js" defer></script>
+<script src="/static/js/drilldown.js" defer></script>
+<script src="/static/js/themes.js" defer></script>
+<script src="/static/js/main.js" defer></script>
+</body>
+</html>

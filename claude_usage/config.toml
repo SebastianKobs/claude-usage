@@ -1,0 +1,158 @@
+# Defaults for claude-usage, shipped with the package. Override any key in ~/.config/claude-usage/config.toml
+# (or config.local.toml in a source checkout): tables are merged key by key, everything else is replaced.
+# Relative paths here count from the data folder: data/ in a source checkout, else ~/.local/share/claude-usage.
+
+# Claude Code's transcripts, one folder per project.
+projects_dir = "~/.claude/projects"
+
+# The SQLite usage history. It keeps what Claude Code deletes after its cleanup period.
+store = "usage.sqlite"
+
+# When the [prices] below were last checked against the official pricing page.
+prices_checked = 2026-09-27
+
+# Flat fees, independent of the model and not multiplied by fast mode.
+[fees]
+web_search_per_1000 = 10.0      # $ per 1,000 web searches, e.g. Claude Code's WebSearch tool
+
+[serve]
+port = 8765
+live_minutes = 5        # a session counts as live if its transcript changed within this many minutes
+
+# Prices in $ per million tokens, by model id prefix: the longest matching prefix wins, so "claude-opus-5-5"
+# beats "claude-opus-5". Source: platform.claude.com/docs/en/about-claude/pricing (Claude API, first party).
+# - Cache writes cost 1.25x (5m) and 2x (1h) of base input. Cache reads cost 0.1x, except on Fable 5.1 and
+#   Mythos 5.1 (0.025x) and Opus 5.5 (0.05x).
+# - fast_multiplier: fast mode (Opus 5.5, Opus 5 and Opus 4.8 only) costs 2x on every category, cache included.
+#   Without a multiplier, fast requests are billed at standard rates (Opus 4.6 does that).
+# - No long-context surcharge on 4.6 and later models: the full 1M window is billed at these rates.
+# - Not included: 1.1x for US-only inference (inference_geo), the Batch discount.
+[prices."claude-fable-5-1"]
+input = 10.0
+cache_write_5m = 12.50
+cache_write_1h = 20.0
+cache_read = 0.25
+output = 50.0
+
+[prices."claude-mythos-5-1"]
+input = 10.0
+cache_write_5m = 12.50
+cache_write_1h = 20.0
+cache_read = 0.25
+output = 50.0
+
+[prices."claude-fable-5"]
+input = 10.0
+cache_write_5m = 12.50
+cache_write_1h = 20.0
+cache_read = 1.0
+output = 50.0
+
+[prices."claude-mythos-5"]
+input = 10.0
+cache_write_5m = 12.50
+cache_write_1h = 20.0
+cache_read = 1.0
+output = 50.0
+
+[prices."claude-opus-5-5"]
+input = 4.0
+cache_write_5m = 5.0
+cache_write_1h = 8.0
+cache_read = 0.20
+output = 20.0
+fast_multiplier = 2.0
+
+[prices."claude-opus-5"]
+input = 5.0
+cache_write_5m = 6.25
+cache_write_1h = 10.0
+cache_read = 0.50
+output = 25.0
+fast_multiplier = 2.0
+
+[prices."claude-opus-4-8"]
+input = 5.0
+cache_write_5m = 6.25
+cache_write_1h = 10.0
+cache_read = 0.50
+output = 25.0
+fast_multiplier = 2.0
+
+[prices."claude-opus-4-7"]
+input = 5.0
+cache_write_5m = 6.25
+cache_write_1h = 10.0
+cache_read = 0.50
+output = 25.0
+
+[prices."claude-opus-4-6"]
+input = 5.0
+cache_write_5m = 6.25
+cache_write_1h = 10.0
+cache_read = 0.50
+output = 25.0
+
+[prices."claude-opus-4-5"]
+input = 5.0
+cache_write_5m = 6.25
+cache_write_1h = 10.0
+cache_read = 0.50
+output = 25.0
+
+[prices."claude-opus-4-1"]
+input = 15.0
+cache_write_5m = 18.75
+cache_write_1h = 30.0
+cache_read = 1.50
+output = 75.0
+
+# Claude Opus 4 has only dated ids (claude-opus-4-2025…); "claude-opus-4" alone would also catch unknown 4.x ids.
+[prices."claude-opus-4-20"]
+input = 15.0
+cache_write_5m = 18.75
+cache_write_1h = 30.0
+cache_read = 1.50
+output = 75.0
+
+[prices."claude-sonnet-5"]
+input = 2.0
+cache_write_5m = 2.50
+cache_write_1h = 4.0
+cache_read = 0.20
+output = 10.0
+
+[prices."claude-sonnet-4-6"]
+input = 3.0
+cache_write_5m = 3.75
+cache_write_1h = 6.0
+cache_read = 0.30
+output = 15.0
+
+[prices."claude-sonnet-4-5"]
+input = 3.0
+cache_write_5m = 3.75
+cache_write_1h = 6.0
+cache_read = 0.30
+output = 15.0
+
+[prices."claude-sonnet-4-20"]
+input = 3.0
+cache_write_5m = 3.75
+cache_write_1h = 6.0
+cache_read = 0.30
+output = 15.0
+
+[prices."claude-haiku-4-5"]
+input = 1.0
+cache_write_5m = 1.25
+cache_write_1h = 2.0
+cache_read = 0.10
+output = 5.0
+
+[prices."claude-3-5-haiku"]
+input = 0.80
+cache_write_5m = 1.0
+cache_write_1h = 1.60
+cache_read = 0.08
+output = 4.0

@@ -1,0 +1,4 @@
+[submodule ".claude/hooks/project-guard"]
+	path = .claude/hooks/project-guard
+	url = https://github.com/SebastianKobs/claude-project-guard.git
+	branch = main
