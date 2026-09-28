@@ -300,57 +300,91 @@ function currentGauge(current) {
 }
 
 // whether the session view calls for compacting: "warm" where a live session's compacting now likely pays
-// (turns.likely_pays), "cold" once the cache has expired and compacting first saves at once, else null
+// (turns.likely_pays), "cold" once the cache has expired and compacting first saves at once, else "threshold" where
+// the context is at or past the configured hint, else null
 function compactCallKind(detail, now) {
-  const preview = detail.live && detail.current ? detail.current.compact_now : null;
-  if (!preview || !preview.estimate) return null;
+  const current = detail.live ? detail.current : null;
+  const preview = current ? current.compact_now : null;
+  if (!preview) return null;
+  // past the hint the call comes whatever the savings: how many replies still follow can't be predicted
+  const fallback = current.context >= current.hint_tokens ? "threshold" : null;
+  const estimate = preview.estimate;
+  if (!estimate) return fallback;
   // compacting cold saves at once, so it needn't wait for the last compaction to pay off
   const until = preview.cache_warm_until;
   if (until !== null && Date.parse(until) < Date.parse(now)) {
-    return preview.estimate.cold_saving !== null && preview.estimate.cold_saving >= 0 ? "cold" : null;
+    return estimate.cold_saving !== null && estimate.cold_saving >= 0 ? "cold" : fallback;
   }
   // warm, not again before the last compaction's gain (its net) is at least what it cost once; without a summary
   // estimate both on the input side alone; none with no call after it yet
   const compactions = detail.agents.find(agent => agent.agent_id === null)?.compactions || [];
   if (compactions.length) {
     const last = compactions[compactions.length - 1].versus_keeping;
-    if (!last) return null;
+    if (!last) return fallback;
     const [gain, cost] = last.net === null ? [last.net_high, last.call_low + last.rewrite] : [last.net, last.one_time];
-    if (gain < cost) return null;
+    if (gain < cost) return fallback;
   }
-  return preview.likely_pays ? "warm" : null;
+  return preview.likely_pays ? "warm" : fallback;
 }
 
 // the call to compact above the gauge, in plain words, with a button that copies /compact
 function compactCall(detail) {
-  const kind = compactCallKind(detail, new Date().toISOString());
+  const now = new Date().toISOString();
+  const kind = compactCallKind(detail, now);
   if (!kind) return null;
   const preview = detail.current.compact_now;
   const estimate = preview.estimate;
-  const shrink = `Compacting would shrink it to about ${compact(estimate.after)}.`;
-  const lines = kind === "cold"
+  const expired = preview.cache_warm_until !== null && Date.parse(preview.cache_warm_until) < Date.parse(now);
+  const lines = kind === "threshold" ? thresholdCallLines(detail.current, expired) : kind === "cold"
     ? [`The cache has expired, so the next reply sends your whole conversation (${compact(preview.before)}) again ` +
-       `at the full price. ${shrink} Doing it now saves about ${money(estimate.cold_saving)} at once.`]
+       `at the full price. Compacting would shrink it to about ${compact(estimate.after)}. Doing it now saves ` +
+       `about ${money(estimate.cold_saving)} at once.`]
     : [`Every reply sends your whole conversation again: ${compact(preview.before)}, ` +
-       `~${money(preview.reread_cost)} each time from the cache. ${shrink} That costs ~${money(estimate.one_time)} ` +
+       `~${money(preview.reread_cost)} each time from the cache. Compacting would shrink it to about ` +
+       `${compact(estimate.after)}. That costs ~${money(estimate.one_time)} ` +
        `once, and the cheaper replies pay it back after about ${whole(estimate.breakeven_calls)} replies. ` +
        (estimate.ahead_from === "longer"
-         ? `After your past compactions, a stretch this long went on for about ${whole(Math.round(estimate.calls_ahead))} ` +
-           "more replies on average."
-         : `After your past compactions you went on for about ${whole(Math.round(estimate.calls_ahead))} replies on average.`)];
-  if (kind === "warm" && estimate.before_break !== null && estimate.before_break > 0 &&
+         ? "After your past compactions, a stretch this long went on for about " +
+           `${whole(Math.round(estimate.calls_ahead))} more replies on average.`
+         : "After your past compactions you went on for about " +
+           `${whole(Math.round(estimate.calls_ahead))} replies on average.`)];
+  if (kind !== "cold" && !expired && estimate && estimate.before_break !== null && estimate.before_break > 0 &&
       preview.cache_warm_until !== null) {
     lines.push(`Taking a break past ${when(preview.cache_warm_until)}? Compact before it: the cache expires ` +
                `then, and compacting first saves about ${money(estimate.before_break)} at the next reply.`);
+  }
+  if (kind === "threshold") {
+    lines.push("How many replies still follow can't be predicted, so past your own threshold ([chat] " +
+               "compact_hint_tokens) this shows whatever the estimate says.");
   }
   const status = el("span", {class: "compact-call-status", role: "status"});
   const button = el("button", {type: "button", id: "compact-copy", text: "Copy /compact"});
   button.addEventListener("click", () => copyCompact(status));
   return el("div", {class: "card compact-call", id: "compact-call", role: "region",
                     "aria-labelledby": "compact-call-title"},
-    el("strong", {id: "compact-call-title", text: "⚠ Compacting now would likely save money"}),
+    el("strong", {id: "compact-call-title", text: kind === "threshold"
+      ? `⚠ Your context is past your ${compact(detail.current.hint_tokens)} compact hint`
+      : "⚠ Compacting now would likely save money"}),
     ...lines.map(line => el("p", {text: line})),
     el("div", {class: "compact-call-actions"}, button, status));
+}
+
+// the call past the hint, which claims no saving: what each reply re-reads, and what compacting would cost and when
+// it would pay off where past compactions give an estimate
+function thresholdCallLines(current, expired) {
+  const preview = current.compact_now;
+  const estimate = preview.estimate;
+  const lines = [expired
+    ? `The cache has expired, so the next reply sends your whole conversation (${compact(preview.before)}) again ` +
+      "at the full price."
+    : `Every reply sends your whole conversation again: ${compact(preview.before)}, ` +
+      `~${money(preview.reread_cost)} each time from the cache.`];
+  if (estimate) {
+    lines.push(`Compacting would shrink it to about ${compact(estimate.after)}` +
+               (expired ? ` and ${payoffText(estimate, true)}.`
+                        : `. That costs ~${money(estimate.one_time)} once and ${payoffText(estimate, false)}.`));
+  }
+  return lines;
 }
 
 // copies /compact for pasting into Claude Code; where the clipboard is refused, shows it selected to copy by hand

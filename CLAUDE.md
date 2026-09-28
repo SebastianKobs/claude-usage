@@ -368,13 +368,15 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     (only with subagents) switches the chart, its table view, the tiles (overhead, rebuilds, compactions, mean
     growth), the biggest growth steps and the compactions to one transcript; another session starts at the main
     thread.
-  - The call to compact (`compactCall`, above the gauge): for a live session where `compact_now.likely_pays`
-    (`turns.likely_pays`), or once the cache has expired where compacting cold saves at once (`compactCallKind`), the
-    warm one never before the main thread's last compaction has gained at least what it cost once (`net` ≥ `one_time`;
-    without a summary estimate `net_high` ≥ `call_low` + `rewrite`; not with no call after it yet); in plain words (each
-    reply's re-read, the size after, the cost once, the replies to pay it back, the replies ahead on average, and
-    compacting before a break) with a "Copy /compact" button: the clipboard, else the command selected in a field. It
-    turns with the cache, like the gauge. The gauge's notes say the same in sentences.
+  - The call to compact (`compactCall`, above the gauge), for a live session (`compactCallKind`): warm where
+    `compact_now.likely_pays` (`turns.likely_pays`), never before the main thread's last compaction has gained at least
+    what it cost once (`net` ≥ `one_time`; without a summary estimate `net_high` ≥ `call_low` + `rewrite`; not with no
+    call after it yet); cold once the cache has expired where compacting cold saves at once; else `threshold` where the
+    context is at or past `hint_tokens`, whatever the savings, since the replies still to come can't be predicted (the
+    user's choice over waiting for a share of the mean stretch). In plain words (each reply's re-read, the size after,
+    the cost once, the replies to pay it back, the replies ahead on average, and compacting before a break; the
+    threshold one claims no saving and says why it shows) with a "Copy /compact" button: the clipboard, else the command
+    selected in a field. It turns with the cache, like the gauge. The gauge's notes say the same in sentences.
   - The conversation is its own framed section (`chatSection`), its head sticky while scrolling through it. It lists
     newest first: the calls in reverse, each call's entries (one `message_id`) in their order above its usage badge. The
     order is an arrow button (`aria-label` "Oldest first", `aria-pressed`, kept as a preference): down for newest first,

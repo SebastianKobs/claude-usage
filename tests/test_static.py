@@ -145,13 +145,15 @@ class CompactCallTest(unittest.TestCase):
     NOW = "2026-09-28T12:00:00.000+00:00"
 
     def detail(self, live=True, likely=True, warm_until="2026-09-28T12:30:00.000+00:00", cold_saving=-0.5,
-               compactions=()):
-        """A session's detail with the gauge's preview of compacting now, and the main thread's compactions."""
+               compactions=(), context=150_000, estimate=True):
+        """A session's detail with the gauge (its context against a 200K hint) and its preview of compacting now,
+        and the main thread's compactions."""
         return {"live": live, "agents": [{"agent_id": None, "compactions": list(compactions)},
                                          {"agent_id": "a1", "compactions": [{"versus_keeping": None}]}],
-                "current": {"compact_now": {
+                "current": {"context": context, "hint_tokens": 200_000, "compact_now": {
                     "likely_pays": likely, "cache_warm_until": warm_until,
-                    "estimate": {"breakeven_calls": 6, "calls_ahead": 40.2, "cold_saving": cold_saving}}}}
+                    "estimate": {"breakeven_calls": 6, "calls_ahead": 40.2, "cold_saving": cold_saving}
+                    if estimate else None}}}
 
     def compaction(self, net, one_time=0.42, net_high=None, input_side=0.3):
         """A compaction row with its comparison against keeping the context: net and one-time cost at the summary
@@ -205,6 +207,25 @@ class CompactCallTest(unittest.TestCase):
     def test_without_a_summary_estimate_the_gain_on_the_input_side_must_reach_its_cost(self):
         self.assertEqual(self.kind(self.detail(compactions=[self.compaction(None, None, 0.3)])), "warm")
         self.assertIsNone(self.kind(self.detail(compactions=[self.compaction(None, None, 0.2)])))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_past_the_hint_the_call_comes_whatever_the_savings(self):
+        below_cost = [self.compaction(0.26)]
+        for detail in (self.detail(context=200_000, compactions=below_cost), self.detail(context=250_000, likely=False),
+                       self.detail(context=250_000, estimate=False),
+                       self.detail(context=250_000, warm_until="2026-09-28T11:00:00.000+00:00")):
+            with self.subTest(detail=detail["current"]):
+                self.assertEqual(self.kind(detail), "threshold")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_past_the_hint_a_warm_or_cold_call_that_saves_still_says_so(self):
+        expired = "2026-09-28T11:00:00.000+00:00"
+        self.assertEqual(self.kind(self.detail(context=250_000)), "warm")
+        self.assertEqual(self.kind(self.detail(context=250_000, warm_until=expired, cold_saving=1.2)), "cold")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_past_the_hint_an_ended_session_gets_no_call(self):
+        self.assertIsNone(self.kind(self.detail(context=250_000, live=False)))
 
     def test_the_copy_button_is_wired_in_the_script_not_inline(self):
         script = read(STATIC / "js" / "drilldown.js")
