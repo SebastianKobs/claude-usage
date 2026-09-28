@@ -27,7 +27,7 @@ function chatControls(detail) {
   order.addEventListener("click", () => {
     savePreference(CHAT_ORDER_PREFERENCE, String(!oldestFirst()));
     order.setAttribute("aria-pressed", String(oldestFirst()));
-    if (shownChat) renderChat(shownChat.container, shownChat.chat);
+    if (shownChat) renderChat(shownChat.container, shownChat.chat, shownChat.agentId);
   });
   shownChat = null;
   return el("div", {class: "chart-head"}, themed("h3", "Conversation"),
@@ -68,24 +68,75 @@ function agentOptions(agents, valueOf, labelOf, picked) {
   return items;
 }
 
+function chatUrl(sessionId, agentId) {
+  const query = agentId ? `?agent=${encodeURIComponent(agentId)}` : "";
+  return `/api/session/${encodeURIComponent(sessionId)}/chat${query}`;
+}
+
 async function loadChat(sessionId, agentId, button) {
   const container = document.getElementById("chat");
   const request = ++chatRequest;                          // switching agents quickly: only the newest renders
   container.replaceChildren(el("div", {class: "empty", text: "Loading…"}));
-  const query = agentId ? `?agent=${encodeURIComponent(agentId)}` : "";
   try {
-    const chat = await fetchJson(`/api/session/${encodeURIComponent(sessionId)}/chat${query}`);
+    const chat = await fetchJson(chatUrl(sessionId, agentId));
     if (request !== chatRequest) return;
-    renderChat(container, chat);
+    renderChat(container, chat, agentId);
     button.textContent = "Reload";
   } catch (error) {
     if (request === chatRequest) container.replaceChildren(el("div", {class: "empty", text: error.message}));
   }
 }
 
+// The conversation shown, read again after its session changed. Drawn again only if it changed: the open entries
+// stay open, and the entry at the top of the window (or the one holding focus) stays where it was.
+async function refreshChat(sessionId) {
+  if (!shownChat || !shownChat.container.isConnected) return;
+  const {container, agentId} = shownChat;
+  const request = ++chatRequest;
+  let chat;
+  try {
+    chat = await fetchJson(chatUrl(sessionId, agentId));
+  } catch (error) {
+    return;                                               // the conversation shown stays; the next refresh tries again
+  }
+  if (request !== chatRequest || JSON.stringify(chat) === JSON.stringify(shownChat.chat)) return;
+  const kept = keptChatView(container);
+  renderChat(container, chat, agentId);
+  restoreChatView(container, kept);
+}
+
+// an entry is known again by its key: its time, kind and position from the conversation's start
+function keptChatView(container) {
+  const entries = [...container.querySelectorAll("[data-key]")];
+  const open = new Map();
+  for (const entry of entries) {
+    const shown = [...entry.querySelectorAll("details")].map(details => details.open);
+    if (shown.some(Boolean)) open.set(entry.dataset.key, shown);
+  }
+  const active = container.contains(document.activeElement) ? document.activeElement : null;
+  const holder = active && active.closest("[data-key]");
+  // with its start in view, new entries (on top, newest first) just show; scrolled into it, the reader stays put
+  const anchor = container.getBoundingClientRect().top < 0 ? scrollAnchor(entries) : null;
+  return {open, anchor, anchorKey: anchor && anchor.node.dataset.key,
+          focusKey: holder && holder.dataset.key,
+          focusIndex: holder ? [...holder.querySelectorAll(FOCUSABLE)].indexOf(active) : -1};
+}
+
+function restoreChatView(container, kept) {
+  const byKey = new Map([...container.querySelectorAll("[data-key]")].map(entry => [entry.dataset.key, entry]));
+  for (const [key, shown] of kept.open) {
+    const entry = byKey.get(key);
+    if (entry) entry.querySelectorAll("details").forEach((details, index) => { details.open = Boolean(shown[index]); });
+  }
+  keepScroll(kept.anchor, byKey.get(kept.anchorKey));
+  const holder = byKey.get(kept.focusKey);
+  const target = holder && holder.querySelectorAll(FOCUSABLE)[kept.focusIndex];
+  if (target) target.focus({preventScroll: true});
+}
+
 // into the container loadChat started with, never into a session view opened since
-function renderChat(container, chat) {
-  shownChat = {container, chat};
+function renderChat(container, chat, agentId) {
+  shownChat = {container, chat, agentId};
   if (!chat.available) {
     container.replaceChildren(el("div", {class: "empty",
       text: "The transcript is gone: Claude Code deleted it after its cleanup period. The usage history stays."}));
@@ -95,8 +146,14 @@ function renderChat(container, chat) {
     container.replaceChildren(el("div", {class: "empty", text: "No conversation in this transcript yet."}));
     return;
   }
+  const position = new Map(chat.entries.map((entry, index) => [entry, index]));
+  const keyed = entry => {
+    const node = chatEntry(entry);
+    node.dataset.key = `${entry.timestamp} ${entry.kind} ${position.get(entry)}`;
+    return node;
+  };
   fill(container, reminderNote(chat.reminders),
-       el("div", {class: "chat"}, ...orderedEntries(chat.entries, oldestFirst()).map(chatEntry)));
+       el("div", {class: "chat"}, ...orderedEntries(chat.entries, oldestFirst()).map(keyed)));
 }
 
 // Claude Code's token reminder comes before almost every call: summed here once, not shown as a line each

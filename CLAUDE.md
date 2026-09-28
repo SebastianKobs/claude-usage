@@ -333,6 +333,12 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - Polling: live every 5 s, the summary every 60 s, each after the previous answer, none while the tab is hidden.
     An unchanged payload isn't drawn again, so focus stays put. The banner keeps one message per source (live,
     summary, session, scan), and a response only renders if it answers the newest request.
+  - An open session polls too: every 5 s while it is `live` (a transcript changed within `live_minutes`), else
+    every 60 s, which notices a resumed session. A changed one is drawn in place (`renderDrilldown(detail, true)`):
+    the conversation's nodes move into the new view, and the table view, the workflow runs shown, focus and the
+    element at the top of the window are kept. A conversation shown is read again and drawn only if it changed,
+    keeping its open entries (by time, kind and position) and, once scrolled into, the entry at the top. It reads
+    the transcript itself, so a reply the scan hasn't reached yet may show plain xhigh until the next change.
   - The range buttons stop at `retention_days`: the summary cuts a longer `days` to it and returns
     `retention_days` and `history_since` (the first stored day); the page hides the longer buttons, falls back
     from a saved longer range, and says "history since" when a range starts before the history does.

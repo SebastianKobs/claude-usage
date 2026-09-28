@@ -2,6 +2,7 @@
 import contextlib
 import io
 import json
+import os
 import re
 import shutil
 import threading
@@ -69,8 +70,8 @@ class ServerCase(TempDirTestCase):
         self.main.tool_result("t1", "abc")
         agent = self.projects.subagent("s1", "a1", project="/home/dev/app").at(now)
         agent.assistant("m2", [text_block("ok")], usage(output=5))
-        other = self.projects.session("s2", project="/home/dev/other").at(now)
-        other.assistant("m3", [text_block("x")], usage(output=7))
+        self.other = self.projects.session("s2", project="/home/dev/other").at(now)
+        self.other.assistant("m3", [text_block("x")], usage(output=7))
         self.clock = FakeClock()
         self.store = store.Store(self.store_path, check_same_thread=False)
         self.addCleanup(self.store.close)
@@ -280,6 +281,12 @@ class ApiTest(ServerCase):
         self.assertEqual((payload["title"], payload["prompt"]), ("Parser fix", "Fix the parser"))
         self.assertEqual([agent["agent_type"] for agent in payload["agents"]], ["main", "general-purpose"])
         self.assertEqual(payload["agents"][0]["tools"], [{"tool": "Read", "calls": 1, "result_chars": 3}])
+
+    def test_session_detail_says_whether_the_session_is_live(self):
+        hour_ago = datetime.now(UTC).timestamp() - 3600
+        os.utime(self.other.path, (hour_ago, hour_ago))
+        self.assertTrue(self.get_json("/api/session/s1")[1]["live"])
+        self.assertFalse(self.get_json("/api/session/s2")[1]["live"])
 
     def test_session_detail_has_the_current_context(self):
         _, payload = self.get_json("/api/session/s1")

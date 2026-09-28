@@ -130,6 +130,23 @@ class ChatOrderTest(unittest.TestCase):
         self.assertEqual(run_function("chat.js", "orderedEntries", entries, True), entries)
 
 
+class SessionPollTest(unittest.TestCase):
+    def function_body(self, name):
+        """main.js's function `name`, from its line to its closing brace."""
+        return re.search(rf"^(async )?function {name}\(.*?^\}}$", read(STATIC / "js" / "main.js"),
+                         re.DOTALL | re.MULTILINE).group(0)
+
+    def test_opening_another_session_or_hiding_the_tab_stops_the_open_sessions_poll(self):
+        for name in ("loadSession", "pollWhileVisible", "pollSession"):
+            with self.subTest(name=name):
+                self.assertIn("clearTimeout(sessionTimer)", self.function_body(name))
+
+    def test_a_changed_session_is_drawn_in_place_with_its_conversation(self):
+        body = self.function_body("refreshSession")
+        self.assertIn("renderDrilldown(session, true)", body)
+        self.assertIn("refreshChat(session.session_id)", body)
+
+
 class StyleTest(unittest.TestCase):
     def test_every_variable_used_is_defined_for_every_theme(self):
         # light.css and common.css apply in every theme; the others only override

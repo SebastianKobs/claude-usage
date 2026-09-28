@@ -403,6 +403,15 @@ class LiveSessionsTest(StoreCase):
         self.assertEqual([session["session_id"] for session in sessions], ["s1"])
         self.assertEqual(len(sessions[0]["subagents"]), 1)
 
+    def test_a_session_is_live_while_any_of_its_transcripts_changed_within_the_window(self):
+        self.age(self.main, 3600)
+        self.age(self.agent, 10)
+        self.age(self.old, 3600)
+        self.live()
+        self.assertTrue(queries.session_live(self.store, "s1", 5, now=self.now))
+        self.assertFalse(queries.session_live(self.store, "s-old", 5, now=self.now))
+        self.assertFalse(queries.session_live(self.store, "unknown", 5, now=self.now))
+
     def test_most_recent_first(self):
         self.age(self.main, 120)
         self.age(self.agent, 120)

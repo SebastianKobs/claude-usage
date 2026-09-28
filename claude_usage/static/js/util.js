@@ -23,6 +23,21 @@ function fill(node, ...children) {
   node.replaceChildren(...children.filter(child => child !== null && child !== undefined && child !== false));
 }
 
+// A view drawn again in place keeps what the reader was looking at: the first of `nodes` still showing at the top
+// of the window, and how far from the top it starts. keepScroll puts that node (or the one that replaced it) back.
+function scrollAnchor(nodes) {
+  for (const node of nodes) {
+    const box = node.getBoundingClientRect();
+    if (box.bottom > 0) return {node, top: box.top};
+  }
+  return null;
+}
+function keepScroll(anchor, node) {
+  if (anchor && node && node.isConnected) window.scrollBy(0, node.getBoundingClientRect().top - anchor.top);
+}
+
+const FOCUSABLE = "a[href], button, select, summary, [tabindex]";
+
 // An element whose text is a label in the theme's wording; data-label lets applyTheme reword it in place, so a
 // view that isn't drawn again (a session's) follows a theme change too
 function themed(tag, label, attributes) {

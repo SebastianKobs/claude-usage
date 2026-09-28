@@ -481,12 +481,26 @@ def session_rows(store: Store, session_id: str) -> list[sqlite3.Row]:
         "ORDER BY agent_id IS NOT NULL, first_ts, path", (session_id,)).fetchall()
 
 
+def live_cutoff_ns(minutes: float, now: float | None) -> int:
+    """The mtime in nanoseconds a transcript must have reached to count as live: `minutes` before now."""
+    moment = time.time() if now is None else now
+    return int((moment - minutes * 60) * 1e9)
+
+
+def session_live(store: Store, session_id: str, minutes: float, now: float | None = None) -> bool:
+    """Whether a transcript of the session changed within `minutes` (by the mtime seen at the last scan), as
+    live_sessions counts it."""
+    cutoff_ns = live_cutoff_ns(minutes, now)
+    row = store.connection.execute("SELECT 1 FROM transcripts WHERE session_id = ? AND mtime_ns >= ? LIMIT 1",
+                                   (session_id, cutoff_ns)).fetchone()
+    return row is not None
+
+
 def live_sessions(store: Store, minutes: float, prices: pricing.Prices, now: float | None = None,
                   project: str | None = None) -> list[Row]:
     """Sessions with a transcript changed within `minutes` (by the mtime seen at the last scan), most recent first,
     with their totals so far, the main thread's last context and output, and the subagents active in the window."""
-    moment = time.time() if now is None else now
-    cutoff_ns = int((moment - minutes * 60) * 1e9)
+    cutoff_ns = live_cutoff_ns(minutes, now)
     session_ids = [row["session_id"] for row in store.connection.execute(
         "SELECT DISTINCT session_id FROM transcripts WHERE mtime_ns >= ? AND (? IS NULL OR slug = ?)",
         (cutoff_ns, project_slug(project), project_slug(project)))]

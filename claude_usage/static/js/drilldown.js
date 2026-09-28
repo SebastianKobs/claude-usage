@@ -3,9 +3,11 @@
 
 // --- drilldown -----------------------------------------------------------------------------------------------
 
-function renderDrilldown(detail) {
+// refresh: the same session drawn again with newer numbers, keeping what the reader had open (keptView)
+function renderDrilldown(detail, refresh = false) {
   const panel = document.getElementById("drilldown");
-  chatRequest++;                                          // a conversation still loading belongs to the old view
+  const kept = refresh && document.getElementById("chat") ? keptView(panel) : null;
+  if (!kept) chatRequest++;                               // a conversation still loading belongs to the old view
   // an open session is all the page shows: the range's filters, figures, charts and tables come back on close
   for (const id of ["filters", "summary"]) document.getElementById(id).hidden = Boolean(detail);
   if (!detail) {
@@ -76,15 +78,56 @@ function renderDrilldown(detail) {
                      "No turns attributed to an MCP server.")))),
     themed("h3", "Rate limits and API errors"),
     el("div", {class: "table-wrap"}, limitEventsTable(detail.api_errors, "No API errors in this session.", false)),
-    chatControls(detail), el("div", {id: "chat"}));
+    ...(kept ? kept.chat : [chatControls(detail), el("div", {id: "chat"})]));
   document.getElementById("context-table-toggle").addEventListener("click", event => {
     const table = document.getElementById("context-table");
     table.hidden = !table.hidden;
     event.currentTarget.setAttribute("aria-pressed", String(!table.hidden));
   });
   panel.hidden = false;
+  if (kept) restoreView(panel, kept);                     // before the chart, which fills the table view
   renderContext(detail);                                  // after unhiding, so the chart can measure its width
+  if (kept) restoreFocusAndScroll(panel, kept);
   scheduleGaugeRefresh(detail);
+}
+
+// What a refresh keeps: the conversation's nodes as they are (moved into the new view, so a loaded conversation
+// and its picker stay), the table view and the workflow runs shown, focus, and the element at the top of the window
+function keptView(panel) {
+  const chat = document.getElementById("chat");
+  const active = panel.contains(document.activeElement) ? document.activeElement : null;
+  const anchor = scrollAnchor([...panel.children]);
+  return {
+    chat: [chat.previousElementSibling, chat],
+    table: !document.getElementById("context-table").hidden,
+    runs: new Set([...panel.querySelectorAll("[data-run][aria-expanded='true']")].map(node => node.dataset.run)),
+    active,
+    activeId: active && active.id,
+    activeRun: active && active.dataset.run,
+    activeIndex: active ? [...panel.querySelectorAll(FOCUSABLE)].indexOf(active) : -1,
+    anchor,
+    anchorIndex: anchor ? [...panel.children].indexOf(anchor.node) : -1,
+  };
+}
+
+function restoreView(panel, kept) {
+  if (kept.table) {
+    document.getElementById("context-table").hidden = false;
+    document.getElementById("context-table-toggle").setAttribute("aria-pressed", "true");
+  }
+  for (const toggle of panel.querySelectorAll("[data-run]")) if (kept.runs.has(toggle.dataset.run)) toggle.click();
+}
+
+// the same element where it still exists (in the conversation), else by id, by workflow run, or by position
+function restoreFocusAndScroll(panel, kept) {
+  const anchored = kept.anchor && kept.anchor.node.isConnected ? kept.anchor.node : panel.children[kept.anchorIndex];
+  keepScroll(kept.anchor, anchored);
+  if (!kept.active) return;
+  const target = kept.active.isConnected ? kept.active
+    : (kept.activeId && document.getElementById(kept.activeId))
+      || (kept.activeRun && panel.querySelector(`[data-run="${CSS.escape(kept.activeRun)}"]`))
+      || panel.querySelectorAll(FOCUSABLE)[kept.activeIndex] || document.getElementById("drilldown-title");
+  target.focus({preventScroll: true});
 }
 
 // one row per transcript; a workflow run's agents under one row per run, whose button shows or hides them
@@ -128,7 +171,7 @@ function workflowRows(agents, searches) {
   const members = agents.map(agent => agentRow(agent, searches, "sub-row workflow-member"));
   for (const row of members) row.hidden = true;
   const toggle = el("button", {type: "button", class: "link-button", "aria-expanded": "false",
-                               text: `${whole(agents.length)} agents`});
+                               "data-run": agents[0].workflow_run, text: `${whole(agents.length)} agents`});
   toggle.addEventListener("click", () => {
     const open = toggle.getAttribute("aria-expanded") !== "true";
     toggle.setAttribute("aria-expanded", String(open));

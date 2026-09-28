@@ -295,8 +295,8 @@ class UsageApp:
         return self.compaction_history
 
     def session(self, session_id: str) -> Payload | None:
-        """/api/session/<id>, with the main thread's current context against the auto-compact point; None for an
-        unknown id."""
+        """/api/session/<id>, with the main thread's current context against the auto-compact point and whether the
+        session is live (the page polls it faster then); None for an unknown id."""
         with self.lock:
             self.refresh()
             detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False,
@@ -304,11 +304,13 @@ class UsageApp:
             current = queries.current_context(self.store, session_id, self.compact, self.prices,
                                               self.stored_comparisons())
             path = queries.transcript_path(self.store, session_id, None)
+            live = queries.session_live(self.store, session_id, self.live_minutes)
         if detail is None:
             return None
         # a file read needn't hold up the other requests
         prompt = None if path is None else transcripts.first_prompt(path)
-        return {**detail, "prompt": prompt, "compact_hint_tokens": self.compact.hint_tokens, "current": current}
+        return {**detail, "prompt": prompt, "compact_hint_tokens": self.compact.hint_tokens, "current": current,
+                "live": live}
 
 
 def route_live(app: UsageApp, match: re.Match[str], query: str) -> Payload:

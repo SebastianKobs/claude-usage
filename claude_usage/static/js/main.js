@@ -104,19 +104,24 @@ async function pollSummary() {
 function pollWhileVisible() {
   clearTimeout(liveTimer);
   clearTimeout(summaryTimer);
+  clearTimeout(sessionTimer);
   if (document.hidden) return;
   pollLive();
   pollSummary();
+  if (state.session) refreshSession();
 }
 
 // the server's session-id pattern: anything else isn't a session link
 const SESSION_HASH = /^#session\/([A-Za-z0-9_-]{1,128})$/;
 let sessionRequest = 0;
+let sessionKey = null;
+let sessionTimer = null;
 // the link that opened the session, and where the page was scrolled: closing the session returns to both
 let opener = null;
 
 async function loadSession() {
   const request = ++sessionRequest;                       // a late answer for a session left since doesn't render
+  clearTimeout(sessionTimer);
   const match = location.hash.match(SESSION_HASH);
   if (!match) {
     showError("session", location.hash.startsWith("#session/") ? "Not a session link." : "");
@@ -135,12 +140,46 @@ async function loadSession() {
     if (request !== sessionRequest) return;
     showError("session", "");
     state.session = session;
+    sessionKey = drawnKey(session);
     renderDrilldown(session);
     document.getElementById("drilldown").scrollIntoView({block: "start"});
     document.getElementById("drilldown-title").focus({preventScroll: true});
+    pollSession();
   } catch (error) {
     if (request === sessionRequest) showError("session", error.message);
   }
+}
+
+// The open session asks again after each answer: every LIVE_INTERVAL_MS while it is live, else every
+// SUMMARY_INTERVAL_MS, which notices a resumed session. A hidden tab asks nothing; closing the session stops it.
+function pollSession() {
+  clearTimeout(sessionTimer);
+  if (document.hidden || state.session === null) return;
+  sessionTimer = setTimeout(refreshSession, state.session.live ? LIVE_INTERVAL_MS : SUMMARY_INTERVAL_MS);
+}
+
+// An unchanged session isn't drawn again. A changed one is drawn in place (renderDrilldown's refresh), and a
+// conversation shown is read again with it.
+async function refreshSession() {
+  const open = state.session;
+  if (!open) return;
+  const request = ++sessionRequest;
+  try {
+    const session = await fetchJson(`/api/session/${encodeURIComponent(open.session_id)}`);
+    if (request !== sessionRequest) return;
+    showError("session", "");
+    const key = drawnKey(session);
+    if (key !== sessionKey) {
+      sessionKey = key;
+      state.session = session;
+      renderDrilldown(session, true);
+      refreshChat(session.session_id);
+    }
+  } catch (error) {
+    if (request !== sessionRequest) return;
+    showError("session", error.message);
+  }
+  pollSession();
 }
 
 function returnToOpener() {
