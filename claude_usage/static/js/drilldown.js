@@ -318,7 +318,7 @@ function compactNowNotes(preview) {
   const parts = [`If you compact now: ${payoffText(estimate, expired)}`,
                  `context after about ${compact(estimate.after)}` +
                  spread(compact(estimate.after_low), compact(estimate.after_high)),
-                 expired ? null : `one-time ~${money(estimate.one_time)}`, `estimated from ${count}`].filter(Boolean);
+                 expired ? null : `costs ~${money(estimate.one_time)} once`, `estimated from ${count}`].filter(Boolean);
   if (estimate.calls_after_low !== null) {
     const low = whole(estimate.calls_after_low);
     const high = whole(estimate.calls_after_high);
@@ -586,7 +586,7 @@ function growthTable(agent) {
 function compactionTable(agent) {
   if (!agent.compactions.length) return el("div", {class: "empty", text: "No compactions."});
   const table = dataTable([headCell("Time"), headCell("Trigger"), headCell("Before", true), headCell("After", true),
-                           headCell("Took", true), headCell("Each later call", true), headCell("One-time", true),
+                           headCell("Took", true), headCell("Each later call", true), headCell("Cost once", true),
                            headCell("Pays off at", true), headCell("Calls after", true), headCell("Versus keeping")],
     agent.compactions.map(row => {
       const comparison = row.versus_keeping;

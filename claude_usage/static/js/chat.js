@@ -420,7 +420,7 @@ function compactHint(hint) {
     return el("div", {class: "compact-hint compact-pays", role: "note"},
       el("strong", {text: "⚠ Compacting pays on average"}),
       ` Context ${compact(hint.context)}, and every reply reads all of it again. /compact would shrink it to about ` +
-      `${compact(hint.after)} for a one-time ~${money(hint.one_time)}, and the cheaper replies pay that back ` +
+      `${compact(hint.after)}. That costs ~${money(hint.one_time)} once, and the cheaper replies pay it back ` +
       `within about ${hint.pays_off_in} replies. ` +
       (hint.ahead_from === "longer"
         ? `After your past compactions, a stretch this long went on for about ${hint.calls_ahead} more on average.`
@@ -502,9 +502,9 @@ function breakevenText(comparison) {
   return comparison.breakeven_call > comparison.calls_after ? `would pay off at ${call}` : `paid off at ${call}`;
 }
 
-// the summary call and the rewrite; only the input side is known without an output speed
+// what compacting cost once: the summary call and the rewrite; only the input side is known without an output speed
 function oneTimeText(comparison) {
-  return comparison.one_time === null ? `at least ${money(comparison.call_low + comparison.rewrite)}`
+  return comparison.one_time === null ? `≥ ${money(comparison.call_low + comparison.rewrite)}`
                                       : `~${money(comparison.one_time)}`;
 }
 
@@ -531,7 +531,7 @@ function verdictTitle(comparison) {
 
 function versusKeepingLine(comparison) {
   const parts = [verdictText(comparison), breakevenText(comparison), `${whole(comparison.calls_after)} calls after`,
-                 `one-time ${oneTimeText(comparison)}`];
+                 `cost ${oneTimeText(comparison)} once`];
   return el("div", {class: "muted", title: VERSUS_KEEPING_NOTE,
                     text: `vs keeping: ${parts.filter(Boolean).join(" · ")}`});
 }

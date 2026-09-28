@@ -107,6 +107,15 @@ class ScriptTest(unittest.TestCase):
                 self.assertIn(f'id="{name}-table"', markup)
 
 
+class CompactionWordingTest(unittest.TestCase):
+    def test_the_one_time_amount_reads_as_a_cost(self):
+        # "one-time $0.12" read like a saving; the page says "costs $0.12 once"
+        for path in OWN_SCRIPTS:
+            strings = re.findall(r'"[^"\n]*"|`[^`]*`', read(path))
+            with self.subTest(script=path.name):
+                self.assertEqual([text for text in strings if re.search(r"one-time", text, re.IGNORECASE)], [])
+
+
 class ChatOrderTest(unittest.TestCase):
     def test_the_order_switch_is_a_toggle_kept_as_a_preference(self):
         script = read(STATIC / "js" / "chat.js")
