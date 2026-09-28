@@ -236,6 +236,13 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
   background: color-mix(in srgb, var(--status-critical) 14%, var(--surface)); }
 .chat-usage-remind .compact-chip, .chat-usage-remind-auto .compact-chip { border: 0; background: none; padding: 0;
   font-weight: 600; }
+/* a cache rebuild: a neutral chip at the end of the usage badge, the icon and words carry it (no status color: it
+   costs, but needs no action) */
+.rebuild-chip { display: inline-block; margin-left: 10px; padding: 0 8px; border: 1px solid var(--border);
+  border-radius: 999px; background: var(--surface); color: var(--text-primary); font-size: 12px; white-space: nowrap; }
+/* hidden context added to a request: quieter than a tool call, as one comes before almost every call */
+.chat-injected { color: var(--text-secondary); font-size: 12px; }
+.chat-injected strong { color: var(--text-primary); font-weight: 600; }
 /* a prompt that was a slash command, as typed */
 .chat-command code { padding: 1px 6px; border-radius: 4px; background: var(--wash); font-size: 13px;
   font-family: var(--mono); }

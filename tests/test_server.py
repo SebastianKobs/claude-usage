@@ -20,6 +20,7 @@ from claude_usage import pricing
 from claude_usage import scan
 from claude_usage import server
 from claude_usage import store
+from helpers import MILLION
 from helpers import TempDirTestCase
 from helpers import text_block
 from helpers import tool_use_block
@@ -399,12 +400,16 @@ class ChatTest(ServerCase):
         self.main.assistant("m8", [text_block("REPLY-MARKER-9c1"), tool_use_block("t8", "Bash", {"command": "ls"})],
                             usage(output=1))
         self.main.tool_result("t8", "RESULT-MARKER-3e7")
+        self.main.attachment("hook_additional_context", "ATTACHMENT-MARKER-4d8")
+        self.main.user("SUMMARY-MARKER-6b3", isCompactSummary=True)
         self.get_json("/api/summary?days=7")
         _, payload = self.get_json("/api/session/s1/chat")
         self.assertIn("REPLY-MARKER-9c1", json.dumps(payload))
+        self.assertIn("ATTACHMENT-MARKER-4d8", json.dumps(payload))
         self.store.connection.execute("PRAGMA wal_checkpoint")
         stored = b"".join(path.read_bytes() for path in self.store_path.parent.glob(f"{self.store_path.name}*"))
-        for marker in (b"PROMPT-MARKER-5f2", b"REPLY-MARKER-9c1", b"RESULT-MARKER-3e7"):
+        for marker in (b"PROMPT-MARKER-5f2", b"REPLY-MARKER-9c1", b"RESULT-MARKER-3e7", b"ATTACHMENT-MARKER-4d8",
+                       b"SUMMARY-MARKER-6b3"):
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, stored)
 
@@ -420,6 +425,27 @@ class ChatTest(ServerCase):
                                                               "web_search"})
         self.assertIsNone(unpriced["usage"]["cost"])
         self.assertEqual(payload["entries"][0]["usage"], None)
+
+    def test_each_calls_usage_carries_its_growth_and_rebuild(self):
+        self.main.assistant("m8", [text_block("a")], usage(new=10, cache_5m=20_000, output=100))
+        self.main.user("go on")
+        self.main.assistant("m9", [text_block("b")], usage(new=5, cache_5m=20_000, cache_read=1_000, output=50))
+        _, payload = self.get_json("/api/session/s1/chat")
+        first, second = [entry["usage"] for entry in payload["entries"][-3:] if entry["usage"]]
+        self.assertEqual((second["growth"], second["rebuild"]["cause"], second["rebuild"]["lost"]),
+                         (21_005 - 20_010 - 100, "prefix", 19_010))
+        self.assertAlmostEqual(second["rebuild"]["extra_cost"], 19_010 * (2.5 - 0.2) / MILLION)
+        self.assertIsNone(first["rebuild"])
+        self.assertNotIn("step", payload["entries"][-1])
+
+    def test_compactions_and_injected_context_come_with_their_details(self):
+        self.main.compaction(trigger="auto", pre_tokens=170_000, post_tokens=9_000, duration_ms=41_000)
+        self.main.user("the summary", isCompactSummary=True)
+        _, payload = self.get_json("/api/session/s1/chat")
+        marker, injected = payload["entries"][-2:]
+        self.assertEqual(marker["compaction"], {"trigger": "auto", "pre_tokens": 170_000, "post_tokens": 9_000,
+                                                "duration_ms": 41_000})
+        self.assertEqual(injected["items"], [{"kind": "summary", "chars": 11, "text": "the summary"}])
 
     def test_tool_calls_carry_their_input_fields(self):
         self.main.assistant("m8", [tool_use_block("t8", "Bash", {"command": "ls", "description": "List"})],

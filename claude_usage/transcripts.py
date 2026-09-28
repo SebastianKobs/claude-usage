@@ -437,6 +437,16 @@ def count_or_none(value: Any) -> int | None:
     return None
 
 
+def compaction(record: Record, record_id: str) -> Compaction:
+    """A compact_boundary record with its compactMetadata, filed under record_id."""
+    metadata = record.get("compactMetadata") if isinstance(record.get("compactMetadata"), dict) else {}
+    return Compaction(record_id=record_id, timestamp=parse_timestamp(record.get("timestamp")),
+                      trigger=text_or_none(metadata.get("trigger")),
+                      pre_tokens=count_or_none(metadata.get("preTokens")),
+                      post_tokens=count_or_none(metadata.get("postTokens")),
+                      duration_ms=count_or_none(metadata.get("durationMs")))
+
+
 def compactions(records: Iterable[Record]) -> list[Compaction]:
     """The compactions, once per record uuid; records without one are skipped."""
     found: dict[str, Compaction] = {}
@@ -444,12 +454,7 @@ def compactions(records: Iterable[Record]) -> list[Compaction]:
         record_id = text_or_none(record.get("uuid"))
         if record.get("type") != "system" or record.get("subtype") != COMPACT_BOUNDARY or record_id is None:
             continue
-        metadata = record.get("compactMetadata") if isinstance(record.get("compactMetadata"), dict) else {}
-        found.setdefault(record_id, Compaction(
-            record_id=record_id, timestamp=parse_timestamp(record.get("timestamp")),
-            trigger=text_or_none(metadata.get("trigger")), pre_tokens=count_or_none(metadata.get("preTokens")),
-            post_tokens=count_or_none(metadata.get("postTokens")),
-            duration_ms=count_or_none(metadata.get("durationMs"))))
+        found.setdefault(record_id, compaction(record, record_id))
     return list(found.values())
 
 

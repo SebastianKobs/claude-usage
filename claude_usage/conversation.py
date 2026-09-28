@@ -6,7 +6,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from claude_usage import pricing
 from claude_usage import transcripts
+from claude_usage import turns
 
 CHAT_TOOL_LIMIT = 4000                  # characters of a tool's input or result the view gets
 CHAT_TEXT_LIMIT = 20000                 # of a prompt or reply (a pasted log can be huge)
@@ -26,10 +28,28 @@ class ToolField:
 
 
 @dataclass(frozen=True)
+class Injected:
+    """One piece of hidden context Claude Code added to a request: an attachment's rendered text, a meta record,
+    a skill's text or the compact summary."""
+    kind: str                           # the attachment's type, or meta, skill or summary
+    chars: int                          # the full length
+    text: str                           # cut to CHAT_TEXT_LIMIT
+
+
+@dataclass(frozen=True)
+class CompactionMarker:
+    """A compaction's metadata; None where the record has none."""
+    trigger: str | None                 # manual (/compact) or auto
+    pre_tokens: int | None              # the context before
+    post_tokens: int | None             # and after
+    duration_ms: int | None             # how long the summary took
+
+
+@dataclass(frozen=True)
 class ChatEntry:
-    """One step of a conversation: a prompt, a reply's text or thinking, a tool call with its result, or a marker
-    (a compaction, a failed API call)."""
-    kind: str                           # prompt, text, thinking, tool, compaction or error
+    """One step of a conversation: a prompt, a reply's text or thinking, a tool call with its result, hidden
+    context added to the next request, or a marker (a compaction, a failed API call)."""
+    kind: str                           # prompt, text, thinking, tool, injected, compaction or error
     timestamp: datetime | None
     text: str | None = None             # of a prompt, text, thinking or marker, cut to CHAT_TEXT_LIMIT
     model: str | None = None            # of a reply
@@ -41,6 +61,9 @@ class ChatEntry:
     is_error: bool = False
     effort: str | None = None           # of a reply: the effort level it ran at
     usage: transcripts.MessageUsage | None = None   # on the last entry of an API call: its final token usage
+    step: turns.Step | None = None      # with the usage: what the call's context grew by, and a cache rebuild
+    items: tuple[Injected, ...] = ()    # of an injected entry, in order
+    compaction: CompactionMarker | None = None
 
 
 def cut(text: str, limit: int) -> str:
@@ -88,9 +111,10 @@ def tool_fields(tool_input: Any) -> tuple[ToolField, ...]:
 
 
 def reply_entries(record: transcripts.Record, calls: dict[str, int], entries: list[ChatEntry],
-                  accumulator: transcripts.MessageAccumulator, last_entries: dict[str, int]) -> None:
-    """Append an assistant record's blocks to entries and take its usage in; calls maps each tool_use id to its
-    entry's index, last_entries each message id to the index of its last entry."""
+                  accumulator: transcripts.MessageAccumulator, last_entries: dict[str, int],
+                  request_ts: datetime | None) -> None:
+    """Append an assistant record's blocks to entries and take its usage in, its request at request_ts; calls maps
+    each tool_use id to its entry's index, last_entries each message id to the index of its last entry."""
     message = transcripts.message_of(record) or {}
     timestamp = transcripts.parse_timestamp(record.get("timestamp"))
     model = transcripts.text_or_none(message.get("model"))
@@ -113,16 +137,30 @@ def reply_entries(record: transcripts.Record, calls: dict[str, int], entries: li
                                      effort=effort))
     if model is None:
         return
-    message_id = accumulator.add(record)
+    message_id = accumulator.add(record, request_ts)
     if message_id is not None and len(entries) > start:
         last_entries[message_id] = len(entries) - 1
 
 
+def as_turn(usage: transcripts.MessageUsage) -> turns.Turn:
+    """A call's final usage as the Turn turns.py works on."""
+    return turns.Turn(message_id=usage.message_id, ts=usage.timestamp, model=usage.model, speed=usage.speed,
+                      new_input=usage.new_input, cache_write_5m=usage.cache_write_5m,
+                      cache_write_1h=usage.cache_write_1h, cache_read=usage.cache_read, output=usage.output,
+                      request_ts=usage.request_ts, end_ts=usage.end_ts)
+
+
 def add_usage(entries: list[ChatEntry], accumulator: transcripts.MessageAccumulator,
-              last_entries: dict[str, int]) -> None:
-    """Put each API call's final usage on its last entry (a call without a shown entry has nowhere to go)."""
-    for message_id, index in last_entries.items():
-        entries[index] = replace(entries[index], usage=accumulator.usage(message_id))
+              last_entries: dict[str, int], prices: pricing.Prices) -> None:
+    """Put each API call's final usage and step on its last entry (a call without a shown entry has nowhere to go,
+    but still counts for the growth of the next)."""
+    usages = accumulator.usages()
+    moments = tuple(entry.timestamp for entry in entries if entry.kind == "compaction" and entry.timestamp)
+    steps = turns.steps([as_turn(usage) for usage in usages], moments, prices)
+    for usage, step in zip(usages, steps):
+        index = last_entries.get(usage.message_id)
+        if index is not None:
+            entries[index] = replace(entries[index], usage=usage, step=step)
 
 
 def add_results(record: transcripts.Record, calls: dict[str, int], entries: list[ChatEntry]) -> None:
@@ -136,30 +174,89 @@ def add_results(record: transcripts.Record, calls: dict[str, int], entries: list
                                  is_error=block.get("is_error") is True)
 
 
-def conversation(path: Path) -> list[ChatEntry]:
+def user_text(record: transcripts.Record) -> str:
+    """A user record's text: a string content, or its text blocks."""
+    message = transcripts.message_of(record)
+    content = message.get("content") if message else None
+    return content if isinstance(content, str) else result_text(
+        [block for block in transcripts.content_blocks(record) if block.get("type") == "text"])
+
+
+def injected_item(record: transcripts.Record) -> Injected | None:
+    """The hidden context a record adds to the next request: an attachment's rendered parts (None for bookkeeping
+    attachments without any), or a user record's text when it is the compact summary, a skill's text
+    (sourceToolUseID) or a meta record; None for anything else or no text."""
+    if record.get("type") == "attachment":
+        attachment = record.get("attachment") if isinstance(record.get("attachment"), dict) else {}
+        kind = transcripts.text_or_none(attachment.get("type")) or "attachment"
+        rendered = record.get("rendered")
+        if not isinstance(rendered, list):
+            return None
+        text = "\n".join(result_text(part.get("content")) for part in rendered if isinstance(part, dict))
+    elif record.get("type") == "user":
+        if record.get("isCompactSummary"):
+            kind = "summary"
+        elif record.get("sourceToolUseID"):
+            kind = "skill"
+        elif record.get("isMeta"):
+            kind = "meta"
+        else:
+            return None
+        text = user_text(record)
+    else:
+        return None
+    if not text.strip():
+        return None
+    return Injected(kind, len(text), cut(text, CHAT_TEXT_LIMIT))
+
+
+def add_injected(item: Injected, timestamp: datetime | None, entries: list[ChatEntry]) -> None:
+    """Add an item to the injected entry at the end, or start one: hidden context in a row is one group."""
+    if entries and entries[-1].kind == "injected":
+        entries[-1] = replace(entries[-1], items=(*entries[-1].items, item))
+    else:
+        entries.append(ChatEntry("injected", timestamp, items=(item,)))
+
+
+def compaction_marker(record: transcripts.Record) -> CompactionMarker:
+    """A compact_boundary record's metadata, parsed as the scan parses it."""
+    found = transcripts.compaction(record, transcripts.text_or_none(record.get("uuid")) or "")
+    return CompactionMarker(found.trigger, found.pre_tokens, found.post_tokens, found.duration_ms)
+
+
+def conversation(path: Path, prices: pricing.Prices) -> list[ChatEntry]:
     """The conversation of one transcript file in order: prompts, reply text and thinking with text, tool calls
-    with their results, compactions and failed API calls. Injected user records (isMeta, skill text with
-    sourceToolUseID, compact summaries) are left out. The last entry of each API call carries its final usage.
-    Raises OSError if the file is gone."""
+    with their results, compactions with their metadata, failed API calls, and the hidden context in between
+    (attachments that reach the model, meta records, skill text, compact summaries) grouped per run. The last
+    entry of each API call carries its final usage and its step (growth, cache rebuild priced at prices). Raises
+    OSError if the file is gone."""
     entries: list[ChatEntry] = []
     calls: dict[str, int] = {}
     accumulator = transcripts.MessageAccumulator()
     last_entries: dict[str, int] = {}
+    last_user_ts: datetime | None = None
     for record in transcripts.iter_lines(path):
         kind = record.get("type")
         timestamp = transcripts.parse_timestamp(record.get("timestamp"))
+        item = injected_item(record)
+        if kind == "user":
+            # the request of the next call, as the scan takes it
+            last_user_ts = timestamp or last_user_ts
         if kind == "system" and record.get("subtype") == "compact_boundary":
-            entries.append(ChatEntry("compaction", timestamp, "Conversation compacted"))
+            entries.append(ChatEntry("compaction", timestamp, "Conversation compacted",
+                                     compaction=compaction_marker(record)))
         elif kind == "assistant" and record.get("isApiErrorMessage") is True:
             status = record.get("apiErrorStatus")
             error = transcripts.text_or_none(record.get("error")) or "unknown"
             entries.append(ChatEntry("error", timestamp, f"{error} ({status})" if isinstance(status, int) else error))
         elif kind == "assistant":
-            reply_entries(record, calls, entries, accumulator, last_entries)
-        elif kind == "user" and not record.get("sourceToolUseID"):
+            reply_entries(record, calls, entries, accumulator, last_entries, last_user_ts)
+        elif item is not None:
+            add_injected(item, timestamp, entries)
+        elif kind == "user":
             add_results(record, calls, entries)
             text = transcripts.prompt_text(record)
             if text and text.strip():
                 entries.append(ChatEntry("prompt", timestamp, cut(text, CHAT_TEXT_LIMIT)))
-    add_usage(entries, accumulator, last_entries)
+    add_usage(entries, accumulator, last_entries, prices)
     return entries

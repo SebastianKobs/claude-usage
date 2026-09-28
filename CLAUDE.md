@@ -110,8 +110,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   2026-09-28 (10 of 10 with metadata). The summary follows as a user record with `isCompactSummary`. One row per
   uuid in `compactions`, owned by the file that stored it first. No microcompact records seen.
 - **Attachments:** `attachment` records (`uuid`, `timestamp`, `attachment.type`) carry what Claude Code adds to the
-  next request; `rendered` is a list of `{content}` (the text the model gets), or null for bookkeeping types
-  (`hook_success`, `deferred_tools_record`, …). Never stored, like prompts.
+  next request; `rendered` is a list of `{content}` (the text the model gets; a string, rarely text blocks), or null
+  for bookkeeping types (`hook_success`, `deferred_tools_record`, …). Never stored, like prompts. Checked 2026-09-28
+  (15,169 records, 35 types): `total_tokens_reminder` (86 characters) comes before almost every call.
 - **Edits:** the user record of an Edit's or a Write's result carries `toolUseResult`: `structuredPatch` hunks
   whose `lines` start with `+`, `-` or a space, or for a new file `type: "create"` with `content`. Count the lines,
   never keep them. Counted this way, lines match `totalLinesAdded`/`Removed` for most sessions.
@@ -232,6 +233,10 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     its final usage with the cost at the configured prices, both computed per request. Nothing of it is stored,
     which a test checks against the store files.
     Once Claude Code has deleted the file, it answers `available: false`.
+  - Hidden context in a row (attachments with `rendered`, meta records, skill text, the compact summary) is one
+    `injected` entry of items (kind, full length, text cut to `CHAT_TEXT_LIMIT`); a tool result doesn't split it.
+    A compaction marker carries its metadata. Each call's usage carries `growth` and `rebuild` from `turns.steps`
+    over every call of the file, shown or not; on real data they match the store's (14 rebuilds, same causes).
 - **Dashboard:**
   - The by-model chart stacks every model × effort combination (`day_model_effort`, `hour_model_effort`): the
     model's color for low or no effort, one shade further from the surface each for medium, high and max (xhigh

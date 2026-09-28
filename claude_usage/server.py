@@ -125,9 +125,14 @@ def usage_payload(usage: transcripts.MessageUsage, prices: pricing.Prices) -> Pa
 
 
 def entry_payload(entry: conversation.ChatEntry, prices: pricing.Prices) -> Payload:
-    """A conversation entry as JSON-ready fields, a reply's usage with its cost."""
-    return {**dataclasses.asdict(entry), "timestamp": scan.iso(entry.timestamp),
-            "usage": None if entry.usage is None else usage_payload(entry.usage, prices)}
+    """A conversation entry as JSON-ready fields, a reply's usage with its cost, its growth and its cache rebuild."""
+    fields = dataclasses.asdict(entry)
+    step = fields.pop("step")
+    usage = None
+    if entry.usage is not None:
+        usage = {**usage_payload(entry.usage, prices), "growth": step["growth"] if step else None,
+                 "rebuild": step["rebuild"] if step else None}
+    return {**fields, "timestamp": scan.iso(entry.timestamp), "usage": usage}
 
 
 def day_navigation(days: int, until: date, previous_day: date | None, next_day: date | None,
@@ -246,7 +251,7 @@ class UsageApp:
         if path is None:
             return None
         try:
-            entries = [entry_payload(entry, self.prices) for entry in conversation.conversation(path)]
+            entries = [entry_payload(entry, self.prices) for entry in conversation.conversation(path, self.prices)]
         except OSError:
             return {"session_id": session_id, "agent_id": agent_id, "available": False, "entries": []}
         compact.compact_hints(entries, self.compact)

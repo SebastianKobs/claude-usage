@@ -35,7 +35,19 @@ def declarations(block):
     return dict(re.findall(r"(--[\w-]+):\s*([^;]+);", block))
 
 
+def object_keys(script, name):
+    """The keys of a script's `const name = {…}` object literal."""
+    body = re.search(rf"const {name} = \{{(.*?)\}};", read(STATIC / "js" / script), re.DOTALL).group(1)
+    return set(re.findall(r"(\w+):", body))
+
+
 class ScriptTest(unittest.TestCase):
+    def test_every_rebuild_cause_has_its_words(self):
+        self.assertEqual(object_keys("chat.js", "REBUILD_CAUSES"), {"model", "idle", "prefix"})
+
+    def test_every_injected_kind_that_is_no_attachment_type_has_its_words(self):
+        self.assertEqual(object_keys("chat.js", "INJECTED_KINDS"), {"meta", "skill", "summary"})
+
     def test_html_is_inserted_only_by_the_two_sanitized_paths_in_chat_js(self):
         uses = {path.name: len(re.findall(r"\binnerHTML\b", read(path))) for path in OWN_SCRIPTS}
         self.assertEqual({name: count for name, count in uses.items() if count}, {"chat.js": 2})

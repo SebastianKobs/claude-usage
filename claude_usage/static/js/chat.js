@@ -252,8 +252,25 @@ function compactChip(hint) {
                      text: `ℹ ${compact(hint.context)} · ${hint.times}× your ${compact(hint.threshold)} hint`});
 }
 
+// A call that wrote the cache again instead of reading it: a neutral chip, the cause in words and what it cost
+const REBUILD_CAUSES = {model: "the model changed", idle: "the cache expired while idle",
+                        prefix: "something early in the context changed"};
+
+function rebuildChip(rebuild) {
+  const cost = rebuild.extra_cost === null ? "" : ` · +${money(rebuild.extra_cost)}`;
+  const why = `${compact(rebuild.lost)} tokens written to the cache again: ${REBUILD_CAUSES[rebuild.cause]}`;
+  return el("span", {class: "rebuild-chip", role: "note", title: why,
+                     text: `↻ cache rebuilt (${rebuild.cause}) · ${compact(rebuild.lost)}${cost}`});
+}
+
+// what the call added beyond the previous one's context and output, signed
+function growthText(growth) {
+  return growth < 0 ? ` (−${compact(-growth)})` : ` (+${compact(growth)})`;
+}
+
 function usageLine(usage, hint) {
-  const parts = [`context ${compact(usage.context)}`, `in ${compact(usage.new_input)}`];
+  const growth = usage.growth === null || usage.growth === undefined ? "" : growthText(usage.growth);
+  const parts = [`context ${compact(usage.context)}${growth}`, `in ${compact(usage.new_input)}`];
   if (usage.cache_write) parts.push(`cache write ${compact(usage.cache_write)}`);
   if (usage.cache_read) parts.push(`cache read ${compact(usage.cache_read)}`);
   parts.push(`out ${compact(usage.output)}`);
@@ -263,7 +280,8 @@ function usageLine(usage, hint) {
   // a reminder tints the whole badge in its status color, so it reads at a glance while scrolling
   const tint = !reminder ? "" : hint.kind === "auto_reminder" ? " chat-usage-remind-auto" : " chat-usage-remind";
   return el("div", {class: `chat-usage${tint}`}, el("span", {text: `${parts.join(" · ")} · `}),
-            el("strong", {text: usage.cost === null ? "no price" : money(usage.cost)}), reminder);
+            el("strong", {text: usage.cost === null ? "no price" : money(usage.cost)}), reminder,
+            usage.rebuild ? rebuildChip(usage.rebuild) : null);
 }
 
 // A hint to compact where a call's context first crosses a threshold: soft at the configured heuristic, stronger
@@ -292,12 +310,42 @@ function chatEntry(entry) {
   return el("div", {}, shown, usageLine(entry.usage, hint), announced);
 }
 
+// A compaction's line: how it was triggered, the context before and after, and how long the summary took
+function compactionText(entry) {
+  const marker = entry.compaction || {};
+  const parts = [entry.text];
+  if (marker.trigger) parts.push(marker.trigger);
+  if (marker.pre_tokens !== null && marker.pre_tokens !== undefined) {
+    parts.push(`${compact(marker.pre_tokens)} → ${compact(marker.post_tokens)} tokens`);
+  }
+  if (marker.duration_ms) parts.push(`took ${duration(marker.duration_ms)}`);
+  return parts.join(" · ");
+}
+
+// the kinds of hidden context that aren't an attachment type
+const INJECTED_KINDS = {meta: "meta record", skill: "skill text", summary: "compact summary"};
+
+function injectedKind(kind) { return INJECTED_KINDS[kind] || kind.replaceAll("_", " "); }
+
+// Hidden context Claude Code added to the next request (attachments, meta records, skill text, the compact
+// summary), collapsed: the model got it, the transcript doesn't show it as a turn
+function injectedBlock(entry, time) {
+  const chars = entry.items.reduce((sum, item) => sum + item.chars, 0);
+  const count = entry.items.length === 1 ? "1 item" : `${whole(entry.items.length)} items`;
+  return el("details", {class: "chat-tool chat-injected"},
+    el("summary", {}, el("strong", {text: "Added to the context"}), ` ${count} · ${whole(chars)} characters `, time),
+    ...entry.items.flatMap(item => [
+      el("div", {class: "label", text: `${injectedKind(item.kind)}${cutNote(item.text, item.chars)}`}),
+      el("pre", {class: "code", text: item.text})]));
+}
+
 function chatBlock(entry) {
   const time = el("span", {class: "muted", text: when(entry.timestamp)});
   if (entry.kind === "compaction" || entry.kind === "error") {
-    return el("div", {class: "chat-marker"}, entry.kind === "error" ? `⚠ API error: ${entry.text}` : entry.text,
-              " ", time);
+    return el("div", {class: "chat-marker"},
+              entry.kind === "error" ? `⚠ API error: ${entry.text}` : compactionText(entry), " ", time);
   }
+  if (entry.kind === "injected") return injectedBlock(entry, time);
   if (entry.kind === "tool") {
     const status = entry.result === null ? " · no result yet" : entry.is_error ? " · ⚠ failed" : "";
     const fields = fieldMap(entry);
