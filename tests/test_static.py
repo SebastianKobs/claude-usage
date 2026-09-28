@@ -153,9 +153,11 @@ class CompactCallTest(unittest.TestCase):
                     "likely_pays": likely, "cache_warm_until": warm_until,
                     "estimate": {"breakeven_calls": 6, "calls_ahead": 40.2, "cold_saving": cold_saving}}}}
 
-    def compaction(self, net, net_high=None):
-        """A compaction row with its comparison against keeping the context."""
-        return {"versus_keeping": {"net": net, "net_high": net_high}}
+    def compaction(self, net, one_time=0.42, net_high=None, input_side=0.3):
+        """A compaction row with its comparison against keeping the context: net and one-time cost at the summary
+        estimate, net_high and the input side without it."""
+        return {"versus_keeping": {"net": net, "one_time": one_time, "net_high": net_high, "call_low": input_side,
+                                   "rewrite": 0.0}}
 
     def kind(self, detail):
         """compactCallKind of this detail at NOW."""
@@ -178,13 +180,15 @@ class CompactCallTest(unittest.TestCase):
         self.assertIsNone(self.kind(self.detail(warm_until=expired, cold_saving=-0.5)))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_the_call_comes_once_the_last_compaction_has_paid_for_itself(self):
-        self.assertEqual(self.kind(self.detail(compactions=[self.compaction(-1.0), self.compaction(0.0)])), "warm")
-        self.assertEqual(self.kind(self.detail(compactions=[self.compaction(0.4)])), "warm")
+    def test_the_call_comes_once_the_last_compaction_has_gained_at_least_what_it_cost(self):
+        self.assertEqual(self.kind(self.detail(compactions=[self.compaction(-1.0), self.compaction(0.42)])), "warm")
+        self.assertEqual(self.kind(self.detail(compactions=[self.compaction(0.9)])), "warm")
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_no_call_while_the_last_compaction_has_not_paid_for_itself(self):
-        self.assertIsNone(self.kind(self.detail(compactions=[self.compaction(0.4), self.compaction(-0.1)])))
+    def test_no_call_while_the_last_compactions_gain_is_below_its_cost(self):
+        # 28 Sept., 22:49: +$0.26 against ~$0.42 once
+        self.assertIsNone(self.kind(self.detail(compactions=[self.compaction(0.26)])))
+        self.assertIsNone(self.kind(self.detail(compactions=[self.compaction(0.9), self.compaction(-0.1)])))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_once_the_cache_has_expired_the_call_does_not_wait_for_the_last_compaction(self):
@@ -198,9 +202,9 @@ class CompactCallTest(unittest.TestCase):
         self.assertIsNone(self.kind(self.detail(compactions=[{"versus_keeping": None}])))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_without_a_summary_estimate_the_known_input_side_must_be_paid_off(self):
-        self.assertEqual(self.kind(self.detail(compactions=[self.compaction(None, 0.2)])), "warm")
-        self.assertIsNone(self.kind(self.detail(compactions=[self.compaction(None, -0.2)])))
+    def test_without_a_summary_estimate_the_gain_on_the_input_side_must_reach_its_cost(self):
+        self.assertEqual(self.kind(self.detail(compactions=[self.compaction(None, None, 0.3)])), "warm")
+        self.assertIsNone(self.kind(self.detail(compactions=[self.compaction(None, None, 0.2)])))
 
     def test_the_copy_button_is_wired_in_the_script_not_inline(self):
         script = read(STATIC / "js" / "drilldown.js")

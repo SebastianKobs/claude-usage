@@ -310,13 +310,14 @@ function compactCallKind(detail, now) {
   if (until !== null && Date.parse(until) < Date.parse(now)) {
     return preview.estimate.cold_saving !== null && preview.estimate.cold_saving >= 0 ? "cold" : null;
   }
-  // warm, not again before the last compaction has saved what it cost: its net, else the input side alone; none
-  // with no call after it yet
+  // warm, not again before the last compaction's gain (its net) is at least what it cost once; without a summary
+  // estimate both on the input side alone; none with no call after it yet
   const compactions = detail.agents.find(agent => agent.agent_id === null)?.compactions || [];
   if (compactions.length) {
     const last = compactions[compactions.length - 1].versus_keeping;
-    const net = last ? last.net ?? last.net_high : null;
-    if (net === null || net < 0) return null;
+    if (!last) return null;
+    const [gain, cost] = last.net === null ? [last.net_high, last.call_low + last.rewrite] : [last.net, last.one_time];
+    if (gain < cost) return null;
   }
   return preview.likely_pays ? "warm" : null;
 }
