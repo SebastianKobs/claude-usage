@@ -472,12 +472,14 @@ const COMPACTION_VERDICTS = {saved: "saved", cost_more: "cost more", even: "abou
 const VERSUS_KEEPING_NOTE = "Compared with keeping the context: the same later calls, each reading the dropped " +
   "tokens again from the cache, at API list prices. ~ marks the summary call's output, estimated from its " +
   "duration at your output speed; ▲ + (saved, green) holds even at your fastest, ▼ − (cost more, red) even without " +
-  "the summary. Re-reading files after compacting isn't counted.";
+  "the summary, or so far for the stretch still running. Re-reading files after compacting isn't counted.";
 
-// a saving is a gain, a proven loss a loss; the rest (about even, not paid off yet, forced, unknown) is neutral
+// a saving is a gain, a proven loss a loss, and so is a last stretch still behind as it stands; the rest (about
+// even, forced, unknown) is neutral
 function verdictTone(comparison) {
   if (comparison.verdict === "saved") return "gain";
   if (comparison.verdict === "cost_more") return "loss";
+  if (comparison.verdict === "open" && comparison.net < 0) return "loss";
   return null;
 }
 
@@ -487,6 +489,9 @@ function verdictText(comparison) {
   if (comparison.verdict === "saved") return `▲ +${money(comparison.net)}`;
   if (comparison.verdict === "cost_more") {
     return comparison.net === null ? `▼ −${money(-comparison.net_high)} or more` : `▼ −${money(-comparison.net)}`;
+  }
+  if (comparison.verdict === "open" && comparison.net !== null) {
+    return comparison.net < 0 ? `▼ −${money(-comparison.net)} so far` : "about even so far";
   }
   if (comparison.verdict === "unknown" && comparison.net_high > 0) {
     return `saved at most ${money(comparison.net_high)}, the summary call unknown`;
@@ -498,6 +503,7 @@ function verdictText(comparison) {
 function verdictBadge(comparison) {
   const tone = verdictTone(comparison);
   const words = tone === "gain" ? "Saved against keeping the context"
+    : comparison.verdict === "open" ? "Not paid off by the last call: cost more than keeping the context so far"
     : tone === "loss" ? "Cost more than keeping the context" : null;
   return el("span", {class: tone ? `verdict-${tone}` : null, title: words, text: verdictText(comparison)});
 }

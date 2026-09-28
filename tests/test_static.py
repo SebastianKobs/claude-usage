@@ -123,6 +123,16 @@ class VerdictToneTest(unittest.TestCase):
         self.assertEqual(tones, {"saved": "gain", "cost_more": "loss", "even": None, "forced": None, "open": None,
                                  "unknown": None})
 
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_stretch_not_paid_off_yet_is_a_loss_so_far(self):
+        self.assertEqual(run_function("chat.js", "verdictTone", {"verdict": "open", "net": -0.21}), "loss")
+        self.assertIsNone(run_function("chat.js", "verdictTone", {"verdict": "open", "net": 0.05}))
+
+    def test_a_loss_so_far_shows_its_amount(self):
+        body = re.search(r"^function verdictText\(.*?^\}$", read(STATIC / "js" / "chat.js"),
+                         re.DOTALL | re.MULTILINE).group(0)
+        self.assertIn("so far", body)
+
     def test_both_tones_have_a_text_color_in_every_theme(self):
         for theme in ("light", "dark"):
             text = read(STATIC / "css" / "themes" / f"{theme}.css")
