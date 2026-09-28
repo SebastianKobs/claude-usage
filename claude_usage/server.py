@@ -33,6 +33,7 @@ from claude_usage import queries
 from claude_usage import scan
 from claude_usage import store
 from claude_usage import transcripts
+from claude_usage import turns
 
 STATIC = Path(__file__).resolve().parent / "static"
 DASHBOARD = STATIC / "dashboard.html"
@@ -176,6 +177,10 @@ class UsageApp:
         self.compact = compact
         self.retention_days = retention_days
         self.lock = threading.Lock()
+        # every stored compaction compared with keeping the context, for the gauge's preview, and the store's change
+        # count it was computed at: rebuilt only once a scan changed the store
+        self.compaction_history: list[turns.VersusKeeping | None] = []
+        self.history_changes: int | None = None
         self.last_scan: float | None = None
         self.scan_errors: tuple[str, ...] = ()
 
@@ -274,6 +279,14 @@ class UsageApp:
         return {"session_id": session_id, "agent_id": agent_id, "available": True, "entries": entries,
                 "reminders": reminder_totals(entries)}
 
+    def stored_comparisons(self) -> list[turns.VersusKeeping | None]:
+        """queries.compaction_history, computed again only after the store changed. Call with the lock held."""
+        changes = self.store.connection.total_changes
+        if changes != self.history_changes:
+            self.compaction_history = queries.compaction_history(self.store, self.prices, self.compact)
+            self.history_changes = changes
+        return self.compaction_history
+
     def session(self, session_id: str) -> Payload | None:
         """/api/session/<id>, with the main thread's current context against the auto-compact point; None for an
         unknown id."""
@@ -281,7 +294,8 @@ class UsageApp:
             self.refresh()
             detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False,
                                             settings=self.compact)
-            current = queries.current_context(self.store, session_id, self.compact, self.prices)
+            current = queries.current_context(self.store, session_id, self.compact, self.prices,
+                                              self.stored_comparisons())
             path = queries.transcript_path(self.store, session_id, None)
         if detail is None:
             return None

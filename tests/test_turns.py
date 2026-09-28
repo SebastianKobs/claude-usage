@@ -1,4 +1,5 @@
 """turns.py: growth per step, cache rebuilds, the fixed overhead and the current-context gauge."""
+import dataclasses
 import math
 import unittest
 from datetime import UTC
@@ -355,6 +356,125 @@ class VersusKeepingTest(unittest.TestCase):
         history = [turn(0, cache_1h=10_000, cache_read=190_000, output=1_000, model="gpt-x"),
                    turn(1, cache_1h=20_000, cache_read=30_000, model="gpt-x")]
         self.assertEqual(self.compare(history), [None])
+
+
+def with_overhead(*later_turns):
+    """A 30K first call (the overhead), then the given turns."""
+    return [turn(0, cache_1h=30_000, output=100), *later_turns]
+
+
+CURRENT = with_overhead(turn(1, cache_1h=10_000, cache_read=290_000, output=1_000))
+
+
+class PreviewTest(unittest.TestCase):
+    """What compacting now would cost and when it would pay off."""
+
+    def past(self):
+        """One earlier compaction: 200K and a 1K reply before, 50K after (20K above the overhead, 30K of it the
+        cached prefix), a 20 s summary call, 9 calls after it."""
+        history = with_overhead(turn(1, cache_1h=10_000, cache_read=190_000, output=1_000),
+                                turn(2, cache_1h=20_000, cache_read=30_000, output=500),
+                                *[later(index + 1) for index in range(2, 10)])
+        compaction = turns.Compaction(START + timedelta(seconds=90), "manual", 201_000, 12_000, 20_000)
+        return turns.versus_keeping(history, turns.steps(history, (compaction.ts,), PRICES), (compaction,), PRICES,
+                                    compact.DEFAULT_COMPACT, RATES)
+
+    def preview(self, history, past=()):
+        """compact_preview of these turns."""
+        return turns.compact_preview(history, list(past), PRICES)
+
+    def test_no_turns_no_preview(self):
+        self.assertIsNone(self.preview([]))
+
+    def test_the_exact_parts_need_no_history(self):
+        current = with_overhead(turn(1, cache_1h=10_000, cache_read=290_000, output=1_000))
+        preview = self.preview(current)
+        self.assertEqual(preview["before"], 301_000)
+        self.assertAlmostEqual(preview["reread_cost"], 301_000 * 0.2 / MILLION)
+        self.assertAlmostEqual(preview["keep_across_break"], 301_000 * (4.0 - 0.2) / MILLION)
+        self.assertEqual(preview["cache_warm_until"],
+                         (current[-1].request_ts + timedelta(hours=1)).isoformat(timespec="milliseconds"))
+        self.assertIsNone(preview["estimate"])
+
+    def test_the_break_even_estimated_from_past_compactions(self):
+        preview = self.preview(with_overhead(turn(1, cache_1h=10_000, cache_read=290_000, output=1_000)), self.past())
+        estimate = preview["estimate"]
+        one_time = (290_000 * 0.2 + 2_100 * 2.0 + 10_300 * 2.5 + 2_000 * 10.0 + 19_000 * 3.8) / MILLION
+        self.assertEqual((estimate["after"], estimate["summary_tokens"], estimate["compactions"]), (50_000, 2_000, 1))
+        self.assertAlmostEqual(estimate["one_time"], one_time)
+        self.assertEqual(estimate["breakeven_calls"], math.ceil(one_time / (251_000 * 0.2 / MILLION)))
+
+    def test_compacting_before_a_break_saves_rewriting_the_difference(self):
+        preview = self.preview(with_overhead(turn(1, cache_1h=10_000, cache_read=290_000, output=1_000)), self.past())
+        call_high = (290_000 * 0.2 + 2_100 * 2.0 + 10_300 * 2.5 + 3_000 * 10.0) / MILLION
+        self.assertAlmostEqual(preview["estimate"]["before_break"], 251_000 * 4.0 / MILLION - call_high)
+
+    def test_a_context_below_the_expected_one_after_never_pays_off(self):
+        preview = self.preview(with_overhead(turn(1, cache_1h=10_000, cache_read=30_000, output=100)), self.past())
+        self.assertEqual((preview["estimate"]["breakeven_calls"], preview["estimate"]["before_break"]), (None, None))
+
+    def test_the_range_spans_the_past_compactions(self):
+        [first] = self.past()
+        bigger = dataclasses.replace(first, added=40_000,
+                                     call=dataclasses.replace(first.call, summary_tokens=6_000, summary_high=8_000))
+        estimate = self.preview(with_overhead(turn(1, cache_1h=10_000, cache_read=290_000, output=1_000)),
+                                [first, bigger])["estimate"]
+        self.assertEqual((estimate["after_low"], estimate["after"], estimate["after_high"]), (50_000, 60_000, 70_000))
+        self.assertLessEqual(estimate["breakeven_low"], estimate["breakeven_calls"])
+        self.assertLessEqual(estimate["breakeven_calls"], estimate["breakeven_high"])
+
+    def test_the_summary_of_the_same_model_is_preferred(self):
+        [first] = self.past()
+        other = dataclasses.replace(first, model="claude-opus-5",
+                                    call=dataclasses.replace(first.call, summary_tokens=9_000, summary_high=9_000))
+        estimate = self.preview(with_overhead(turn(1, cache_1h=10_000, cache_read=290_000, output=1_000)),
+                                [first, other])["estimate"]
+        self.assertEqual(estimate["summary_tokens"], 2_000)
+
+    def test_the_calls_that_followed_finished_past_compactions(self):
+        [first] = self.past()
+        finished = dataclasses.replace(first, last_stretch=False)
+        estimate = self.preview(CURRENT, [first, finished, dataclasses.replace(finished, calls_after=30)])["estimate"]
+        self.assertEqual((estimate["calls_after_low"], estimate["calls_after_high"]), (9, 30))
+
+    def test_open_stretches_tell_nothing_about_the_calls_that_follow(self):
+        estimate = self.preview(CURRENT, self.past())["estimate"]
+        self.assertEqual((estimate["calls_after_low"], estimate["calls_after_high"]), (None, None))
+
+    def test_the_context_after_is_the_cached_prefix_and_what_past_compactions_added(self):
+        # another session cached a 45K prefix and added 10K: independent of this session's first call
+        [first] = self.past()
+        other = dataclasses.replace(first, prefix_read=45_000, added=10_000)
+        estimate = self.preview(with_overhead(turn(1, cache_1h=3_000, cache_read=200_000, output=3_000)),
+                                [other])["estimate"]
+        self.assertEqual(estimate["after"], 55_000)
+        self.assertGreater(estimate["one_time"], 0)
+        self.assertGreaterEqual(estimate["breakeven_calls"], 1)
+
+    def test_a_reply_bigger_than_what_compacting_adds_rewrites_nothing(self):
+        [first] = self.past()
+        estimate = self.preview(with_overhead(turn(1, cache_1h=10_000, cache_read=290_000, output=30_000)),
+                                [first])["estimate"]
+        uncached = 10_000 + 30_000 + 1_400
+        input_side = (290_000 * 0.2 + 2_100 * 2.0 + (uncached - 2_100) * 2.5) / MILLION
+        self.assertAlmostEqual(estimate["one_time"], input_side + 2_000 * 10.0 / MILLION)
+
+    def test_a_cold_cache_prices_the_compaction_cold_against_rewriting_everything(self):
+        estimate = self.preview(CURRENT, self.past())["estimate"]
+        cold_input = ((290_000 + 12_400 - 2_100) * 2.5 + 2_100 * 2.0) / MILLION
+        self.assertAlmostEqual(estimate["cold_saving"], 251_000 * 4.0 / MILLION - cold_input - 2_000 * 10.0 / MILLION)
+        self.assertEqual(estimate["breakeven_cold"], 1)
+
+    def test_the_cache_lifetime_comes_from_the_latest_call_that_wrote(self):
+        current = with_overhead(turn(1, cache_1h=10_000, cache_read=290_000, output=1_000),
+                                turn(2, cache_read=301_000, output=10))
+        self.assertEqual(self.preview(current)["cache_ttl_minutes"], 60)
+
+    def test_stored_compactions_without_a_summary_estimate_are_counted(self):
+        [first] = self.past()
+        untimed = dataclasses.replace(first, call=dataclasses.replace(first.call, summary_tokens=None))
+        preview = self.preview(CURRENT, [untimed])
+        self.assertEqual((preview["estimate"], preview["stored_compactions"]), (None, 1))
 
 
 class OverheadTest(unittest.TestCase):

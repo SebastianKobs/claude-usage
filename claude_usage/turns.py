@@ -6,6 +6,7 @@
 - compaction versus keeping: what a compaction cost once and saved per later call against the same calls carrying
   the dropped context, the call at which it paid off, and whether it did.
 """
+import dataclasses
 import math
 import statistics
 from dataclasses import dataclass
@@ -135,6 +136,8 @@ class VersusKeeping:
     net_high: float                     # with the call's input side alone
     verdict: str                        # one of VERDICTS
     rework_margin: int | None           # the re-read tokens after compacting that would cancel a proven saving
+    added: int                          # the next call's context beyond its cache read: the summary, new input
+    prefix_read: int                    # the next call's cache read: the system prompt and tools, still cached
 
 
 @dataclass(frozen=True)
@@ -276,17 +279,22 @@ def output_rates(samples: list[tuple[str, int, float]]) -> dict[str, OutputRate]
     return rates
 
 
+def compaction_input(last: Turn, rates: Rates, warm: bool) -> float:
+    """The input side of a compaction call after the last call: warm, it reads the last call's cache read and writes
+    the rest but the tail to the 5-minute cache; cold, it writes all but the tail."""
+    uncached = last.context - last.cache_read + last.output + COMPACT_PROMPT_TOKENS
+    tail = min(uncached, COMPACT_UNCACHED_TAIL)
+    if warm:
+        return last.cache_read * rates.read + tail * rates.input + (uncached - tail) * rates.write_5m
+    return (last.cache_read + uncached - tail) * rates.write_5m + tail * rates.input
+
+
 def compaction_call(last: Turn, compaction: Compaction, rate: OutputRate | None, rates: Rates,
                     warm: bool) -> CallCost:
     """The compaction call's cost, which no transcript shows. Its input side is known: warm, it reads the last
     call's cache read and writes the rest but the tail to the 5-minute cache; cold, it writes all but the tail. Its
     output, the summary, is estimated from the call's duration at the model's median and fastest output speed."""
-    uncached = last.context - last.cache_read + last.output + COMPACT_PROMPT_TOKENS
-    tail = min(uncached, COMPACT_UNCACHED_TAIL)
-    if warm:
-        low = last.cache_read * rates.read + tail * rates.input + (uncached - tail) * rates.write_5m
-    else:
-        low = (last.cache_read + uncached - tail) * rates.write_5m + tail * rates.input
+    low = compaction_input(last, rates, warm)
     if rate is None or not compaction.duration_ms:
         return CallCost(low=low, cost=None, high=None, summary_tokens=None, summary_high=None)
     seconds = compaction.duration_ms / 1000
@@ -419,4 +427,81 @@ def compare_one(turns: list[Turn], turn_steps: list[Step], compaction: Compactio
         breakeven_call=breakeven(savings, target, per_call, capped_at is not None),
         breakeven_at_least=call.high is None,
         net=net, net_low=net_low, net_high=net_high, verdict=verdict_of(forced, net_low, net_high, final),
-        rework_margin=margin)
+        rework_margin=margin, added=first.context - first.cache_read, prefix_read=first.cache_read)
+
+
+def cache_writer(turns: list[Turn]) -> Turn:
+    """The latest turn that wrote to the cache (its lifetime and write price stand for the session's), else the
+    last one."""
+    return next((turn for turn in reversed(turns) if turn.cache_write), turns[-1])
+
+
+def compact_preview(turns: list[Turn], past: list[VersusKeeping | None],
+                    prices: pricing.Prices) -> dict[str, Any] | None:
+    """What compacting after the last turn would cost and when it would pay off. Exact: what each call reads again
+    (the last context and reply), until when the cache stays warm (the last request plus the lifetime of the latest
+    writes; other requests may refresh it), and what keeping costs across a break past that (rewriting it all).
+    Estimated from past compactions (preview_estimate, None without one that estimated a summary). None without
+    turns or a price."""
+    if not turns:
+        return None
+    last = turns[-1]
+    writer = cache_writer(turns)
+    rates = turn_rates(prices, last)
+    writer_rates = turn_rates(prices, writer) if writer.model == last.model else rates
+    if rates is None or writer_rates is None:
+        return None
+    rates = dataclasses.replace(rates, write=writer_rates.write)
+    before = last.context + last.output
+    start = last.request_ts or last.ts
+    known = [item for item in past if item is not None]
+    return {"before": before, "reread_cost": before * rates.read,
+            "cache_ttl_minutes": round(cache_ttl(writer).total_seconds() / 60),
+            "cache_warm_until": None if start is None
+            else (start + cache_ttl(writer)).isoformat(timespec="milliseconds"),
+            "keep_across_break": before * (rates.write - rates.read), "stored_compactions": len(known),
+            "estimate": preview_estimate(last, known, rates)}
+
+
+def preview_estimate(last: Turn, past: list[VersusKeeping], rates: Rates) -> dict[str, Any] | None:
+    """compact_preview's estimates from past comparisons: the context after (the median cached prefix plus what
+    past compactions added beyond it, the next call's rewrite never below nothing), the summary (the same model's
+    median), the one-time cost, the calls to break even with a range, the calls that followed finished stretches,
+    what compacting right before a break past the cache's lifetime saves at the fastest summary, and the same once
+    the cache has expired (compacting cold against keeping's rewrite of everything). None without a past summary."""
+    same_model = [item for item in past if item.model == last.model and item.call.summary_tokens is not None]
+    timed = same_model or [item for item in past if item.call.summary_tokens is not None]
+    if not timed:
+        return None
+    before = last.context + last.output
+    prefix = statistics.median(item.prefix_read for item in past)
+    added = [item.added for item in past]
+    summaries = [item.call.summary_tokens for item in timed]
+    warm_input = compaction_input(last, rates, warm=True)
+
+    def horizon(add: float, summary: float) -> tuple[float, int | None]:
+        """The one-time cost and the calls to break even when compacting adds this much and summarises so long."""
+        one_time = warm_input + summary * rates.output + max(0.0, add - last.output) * (rates.write - rates.read)
+        saving = (before - prefix - add) * rates.read
+        return one_time, math.ceil(one_time / saving) if saving > 0 else None
+
+    add = statistics.mean(added)
+    summary = statistics.median(summaries)
+    one_time, calls = horizon(add, summary)
+    difference = before - prefix - add
+    summary_high = max(item.call.summary_high for item in timed)
+    break_saving = difference * rates.write - (warm_input + summary_high * rates.output)
+    cold_saving = difference * rates.write - (compaction_input(last, rates, warm=False) + summary * rates.output)
+    per_call = difference * rates.read
+    if cold_saving >= 0:
+        cold_calls = 1
+    else:
+        cold_calls = 1 + math.ceil(-cold_saving / per_call) if per_call > 0 else None
+    finished = [item.calls_after for item in past if not item.last_stretch]
+    return {"compactions": len(past), "after": round(prefix + add), "after_low": round(prefix + min(added)),
+            "after_high": round(prefix + max(added)), "summary_tokens": round(summary), "one_time": one_time,
+            "breakeven_calls": calls, "breakeven_low": horizon(min(added), min(summaries))[1],
+            "breakeven_high": horizon(max(added), max(summaries))[1],
+            "before_break": break_saving if break_saving > 0 and difference > 0 else None,
+            "cold_saving": cold_saving, "breakeven_cold": cold_calls if difference > 0 else None,
+            "calls_after_low": min(finished, default=None), "calls_after_high": max(finished, default=None)}

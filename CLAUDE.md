@@ -209,7 +209,22 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     the read price.
   - The gauge (`current` in `/api/session`): the main thread's last context against the auto-compact point, turns
     since the last compaction, the mean growth and context step over the last 10 steps since then, and the turns
-    left at that pace.
+    left at that pace. Its `compact_now` (`turns.compact_preview`) previews compacting after the last call:
+    - Exact: each call's re-read (the last context and reply at the read price), the cache warm until the last
+      request plus the `cache_ttl` of the latest call that wrote (a lower bound: other requests may refresh it),
+      and keeping across a break past that (rewriting it all).
+    - Estimated from every stored main-thread compaction (`queries.compaction_history`, which the server keeps
+      until the store's change count moves), None without one that estimated a summary:
+      - the context after: the median cached prefix plus what past compactions added beyond it (min to max;
+        never this session's first call, which a resumed transcript makes large);
+      - the summary (the same model's median), and the one-time cost with the rewrite never below nothing;
+      - the calls to break even (a range);
+      - how many calls followed finished stretches;
+      - what compacting right before a break past the cache's lifetime saves at the fastest summary;
+      - once the cache has expired, compacting cold against keeping's rewrite of everything (`cold_saving`,
+        `breakeven_cold`), which the page switches to, drawing the gauge again when the cache runs out.
+    - The page words it as a horizon, not advice: on real data "always compact" was never wrong, and how many calls
+      follow is unknowable.
   - The biggest growth steps list the tools the call before ran (tool_use blocks between its first and last
     record); a subagent's `returned_chars` is its spawning Agent call's result size (`transcripts.tool_use_id`).
 - **Compaction versus keeping** (`turns.versus_keeping`, per request, nothing stored; checked 2026-09-28 against

@@ -422,15 +422,39 @@ def returned_chars(store: Store, tool_use_id: str | None) -> int | None:
     return None if row is None else row["result_chars"]
 
 
-def current_context(store: Store, session_id: str, settings: compact.CompactSettings,
-                    prices: pricing.Prices) -> Row | None:
-    """The gauge of the session's main thread (turns.gauge), or None without main-thread turns."""
+def current_context(store: Store, session_id: str, settings: compact.CompactSettings, prices: pricing.Prices,
+                    past: list[turns.VersusKeeping | None] | None = None) -> Row | None:
+    """The gauge of the session's main thread (turns.gauge) with what compacting now would cost and when it would
+    pay off (turns.compact_preview, learning from past, by default every stored compaction), or None without
+    main-thread turns."""
     path = transcript_path(store, session_id, None)
     if path is None:
         return None
     history = as_turns(turn_contexts(store, str(path)))
     moments = compaction_times(compaction_rows(store, str(path)))
-    return turns.gauge(history, turns.steps(history, moments, prices), moments, settings)
+    gauge = turns.gauge(history, turns.steps(history, moments, prices), moments, settings)
+    if gauge is None:
+        return None
+    if past is None:
+        past = compaction_history(store, prices, settings)
+    return {**gauge, "compact_now": turns.compact_preview(history, past, prices)}
+
+
+def compaction_history(store: Store, prices: pricing.Prices,
+                       settings: compact.CompactSettings) -> list[turns.VersusKeeping | None]:
+    """Every stored main-thread compaction compared with keeping the context: what compact_preview learns from."""
+    rates = output_rates(store)
+    paths = [row["path"] for row in store.connection.execute(
+        "SELECT DISTINCT c.path AS path FROM compactions c JOIN transcripts t ON t.path = c.path "
+        "WHERE t.agent_id IS NULL ORDER BY c.path")]
+    comparisons: list[turns.VersusKeeping | None] = []
+    for path in paths:
+        history = as_turns(turn_contexts(store, path))
+        records = compaction_list(compaction_rows(store, path))
+        moments = tuple(record.ts for record in records if record.ts is not None)
+        comparisons += turns.versus_keeping(history, turns.steps(history, moments, prices), records, prices,
+                                            settings, rates)
+    return comparisons
 
 
 def transcript_path(store: Store, session_id: str, agent_id: str | None) -> Path | None:

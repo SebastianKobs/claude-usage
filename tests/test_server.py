@@ -305,6 +305,33 @@ class ApiTest(ServerCase):
         comparison = payload["agents"][0]["compactions"][0]["versus_keeping"]
         self.assertEqual((status, comparison["breakeven_call"]), (200, None))
 
+    def test_the_current_context_previews_compacting_now(self):
+        _, payload = self.get_json("/api/session/s1")
+        preview = payload["current"]["compact_now"]
+        self.assertEqual((preview["before"], preview["estimate"]), (160, None))
+
+    def test_the_preview_learns_from_compactions_of_other_sessions(self):
+        earlier = self.projects.session("s0", project="/home/dev/app").at(datetime.now(UTC) - timedelta(hours=2))
+        earlier.user("go")
+        earlier.assistant("e1", [text_block("a")], usage(cache_1h=20_000, cache_read=180_000, output=500))
+        earlier.compaction("e-c")
+        earlier.user("more")
+        earlier.assistant("e2", [text_block("b")], usage(cache_1h=500, cache_read=30_000))
+        earlier.user("more")
+        earlier.assistant("e3", [text_block("long")], usage(cache_read=30_500, output=5_000))
+        _, payload = self.get_json("/api/session/s1")
+        self.assertEqual(payload["current"]["compact_now"]["stored_compactions"], 1)
+
+    def test_the_compaction_history_is_computed_again_only_after_the_store_changed(self):
+        computed = server.queries.compaction_history
+        with mock.patch.object(server.queries, "compaction_history", wraps=computed) as history:
+            self.get_json("/api/session/s1")
+            self.get_json("/api/session/s1")
+            self.main.assistant("m9", [text_block("c")], usage(output=1))
+            self.clock.now += server.SCAN_INTERVAL
+            self.get_json("/api/session/s1")
+        self.assertEqual(history.call_count, 2)
+
     def test_the_prompt_is_read_outside_the_lock(self):
         held = []
         read = server.transcripts.first_prompt

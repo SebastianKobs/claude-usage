@@ -793,6 +793,35 @@ class ContextPartsTest(StoreCase):
         self.assertIsNone(queries.current_context(self.store, "nope", compact.DEFAULT_COMPACT, PRICES))
 
 
+class CompactionHistoryTest(StoreCase):
+    """Every stored main-thread compaction compared with keeping the context, what the preview learns from."""
+
+    def compacted(self, transcript, prefix):
+        """A call, a compaction and three calls after it, message ids starting with prefix."""
+        transcript.user("go")
+        transcript.assistant(f"{prefix}1", [text_block("a")], usage(cache_1h=20_000, cache_read=180_000, output=500))
+        transcript.compaction(f"{prefix}-c")
+        for index in range(2, 5):
+            transcript.user("more")
+            transcript.assistant(f"{prefix}{index}", [text_block("b")], usage(cache_1h=500, cache_read=30_000))
+
+    def test_main_thread_compactions_of_every_session(self):
+        self.compacted(self.projects.session("s1"), "a")
+        self.compacted(self.projects.session("s2"), "b")
+        self.compacted(self.projects.subagent("s1", "x1"), "c")
+        self.scan()
+        history = queries.compaction_history(self.store, PRICES, compact.DEFAULT_COMPACT)
+        self.assertEqual([item.calls_after for item in history], [3, 3])
+
+    def test_every_compaction_of_a_file(self):
+        main = self.projects.session("s1")
+        self.compacted(main, "a")
+        self.compacted(main, "b")
+        self.scan()
+        history = queries.compaction_history(self.store, PRICES, compact.DEFAULT_COMPACT)
+        self.assertEqual([(item.calls_after, item.last_stretch) for item in history], [(4, False), (3, True)])
+
+
 class OutputRateTest(StoreCase):
     def test_output_speeds_come_from_the_main_threads_only(self):
         main = self.projects.session("s1")

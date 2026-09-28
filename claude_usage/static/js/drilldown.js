@@ -9,6 +9,7 @@ function renderDrilldown(detail) {
   // an open session is all the page shows: the range's filters, figures, charts and tables come back on close
   for (const id of ["filters", "summary"]) document.getElementById(id).hidden = Boolean(detail);
   if (!detail) {
+    clearTimeout(gaugeTimer);
     panel.hidden = true;
     panel.replaceChildren();
     return;
@@ -92,6 +93,7 @@ function renderDrilldown(detail) {
   });
   panel.hidden = false;
   renderContext(detail);                                  // after unhiding, so the chart can measure its width
+  scheduleGaugeRefresh(detail);
 }
 
 // an agent's models, one line each with its effort levels ("claude-opus-5-5 · high, max"); background calls
@@ -177,7 +179,7 @@ function currentGauge(current) {
              : current.turns_left === null ? `${signed(current.mean_step)} per turn, not growing`
              : `about ${whole(current.turns_left)} turns left at ${signed(current.mean_step)} per turn ` +
                "(mean of the last 10)";
-  return el("div", {class: "card gauge-card"},
+  return el("div", {class: "card gauge-card", id: "current-gauge"},
     el("div", {class: "label", text: `Latest context, main thread · ${current.model}`}),
     el("div", {class: "tile-value"}, `${compact(current.context)} `,
        el("span", {class: "secondary",
@@ -191,7 +193,82 @@ function currentGauge(current) {
     el("div", {class: "note", text: [
       `${compact(current.headroom)} until auto-compact`,
       hint === null ? null : `the mark is the compact hint at ${compact(current.hint_tokens)}, a heuristic`,
-      `${whole(current.turns_since_compaction)} turns ${since}`, pace].filter(Boolean).join(" · ")}));
+      `${whole(current.turns_since_compaction)} turns ${since}`, pace].filter(Boolean).join(" · ")}),
+    ...compactNowNotes(current.compact_now));
+}
+
+// " (low–high)", or nothing where both ends read the same
+function spread(low, high) { return low === high ? "" : ` (${low}–${high})`; }
+
+// what compacting now would cost: the exact parts (each call's re-read, the cache's lifetime, keeping across a
+// break), then the estimate from past compactions (turns.compact_preview)
+function compactNowNotes(preview) {
+  if (!preview) return [];
+  const until = preview.cache_warm_until;
+  const expired = until !== null && Date.parse(until) < Date.now();
+  const cache = until === null ? null
+    : expired ? `the cache has likely expired (${when(until)}): the next call rewrites it all, ` +
+                `+${money(preview.keep_across_break)}`
+    : `cache warm until ${when(until)} (${preview.cache_ttl_minutes} min from the last request); after that, ` +
+      `keeping costs +${money(preview.keep_across_break)} at the next call`;
+  const reread = `Each call re-reads ${compact(preview.before)} (${money(preview.reread_cost)})`;
+  const exact = el("div", {class: "note", text: [reread, cache].filter(Boolean).join(" · ")});
+  const estimate = preview.estimate;
+  if (!estimate) {
+    const stored = preview.stored_compactions;
+    const why = stored ? `your ${whole(stored)} stored ${stored === 1 ? "compaction carries" : "compactions carry"} ` +
+                         "no duration or output speed to estimate the summary from"
+                       : "no stored compaction to learn from yet";
+    return [exact, el("div", {class: "note", text: `No estimate of compacting now: ${why}.`})];
+  }
+  const count = `${whole(estimate.compactions)} stored ${estimate.compactions === 1 ? "compaction" : "compactions"}`;
+  const parts = [`If you compact now: ${payoffText(estimate, expired)}`,
+                 `context after about ${compact(estimate.after)}` +
+                 spread(compact(estimate.after_low), compact(estimate.after_high)),
+                 expired ? null : `one-time ~${money(estimate.one_time)}`, `estimated from ${count}`].filter(Boolean);
+  if (estimate.calls_after_low !== null) {
+    const low = whole(estimate.calls_after_low);
+    const high = whole(estimate.calls_after_high);
+    parts.push(`${low === high ? low : `${low}–${high}`} calls followed them until the next compaction`);
+  }
+  if (estimate.before_break !== null && !expired && until !== null) {
+    parts.push(`compacting before a break past ${when(until)} pays off at once ` +
+               `(about ${money(estimate.before_break)})`);
+  }
+  return [exact, el("div", {class: "note", text: parts.join(" · ")})];
+}
+
+// when compacting now pays off: warm against the next calls' reads; once the cache has expired, cold against
+// keeping's rewrite of everything
+function payoffText(estimate, expired) {
+  if (expired) {
+    if (estimate.breakeven_cold === null) return "would never pay off: the context is below what compacting leaves";
+    return estimate.cold_saving >= 0
+      ? `pays off at once (about ${money(estimate.cold_saving)}), since the next call rewrites it all anyway`
+      : `would pay off after about ${whole(estimate.breakeven_cold)} calls`;
+  }
+  const calls = value => (value === null ? "never" : whole(value));
+  if (estimate.breakeven_calls !== null) {
+    return `would pay off after about ${whole(estimate.breakeven_calls)} calls` +
+           spread(calls(estimate.breakeven_low), calls(estimate.breakeven_high));
+  }
+  return estimate.breakeven_low === null
+    ? "would never pay off: the context is below what compacting leaves"
+    : `would likely not pay off (at best after about ${whole(estimate.breakeven_low)} calls)`;
+}
+
+// the gauge's cache wording turns once the cache expires: draw it again then, if the session is still open
+let gaugeTimer = null;
+function scheduleGaugeRefresh(detail) {
+  clearTimeout(gaugeTimer);
+  const until = detail && detail.current && detail.current.compact_now
+    ? detail.current.compact_now.cache_warm_until : null;
+  const wait = until === null ? -1 : Date.parse(until) - Date.now();
+  if (wait <= 0 || wait > 2 ** 31 - 1) return;
+  gaugeTimer = setTimeout(() => {
+    const gauge = document.getElementById("current-gauge");
+    if (gauge && state.session === detail) gauge.replaceWith(currentGauge(detail.current));
+  }, wait + 1000);
 }
 
 // the turn the chart puts a compaction before: the first turn after it
