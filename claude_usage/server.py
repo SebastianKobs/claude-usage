@@ -142,10 +142,12 @@ def entry_payload(entry: conversation.ChatEntry, prices: pricing.Prices) -> Payl
 def add_pays(chat_entries: list[conversation.ChatEntry], entries: list[Payload],
              past: list[turns.VersusKeeping | None], prices: pricing.Prices) -> None:
     """Put compact_pays, the estimate, on the usage of each call after which compacting likely pays off
-    (turns.pays_estimates, learnt from the stored compactions known at that call)."""
+    (turns.pays_estimates, learnt from the stored compactions known at that call, counting its calls since the
+    transcript's last compaction)."""
     calls = [index for index, entry in enumerate(chat_entries) if entry.usage is not None]
     history = [conversation.as_turn(chat_entries[index].usage) for index in calls]
-    for index, estimate in zip(calls, turns.pays_estimates(history, past, prices)):
+    moments = tuple(entry.timestamp for entry in chat_entries if entry.kind == "compaction" and entry.timestamp)
+    for index, estimate in zip(calls, turns.pays_estimates(history, moments, past, prices)):
         if estimate is not None:
             entries[index]["usage"]["compact_pays"] = estimate
 

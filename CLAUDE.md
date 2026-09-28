@@ -215,8 +215,13 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     One hint per call, for the highest milestone passed; once a stronger tier has spoken the weaker ones are quiet.
   - The pays tier (main thread only): the call's usage carries `compact_pays`, the gauge's estimate for
     compacting right after it (`turns.pays_estimates`), where `turns.likely_pays` holds: the break-even is at most
-    the fewest calls that followed a finished past compaction. It learns only from what was known at that call
-    (`turns.known_at`: compactions before it, a stretch ending later still open). Its edge is
+    the calls still ahead on average (`turns.calls_ahead`). That is the mean of what the finished past stretches
+    longer than the current one had left, with at least `AHEAD_MIN_STRETCHES` of them, else the mean finished
+    stretch (having outlasted most says nothing about stopping soon). The mean, not a low bound, is the rule that
+    saves most on average: a compaction that doesn't pay back loses at most its one-time cost, a long stretch saves
+    on every call. It learns only from what was known at that call (`turns.known_at`: compactions before it, a
+    stretch ending later still open), counting its calls since the transcript's last compaction. The gauge's
+    estimate carries the same `calls_ahead`. Its edge is
     `--hint-critical-edge`, the critical hue lightened in dark mode to clear 3:1 on the warning wash.
   - The Input tokens tile shows the median and p90 context per main-thread turn (`queries.context_stats`) to choose
     the threshold by.
@@ -242,7 +247,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
         never this session's first call, which a resumed transcript makes large);
       - the summary (the same model's median), and the one-time cost with the rewrite never below nothing;
       - the calls to break even (a range);
-      - how many calls followed finished stretches;
+      - how many calls followed finished stretches, and how many are still ahead on average (`calls_ahead`);
       - what compacting right before a break past the cache's lifetime saves at the fastest summary;
       - once the cache has expired, compacting cold against keeping's rewrite of everything (`cold_saving`,
         `breakeven_cold`), which the page switches to, drawing the gauge again when the cache runs out.

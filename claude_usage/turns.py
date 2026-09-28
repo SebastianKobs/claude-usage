@@ -30,6 +30,7 @@ COMPACT_PROMPT_TOKENS = 1_400           # its own prompt: 684 to 1,926
 COMPACT_UNCACHED_TAIL = 2_100           # 2,040 to 2,177
 RATE_MEDIAN_MIN_OUTPUT = 3_000          # replies this long give the median output speed, the summary's estimate
 RATE_FASTEST_MIN_OUTPUT = 1_000         # and this long the fastest one, its upper bound
+AHEAD_MIN_STRETCHES = 3                 # finished stretches the calls ahead are averaged over, at least
 VERDICTS = ("saved", "cost_more", "even", "forced", "open", "unknown")
 
 
@@ -439,13 +440,13 @@ def cache_writer(turns: list[Turn]) -> Turn:
     return next((turn for turn in reversed(turns) if turn.cache_write), turns[-1])
 
 
-def compact_preview(turns: list[Turn], past: list[VersusKeeping | None],
-                    prices: pricing.Prices) -> dict[str, Any] | None:
+def compact_preview(turns: list[Turn], past: list[VersusKeeping | None], prices: pricing.Prices,
+                    calls_so_far: int = 0) -> dict[str, Any] | None:
     """What compacting after the last turn would cost and when it would pay off. Exact: what each call reads again
     (the last context and reply), until when the cache stays warm (the last request plus the lifetime of the latest
     writes; other requests may refresh it), and what keeping costs across a break past that (rewriting it all).
-    Estimated from past compactions (preview_estimate, None without one that estimated a summary). None without
-    turns or a price."""
+    Estimated from past compactions (preview_estimate, None without one that estimated a summary), calls_so_far
+    being the calls since the last compaction. None without turns or a price."""
     if not turns:
         return None
     last = turns[-1]
@@ -463,15 +464,17 @@ def compact_preview(turns: list[Turn], past: list[VersusKeeping | None],
             "cache_warm_until": None if start is None
             else (start + cache_ttl(writer)).isoformat(timespec="milliseconds"),
             "keep_across_break": before * (rates.write - rates.read), "stored_compactions": len(known),
-            "estimate": preview_estimate(last, known, rates)}
+            "estimate": preview_estimate(last, known, rates, calls_so_far)}
 
 
-def preview_estimate(last: Turn, past: list[VersusKeeping], rates: Rates) -> dict[str, Any] | None:
+def preview_estimate(last: Turn, past: list[VersusKeeping], rates: Rates,
+                     calls_so_far: int = 0) -> dict[str, Any] | None:
     """compact_preview's estimates from past comparisons: the context after (the median cached prefix plus what
     past compactions added beyond it, the next call's rewrite never below nothing), the summary (the same model's
     median), the one-time cost, the calls to break even with a range, the calls that followed finished stretches,
     what compacting right before a break past the cache's lifetime saves at the fastest summary, and the same once
-    the cache has expired (compacting cold against keeping's rewrite of everything). None without a past summary."""
+    the cache has expired (compacting cold against keeping's rewrite of everything), and the calls still ahead
+    (calls_ahead). None without a past summary."""
     same_model = [item for item in past if item.model == last.model and item.call.summary_tokens is not None]
     timed = same_model or [item for item in past if item.call.summary_tokens is not None]
     if not timed:
@@ -501,21 +504,39 @@ def preview_estimate(last: Turn, past: list[VersusKeeping], rates: Rates) -> dic
     else:
         cold_calls = 1 + math.ceil(-cold_saving / per_call) if per_call > 0 else None
     finished = [item.calls_after for item in past if not item.last_stretch]
+    ahead, ahead_from = calls_ahead(finished, calls_so_far)
     return {"compactions": len(past), "after": round(prefix + add), "after_low": round(prefix + min(added)),
             "after_high": round(prefix + max(added)), "summary_tokens": round(summary), "one_time": one_time,
             "breakeven_calls": calls, "breakeven_low": horizon(min(added), min(summaries))[1],
             "breakeven_high": horizon(max(added), max(summaries))[1],
             "before_break": break_saving if break_saving > 0 and difference > 0 else None,
             "cold_saving": cold_saving, "breakeven_cold": cold_calls if difference > 0 else None,
-            "calls_after_low": min(finished, default=None), "calls_after_high": max(finished, default=None)}
+            "calls_after_low": min(finished, default=None), "calls_after_high": max(finished, default=None),
+            "calls_ahead": ahead, "ahead_from": ahead_from,
+            "stretches_ahead": sum(1 for calls in finished if calls > calls_so_far)}
+
+
+def calls_ahead(finished: list[int], calls_so_far: int) -> tuple[float | None, str | None]:
+    """The calls still ahead on average, calls_so_far into a stretch, rounded to a tenth, and what it is averaged
+    over: "longer", what the finished stretches longer than that had left, with at least AHEAD_MIN_STRETCHES of
+    them; else "all", the mean finished stretch (having outlasted most says nothing about stopping soon, so that is
+    the cautious estimate); (None, None) with fewer finished stretches than that. The mean, not a low bound: a
+    compaction that doesn't pay back loses at most its one-time cost, a long stretch saves on every call, so the
+    expected saving is what counts."""
+    left = [calls - calls_so_far for calls in finished if calls > calls_so_far]
+    if len(left) >= AHEAD_MIN_STRETCHES:
+        return round(statistics.mean(left), 1), "longer"
+    if len(finished) >= AHEAD_MIN_STRETCHES:
+        return round(statistics.mean(finished), 1), "all"
+    return None, None
 
 
 def likely_pays(estimate: dict[str, Any] | None) -> bool:
-    """Whether compacting is predicted to pay off (preview_estimate's break-even) within the fewest calls that
-    followed a finished past compaction."""
-    if estimate is None or estimate["breakeven_calls"] is None or estimate["calls_after_low"] is None:
+    """Whether compacting is predicted to pay off (preview_estimate's break-even) within the calls that on average
+    still follow (calls_ahead)."""
+    if estimate is None or estimate["breakeven_calls"] is None or estimate["calls_ahead"] is None:
         return False
-    return estimate["breakeven_calls"] <= estimate["calls_after_low"]
+    return estimate["breakeven_calls"] <= estimate["calls_ahead"]
 
 
 def known_at(past: list[VersusKeeping | None], moment: datetime | None) -> list[VersusKeeping]:
@@ -531,14 +552,19 @@ def known_at(past: list[VersusKeeping | None], moment: datetime | None) -> list[
     return known
 
 
-def pays_estimates(history: list[Turn], past: list[VersusKeeping | None],
+def pays_estimates(history: list[Turn], compactions: tuple[datetime, ...], past: list[VersusKeeping | None],
                    prices: pricing.Prices) -> list[dict[str, Any] | None]:
-    """Per turn, compact_preview's estimate for compacting right after it, learnt from the compactions known then,
-    where it likely pays (likely_pays); else None."""
+    """Per turn, compact_preview's estimate for compacting right after it, learnt from the compactions known then
+    and counting the calls since the transcript's last compaction before it (compactions), where it likely pays
+    (likely_pays); else None."""
     results: list[dict[str, Any] | None] = []
+    calls_so_far = 0
     for index, turn in enumerate(history):
+        previous = history[index - 1] if index else None
+        restarted = previous is not None and compacted_between(compactions, previous, turn)
+        calls_so_far = 1 if restarted else calls_so_far + 1
         known = known_at(past, turn.ts)
-        preview = compact_preview(history[:index + 1], known, prices) if known else None
+        preview = compact_preview(history[:index + 1], known, prices, calls_so_far) if known else None
         estimate = None if preview is None else preview["estimate"]
         results.append(estimate if likely_pays(estimate) else None)
     return results

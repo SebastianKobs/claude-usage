@@ -443,6 +443,28 @@ class PreviewTest(unittest.TestCase):
         estimate = self.preview(CURRENT, [first, finished, dataclasses.replace(finished, calls_after=30)])["estimate"]
         self.assertEqual((estimate["calls_after_low"], estimate["calls_after_high"]), (9, 30))
 
+    def test_the_calls_still_ahead_are_the_mean_left_of_the_finished_stretches_longer_than_this_one(self):
+        [first] = self.past()
+        stretches = [dataclasses.replace(first, last_stretch=False, calls_after=calls) for calls in (3, 9, 30, 40)]
+        estimate = turns.compact_preview(CURRENT, stretches, PRICES, calls_so_far=5)["estimate"]
+        self.assertEqual((estimate["calls_ahead"], estimate["stretches_ahead"], estimate["ahead_from"]),
+                         (21.3, 3, "longer"))
+
+    def test_with_fewer_than_three_longer_stretches_the_calls_ahead_are_the_mean_stretch(self):
+        # having outlasted most past stretches says nothing about stopping soon: the mean of all is the cautious
+        # estimate
+        [first] = self.past()
+        stretches = [dataclasses.replace(first, last_stretch=False, calls_after=calls) for calls in (3, 9, 30, 40)]
+        estimate = turns.compact_preview(CURRENT, stretches, PRICES, calls_so_far=10)["estimate"]
+        self.assertEqual((estimate["calls_ahead"], estimate["stretches_ahead"], estimate["ahead_from"]),
+                         (20.5, 2, "all"))
+
+    def test_fewer_than_three_finished_stretches_tell_nothing_about_the_calls_ahead(self):
+        [first] = self.past()
+        stretches = [dataclasses.replace(first, last_stretch=False, calls_after=calls) for calls in (30, 40)]
+        estimate = turns.compact_preview(CURRENT, stretches, PRICES, calls_so_far=1)["estimate"]
+        self.assertEqual((estimate["calls_ahead"], estimate["ahead_from"]), (None, None))
+
     def test_open_stretches_tell_nothing_about_the_calls_that_follow(self):
         estimate = self.preview(CURRENT, self.past())["estimate"]
         self.assertEqual((estimate["calls_after_low"], estimate["calls_after_high"]), (None, None))
@@ -484,7 +506,7 @@ class PreviewTest(unittest.TestCase):
 
 
 class LikelyPaysTest(unittest.TestCase):
-    """Where compacting is predicted to pay off within the fewest calls that followed a past compaction."""
+    """Where compacting is predicted to pay off within the calls that on average still follow."""
 
     def past(self, calls_after=9):
         """PreviewTest's earlier compaction, its stretch finished after calls_after calls a day later."""
@@ -492,13 +514,13 @@ class LikelyPaysTest(unittest.TestCase):
         return dataclasses.replace(first, last_stretch=False, calls_after=calls_after,
                                    ended_at=first.compacted_at + timedelta(days=1))
 
-    def test_it_pays_where_the_break_even_comes_within_the_shortest_finished_stretch(self):
-        self.assertTrue(turns.likely_pays({"breakeven_calls": 5, "calls_after_low": 5}))
-        self.assertFalse(turns.likely_pays({"breakeven_calls": 6, "calls_after_low": 5}))
+    def test_it_pays_where_the_break_even_comes_within_the_calls_ahead(self):
+        self.assertTrue(turns.likely_pays({"breakeven_calls": 5, "calls_ahead": 5.0}))
+        self.assertFalse(turns.likely_pays({"breakeven_calls": 6, "calls_ahead": 5.5}))
 
-    def test_nothing_is_likely_without_an_estimate_a_break_even_or_a_finished_stretch(self):
-        for estimate in (None, {"breakeven_calls": None, "calls_after_low": 5},
-                         {"breakeven_calls": 1, "calls_after_low": None}):
+    def test_nothing_is_likely_without_an_estimate_a_break_even_or_the_calls_ahead(self):
+        for estimate in (None, {"breakeven_calls": None, "calls_ahead": 5.0},
+                         {"breakeven_calls": 1, "calls_ahead": None}):
             with self.subTest(estimate=estimate):
                 self.assertFalse(turns.likely_pays(estimate))
 
@@ -512,16 +534,27 @@ class LikelyPaysTest(unittest.TestCase):
         past = self.past()
         self.assertEqual(turns.known_at([past], past.ended_at), [past])
 
-    def test_each_call_where_compacting_after_it_likely_pays(self):
+    def calls(self):
+        """A call before the past compaction, then a small and a big one well after its stretch ended."""
         past = self.past()
         later_start = past.ended_at + timedelta(hours=1)
         small = dataclasses.replace(turn(1, cache_1h=100, cache_read=40_000, output=100), ts=later_start)
         big = dataclasses.replace(turn(2, cache_1h=10_000, cache_read=290_000, output=1_000),
                                   ts=later_start + timedelta(minutes=1))
         early = dataclasses.replace(big, ts=past.compacted_at - timedelta(minutes=1))
-        estimates = turns.pays_estimates([early, small, big], [past], PRICES)
+        return [early, small, big]
+
+    def test_each_call_where_compacting_after_it_likely_pays(self):
+        estimates = turns.pays_estimates(self.calls(), (), [self.past()] * 3, PRICES)
         self.assertEqual([estimate is not None for estimate in estimates], [False, False, True])
-        self.assertEqual(estimates[2]["calls_after_low"], 9)
+        # three calls so far, and each past stretch ran 9
+        self.assertEqual(estimates[2]["calls_ahead"], 6)
+
+    def test_the_calls_so_far_count_from_the_transcripts_last_compaction(self):
+        history = self.calls()
+        moment = history[1].ts - timedelta(seconds=1)
+        estimates = turns.pays_estimates(history, (moment,), [self.past()] * 3, PRICES)
+        self.assertEqual(estimates[2]["calls_ahead"], 7)
 
 
 class OverheadTest(unittest.TestCase):

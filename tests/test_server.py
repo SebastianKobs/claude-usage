@@ -556,9 +556,10 @@ class ChatTest(ServerCase):
         self.assertEqual((entry["compact_hint"]["kind"], entry["compact_hint"]["threshold"]), ("soft", 1000))
 
     def test_replies_where_compacting_likely_pays_carry_the_estimate_and_a_warning(self):
-        estimate = {"breakeven_calls": 3, "calls_after_low": 20, "one_time": 0.1, "after": 40_000}
+        estimate = {"breakeven_calls": 3, "calls_ahead": 20.0, "ahead_from": "all", "one_time": 0.1,
+                    "after": 40_000}
 
-        def every_call_pays(history, past, prices):
+        def every_call_pays(history, moments, past, prices):
             """pays_estimates saying compacting pays after every call."""
             return [estimate] * len(history)
 

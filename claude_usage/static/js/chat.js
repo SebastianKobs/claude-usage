@@ -418,11 +418,13 @@ function usageLine(usage, hint) {
 function compactHint(hint) {
   if (hint.kind === "pays") {
     return el("div", {class: "compact-hint compact-pays", role: "note"},
-      el("strong", {text: "⚠ Compact now: it pays"}),
+      el("strong", {text: "⚠ Compacting pays on average"}),
       ` Context ${compact(hint.context)}, and every reply reads all of it again. /compact would shrink it to about ` +
       `${compact(hint.after)} for a one-time ~${money(hint.one_time)}, and the cheaper replies pay that back ` +
-      `within about ${hint.pays_off_in} replies. After each of your past compactions you kept going for at least ` +
-      `${hint.shortest_stretch}.`);
+      `within about ${hint.pays_off_in} replies. ` +
+      (hint.ahead_from === "longer"
+        ? `After your past compactions, a stretch this long went on for about ${hint.calls_ahead} more on average.`
+        : `After your past compactions you went on for about ${hint.calls_ahead} replies on average.`));
   }
   if (hint.kind === "auto") {
     return el("div", {class: "compact-hint compact-auto", role: "note"},

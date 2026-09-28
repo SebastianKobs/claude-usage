@@ -14,7 +14,7 @@ def reply(context, model="claude-sonnet-5", cache_read_cost=0.01, pays=None):
     return {"kind": "text", "usage": usage}
 
 
-PAYS = {"breakeven_calls": 6, "calls_after_low": 24, "one_time": 0.36, "after": 51_000}
+PAYS = {"breakeven_calls": 6, "calls_ahead": 40.2, "ahead_from": "longer", "one_time": 0.36, "after": 51_000}
 
 
 class CompactHintsTest(unittest.TestCase):
@@ -84,8 +84,8 @@ class CompactHintsTest(unittest.TestCase):
 
     def test_a_warning_where_compacting_first_likely_pays(self):
         hints = self.hints([reply(100_000), reply(120_000, pays=PAYS), reply(130_000, pays=PAYS)])
-        self.assertEqual(hints, [None, {"kind": "pays", "context": 120_000, "pays_off_in": 6, "shortest_stretch": 24,
-                                        "one_time": 0.36, "after": 51_000}, None])
+        self.assertEqual(hints, [None, {"kind": "pays", "context": 120_000, "pays_off_in": 6, "calls_ahead": 40,
+                                        "ahead_from": "longer", "one_time": 0.36, "after": 51_000}, None])
 
     def test_pays_reminders_at_each_step_of_the_context_it_first_warned_at(self):
         contexts = (120_000, 170_000, 180_000, 200_000, 240_000)

@@ -119,8 +119,8 @@ def compact_hints(entries: list[dict[str, Any]], settings: CompactSettings) -> N
                 auto_next = next_milestone(share, settings.warn_share, settings.auto_reminder_step)
         elif pays_at is None and pays is not None:
             entry["compact_hint"] = {"kind": "pays", "context": context, "pays_off_in": pays["breakeven_calls"],
-                                     "shortest_stretch": pays["calls_after_low"], "one_time": pays["one_time"],
-                                     "after": pays["after"]}
+                                     "calls_ahead": round(pays["calls_ahead"]), "ahead_from": pays["ahead_from"],
+                                     "one_time": pays["one_time"], "after": pays["after"]}
             pays_at = context
             pays_next = next_milestone(1.0, 1.0, settings.reminder_step)
         elif pays_at is not None:
