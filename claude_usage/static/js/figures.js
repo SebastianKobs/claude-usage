@@ -44,9 +44,10 @@ function savingsNote(savings) {
   const gain = savings.net >= 0;
   const amount = gain ? `▲ compacting saved ~${money(savings.net)} so far`
                       : `▼ compacting cost ~${money(-savings.net)} more so far`;
+  // the count on a line of its own, so the amount reads at a glance
   return el("div", {class: "note", title},
-            el("span", {class: gain ? "verdict-gain" : "verdict-loss", text: amount}),
-            ` (${[count, unknown].filter(Boolean).join(", ")})`);
+            el("div", {class: gain ? "verdict-gain" : "verdict-loss", text: amount}),
+            el("div", {text: `(${[count, unknown].filter(Boolean).join(", ")})`}));
 }
 
 function renderRuntime(summary) {
