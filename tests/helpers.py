@@ -6,6 +6,7 @@ import re
 import shutil
 import tempfile
 import unittest
+import uuid
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -188,7 +189,7 @@ class Transcript:
         parts = [rendered] if isinstance(rendered, str) else rendered
         return self.record("attachment", attachment={"type": kind, **fields},
                            rendered=None if parts is None else [{"content": part} for part in parts],
-                           uuid=f"att-{kind}")
+                           uuid=f"att-{uuid.uuid4().hex}")
 
     def tool_result(self, tool_use_id, content, is_error=None, **fields):
         """A user record carrying a tool result; content is a string or a list of text blocks. is_error True marks

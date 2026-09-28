@@ -180,6 +180,17 @@ class ConversationTest(TempDirTestCase):
         marker = conversation.conversation(self.main.path, PRICES)[0].compaction
         self.assertEqual(marker, conversation.CompactionMarker(None, None, None, None))
 
+    def test_records_written_again_are_shown_once_with_their_usage(self):
+        # Claude Code may write earlier records of a session again further down its file (seen after compactions)
+        self.main.user("Fix the parser", uuid="u1")
+        self.main.assistant("m1", [text_block("Done.")], usage(output=5), uuid="a1")
+        history = self.main.path.read_text(encoding="utf-8")
+        self.main.path.write_text(history + history, encoding="utf-8")
+        self.main.user("thanks", uuid="u2")
+        entries = conversation.conversation(self.main.path, PRICES)
+        self.assertEqual([(entry.kind, entry.text, entry.usage is not None) for entry in entries],
+                         [("prompt", "Fix the parser", False), ("text", "Done.", True), ("prompt", "thanks", False)])
+
     def test_a_missing_file_raises(self):
         with self.assertRaises(OSError):
             conversation.conversation(self.main.path.with_name("gone.jsonl"), PRICES)

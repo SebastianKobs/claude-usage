@@ -87,6 +87,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - `tool-results/`, `memory/` and anything else: ignore.
   - Paths sort a session's `subagents/` before its main file.
 - **Records:** one JSON object per line. Skip unreadable lines (also nested too deeply to decode) and non-objects.
+  - Claude Code may write earlier records again further down the file, identical with the same `uuid`, after a
+    compaction (checked 2026-09-28: 3 files, 1,863 records). The conversation reads each uuid once; the scan's
+    upserts by message and tool_use id make the copies change nothing.
   A timestamp without a zone counts as UTC; an epoch time out of range counts as missing.
   - Conversation records carry `timestamp` (ISO UTC with milliseconds), `sessionId`, `cwd`, `gitBranch` and
     `version`.

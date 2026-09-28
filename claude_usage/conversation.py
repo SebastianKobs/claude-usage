@@ -234,7 +234,8 @@ def conversation(path: Path, prices: pricing.Prices) -> list[ChatEntry]:
     with their results, compactions with their metadata, failed API calls, and the hidden context in between
     (attachments that reach the model, meta records, skill text, compact summaries) grouped per run, without
     FOLDED_ATTACHMENTS. The last entry of each API call carries its final usage, its step (growth, cache rebuild
-    priced at prices) and the folded characters sent with it. Raises OSError if the file is gone."""
+    priced at prices) and the folded characters sent with it. A record written again (the same uuid) counts once.
+    Raises OSError if the file is gone."""
     entries: list[ChatEntry] = []
     calls: dict[str, int] = {}
     accumulator = transcripts.MessageAccumulator()
@@ -242,7 +243,14 @@ def conversation(path: Path, prices: pricing.Prices) -> list[ChatEntry]:
     last_user_ts: datetime | None = None
     pending_reminder = 0                # folded characters waiting for the next call
     reminders: dict[str, int] = {}
+    seen: set[str] = set()
     for record in transcripts.iter_lines(path):
+        # Claude Code may write earlier records again further down the file (after a compaction): read each once
+        record_id = transcripts.text_or_none(record.get("uuid"))
+        if record_id is not None and record_id in seen:
+            continue
+        if record_id is not None:
+            seen.add(record_id)
         kind = record.get("type")
         timestamp = transcripts.parse_timestamp(record.get("timestamp"))
         item = injected_item(record)
