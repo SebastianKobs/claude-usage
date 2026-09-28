@@ -208,11 +208,16 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - The hard number is where Claude Code auto-compacts: about 967K on native 1M windows, 200K on 200K windows
     (code.claude.com/docs/en/model-config, checked 2026-09-27), in `[auto_compact]` by model prefix. It's
     user-changeable (`autoCompactWindow`), so `default` is configurable.
-  - Two tiers, each announced once per stretch between compactions as a block with its advice, then reminded
+  - Three tiers, each announced once per stretch between compactions as a block with its advice, then reminded
     at milestones as a chip in the call's usage badge: soft every further `compact_reminder_step` of the
-    threshold (1.5×, 2×, …), auto every further `auto_compact_reminder_step` of the auto-compact point (85 %,
-    90 %, …). One hint per call, for the highest milestone passed; once the auto tier has spoken the soft tier is
-    quiet.
+    threshold (1.5×, 2×, …), pays every further `compact_reminder_step` of the context it first fired at (while
+    it still pays), auto every further `auto_compact_reminder_step` of the auto-compact point (85 %, 90 %, …).
+    One hint per call, for the highest milestone passed; once a stronger tier has spoken the weaker ones are quiet.
+  - The pays tier (main thread only): the call's usage carries `compact_pays`, the gauge's estimate for
+    compacting right after it (`turns.pays_estimates`), where `turns.likely_pays` holds: the break-even is at most
+    the fewest calls that followed a finished past compaction. It learns only from what was known at that call
+    (`turns.known_at`: compactions before it, a stretch ending later still open). Its edge is
+    `--hint-critical-edge`, the critical hue lightened in dark mode to clear 3:1 on the warning wash.
   - The Input tokens tile shows the median and p90 context per main-thread turn (`queries.context_stats`) to choose
     the threshold by.
 - **Context per turn** (`turns.py`, per request from the stored turns, nothing stored; checked 2026-09-28 against

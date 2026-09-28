@@ -352,6 +352,12 @@ class VersusKeepingTest(unittest.TestCase):
         early = turns.Compaction(START - timedelta(minutes=1), "manual", 1, 1, 1)
         self.assertEqual(self.compare([last_call()], (early, COMPACTION)), [None, None])
 
+    def test_a_comparison_knows_when_its_compaction_ran_and_when_its_stretch_ended(self):
+        history, compactions = twice_compacted(3)
+        first, second = self.compare(history, compactions)
+        self.assertEqual((first.compacted_at, first.ended_at), (COMPACTED_AT, compactions[1].ts))
+        self.assertEqual((second.compacted_at, second.ended_at), (compactions[1].ts, None))
+
     def test_an_unpriced_model_means_no_comparison(self):
         history = [turn(0, cache_1h=10_000, cache_read=190_000, output=1_000, model="gpt-x"),
                    turn(1, cache_1h=20_000, cache_read=30_000, model="gpt-x")]
@@ -475,6 +481,47 @@ class PreviewTest(unittest.TestCase):
         untimed = dataclasses.replace(first, call=dataclasses.replace(first.call, summary_tokens=None))
         preview = self.preview(CURRENT, [untimed])
         self.assertEqual((preview["estimate"], preview["stored_compactions"]), (None, 1))
+
+
+class LikelyPaysTest(unittest.TestCase):
+    """Where compacting is predicted to pay off within the fewest calls that followed a past compaction."""
+
+    def past(self, calls_after=9):
+        """PreviewTest's earlier compaction, its stretch finished after calls_after calls a day later."""
+        [first] = PreviewTest.past(self)
+        return dataclasses.replace(first, last_stretch=False, calls_after=calls_after,
+                                   ended_at=first.compacted_at + timedelta(days=1))
+
+    def test_it_pays_where_the_break_even_comes_within_the_shortest_finished_stretch(self):
+        self.assertTrue(turns.likely_pays({"breakeven_calls": 5, "calls_after_low": 5}))
+        self.assertFalse(turns.likely_pays({"breakeven_calls": 6, "calls_after_low": 5}))
+
+    def test_nothing_is_likely_without_an_estimate_a_break_even_or_a_finished_stretch(self):
+        for estimate in (None, {"breakeven_calls": None, "calls_after_low": 5},
+                         {"breakeven_calls": 1, "calls_after_low": None}):
+            with self.subTest(estimate=estimate):
+                self.assertFalse(turns.likely_pays(estimate))
+
+    def test_only_compactions_before_the_moment_are_known(self):
+        past = self.past()
+        self.assertEqual(turns.known_at([past], past.compacted_at), [])
+        self.assertEqual(turns.known_at([past], past.compacted_at + timedelta(seconds=1)),
+                         [dataclasses.replace(past, last_stretch=True)])
+
+    def test_a_stretch_that_ends_later_is_still_open_at_the_moment(self):
+        past = self.past()
+        self.assertEqual(turns.known_at([past], past.ended_at), [past])
+
+    def test_each_call_where_compacting_after_it_likely_pays(self):
+        past = self.past()
+        later_start = past.ended_at + timedelta(hours=1)
+        small = dataclasses.replace(turn(1, cache_1h=100, cache_read=40_000, output=100), ts=later_start)
+        big = dataclasses.replace(turn(2, cache_1h=10_000, cache_read=290_000, output=1_000),
+                                  ts=later_start + timedelta(minutes=1))
+        early = dataclasses.replace(big, ts=past.compacted_at - timedelta(minutes=1))
+        estimates = turns.pays_estimates([early, small, big], [past], PRICES)
+        self.assertEqual([estimate is not None for estimate in estimates], [False, False, True])
+        self.assertEqual(estimates[2]["calls_after_low"], 9)
 
 
 class OverheadTest(unittest.TestCase):

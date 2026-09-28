@@ -138,6 +138,8 @@ class VersusKeeping:
     rework_margin: int | None           # the re-read tokens after compacting that would cancel a proven saving
     added: int                          # the next call's context beyond its cache read: the summary, new input
     prefix_read: int                    # the next call's cache read: the system prompt and tools, still cached
+    compacted_at: datetime | None = None
+    ended_at: datetime | None = None    # the next compaction's time; None for the last stretch
 
 
 @dataclass(frozen=True)
@@ -427,7 +429,8 @@ def compare_one(turns: list[Turn], turn_steps: list[Step], compaction: Compactio
         breakeven_call=breakeven(savings, target, per_call, capped_at is not None),
         breakeven_at_least=call.high is None,
         net=net, net_low=net_low, net_high=net_high, verdict=verdict_of(forced, net_low, net_high, final),
-        rework_margin=margin, added=first.context - first.cache_read, prefix_read=first.cache_read)
+        rework_margin=margin, added=first.context - first.cache_read, prefix_read=first.cache_read,
+        compacted_at=compaction.ts, ended_at=next_moment)
 
 
 def cache_writer(turns: list[Turn]) -> Turn:
@@ -505,3 +508,37 @@ def preview_estimate(last: Turn, past: list[VersusKeeping], rates: Rates) -> dic
             "before_break": break_saving if break_saving > 0 and difference > 0 else None,
             "cold_saving": cold_saving, "breakeven_cold": cold_calls if difference > 0 else None,
             "calls_after_low": min(finished, default=None), "calls_after_high": max(finished, default=None)}
+
+
+def likely_pays(estimate: dict[str, Any] | None) -> bool:
+    """Whether compacting is predicted to pay off (preview_estimate's break-even) within the fewest calls that
+    followed a finished past compaction."""
+    if estimate is None or estimate["breakeven_calls"] is None or estimate["calls_after_low"] is None:
+        return False
+    return estimate["breakeven_calls"] <= estimate["calls_after_low"]
+
+
+def known_at(past: list[VersusKeeping | None], moment: datetime | None) -> list[VersusKeeping]:
+    """The comparisons known at a moment: only compactions before it, and a stretch that ends after it still open,
+    so a call's estimate never learns from what came later."""
+    known: list[VersusKeeping] = []
+    for item in past:
+        if item is None or item.compacted_at is None or moment is None or item.compacted_at >= moment:
+            continue
+        if not item.last_stretch and (item.ended_at is None or item.ended_at > moment):
+            item = dataclasses.replace(item, last_stretch=True)
+        known.append(item)
+    return known
+
+
+def pays_estimates(history: list[Turn], past: list[VersusKeeping | None],
+                   prices: pricing.Prices) -> list[dict[str, Any] | None]:
+    """Per turn, compact_preview's estimate for compacting right after it, learnt from the compactions known then,
+    where it likely pays (likely_pays); else None."""
+    results: list[dict[str, Any] | None] = []
+    for index, turn in enumerate(history):
+        known = known_at(past, turn.ts)
+        preview = compact_preview(history[:index + 1], known, prices) if known else None
+        estimate = None if preview is None else preview["estimate"]
+        results.append(estimate if likely_pays(estimate) else None)
+    return results

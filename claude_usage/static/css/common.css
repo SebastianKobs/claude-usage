@@ -238,6 +238,8 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 .compact-auto { border-color: var(--status-critical); background: color-mix(in srgb, var(--status-critical) 14%,
   var(--surface)); color: var(--text-primary); font-size: 14px; padding: 10px 14px; }
 .compact-auto strong { font-size: 16px; }
+/* compacting likely pays: a notch sterner than the soft hint, the critical edge on the warning wash */
+.compact-pays { border-color: var(--hint-critical-edge); color: var(--text-primary); font-size: 14px; }
 /* a reminder at a milestone past a hint already shown: a chip at the end of the usage badge, in the same tints */
 .compact-chip { display: inline-block; margin-left: 10px; padding: 0 8px; border: 1px solid var(--hint-warning-edge);
   border-radius: 999px; background: color-mix(in srgb, var(--status-warning) 16%, var(--surface));
@@ -249,8 +251,11 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
   background: color-mix(in srgb, var(--status-warning) 16%, var(--surface)); }
 .chat-usage-remind-auto { border-color: var(--status-critical); border-left-width: 5px;
   background: color-mix(in srgb, var(--status-critical) 14%, var(--surface)); }
-.chat-usage-remind .compact-chip, .chat-usage-remind-auto .compact-chip { border: 0; background: none; padding: 0;
-  font-weight: 600; }
+.compact-chip-pays { border-color: var(--hint-critical-edge); font-weight: 600; }
+.chat-usage-remind-pays { border-color: var(--hint-critical-edge); border-left-width: 5px;
+  background: color-mix(in srgb, var(--status-warning) 16%, var(--surface)); }
+.chat-usage-remind .compact-chip, .chat-usage-remind-auto .compact-chip, .chat-usage-remind-pays .compact-chip {
+  border: 0; background: none; padding: 0; font-weight: 600; }
 /* a cache rebuild: a neutral chip at the end of the usage badge, the icon and words carry it (no status color: it
    costs, but needs no action) */
 .rebuild-chip { display: inline-block; margin-left: 10px; padding: 0 8px; border: 1px solid var(--border);

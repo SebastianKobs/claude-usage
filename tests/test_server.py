@@ -555,6 +555,26 @@ class ChatTest(ServerCase):
         self.assertEqual(entry["usage"]["context"], 1500)
         self.assertEqual((entry["compact_hint"]["kind"], entry["compact_hint"]["threshold"]), ("soft", 1000))
 
+    def test_replies_where_compacting_likely_pays_carry_the_estimate_and_a_warning(self):
+        estimate = {"breakeven_calls": 3, "calls_after_low": 20, "one_time": 0.1, "after": 40_000}
+
+        def every_call_pays(history, past, prices):
+            """pays_estimates saying compacting pays after every call."""
+            return [estimate] * len(history)
+
+        with mock.patch.object(server.turns, "pays_estimates", side_effect=every_call_pays) as estimates:
+            _, payload = self.get_json("/api/session/s1/chat")
+            _, agent = self.get_json("/api/session/s1/chat?agent=a1")
+        entry = payload["entries"][-1]
+        self.assertEqual((entry["usage"]["compact_pays"], entry["compact_hint"]["kind"]), (estimate, "pays"))
+        # a subagent can't be compacted
+        self.assertNotIn("compact_pays", agent["entries"][-1]["usage"])
+        self.assertEqual(estimates.call_count, 1)
+
+    def test_without_stored_compactions_nothing_is_predicted_to_pay(self):
+        _, payload = self.get_json("/api/session/s1/chat")
+        self.assertNotIn("compact_pays", payload["entries"][-1]["usage"])
+
     def test_summary_and_session_carry_the_context_stats_and_the_hint(self):
         _, summary = self.get_json("/api/summary?days=7")
         self.assertEqual((summary["context"]["turns"], summary["compact_hint_tokens"]), (2, 200_000))

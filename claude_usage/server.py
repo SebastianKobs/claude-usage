@@ -139,6 +139,17 @@ def entry_payload(entry: conversation.ChatEntry, prices: pricing.Prices) -> Payl
     return {**fields, "timestamp": scan.iso(entry.timestamp), "usage": usage}
 
 
+def add_pays(chat_entries: list[conversation.ChatEntry], entries: list[Payload],
+             past: list[turns.VersusKeeping | None], prices: pricing.Prices) -> None:
+    """Put compact_pays, the estimate, on the usage of each call after which compacting likely pays off
+    (turns.pays_estimates, learnt from the stored compactions known at that call)."""
+    calls = [index for index, entry in enumerate(chat_entries) if entry.usage is not None]
+    history = [conversation.as_turn(chat_entries[index].usage) for index in calls]
+    for index, estimate in zip(calls, turns.pays_estimates(history, past, prices)):
+        if estimate is not None:
+            entries[index]["usage"]["compact_pays"] = estimate
+
+
 def reminder_totals(entries: list[Payload]) -> Payload:
     """How many calls had the token reminder folded into their usage, and its characters in all."""
     usages = [entry["usage"] for entry in entries if entry["usage"]]
@@ -265,13 +276,18 @@ class UsageApp:
             path = queries.transcript_path(self.store, session_id, agent_id)
             comparisons = queries.compaction_comparisons(self.store, session_id, agent_id, self.prices, self.compact)
             ultracode = set() if path is None else queries.ultracode_messages(self.store, str(path))
+            # only the main thread can be compacted
+            past = self.stored_comparisons() if agent_id is None else []
         if path is None:
             return None
         try:
-            entries = [entry_payload(entry, self.prices) for entry in conversation.conversation(path, self.prices)]
+            chat_entries = conversation.conversation(path, self.prices)
         except OSError:
             return {"session_id": session_id, "agent_id": agent_id, "available": False, "entries": [],
                     "reminders": reminder_totals([])}
+        entries = [entry_payload(entry, self.prices) for entry in chat_entries]
+        if agent_id is None:
+            add_pays(chat_entries, entries, past, self.prices)
         for entry in entries:
             # the transcript says xhigh; the scan knows which of those calls ran while ultracode was on
             if entry["message_id"] in ultracode:

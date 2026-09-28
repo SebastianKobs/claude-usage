@@ -79,18 +79,25 @@ def next_milestone(ratio: float, start: float, step: float) -> float:
 
 
 def compact_hints(entries: list[dict[str, Any]], settings: CompactSettings) -> None:
-    """Set compact_hint on the conversation entries, per stretch between compactions, in two tiers:
+    """Set compact_hint on the conversation entries, per stretch between compactions, in three tiers:
     - soft: "soft" where a call's context first reaches hint_tokens (with what re-reading it cost), then a
       "soft_reminder" at each further reminder_step of hint_tokens (1.5x, 2x, ... by default);
+    - pays: "pays" where compacting after a call first likely pays off (its usage carries compact_pays, the
+      estimate), then a "pays_reminder" at each further reminder_step of the context it first fired at, while it
+      still likely pays;
     - auto: "auto" where it first reaches warn_share of the model's auto-compact point, then an "auto_reminder"
       at each further auto_reminder_step of that point (85 %, 90 %, ... by default).
-    A call gets at most one hint, the highest milestone it passed; once the auto tier has spoken the soft tier is
-    quiet, so the stronger one takes over."""
+    A call gets at most one hint, the highest milestone it passed; once a stronger tier has spoken the weaker ones
+    are quiet, so it takes over."""
     soft_next: float | None = None      # the next soft milestone, as a multiple of hint_tokens; None: not yet shown
+    pays_at: int | None = None          # the context the pays warning fired at; None: not yet shown
+    pays_next: float | None = None      # the next pays milestone, as a multiple of pays_at
     auto_next: float | None = None      # the next auto milestone, as a share of the auto-compact point
     for entry in entries:
         if entry.get("kind") == "compaction":
             soft_next = None
+            pays_at = None
+            pays_next = None
             auto_next = None
             continue
         usage = entry.get("usage")
@@ -100,6 +107,7 @@ def compact_hints(entries: list[dict[str, Any]], settings: CompactSettings) -> N
         point = auto_compact_point(settings, usage["model"])
         share = context / point
         times = context / settings.hint_tokens
+        pays = usage.get("compact_pays")
         if auto_next is None and share >= settings.warn_share:
             entry["compact_hint"] = {"kind": "auto", "context": context, "auto_compact": point,
                                      "share": round(share, 2)}
@@ -109,6 +117,17 @@ def compact_hints(entries: list[dict[str, Any]], settings: CompactSettings) -> N
                 entry["compact_hint"] = {"kind": "auto_reminder", "context": context, "auto_compact": point,
                                          "share": round(share, 2)}
                 auto_next = next_milestone(share, settings.warn_share, settings.auto_reminder_step)
+        elif pays_at is None and pays is not None:
+            entry["compact_hint"] = {"kind": "pays", "context": context, "pays_off_in": pays["breakeven_calls"],
+                                     "shortest_stretch": pays["calls_after_low"], "one_time": pays["one_time"],
+                                     "after": pays["after"]}
+            pays_at = context
+            pays_next = next_milestone(1.0, 1.0, settings.reminder_step)
+        elif pays_at is not None:
+            if pays is not None and context / pays_at >= pays_next - 1e-9:
+                entry["compact_hint"] = {"kind": "pays_reminder", "context": context,
+                                         "pays_off_in": pays["breakeven_calls"]}
+                pays_next = next_milestone(context / pays_at, 1.0, settings.reminder_step)
         elif soft_next is None and times >= 1:
             entry["compact_hint"] = {"kind": "soft", "context": context, "threshold": settings.hint_tokens,
                                      "reread_cost": usage["cost_parts"]["cache_read"]}
@@ -117,4 +136,3 @@ def compact_hints(entries: list[dict[str, Any]], settings: CompactSettings) -> N
             entry["compact_hint"] = {"kind": "soft_reminder", "context": context, "threshold": settings.hint_tokens,
                                      "times": round(times, 1)}
             soft_next = next_milestone(times, 1.0, settings.reminder_step)
-

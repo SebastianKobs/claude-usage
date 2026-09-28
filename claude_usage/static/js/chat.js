@@ -360,6 +360,10 @@ function compactChip(hint) {
     return el("span", {class: "compact-chip compact-chip-auto", role: "note",
                        text: `⚠ ${share} of auto-compact (${compact(hint.auto_compact)})`});
   }
+  if (hint.kind === "pays_reminder") {
+    return el("span", {class: "compact-chip compact-chip-pays", role: "note",
+                       text: `⚠ ${compact(hint.context)} · compacting pays after ~${hint.pays_off_in} replies`});
+  }
   return el("span", {class: "compact-chip", role: "note",
                      text: `ℹ ${compact(hint.context)} · ${hint.times}× your ${compact(hint.threshold)} hint`});
 }
@@ -397,7 +401,8 @@ function usageLine(usage, hint) {
   if (usage.speed !== "standard") parts.push("fast mode");
   const reminder = hint && hint.kind.endsWith("_reminder") ? compactChip(hint) : null;
   // a reminder tints the whole badge in its status color, so it reads at a glance while scrolling
-  const tint = !reminder ? "" : hint.kind === "auto_reminder" ? " chat-usage-remind-auto" : " chat-usage-remind";
+  const tints = {auto_reminder: " chat-usage-remind-auto", pays_reminder: " chat-usage-remind-pays"};
+  const tint = !reminder ? "" : tints[hint.kind] || " chat-usage-remind";
   // the cost first, so each call's price reads at a glance while scrolling
   const title = usage.reminder_chars
     ? `The context includes Claude Code's token reminder (${whole(usage.reminder_chars)} characters)` : null;
@@ -407,9 +412,18 @@ function usageLine(usage, hint) {
             usage.rebuild ? rebuildChip(usage.rebuild) : null);
 }
 
-// A hint to compact where a call's context first crosses a threshold: soft at the configured heuristic, stronger
-// near the point where Claude Code auto-compacts. The icon and label carry the meaning, not the color.
+// A hint to compact where a call's context first crosses a threshold: soft at the configured heuristic, sterner
+// where compacting likely pays for itself (learnt from past compactions), strongest near the point where Claude Code
+// auto-compacts. The icon and label carry the meaning, not the color.
 function compactHint(hint) {
+  if (hint.kind === "pays") {
+    return el("div", {class: "compact-hint compact-pays", role: "note"},
+      el("strong", {text: "⚠ Compact now: it pays"}),
+      ` Context ${compact(hint.context)}, and every reply reads all of it again. /compact would shrink it to about ` +
+      `${compact(hint.after)} for a one-time ~${money(hint.one_time)}, and the cheaper replies pay that back ` +
+      `within about ${hint.pays_off_in} replies. After each of your past compactions you kept going for at least ` +
+      `${hint.shortest_stretch}.`);
+  }
   if (hint.kind === "auto") {
     return el("div", {class: "compact-hint compact-auto", role: "note"},
       el("strong", {text: "⚠ Compact soon"}),

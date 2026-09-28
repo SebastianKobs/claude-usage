@@ -5,10 +5,16 @@ from claude_usage import compact
 from claude_usage import config
 
 
-def reply(context, model="claude-sonnet-5", cache_read_cost=0.01):
-    """A conversation entry as the chat payload has it, with the usage fields compact_hints reads."""
-    return {"kind": "text",
-            "usage": {"context": context, "model": model, "cost_parts": {"cache_read": cache_read_cost}}}
+def reply(context, model="claude-sonnet-5", cache_read_cost=0.01, pays=None):
+    """A conversation entry as the chat payload has it, with the usage fields compact_hints reads; pays is the
+    estimate where compacting after it likely pays (server.chat's compact_pays)."""
+    usage = {"context": context, "model": model, "cost_parts": {"cache_read": cache_read_cost}}
+    if pays is not None:
+        usage["compact_pays"] = pays
+    return {"kind": "text", "usage": usage}
+
+
+PAYS = {"breakeven_calls": 6, "calls_after_low": 24, "one_time": 0.36, "after": 51_000}
 
 
 class CompactHintsTest(unittest.TestCase):
@@ -75,6 +81,34 @@ class CompactHintsTest(unittest.TestCase):
     def test_crossing_both_at_once_warns_once(self):
         hints = self.hints([reply(800_000), reply(810_000)])
         self.assertEqual([hint and hint["kind"] for hint in hints], ["auto", None])
+
+    def test_a_warning_where_compacting_first_likely_pays(self):
+        hints = self.hints([reply(100_000), reply(120_000, pays=PAYS), reply(130_000, pays=PAYS)])
+        self.assertEqual(hints, [None, {"kind": "pays", "context": 120_000, "pays_off_in": 6, "shortest_stretch": 24,
+                                        "one_time": 0.36, "after": 51_000}, None])
+
+    def test_pays_reminders_at_each_step_of_the_context_it_first_warned_at(self):
+        contexts = (120_000, 170_000, 180_000, 200_000, 240_000)
+        hints = self.hints([reply(context, pays=PAYS) for context in contexts])
+        self.assertEqual([hint and hint["kind"] for hint in hints],
+                         ["pays", None, "pays_reminder", None, "pays_reminder"])
+        self.assertEqual(hints[2], {"kind": "pays_reminder", "context": 180_000, "pays_off_in": 6})
+
+    def test_no_pays_reminder_where_compacting_no_longer_likely_pays(self):
+        hints = self.hints([reply(120_000, pays=PAYS), reply(180_000)])
+        self.assertEqual([hint and hint["kind"] for hint in hints], ["pays", None])
+
+    def test_the_pays_warning_outranks_the_soft_hint_and_quiets_it(self):
+        hints = self.hints([reply(210_000), reply(250_000, pays=PAYS), reply(310_000), reply(400_000)])
+        self.assertEqual([hint and hint["kind"] for hint in hints], ["soft", "pays", None, None])
+
+    def test_the_auto_tier_outranks_the_pays_warning(self):
+        hints = self.hints([reply(120_000, pays=PAYS), reply(790_000, pays=PAYS), reply(900_000, pays=PAYS)])
+        self.assertEqual([hint and hint["kind"] for hint in hints], ["pays", "auto", "auto_reminder"])
+
+    def test_the_pays_warning_comes_again_after_a_compaction(self):
+        hints = self.hints([reply(120_000, pays=PAYS), {"kind": "compaction"}, reply(130_000, pays=PAYS)])
+        self.assertEqual([hint and hint["kind"] for hint in hints], ["pays", None, "pays"])
 
     def test_entries_without_usage_are_left_alone(self):
         self.assertEqual(self.hints([{"kind": "prompt", "usage": None}, {"kind": "tool"}]), [None, None])

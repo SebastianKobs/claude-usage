@@ -59,7 +59,9 @@ holds:
 - each compaction against keeping the context: what it cost once, what each later call saved, the call at which it
   paid off, and whether it saved or cost more (at API list prices, with the summary call estimated). The
   conversation shows the same at each compaction marker.
-- the conversation, on request: newest first, or in the transcript's order with "Oldest first".
+- the conversation, on request: newest first, or in the transcript's order with "Oldest first". It hints at
+  compacting where the context passes 200K, warns more sternly where your past compactions say compacting now
+  would pay for itself before you would likely stop, and most sternly near the auto-compact point.
 
 ## Keeping the history safe
 After each scan, sessions whose last activity is older than `retention_days` are deleted from the store; the

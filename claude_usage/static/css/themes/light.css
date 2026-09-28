@@ -21,6 +21,7 @@
   --status-critical: #d03b3b;
   --status-warning: #fab219;
   --hint-warning-edge: #a86f00;  /* the warning hue, darkened to clear 3:1 as an edge on the light surface */
+  --hint-critical-edge: #d03b3b;  /* 4.3:1 on the warning wash; dark mode lightens it to clear 3:1 */
   --split-strong: #184f95;
   --split-soft: #3987e5;
   /* the context chart's parts, cache read to new input: blue 400, 550, 700, validated as an ordinal ramp */

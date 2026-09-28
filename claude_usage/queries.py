@@ -331,11 +331,13 @@ def output_rates(store: Store) -> dict[str, turns.OutputRate]:
 
 
 def versus_keeping_payload(comparison: turns.VersusKeeping | None) -> Row | None:
-    """A compaction's comparison with keeping the context as JSON-ready fields."""
+    """A compaction's comparison with keeping the context as JSON-ready fields, without its times (the compaction's
+    row has them)."""
     if comparison is None:
         return None
     fields = dataclasses.asdict(comparison)
     call = fields.pop("call")
+    del fields["compacted_at"], fields["ended_at"]
     return {**fields, "call_low": call["low"], "call_cost": call["cost"], "call_high": call["high"],
             "summary_tokens": call["summary_tokens"], "summary_high": call["summary_high"]}
 
