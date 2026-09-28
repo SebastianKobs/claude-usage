@@ -63,6 +63,7 @@ class ChatEntry:
     result_chars: int = 0
     is_error: bool = False
     effort: str | None = None           # of a reply: the effort level it ran at
+    message_id: str | None = None       # of a reply: its API call's message id
     usage: transcripts.MessageUsage | None = None   # on the last entry of an API call: its final token usage
     step: turns.Step | None = None      # with the usage: what the call's context grew by, and a cache rebuild
     items: tuple[Injected, ...] = ()    # of an injected entry, in order
@@ -123,22 +124,23 @@ def reply_entries(record: transcripts.Record, calls: dict[str, int], entries: li
     timestamp = transcripts.parse_timestamp(record.get("timestamp"))
     model = transcripts.text_or_none(message.get("model"))
     effort = transcripts.text_or_none(record.get("effort"))
+    reply_id = transcripts.text_or_none(message.get("id"))
     start = len(entries)
     for block in transcripts.content_blocks(record):
         kind = block.get("type")
         if kind == "text" and transcripts.text_or_none(block.get("text")):
             entries.append(ChatEntry("text", timestamp, cut(block["text"], CHAT_TEXT_LIMIT), model=model,
-                                     effort=effort))
+                                     effort=effort, message_id=reply_id))
         elif kind == "thinking" and transcripts.text_or_none(block.get("thinking")):
             entries.append(ChatEntry("thinking", timestamp, cut(block["thinking"], CHAT_TEXT_LIMIT), model=model,
-                                     effort=effort))
+                                     effort=effort, message_id=reply_id))
         elif (kind == "tool_use" and transcripts.text_or_none(block.get("id"))
               and transcripts.text_or_none(block.get("name"))):
             calls[block["id"]] = len(entries)
             entries.append(ChatEntry("tool", timestamp, model=model, tool=transcripts.display_name(block["name"]),
                                      summary=call_summary(block.get("input")),
                                      tool_fields=tool_fields(block.get("input")),
-                                     effort=effort))
+                                     effort=effort, message_id=reply_id))
     if model is None:
         return
     message_id = accumulator.add(record, request_ts)

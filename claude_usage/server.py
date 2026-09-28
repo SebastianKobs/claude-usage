@@ -264,6 +264,7 @@ class UsageApp:
             self.refresh()
             path = queries.transcript_path(self.store, session_id, agent_id)
             comparisons = queries.compaction_comparisons(self.store, session_id, agent_id, self.prices, self.compact)
+            ultracode = set() if path is None else queries.ultracode_messages(self.store, str(path))
         if path is None:
             return None
         try:
@@ -271,6 +272,12 @@ class UsageApp:
         except OSError:
             return {"session_id": session_id, "agent_id": agent_id, "available": False, "entries": [],
                     "reminders": reminder_totals([])}
+        for entry in entries:
+            # the transcript says xhigh; the scan knows which of those calls ran while ultracode was on
+            if entry["message_id"] in ultracode:
+                entry["effort"] = store.ULTRACODE
+                if entry["usage"] is not None:
+                    entry["usage"]["effort"] = store.ULTRACODE
         for entry in entries:
             if entry["kind"] == "compaction":
                 # both times come from the same record through scan.iso

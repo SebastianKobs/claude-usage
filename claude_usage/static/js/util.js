@@ -161,8 +161,8 @@ function modelSlots(models) {
   }
   return slots;
 }
-// effort levels from least to most; others sort after them by name
-const EFFORT_ORDER = ["low", "medium", "high", "xhigh", "max"];
+// effort levels from least to most, ultracode (xhigh with its workflows) last; others sort after them by name
+const EFFORT_ORDER = ["low", "medium", "high", "xhigh", "max", "ultracode"];
 function effortRank(effort) {
   const rank = EFFORT_ORDER.indexOf(effort);
   return rank === -1 ? EFFORT_ORDER.length : rank;
@@ -171,11 +171,20 @@ function effortName(effort) { return effort ? `effort ${effort}` : "no effort le
 // A model's color, shaded by effort level: the model's own color for low, none or an unknown level, then one step
 // further from the surface each for medium, high and max (xhigh shares max's shade). Each slot's step is sized for
 // the same lightness gap (--shade-step-*, validated per theme); the legend, tooltip and table name every level.
-const EFFORT_SHADES = {medium: 1, high: 2, xhigh: 3, max: 3};
-function effortShade(slot, effort) {
-  const step = EFFORT_SHADES[effort] || 0;
+// Ultracode shares max's shade too, hatched at 45° with lines one step further (tone on tone), so it needs no color
+// of its own.
+const EFFORT_SHADES = {medium: 1, high: 2, xhigh: 3, max: 3, ultracode: 3};
+const HATCH_SHADES = {ultracode: 4};
+function effortShade(slot, effort) { return shade(slot, EFFORT_SHADES[effort] || 0); }
+// the color of the effort level's hatch lines, or null for a level without a hatch
+function effortHatch(slot, effort) { return HATCH_SHADES[effort] ? shade(slot, HATCH_SHADES[effort]) : null; }
+function shade(slot, step) {
   const name = slot === null ? "other" : slot + 1;
   if (step === 0) return slotColor(slot);
   return `color-mix(in oklab, var(--series-${name}), var(--shade-ink) calc(var(--shade-step-${name}) * ${step}))`;
+}
+// a swatch's background: a series' color, with its hatch where it has one
+function swatchFill(color, hatch) {
+  return hatch ? `repeating-linear-gradient(135deg, ${hatch} 0 1.5px, ${color} 1.5px 4px)` : color;
 }
 function slotColor(slot) { return slot === null ? "var(--series-other)" : `var(--series-${slot + 1})`; }

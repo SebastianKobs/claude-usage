@@ -24,6 +24,7 @@ from claude_usage import turns
 from helpers import MILLION
 from helpers import TempDirTestCase
 from helpers import text_block
+from helpers import thinking_block
 from helpers import tool_use_block
 from helpers import usage
 
@@ -472,6 +473,15 @@ class ChatTest(ServerCase):
                                                               "web_search"})
         self.assertIsNone(unpriced["usage"]["cost"])
         self.assertEqual(payload["entries"][0]["usage"], None)
+
+    def test_replies_made_in_ultracode_say_so(self):
+        self.main.assistant("m7", [text_block("plain")], usage(output=5), effort="xhigh")
+        self.main.ultracode("u1")
+        self.main.assistant("m8", [thinking_block(), text_block("ultra")], usage(output=5), effort="xhigh")
+        _, payload = self.get_json("/api/session/s1/chat")
+        replies = [entry for entry in payload["entries"] if entry["kind"] in ("text", "thinking")]
+        self.assertEqual([entry["effort"] for entry in replies], ["xhigh", "ultracode", "ultracode"])
+        self.assertEqual(replies[-1]["usage"]["effort"], "ultracode")
 
     def test_each_calls_usage_carries_its_growth_and_rebuild(self):
         self.main.assistant("m8", [text_block("a")], usage(new=10, cache_5m=20_000, output=100))

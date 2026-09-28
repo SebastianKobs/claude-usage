@@ -191,6 +191,15 @@ class Transcript:
                            rendered=None if parts is None else [{"content": part} for part in parts],
                            uuid=f"att-{uuid.uuid4().hex}")
 
+    def ultracode(self, record_id, reminder="full"):
+        """Ultracode's attachment on a human prompt: switched on (reminder "full"), a reminder that it still is
+        ("sparse"), or with reminder=None switched off (ultra_effort_exit)."""
+        if reminder is None:
+            attachment = {"type": "ultra_effort_exit"}
+        else:
+            attachment = {"type": "ultra_effort_enter", "reminderType": reminder}
+        return self.record("attachment", attachment=attachment, rendered=[{"content": "ultracode"}], uuid=record_id)
+
     def tool_result(self, tool_use_id, content, is_error=None, **fields):
         """A user record carrying a tool result; content is a string or a list of text blocks. is_error True marks
         a failed call; fields adds e.g. toolUseResult (see edit_result and create_result)."""

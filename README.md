@@ -5,6 +5,11 @@ and a local dashboard (127.0.0.1 only) with live sessions, totals by day, model,
 per-session drilldown and estimated cost. The history keeps 30 days by default, as Claude Code keeps its
 transcripts; set `retention_days` to 90 or 365 (or 0 for everything) to keep usage past their cleanup.
 
+Usage is split by model and effort level. Calls made while ultracode was on count as a level of their own,
+`ultracode`, hatched in the chart: Claude Code notes ultracode only on your prompts, so a call counts if it ran at
+xhigh between switching ultracode on and switching it off or picking another effort level. Subagents and Workflow
+agents count by that time too.
+
 Python ≥ 3.12, standard library only. Run it from the checkout as it is, or install it with `pip install .` to get
 a `claude-usage` command.
 

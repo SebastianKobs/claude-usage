@@ -18,6 +18,8 @@ from claude_usage import pricing
 from claude_usage import transcripts
 from claude_usage import turns
 from claude_usage.store import BACKGROUND
+from claude_usage.store import EFFORT
+from claude_usage.store import ULTRACODE
 from claude_usage.store import RUN_FIELDS
 from claude_usage.store import Row
 from claude_usage.store import Store
@@ -58,8 +60,9 @@ ERROR_GROUPS = {
 }
 NO_LIMIT = -1                             # SQLite's LIMIT for all rows
 ID_BATCH = 500                            # ids per IN list: SQLite before 3.32 allows 999 variables
-# effort levels from least to most; others sort after them by name, as on the dashboard
-EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max")
+# effort levels from least to most, ultracode (xhigh with its workflows) last; others sort after them by name, as on
+# the dashboard
+EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max", ULTRACODE)
 TOP_GROWTH = 5                            # the biggest growth steps a transcript's detail lists
 
 
@@ -260,7 +263,7 @@ def activity_time(mtime_ns: int) -> str:
 
 
 def effort_order(effort: str | None) -> tuple[int, str]:
-    """A sort key for effort levels: low to max, then unknown ones by name, then none."""
+    """A sort key for effort levels: low to max and ultracode, then unknown ones by name, then none."""
     if effort is None:
         return len(EFFORT_ORDER) + 1, ""
     if effort in EFFORT_ORDER:
@@ -274,7 +277,7 @@ def turn_contexts(store: Store, path: str) -> list[sqlite3.Row]:
     return store.connection.execute(
         f"SELECT m.message_id AS message_id, m.ts AS ts, {CONTEXT} AS context, m.new_input AS new_input, "
         "m.cache_write_5m AS cache_write_5m, m.cache_write_1h AS cache_write_1h, m.cache_read AS cache_read, "
-        "m.output AS output, m.model AS model, m.speed AS speed, m.effort AS effort, m.request_ts AS request_ts, "
+        f"m.output AS output, m.model AS model, m.speed AS speed, {EFFORT} AS effort, m.request_ts AS request_ts, "
         "m.end_ts AS end_ts "
         "FROM messages m "
         "WHERE m.path = ? ORDER BY m.ts, m.rowid", (path,)).fetchall()
@@ -292,6 +295,12 @@ def as_turns(rows: list[sqlite3.Row]) -> list[turns.Turn]:
                        cache_write_1h=row["cache_write_1h"], cache_read=row["cache_read"], output=row["output"],
                        request_ts=stored_time(row["request_ts"]), end_ts=stored_time(row["end_ts"]))
             for row in rows]
+
+
+def ultracode_messages(store: Store, path: str) -> set[str]:
+    """The ids of the file's messages made while ultracode was on."""
+    return {row["message_id"] for row in store.connection.execute(
+        "SELECT message_id FROM messages WHERE path = ? AND ultracode = 1", (path,))}
 
 
 def compaction_rows(store: Store, path: str) -> list[Row]:

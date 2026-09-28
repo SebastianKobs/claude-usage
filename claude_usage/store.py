@@ -12,14 +12,15 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 12                     # 2: cost_states and background; 3: web_searches; 4: start_ts;
+SCHEMA_VERSION = 13                     # 2: cost_states and background; 3: web_searches; 4: start_ts;
                                         # 5: the run totals of cost_states; 6: skill and mcp_server;
                                         # 7: api_errors; 8: the times and lines the run totals
                                         # are estimated from without a cost record; 9: effort;
                                         # 10: meta_mtime_ns; 11: compactions and tool_use_id;
                                         # 12: workflow_run, workflow_phase and workflow_name (the files
-                                        # were never read, so no re-read)
-REREAD_BELOW = 11                       # stores older than this lack data only a new read of every file gives
+                                        # were never read, so no re-read); 13: ultracode_states and
+                                        # messages.ultracode
+REREAD_BELOW = 13                       # stores older than this lack data only a new read of every file gives
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -66,7 +67,8 @@ CREATE TABLE IF NOT EXISTS messages (
     mcp_server TEXT,                -- the MCP server it attributes the call to
     request_ts TEXT,                -- of the last user record before it (a prompt or a tool result)
     end_ts TEXT,                    -- of its last record: request_ts to end_ts is the time waiting on the API
-    effort TEXT                     -- the effort level it ran at, e.g. medium, high, max
+    effort TEXT,                    -- the effort level it ran at: low to max
+    ultracode INTEGER NOT NULL DEFAULT 0    -- 1: made while ultracode was on (scan.update_ultracode)
 );
 CREATE TABLE IF NOT EXISTS tool_calls (
     tool_use_id TEXT PRIMARY KEY,
@@ -127,6 +129,12 @@ CREATE TABLE IF NOT EXISTS compactions (
     post_tokens INTEGER,            -- and after
     duration_ms INTEGER
 );
+CREATE TABLE IF NOT EXISTS ultracode_states (
+    record_id TEXT PRIMARY KEY,     -- the attachment record's uuid
+    path TEXT NOT NULL,             -- the file that stored the id first owns it
+    ts TEXT,
+    active INTEGER NOT NULL         -- 1: on (switched on, or a reminder that it still is), 0: switched off
+);
 CREATE TABLE IF NOT EXISTS dirty_sessions (
     session_id TEXT PRIMARY KEY     -- a file of it was scanned, its background is not recomputed yet
 );
@@ -139,14 +147,18 @@ CREATE INDEX IF NOT EXISTS messages_day ON messages (day);
 CREATE INDEX IF NOT EXISTS tool_calls_path ON tool_calls (path);
 CREATE INDEX IF NOT EXISTS api_errors_day ON api_errors (day);
 CREATE INDEX IF NOT EXISTS compactions_path ON compactions (path);
+CREATE INDEX IF NOT EXISTS ultracode_states_path ON ultracode_states (path);
 """
+ULTRACODE = "ultracode"                 # the effort level of the calls made while ultracode was on
+# a message's effort level: ultracode runs at xhigh, and its calls count as a level of their own
+EFFORT = f"CASE WHEN m.ultracode = 1 THEN '{ULTRACODE}' ELSE m.effort END"
 # A view holds no data, so it is replaced whenever its definition here changes.
-VIEW = """CREATE VIEW usage_rows AS
+VIEW = f"""CREATE VIEW usage_rows AS
 SELECT m.path AS path, t.session_id AS session_id, t.agent_id AS agent_id, t.agent_type AS agent_type,
        t.project AS project, t.slug AS slug, m.model AS model, m.speed AS speed, m.ts AS ts, m.day AS day,
        m.new_input AS new_input, m.cache_write_5m AS cache_write_5m, m.cache_write_1h AS cache_write_1h,
        m.cache_read AS cache_read, m.output AS output, m.web_searches AS web_searches, 1 AS turn,
-       m.skill AS skill, m.mcp_server AS mcp_server, m.effort AS effort
+       m.skill AS skill, m.mcp_server AS mcp_server, {EFFORT} AS effort
 FROM messages m JOIN transcripts t ON t.path = m.path
 UNION ALL
 SELECT b.path, b.session_id, NULL, '(background)', t.project, t.slug, b.model, 'standard', b.ts, b.day,
@@ -167,6 +179,7 @@ ADDED_COLUMNS = (("messages", "web_searches", "INTEGER NOT NULL DEFAULT 0"),
                  ("messages", "request_ts", "TEXT"),
                  ("messages", "end_ts", "TEXT"),
                  ("messages", "effort", "TEXT"),
+                 ("messages", "ultracode", "INTEGER NOT NULL DEFAULT 0"),
                  ("tool_calls", "call_ts", "TEXT"),
                  ("tool_calls", "result_ts", "TEXT"),
                  ("tool_calls", "lines_added", "INTEGER NOT NULL DEFAULT 0"),

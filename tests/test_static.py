@@ -3,7 +3,9 @@ import re
 import unittest
 from pathlib import Path
 
+from claude_usage import queries
 from claude_usage import server
+from claude_usage import store
 from claude_usage import turns
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -58,6 +60,14 @@ class ScriptTest(unittest.TestCase):
     def test_the_context_chart_stacks_the_three_parts_of_a_turn(self):
         body = re.search(r"const CONTEXT_PARTS = \[(.*?)\];", read(STATIC / "js" / "drilldown.js"), re.DOTALL).group(1)
         self.assertEqual(re.findall(r'field: "(\w+)"', body), ["cache_read", "cache_write", "new_input"])
+
+    def test_the_page_orders_effort_levels_like_the_report(self):
+        body = re.search(r"const EFFORT_ORDER = \[(.*?)\];", read(STATIC / "js" / "util.js")).group(1)
+        self.assertEqual(tuple(re.findall(r'"(\w+)"', body)), queries.EFFORT_ORDER)
+
+    def test_every_hatched_effort_level_has_a_shade(self):
+        self.assertLessEqual(object_keys("util.js", "HATCH_SHADES"), object_keys("util.js", "EFFORT_SHADES"))
+        self.assertIn(store.ULTRACODE, object_keys("util.js", "HATCH_SHADES"))
 
     def test_html_is_inserted_only_by_the_two_sanitized_paths_in_chat_js(self):
         uses = {path.name: len(re.findall(r"\binnerHTML\b", read(path))) for path in OWN_SCRIPTS}

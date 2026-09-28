@@ -141,7 +141,7 @@ function chartData(summary) {
     const key = `${model} · ${effortName(row.effort)}`;
     if (!bySeries.has(key)) {
       bySeries.set(key, {key, model, effort: row.effort, slot, color: effortShade(slot, row.effort),
-                         values: new Map()});
+                         hatch: effortHatch(slot, row.effort), values: new Map()});
     }
     const entry = bySeries.get(key);
     const bucket = buckets.keyOf(row);
@@ -171,8 +171,21 @@ function modelGroups(series) {
 function renderLegend(series) {
   document.getElementById("legend").replaceChildren(...modelGroups(series).map(group =>
     el("span", {class: "legend-group"}, el("strong", {text: group.model}),
-       ...group.entries.map(entry => el("span", {}, el("span", {class: "swatch", style: `background:${entry.color}`}),
-                                        entry.effort ?? "no effort level")))));
+       ...group.entries.map(entry => el("span", {}, seriesSwatch(entry), entry.effort ?? "no effort level")))));
+}
+
+// a series' key in the legend and the tooltip
+function seriesSwatch(entry) {
+  return el("span", {class: "swatch", style: `background:${swatchFill(entry.color, entry.hatch)}`});
+}
+
+// A hatched series' fill: its color with lines of its hatch at 45°, 2px on a 6px period
+function hatchPattern(id, entry) {
+  const pattern = svg("pattern", {id, width: 6, height: 6, patternUnits: "userSpaceOnUse",
+                                  patternTransform: "rotate(45)"});
+  pattern.append(svg("rect", {width: 6, height: 6, fill: entry.color}),
+                 svg("rect", {width: 2, height: 6, fill: entry.hatch}));
+  return pattern;
 }
 
 function renderChart(summary) {
@@ -195,6 +208,16 @@ function renderChart(summary) {
   drawYAxis(root, LEFT_AXIS, right, ticks(top, 4), value => PLOT_HEIGHT - scale(value), metric.format);
   drawXLabels(root, days.length, index => LEFT_AXIS + band * (index + 0.5), PLOT_HEIGHT + 18,
               index => buckets.short(days[index]));
+  const hatched = series.filter(entry => entry.hatch);
+  const fills = new Map(series.map(entry => [entry, entry.color]));
+  if (hatched.length) {
+    const defs = svg("defs", {});
+    hatched.forEach((entry, index) => {
+      defs.append(hatchPattern(`model-hatch-${index}`, entry));
+      fills.set(entry, `url(#model-hatch-${index})`);
+    });
+    root.append(defs);
+  }
   // stacked columns, a 2px surface gap between a model's shades and a wider one between models (the shades of two
   // models can come close), rounded data end on the top segment only
   const peak = totals.indexOf(Math.max(...totals));
@@ -209,7 +232,7 @@ function renderChart(summary) {
       const drawn = height - gap;
       if (drawn > 0) {
         root.append(svg("path", {d: columnPath(x, base - height, barWidth, drawn, position === present.length - 1),
-                                 fill: entry.color}));
+                                 fill: fills.get(entry)}));
       }
       base -= height;
     });
@@ -252,8 +275,7 @@ function modelTooltip(tooltip, heading, day, series, metric, total) {
     line("tip-model", el("span", {text: group.model}),
          group.entries.reduce((sum, entry) => sum + entry.values.get(day), 0)),
     ...group.entries.slice().reverse().map(entry => line("tip-effort",
-      el("span", {}, el("span", {class: "swatch", style: `background:${entry.color}`}),
-         entry.effort ?? "no effort level"), entry.values.get(day)))]);
+      el("span", {}, seriesSwatch(entry), entry.effort ?? "no effort level"), entry.values.get(day)))]);
   fill(tooltip, el("div", {class: "when", text: heading}),
        ...(lines.length ? lines : [el("div", {class: "name", text: "No usage"})]),
        groups.length > 1 ? line("tip-total", el("span", {text: "Total"}), total) : null);

@@ -26,6 +26,10 @@ META_SUFFIX = ".meta.json"
 MCP_PREFIX = "mcp__"
 COST_STATE = "cost-state"
 COMPACT_BOUNDARY = "compact_boundary"   # the subtype of the system record a compaction leaves
+# ultracode's attachments on a human prompt: on (reminderType "full"), still on ("sparse"), and off
+ULTRACODE_ON = "ultra_effort_enter"
+ULTRACODE_OFF = "ultra_effort_exit"
+ULTRACODE_REMINDERS = ("full", "sparse")
 # Claude Code's cost records name the 1M-context variant "claude-opus-5-5[1m]"; assistant records don't.
 CONTEXT_SUFFIX = re.compile(r"\[[^\]]*\]$")
 
@@ -99,6 +103,15 @@ class Compaction:
 
 
 @dataclass(frozen=True)
+class UltracodeState:
+    """Ultracode's state as Claude Code noted it on a human prompt: switched on, reminded that it still is, or
+    switched off. Picking another effort level switches it off without a note."""
+    record_id: str                      # the attachment record's uuid
+    timestamp: datetime | None
+    active: bool
+
+
+@dataclass(frozen=True)
 class ModelTotals:
     """One model's cumulative usage in a cost-state record."""
     model: str                          # without a [1m]-style suffix
@@ -150,6 +163,7 @@ class Chunk:
     last_user_ts: datetime | None = None  # of the last user record in this part, the request of a reply in the next
     api_errors: tuple[ApiError, ...] = ()
     compactions: tuple[Compaction, ...] = ()
+    ultracode_states: tuple[UltracodeState, ...] = ()
     tool_use_id: str | None = None      # of a subagent, the Agent tool call that spawned it (the meta's toolUseId)
     workflow_run: str | None = None     # of a workflow agent, its run's folder (wf_...)
     workflow_phase: str | None = None   # the meta's workflowPhase
@@ -462,6 +476,31 @@ def compactions(records: Iterable[Record]) -> list[Compaction]:
     return list(found.values())
 
 
+def ultracode_active(record: Record) -> bool | None:
+    """Whether an attachment record says ultracode is on (True) or switched off (False); None for other
+    records."""
+    attachment = record.get("attachment") if record.get("type") == "attachment" else None
+    if not isinstance(attachment, dict):
+        return None
+    if attachment.get("type") == ULTRACODE_OFF:
+        return False
+    if attachment.get("type") == ULTRACODE_ON and attachment.get("reminderType") in ULTRACODE_REMINDERS:
+        return True
+    return None
+
+
+def ultracode_states(records: Iterable[Record]) -> list[UltracodeState]:
+    """Ultracode's states, once per record uuid; records without one are skipped."""
+    found: dict[str, UltracodeState] = {}
+    for record in records:
+        record_id = text_or_none(record.get("uuid"))
+        active = ultracode_active(record)
+        if active is None or record_id is None:
+            continue
+        found.setdefault(record_id, UltracodeState(record_id, parse_timestamp(record.get("timestamp")), active))
+    return list(found.values())
+
+
 def cost_usd(value: Any) -> float:
     """A dollar amount; missing or non-numeric values count as 0."""
     if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -629,7 +668,8 @@ def parse(path: Path, offset: int = 0, last_user_ts: datetime | None = None) -> 
                  tool_results=tuple(tool_results(records)),
                  first_ts=min(timestamps, default=None), last_ts=max(timestamps, default=None),
                  cost_state=cost_state, api_errors=tuple(api_errors(records)),
-                 compactions=tuple(compactions(records)), tool_use_id=tool_use_id,
+                 compactions=tuple(compactions(records)), ultracode_states=tuple(ultracode_states(records)),
+                 tool_use_id=tool_use_id,
                  last_user_ts=user_timestamps[-1] if user_timestamps else None,
                  workflow_run=run, workflow_phase=phase if run else None,
                  workflow_name=None if run is None else workflow_name(path, run))

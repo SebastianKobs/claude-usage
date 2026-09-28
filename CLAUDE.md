@@ -135,6 +135,12 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   never keep them. Counted this way, lines match `totalLinesAdded`/`Removed` for most sessions.
 - **Effort:** assistant records carry `effort` (`medium`, `high`, `max`, …), the same on every record of a message
   id. `perTurnEffort` is often null; ignore it.
+- **Ultracode:** no call records it (checked 2026-09-28, Claude Code 2.1.283, counts only). It is a session setting,
+  on only while the effort is xhigh. The main thread notes it in `attachment` records on human prompts:
+  `ultra_effort_enter` with `reminderType` `full` (switched on) or `sparse` (a reminder that it still is), and
+  `ultra_effort_exit` (switched off, noticed at the next prompt). Picking another effort level switches it off
+  without a note; only the calls' `effort` shows it. `workflow_keyword_request` is a one-turn opt-in and changes
+  nothing. One row per uuid in `ultracode_states`, owned by the file that stored it first.
 - **Attribution:** assistant records may carry `attributionSkill`, and `attributionMcpServer` with
   `attributionMcpTool` (the bare tool name). All records of a message id carry the same values.
 - **Tools:** `tool_use` blocks (`id`, `name`) and `tool_result` blocks in user records (`tool_use_id`, `content` as
@@ -180,6 +186,11 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     session in `dirty_sessions`, so a scan that stops early leaves the recomputation to the next one.
   - It goes into `background`. The `usage_rows` view unites it with the messages as agent type `(background)`,
     without turns, filed under the snapshot's day.
+- **Ultracode** (`scan.update_ultracode`, after each scan for the touched sessions): a span runs from a note that
+  it is on to a note that it is off, or to the first later main-thread call at another effort level (a call without
+  one ends nothing). Every message of the session at xhigh inside a span gets `messages.ultracode = 1`, subagents'
+  and workflow agents' too, since they note nothing of their own. The view, the turn contexts and the chat show its
+  effort as `ultracode` (`store.EFFORT`), ordered after max.
 - **Run totals:** the latest cost-state per session, filed under its snapshot day. The summary sums the sessions that
   ended in the range, and prices their whole usage for the cost per 100 lines changed.
   - Without a cost-state (a session still running, or a process that never exited), the session view estimates
@@ -304,8 +315,10 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
 - **Dashboard:**
   - The by-model chart stacks every model × effort combination (`day_model_effort`, `hour_model_effort`): the
     model's color for low or no effort, one shade further from the surface each for medium, high and max (xhigh
-    shares max). `--shade-step-*` per slot and theme sizes the steps for a lightness gap of 0.065; re-run the
-    `--ordinal` and contrast checks when a series color changes. Models are 4px apart in a column, shades 2px.
+    shares max). Ultracode shares max's shade too, hatched at 45° with 2px lines one shade further (tone on tone,
+    the dataviz texture), in the columns as an SVG pattern and on the legend and tooltip swatches as a gradient.
+    `--shade-step-*` per slot and theme sizes the steps for a lightness gap of 0.065; re-run the `--ordinal` and
+    contrast checks when a series color changes. Models are 4px apart in a column, shades 2px.
   - Load the `dataviz` skill before changing a chart, and run its palette validator for any new colors.
   - Categorical colors come from its validated palette in a fixed order per model; past eight slots a model folds
     into "Other".

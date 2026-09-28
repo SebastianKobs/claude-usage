@@ -560,6 +560,17 @@ class SessionEffortTest(StoreCase):
         turns = self.detail["agents"][0]["context_per_turn"]
         self.assertEqual([turn["effort"] for turn in turns], ["high", "max"])
 
+    def test_ultracode_is_an_effort_level_of_its_own(self):
+        self.main.ultracode("u1")
+        self.main.assistant("m5", [text_block("e")], usage(output=1), effort="xhigh")
+        self.scan()
+        main = queries.session_detail(self.store, "s1", PRICES)["agents"][0]
+        self.assertEqual([entry["effort"] for entry in main["model_efforts"]], ["high", "max", "ultracode"])
+        self.assertEqual(main["context_per_turn"][-1]["effort"], "ultracode")
+
+    def test_ultracode_sorts_after_max_and_before_unknown_levels(self):
+        self.assertEqual(sorted(["turbo", "ultracode", "max"], key=queries.effort_order), ["max", "ultracode", "turbo"])
+
 
 class ContextStatsTest(StoreCase):
     """The median and 90th percentile of the context per main-thread turn, to choose a compact hint by."""

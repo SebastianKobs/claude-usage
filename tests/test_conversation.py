@@ -199,6 +199,12 @@ class ConversationTest(TempDirTestCase):
         self.main.assistant("m1", [text_block("a"), tool_use_block("t1", "Read")], usage(output=5), effort="max")
         self.assertEqual([entry.effort for entry in conversation.conversation(self.main.path, PRICES)], ["max", "max"])
 
+    def test_replies_carry_their_calls_message_id(self):
+        self.main.user("hi")
+        self.main.assistant("m1", [thinking_block("hm"), tool_use_block("t1", "Read")], usage(output=5))
+        self.assertEqual([entry.message_id for entry in conversation.conversation(self.main.path, PRICES)],
+                         [None, "m1", "m1"])
+
     def test_the_last_entry_of_a_reply_carries_its_final_usage(self):
         self.main.user("hi")
         self.main.assistant("m1", [thinking_block("hm"), text_block("a"), tool_use_block("t1", "Read")],

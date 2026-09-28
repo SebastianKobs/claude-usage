@@ -179,6 +179,21 @@ class SchemaTest(TempDirTestCase):
             columns = {row["name"] for row in second.connection.execute("PRAGMA table_info(transcripts)")}
             self.assertLessEqual({"workflow_run", "workflow_phase", "workflow_name"}, columns)
 
+    def test_a_version_12_store_gets_ultracode_by_reading_its_files_again(self):
+        main = self.projects.session("s1")
+        main.at(DAY_1).ultracode("u1")
+        main.assistant("m1", [text_block("a")], usage(output=5), effort="xhigh")
+        with store.Store(self.store_path) as first:
+            scan.scan(first, self.projects.root)
+            # what a version-12 store looks like: no ultracode_states table, messages without ultracode
+            first.connection.execute("DROP TABLE ultracode_states")
+            first.connection.execute("DROP VIEW usage_rows")
+            first.connection.execute("ALTER TABLE messages DROP COLUMN ultracode")
+            first.connection.execute("UPDATE meta SET value = '12' WHERE key = 'schema_version'")
+        with store.Store(self.store_path) as second:
+            self.assertEqual(scan.scan(second, self.projects.root).files_scanned, 1)
+            self.assertEqual(second.connection.execute("SELECT effort FROM usage_rows").fetchone()[0], "ultracode")
+
     def test_reopening_leaves_the_schema_alone(self):
         with store.Store(self.store_path) as first:
             before = first.connection.execute("PRAGMA schema_version").fetchone()[0]

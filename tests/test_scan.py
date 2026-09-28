@@ -484,6 +484,7 @@ class RetentionTest(StoreCase):
         old.tool_result("ot1", "abc")
         old.api_error("oe1")
         old.compaction("oc1")
+        old.ultracode("ou1")
         old.cost_state({HAIKU: (100, 0, 0, 10, 0.01)}, totalDuration=1000)
         self.projects.subagent("old", "a1").at(DAY_1).assistant("o2", [text_block("b")], usage(output=5))
         self.projects.session("new").at(DAY_3).assistant("n1", [text_block("c")], usage(output=20))
@@ -505,7 +506,8 @@ class RetentionTest(StoreCase):
     def test_an_old_session_goes_from_every_table(self):
         result = self.scan_keeping(7)
         self.assertEqual(result.sessions_pruned, 1)
-        for table in ("messages", "tool_calls", "api_errors", "compactions", "background", "cost_states"):
+        for table in ("messages", "tool_calls", "api_errors", "compactions", "ultracode_states", "background",
+                      "cost_states"):
             with self.subTest(table=table):
                 self.assertNotIn("old", self.sessions(table))
         self.assertEqual(self.sessions("messages"), ["mixed", "new"])
@@ -612,6 +614,107 @@ class EffortTest(StoreCase):
     def test_by_effort(self):
         rows = {row["effort"]: row["turns"] for row in queries.totals_by(self.store, "effort", None, PRICES)}
         self.assertEqual(rows, {None: 0, "high": 2, "max": 1, "medium": 1})
+
+
+
+class UltracodeTest(StoreCase):
+    """Calls made while ultracode was on count as effort ultracode."""
+
+    def setUp(self):
+        super().setUp()
+        self.main = self.projects.session("s1").at(DAY_1)
+
+    def call(self, message_id, effort="xhigh", transcript=None):
+        """One call at an effort level, in the main thread or in transcript."""
+        (transcript or self.main).assistant(message_id, [text_block("a")], usage(output=5), effort=effort)
+
+    def flagged(self):
+        """The ids of the messages stored as ultracode, sorted."""
+        return [row[0] for row in self.rows("SELECT message_id FROM messages WHERE ultracode = 1 ORDER BY 1")]
+
+    def test_xhigh_calls_after_switching_it_on_count(self):
+        self.call("m1")                                 # plain xhigh, before the switch
+        self.main.ultracode("u1")
+        self.call("m2")
+        self.call("m3")
+        self.scan()
+        self.assertEqual(self.flagged(), ["m2", "m3"])
+
+    def test_a_main_thread_call_at_another_effort_ends_it(self):
+        self.main.ultracode("u1")
+        self.call("m1")
+        self.call("m2", effort="medium")
+        self.call("m3")
+        self.scan()
+        self.assertEqual(self.flagged(), ["m1"])
+
+    def test_a_call_without_an_effort_level_does_not_end_it(self):
+        self.main.ultracode("u1")
+        self.call("m1", effort=None)
+        self.call("m2")
+        self.scan()
+        self.assertEqual(self.flagged(), ["m2"])
+
+    def test_switching_it_off_ends_it(self):
+        self.main.ultracode("u1")
+        self.call("m1")
+        self.main.ultracode("u2", reminder=None)
+        self.call("m2")
+        self.scan()
+        self.assertEqual(self.flagged(), ["m1"])
+
+    def test_a_reminder_that_it_is_still_on_starts_it_again(self):
+        self.main.ultracode("u1")
+        self.call("m1", effort="medium")
+        self.call("m2")
+        self.main.ultracode("u2", reminder="sparse")
+        self.call("m3")
+        self.scan()
+        self.assertEqual(self.flagged(), ["m3"])
+
+    def test_subagents_and_workflow_agents_count_by_time_and_their_own_effort(self):
+        self.main.ultracode("u1")
+        agent = self.projects.subagent("s1", "a1").at(DAY_1 + timedelta(seconds=10))
+        self.call("a1", transcript=agent)
+        self.call("a2", effort="high", transcript=agent)
+        self.call("w1", transcript=self.projects.workflow_agent("s1", "wf_1", "w1").at(DAY_1 + timedelta(seconds=10)))
+        self.main.at(DAY_1 + timedelta(seconds=20))
+        self.call("m1", effort="medium")
+        self.call("a3", transcript=agent.at(DAY_1 + timedelta(seconds=30)))
+        self.scan()
+        self.assertEqual(self.flagged(), ["a1", "w1"])
+
+    def test_a_later_scan_moves_the_end(self):
+        self.main.ultracode("u1")
+        self.call("m1")
+        self.call("a1", transcript=self.projects.subagent("s1", "a1").at(DAY_1 + timedelta(seconds=30)))
+        self.scan()
+        self.call("m2", effort="medium", transcript=self.main.at(DAY_1 + timedelta(seconds=20)))
+        self.scan()
+        self.assertEqual(self.flagged(), ["m1"])
+
+    def test_other_sessions_are_not_affected(self):
+        self.main.ultracode("u1")
+        self.call("o1", transcript=self.projects.session("s2").at(DAY_1 + timedelta(seconds=5)))
+        self.scan()
+        self.assertEqual(self.flagged(), [])
+
+    def test_usage_shows_them_as_effort_ultracode(self):
+        self.call("m1")
+        self.main.ultracode("u1")
+        self.call("m2")
+        self.scan()
+        rows = {row["effort"]: row["turns"] for row in queries.totals_by(self.store, "effort", None, PRICES)}
+        self.assertEqual(rows, {"xhigh": 1, "ultracode": 1})
+
+    def test_states_are_stored_once_by_the_file_that_had_them_first(self):
+        self.main.ultracode("u1")
+        self.scan()
+        self.projects.session("s2").ultracode("u1", reminder=None)
+        self.scan()
+        self.scan()
+        self.assertEqual(self.rows("SELECT record_id, path, ts, active FROM ultracode_states"),
+                         [("u1", str(self.main.path), scan.iso(DAY_1), 1)])
 
 
 if __name__ == "__main__":

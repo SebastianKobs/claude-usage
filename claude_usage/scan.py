@@ -7,6 +7,9 @@ Background usage: when a session ends, Claude Code writes a cost-state record wi
 including calls no transcript shows (Haiku for titles, classifiers). The latest one per session is kept in
 cost_states; after each scan, the background table gets, per session and model, what that snapshot counts beyond
 the transcripts up to the snapshot time (per category, never below 0).
+
+Ultracode: no call records it, only a note on a human prompt in the main thread. After each scan, the messages of
+every touched session made at xhigh while it was on are marked (update_ultracode).
 """
 import hashlib
 import json
@@ -26,6 +29,7 @@ from claude_usage.store import Store
 BACKGROUND_FIELDS = ("new_input", "cache_write", "cache_read", "output", "web_searches")
 # a snapshot model's fields as cost_states.models keeps them, as ModelTotals names them
 SNAPSHOT_FIELDS = ("model", "new_input", "cache_write", "cache_read", "output", "cost_usd", "web_searches")
+ULTRACODE_EFFORT = "xhigh"              # the effort level ultracode runs at: it is on only while this one is
 
 
 @dataclass(frozen=True)
@@ -171,6 +175,14 @@ def insert_compactions(store: Store, chunk: transcripts.Chunk) -> None:
          for compaction in chunk.compactions])
 
 
+def insert_ultracode_states(store: Store, chunk: transcripts.Chunk) -> None:
+    """Insert the chunk's ultracode states; ids already stored (by this or another file) are kept as they are."""
+    store.connection.executemany(
+        "INSERT OR IGNORE INTO ultracode_states (record_id, path, ts, active) VALUES (?, ?, ?, ?)",
+        [(state.record_id, str(chunk.path), iso(state.timestamp), int(state.active))
+         for state in chunk.ultracode_states])
+
+
 def upsert_cost_state(store: Store, chunk: transcripts.Chunk, previous_last_ts: str | None) -> None:
     """Keep the session's newest cost-state snapshot (only main transcripts write them). Without a timestamped
     record before it in this read, the snapshot time is the last one seen in earlier reads."""
@@ -232,6 +244,47 @@ def update_background(store: Store, session_ids: set[str]) -> None:
                 (session_id, model, state["path"], state["snapshot_ts"], local_day(snapshot), *missing))
 
 
+def ultracode_spans(store: Store, session_id: str) -> list[tuple[str, str | None]]:
+    """When ultracode was on in a session, as (start, end) ISO times, end None while it still is: from a note that
+    it is on to a note that it is off, or to the first later main-thread call at another effort level (picking one
+    switches it off without a note). A call without an effort level ends nothing."""
+    states = store.connection.execute(
+        "SELECT u.ts AS ts, u.active AS active FROM ultracode_states u JOIN transcripts t ON t.path = u.path "
+        "WHERE t.session_id = ? AND u.ts IS NOT NULL", (session_id,)).fetchall()
+    if not states:
+        return []
+    others = store.connection.execute(
+        "SELECT m.ts AS ts FROM messages m JOIN transcripts t ON t.path = m.path "
+        "WHERE t.session_id = ? AND t.agent_id IS NULL AND m.ts IS NOT NULL AND m.effort IS NOT NULL "
+        "AND m.effort != ?", (session_id, ULTRACODE_EFFORT)).fetchall()
+    # at the same moment an end comes first (False sorts before True)
+    events = sorted([(row["ts"], bool(row["active"])) for row in states] + [(row["ts"], False) for row in others])
+    spans: list[tuple[str, str | None]] = []
+    start = None
+    for moment, active in events:
+        if active and start is None:
+            start = moment
+        elif not active and start is not None:
+            spans.append((start, moment))
+            start = None
+    if start is not None:
+        spans.append((start, None))
+    return spans
+
+
+def update_ultracode(store: Store, session_ids: set[str]) -> None:
+    """Mark the messages of these sessions made while ultracode was on: at xhigh within one of its spans. Subagents
+    and workflow agents note nothing of their own, so they count by the session's spans and their own effort."""
+    for session_id in sorted(session_ids):
+        paths = [(row["path"],) for row in store.connection.execute(
+            "SELECT path FROM transcripts WHERE session_id = ?", (session_id,))]
+        store.connection.executemany("UPDATE messages SET ultracode = 0 WHERE path = ? AND ultracode = 1", paths)
+        for start, end in ultracode_spans(store, session_id):
+            store.connection.executemany(
+                "UPDATE messages SET ultracode = 1 WHERE path = ? AND effort = ? AND ts >= ? AND (? IS NULL OR ts < ?)",
+                [(path, ULTRACODE_EFFORT, start, end, end) for (path,) in paths])
+
+
 def meta_modified_ns(path: Path) -> int | None:
     """The mtime of a subagent's meta file, or None for a main transcript or a subagent without one (yet)."""
     if not transcripts.is_subagent_file(path):
@@ -270,6 +323,7 @@ def scan_file(store: Store, path: Path, known: sqlite3.Row | None) -> tuple[int,
         update_tool_results(store, chunk)
         insert_api_errors(store, chunk)
         insert_compactions(store, chunk)
+        insert_ultracode_states(store, chunk)
         # with the file's data, so a scan that stops before update_background leaves the session for the next one
         store.connection.execute("INSERT OR IGNORE INTO dirty_sessions (session_id) VALUES (?)", (chunk.session_id,))
     return upserted, chunk.end_offset - offset
@@ -283,10 +337,10 @@ def last_activity(last_ts: str | None, mtime_ns: int) -> date:
 
 def prune(store: Store, first_day: date) -> int:
     """Delete the sessions whose last activity (over all their files) lies before first_day, in one transaction:
-    their messages, tool calls, API errors, compactions, background and cost-state rows, whole sessions only, so no
-    background or run total loses half its session. A transcript row stays while its file exists: it holds the
-    offset the file was read to, and without it the next scan would read the old data back in. Returns the sessions
-    that lost rows."""
+    their messages, tool calls, API errors, compactions, ultracode states, background and cost-state rows, whole
+    sessions only, so no background or run total loses half its session. A transcript row stays while its file
+    exists: it holds the offset the file was read to, and without it the next scan would read the old data back in.
+    Returns the sessions that lost rows."""
     sessions = store.connection.execute(
         "SELECT session_id, MAX(last_ts) AS last_ts, MAX(mtime_ns) AS mtime_ns FROM transcripts GROUP BY session_id")
     old = [row["session_id"] for row in sessions if last_activity(row["last_ts"], row["mtime_ns"]) < first_day]
@@ -296,7 +350,7 @@ def prune(store: Store, first_day: date) -> int:
             before = store.connection.total_changes
             paths = [row["path"] for row in store.connection.execute(
                 "SELECT path FROM transcripts WHERE session_id = ?", (session_id,))]
-            for table in ("messages", "tool_calls", "api_errors", "compactions"):
+            for table in ("messages", "tool_calls", "api_errors", "compactions", "ultracode_states"):
                 store.connection.executemany(f"DELETE FROM {table} WHERE path = ?", [(path,) for path in paths])
             for table in ("background", "cost_states", "dirty_sessions"):
                 store.connection.execute(f"DELETE FROM {table} WHERE session_id = ?", (session_id,))
@@ -342,6 +396,7 @@ def scan(store: Store, projects_dir: Path, project_filter: str | None = None, re
     with store.transaction():
         dirty = {row["session_id"] for row in store.connection.execute("SELECT session_id FROM dirty_sessions")}
         update_background(store, dirty)
+        update_ultracode(store, dirty)
         store.connection.execute("DELETE FROM dirty_sessions")
     pruned = 0
     if retention_days:

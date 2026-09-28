@@ -450,6 +450,39 @@ class CompactionTest(ParseCase):
         self.assertEqual([compaction.record_id for compaction in self.parse().compactions], ["c1", "c2"])
 
 
+class UltracodeTest(ParseCase):
+    def test_switching_it_on(self):
+        self.main.at(datetime(2026, 9, 1, 17, 4, tzinfo=UTC)).ultracode("u1")
+        self.assertEqual(self.parse().ultracode_states, (transcripts.UltracodeState(
+            record_id="u1", timestamp=datetime(2026, 9, 1, 17, 4, tzinfo=UTC), active=True),))
+
+    def test_a_reminder_that_it_is_still_on_counts_as_on(self):
+        self.main.ultracode("u1", reminder="sparse")
+        self.assertTrue(self.parse().ultracode_states[0].active)
+
+    def test_switching_it_off(self):
+        self.main.ultracode("u1", reminder=None)
+        self.assertFalse(self.parse().ultracode_states[0].active)
+
+    def test_other_attachments_are_no_states(self):
+        self.main.attachment("workflow_keyword_request")
+        self.main.attachment("ultra_effort_enter", reminderType="later")
+        self.main.record("system", subtype="ultra_effort_exit", uuid="x1")
+        self.assertEqual(self.parse().ultracode_states, ())
+
+    def test_one_without_a_record_id_is_skipped(self):
+        record = self.main.ultracode("u1")
+        self.main.path.write_text("", encoding="utf-8")
+        del record["uuid"]
+        self.main.bare(record)
+        self.assertEqual(self.parse().ultracode_states, ())
+
+    def test_they_keep_their_order(self):
+        self.main.ultracode("u1")
+        self.main.ultracode("u2", reminder=None)
+        self.assertEqual([state.record_id for state in self.parse().ultracode_states], ["u1", "u2"])
+
+
 class OffsetTest(ParseCase):
     def test_full_read_ends_at_the_file_size(self):
         self.main.user("hi")
