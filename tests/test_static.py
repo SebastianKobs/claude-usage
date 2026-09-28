@@ -1,5 +1,8 @@
 """static/: checks over the page's scripts, stylesheets and markup that don't need a browser."""
+import json
 import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -36,6 +39,14 @@ def css_block(text, selector):
 def declarations(block):
     """A rule's custom properties, name -> value."""
     return dict(re.findall(r"(--[\w-]+):\s*([^;]+);", block))
+
+
+def run_function(script, name, *arguments):
+    """Calls a script's top-level function, which must use nothing else of the page, in node; its result."""
+    source = re.search(rf"^function {name}\(.*?^\}}$", read(STATIC / "js" / script), re.DOTALL | re.MULTILINE)
+    program = f"{source.group(0)}\nprocess.stdout.write(JSON.stringify({name}(...{json.dumps(arguments)})));"
+    result = subprocess.run(["node", "-e", program], capture_output=True, text=True, check=True, timeout=30)
+    return json.loads(result.stdout)
 
 
 def object_keys(script, name):
@@ -94,6 +105,29 @@ class ScriptTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn(f'id="{name}-table-toggle"', markup)
                 self.assertIn(f'id="{name}-table"', markup)
+
+
+class ChatOrderTest(unittest.TestCase):
+    def test_the_order_switch_is_a_toggle_kept_as_a_preference(self):
+        script = read(STATIC / "js" / "chat.js")
+        self.assertRegex(script, r'id: "chat-order", "aria-pressed"')
+        self.assertIn("savePreference(CHAT_ORDER_PREFERENCE", script)
+        self.assertIn("readPreference(CHAT_ORDER_PREFERENCE)", script)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_newest_first_keeps_each_calls_entries_in_their_order(self):
+        entries = [{"kind": "prompt", "message_id": None}, {"kind": "thinking", "message_id": "a"},
+                   {"kind": "tool", "message_id": "a"}, {"kind": "injected", "message_id": None},
+                   {"kind": "text", "message_id": "b"}, {"kind": "text", "message_id": "c"}]
+        ordered = run_function("chat.js", "orderedEntries", entries, False)
+        self.assertEqual([(entry["kind"], entry["message_id"]) for entry in ordered],
+                         [("text", "c"), ("text", "b"), ("injected", None), ("thinking", "a"), ("tool", "a"),
+                          ("prompt", None)])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_oldest_first_is_the_transcripts_order(self):
+        entries = [{"kind": "prompt", "message_id": None}, {"kind": "text", "message_id": "a"}]
+        self.assertEqual(run_function("chat.js", "orderedEntries", entries, True), entries)
 
 
 class StyleTest(unittest.TestCase):

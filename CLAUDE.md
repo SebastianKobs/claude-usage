@@ -344,6 +344,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     (only with subagents) switches the chart, its table view, the tiles (overhead, rebuilds, compactions, mean
     growth), the biggest growth steps and the compactions to one transcript; another session starts at the main
     thread.
+  - The conversation lists newest first: the calls in reverse, each call's entries (one `message_id`) in their
+    order above its usage badge. "Oldest first" (`aria-pressed`, kept as a preference) switches to the transcript's
+    order and draws the loaded conversation again.
   - All data goes into the DOM via `textContent`. Two exceptions, both in `chat.js`:
     - `highlighted()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans
       with classes.

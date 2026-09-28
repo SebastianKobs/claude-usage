@@ -4,7 +4,11 @@
 // --- conversation --------------------------------------------------------------------------------------------
 
 const CHAT_ROLES = {prompt: "You", text: "Claude", thinking: "Thinking"};
+const CHAT_ORDER_PREFERENCE = "chat-oldest-first";
 let chatRequest = 0;
+let shownChat = null;                                     // the conversation on the page, drawn again on a switch
+
+function oldestFirst() { return readPreference(CHAT_ORDER_PREFERENCE) === "true"; }
 
 // The picker (main thread or a subagent) and the button that loads the conversation into #chat
 function chatControls(detail) {
@@ -18,9 +22,30 @@ function chatControls(detail) {
   picker.addEventListener("change", () => {
     if (button.textContent !== "Show conversation") loadChat(detail.session_id, picker.value || null, button);
   });
+  const order = el("button", {type: "button", id: "chat-order", "aria-pressed": String(oldestFirst()),
+                              text: "Oldest first"});
+  order.addEventListener("click", () => {
+    savePreference(CHAT_ORDER_PREFERENCE, String(!oldestFirst()));
+    order.setAttribute("aria-pressed", String(oldestFirst()));
+    if (shownChat) renderChat(shownChat.container, shownChat.chat);
+  });
+  shownChat = null;
   return el("div", {class: "chart-head"}, themed("h3", "Conversation"),
             el("span", {class: "muted", text: "read from the transcript when you ask, never stored"}),
-            el("span", {class: "spacer"}), picker, button);
+            el("span", {class: "spacer"}), picker, order, button);
+}
+
+// Newest first by default: the calls in reverse, each call's entries (one message id) kept in their order, so its
+// thinking, text and tools still lead to its usage badge; prompts, hidden context and markers stand alone
+function orderedEntries(entries, oldest) {
+  if (oldest) return entries;
+  const groups = [];
+  for (const entry of entries) {
+    const last = groups[groups.length - 1];
+    if (entry.message_id && last && last[0].message_id === entry.message_id) last.push(entry);
+    else groups.push([entry]);
+  }
+  return groups.reverse().flat();
 }
 
 // a picker's options: one per transcript, a workflow run's agents in one group per run
@@ -60,6 +85,7 @@ async function loadChat(sessionId, agentId, button) {
 
 // into the container loadChat started with, never into a session view opened since
 function renderChat(container, chat) {
+  shownChat = {container, chat};
   if (!chat.available) {
     container.replaceChildren(el("div", {class: "empty",
       text: "The transcript is gone: Claude Code deleted it after its cleanup period. The usage history stays."}));
@@ -69,7 +95,8 @@ function renderChat(container, chat) {
     container.replaceChildren(el("div", {class: "empty", text: "No conversation in this transcript yet."}));
     return;
   }
-  fill(container, reminderNote(chat.reminders), el("div", {class: "chat"}, ...chat.entries.map(chatEntry)));
+  fill(container, reminderNote(chat.reminders),
+       el("div", {class: "chat"}, ...orderedEntries(chat.entries, oldestFirst()).map(chatEntry)));
 }
 
 // Claude Code's token reminder comes before almost every call: summed here once, not shown as a line each
