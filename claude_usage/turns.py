@@ -568,3 +568,15 @@ def pays_estimates(history: list[Turn], compactions: tuple[datetime, ...], past:
         estimate = None if preview is None else preview["estimate"]
         results.append(estimate if likely_pays(estimate) else None)
     return results
+
+
+def savings_total(comparisons: list[VersusKeeping | None]) -> dict[str, Any] | None:
+    """What compacting saved so far: the nets summed (a stretch not paid off yet as it stands, at the median
+    summary), the compactions summed, and those without a summary estimate (unknown), which are counted but not
+    summed. A forced compaction had no alternative, so it is left out. None without a compaction to count. Each
+    comparison covers its own stretch, up to the next compaction, so they don't overlap."""
+    counted = [item for item in comparisons if item is not None and item.verdict != "forced"]
+    if not counted:
+        return None
+    nets = [item.net for item in counted if item.net is not None]
+    return {"net": sum(nets), "compactions": len(nets), "unknown": len(counted) - len(nets)}

@@ -284,8 +284,12 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     other verdicts in neutral words (`verdictTone`); the sign and the arrow carry it, not the color (≥ 4.5:1 on the
     surface, the page and the hover wash in both modes).
   - The break-even call is judged at the fastest summary, like `saved`; without an estimate at the input side
-    alone (`breakeven_at_least`). It is projected past the last call, and None is "never". Compactions are
-    compared one at a time, so no totals.
+    alone (`breakeven_at_least`). It is projected past the last call, and None is "never".
+  - Each comparison covers its own stretch, up to the next compaction, so they don't overlap and add up:
+    `queries.compaction_savings` (by range, project or session) sums the main threads' nets
+    (`turns.savings_total`: a stretch not paid off yet as it stands, forced compactions left out, those without a
+    summary estimate counted, not summed). The Estimated cost tile shows it as a gain or loss, in the overview
+    (`compaction_savings` in `/api/summary`, the compactions of the range's days) and the session view.
 - **Pricing:**
   - The longest model-id prefix wins, and a `[1m]` suffix is ignored.
   - Fast mode multiplies every category, cache included.

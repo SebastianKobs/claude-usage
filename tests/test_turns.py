@@ -557,6 +557,29 @@ class LikelyPaysTest(unittest.TestCase):
         self.assertEqual(estimates[2]["calls_ahead"], 7)
 
 
+class SavingsTotalTest(unittest.TestCase):
+    """What compacting saved so far: the nets of the compactions summed."""
+
+    def comparison(self, verdict, net):
+        """PreviewTest's earlier compaction with this verdict and net."""
+        [first] = PreviewTest.past(self)
+        return dataclasses.replace(first, verdict=verdict, net=net)
+
+    def test_the_nets_summed_open_and_even_stretches_as_they_stand(self):
+        total = turns.savings_total([self.comparison("saved", 0.9), self.comparison("cost_more", -0.2),
+                                     self.comparison("open", -0.05), self.comparison("even", 0.01), None])
+        self.assertAlmostEqual(total["net"], 0.66)
+        self.assertEqual((total["compactions"], total["unknown"]), (4, 0))
+
+    def test_forced_compactions_are_left_out_and_unknown_ones_counted(self):
+        total = turns.savings_total([self.comparison("saved", 0.5), self.comparison("forced", 3.0),
+                                     self.comparison("unknown", None)])
+        self.assertEqual((total["net"], total["compactions"], total["unknown"]), (0.5, 1, 1))
+
+    def test_nothing_to_sum_is_no_total(self):
+        self.assertIsNone(turns.savings_total([None, self.comparison("forced", 1.0)]))
+
+
 class OverheadTest(unittest.TestCase):
     def test_the_overhead_is_the_first_turns_context(self):
         overhead = turns.overhead(spaced((10, 20_000, 0, 100), (5, 100, 20_010, 50)), PRICES)

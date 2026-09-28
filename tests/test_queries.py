@@ -842,6 +842,53 @@ class CompactionHistoryTest(StoreCase):
         self.assertEqual([(item.calls_after, item.last_stretch) for item in history], [(4, False), (3, True)])
 
 
+class CompactionSavingsTest(StoreCase):
+    """What the main threads' compactions saved so far, by range, project and session."""
+
+    def compacted(self, transcript, prefix, day):
+        """On day: a timed long reply (the output speed), a compaction and three calls after it."""
+        transcript.at(day)
+        transcript.user("go")
+        transcript.at(day + timedelta(seconds=50))
+        transcript.assistant(f"{prefix}1", [text_block("a")], usage(cache_1h=20_000, cache_read=180_000, output=5_000))
+        transcript.at(day + timedelta(minutes=1))
+        transcript.compaction(f"{prefix}-c")
+        for index in range(2, 5):
+            transcript.at(day + timedelta(minutes=index))
+            transcript.user("more")
+            transcript.assistant(f"{prefix}{index}", [text_block("b")], usage(cache_1h=500, cache_read=30_000))
+
+    def setUp(self):
+        super().setUp()
+        self.compacted(self.projects.session("s1"), "a", DAY_1)
+        self.compacted(self.projects.session("s2", project="/home/dev/other"), "b", DAY_3)
+        self.compacted(self.projects.subagent("s1", "x1"), "c", DAY_1)
+        self.scan()
+        self.nets = [item.net for item in queries.compaction_history(self.store, PRICES, compact.DEFAULT_COMPACT)]
+
+    def savings(self, **filters):
+        """compaction_savings with these filters."""
+        return queries.compaction_savings(self.store, PRICES, compact.DEFAULT_COMPACT, **filters)
+
+    def test_every_main_thread_compaction_without_filters(self):
+        total = self.savings()
+        self.assertEqual(total["compactions"], 2)
+        self.assertAlmostEqual(total["net"], sum(self.nets))
+
+    def test_a_range_counts_the_compactions_of_its_days(self):
+        day = date.fromisoformat(local_day(DAY_3))
+        total = self.savings(since=day, until=day)
+        self.assertEqual(total["compactions"], 1)
+        self.assertAlmostEqual(total["net"], self.nets[1])
+
+    def test_a_project_and_a_session(self):
+        self.assertEqual(self.savings(project="/home/dev/other")["compactions"], 1)
+        self.assertAlmostEqual(self.savings(session_id="s1")["net"], self.nets[0])
+
+    def test_no_compaction_in_the_range_is_no_total(self):
+        self.assertIsNone(self.savings(since=date(2000, 1, 1), until=date(2000, 1, 2)))
+
+
 class WorkflowAgentTest(StoreCase):
     def test_a_sessions_workflow_agents_carry_their_run(self):
         self.projects.session("s1").at(DAY_1).assistant("m1", [text_block("a")], usage(output=5))

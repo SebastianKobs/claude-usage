@@ -5,12 +5,14 @@
 
 function renderKpis(summary) {
   document.getElementById("kpis").replaceChildren(...kpiTiles(summary.totals, rangeText(summary), summary.context,
-                                                              summary.compact_hint_tokens));
+                                                              summary.compact_hint_tokens,
+                                                              summary.compaction_savings));
 }
 
 // The cost, input, turns and output tiles of a usage total: the range's on the page, a session's in its view.
-// context is the median and p90 context per main-thread turn, shown with the compact hint's threshold.
-function kpiTiles(totals, scope, context, hintTokens) {
+// context is the median and p90 context per main-thread turn, shown with the compact hint's threshold; savings what
+// the main threads' compactions saved so far against keeping the context.
+function kpiTiles(totals, scope, context, hintTokens, savings) {
   const parts = totals.cost_parts;
   const tile = (label, value, note) => el("div", {class: "card"},
     themed("div", label, {class: "label"}), el("div", {class: "tile-value", text: value}), note);
@@ -21,10 +23,30 @@ function kpiTiles(totals, scope, context, hintTokens) {
     el("div", {class: "card"},
        el("div", {class: "label"}, themed("span", "Estimated cost"), `, ${scope}`),
        el("div", {class: "hero", text: money(totals.cost)}),
-       el("div", {class: "note", text: notes.join(" · ")})),
+       el("div", {class: "note", text: notes.join(" · ")}), savingsNote(savings)),
     inputSplit(totals, parts, context, hintTokens),
     tile("Turns", whole(totals.turns), themed("div", "API calls with usage", {class: "note"})),
     tile("Output tokens", compact(totals.output), el("div", {class: "note", text: money(parts.output)}))];
+}
+
+// What compacting saved so far, as a gain or a loss (the sign and arrow carry it, like the compactions table), with
+// how many compactions it sums; null without one
+function savingsNote(savings) {
+  if (!savings) return null;
+  const count = savings.compactions === 1 ? "1 compaction" : `${whole(savings.compactions)} compactions`;
+  const unknown = savings.unknown ? `${whole(savings.unknown)} without an estimate` : null;
+  const title = "Each main-thread compaction against keeping its context, over its stretch up to the next one, " +
+    "summed; a stretch not paid off yet as it stands, forced compactions left out. ~: the summary call is " +
+    "estimated.";
+  if (!savings.compactions) {
+    return el("div", {class: "note", title, text: `Compacting: ${unknown}`});
+  }
+  const gain = savings.net >= 0;
+  const amount = gain ? `▲ compacting saved ~${money(savings.net)} so far`
+                      : `▼ compacting cost ~${money(-savings.net)} more so far`;
+  return el("div", {class: "note", title},
+            el("span", {class: gain ? "verdict-gain" : "verdict-loss", text: amount}),
+            ` (${[count, unknown].filter(Boolean).join(", ")})`);
 }
 
 function renderRuntime(summary) {

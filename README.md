@@ -57,8 +57,9 @@ holds:
   tools the call before ran;
 - per subagent, what it returned to the main thread; a Workflow run's agents under one row per run;
 - each compaction against keeping the context: what it cost once, what each later call saved, the call at which it
-  paid off, and whether it saved or cost more (at API list prices, with the summary call estimated). The
-  conversation shows the same at each compaction marker.
+  paid off, and whether it saved (green) or cost more (red), at API list prices with the summary call estimated.
+  The conversation shows the same at each compaction marker, and the Estimated cost tile, here and on the
+  overview, what compacting saved so far;
 - the conversation, on request: newest first, or in the transcript's order with "Oldest first". It hints at
   compacting where the context passes 200K, warns more sternly where compacting now would pay for itself within
   the replies that, going by your past compactions, you make on average before the next one, and most sternly

@@ -163,6 +163,7 @@ USAGE_COLUMNS = FilterColumns("u.day", "u.slug", "u.session_id")
 ERROR_COLUMNS = FilterColumns("e.day", "t.slug", "t.session_id")
 MESSAGE_COLUMNS = FilterColumns("m.day", "t.slug", "t.session_id")
 COST_STATE_COLUMNS = FilterColumns("c.day", "t.slug", "t.session_id")
+COMPACTION_COLUMNS = FilterColumns("c.day", "t.slug", "t.session_id")
 
 
 def range_filter(columns: FilterColumns, since: date | None, until: date | None, project: str | None = None,
@@ -466,6 +467,30 @@ def compaction_history(store: Store, prices: pricing.Prices,
         comparisons += turns.versus_keeping(history, turns.steps(history, moments, prices), records, prices,
                                             settings, rates)
     return comparisons
+
+
+def compaction_savings(store: Store, prices: pricing.Prices, settings: compact.CompactSettings,
+                       since: date | None = None, until: date | None = None, project: str | None = None,
+                       session_id: str | None = None) -> Row | None:
+    """What the main threads' compactions of the local days since up to until (of one project or session, if
+    given) saved so far (turns.savings_total); None without one. Each is compared with every compaction of its file,
+    since the next one ends its stretch."""
+    condition, parameters = range_filter(COMPACTION_COLUMNS, since, until, project, session_id)
+    wanted: dict[str, set[datetime]] = {}
+    for row in store.connection.execute(
+            "SELECT c.path AS path, c.ts AS ts FROM compactions c JOIN transcripts t ON t.path = c.path "
+            f"WHERE t.agent_id IS NULL AND c.ts IS NOT NULL AND {condition} ORDER BY c.path", parameters):
+        wanted.setdefault(row["path"], set()).add(stored_time(row["ts"]))
+    rates = output_rates(store) if wanted else {}
+    comparisons: list[turns.VersusKeeping | None] = []
+    for path, moments in wanted.items():
+        history = as_turns(turn_contexts(store, path))
+        records = compaction_list(compaction_rows(store, path))
+        times = tuple(record.ts for record in records if record.ts is not None)
+        compared = turns.versus_keeping(history, turns.steps(history, times, prices), records, prices, settings,
+                                        rates)
+        comparisons += [item for item, record in zip(compared, records) if record.ts in moments]
+    return turns.savings_total(comparisons)
 
 
 def transcript_path(store: Store, session_id: str, agent_id: str | None) -> Path | None:

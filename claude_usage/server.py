@@ -224,7 +224,8 @@ class UsageApp:
     def summary(self, days: int, until: date | None = None) -> Payload:
         """/api/summary: totals of the `days` local days up to until (default today, included), per hour too for a
         single day with the nearest days before and after it that have usage, the run totals of the sessions that
-        ended in them, the failed API calls (rate limits), the newest sessions and the costliest."""
+        ended in them, the failed API calls (rate limits), what the main threads' compactions of the range saved so
+        far, the newest sessions and the costliest."""
         until = until or date.today()
         # the store holds no more: a longer range would only show empty days
         if self.retention_days:
@@ -258,6 +259,7 @@ class UsageApp:
             sessions = queries.recent_sessions(self.store, since, self.prices, limit=None, project=self.project,
                                                until=until)
             history_since = queries.first_stored_day(self.store, project=self.project)
+            savings = queries.compaction_savings(self.store, self.prices, self.compact, since, until, self.project)
             nearest = queries.nearest_days(self.store, until, project=self.project) if single_day else (None, None)
             scan_errors = list(self.scan_errors)
         return {"days": days, "since": since.isoformat(), "until": until.isoformat(),
@@ -266,8 +268,9 @@ class UsageApp:
                 "history_since": None if history_since is None else history_since.isoformat(),
                 "prices_checked": self.prices_checked, "totals": queries.combined(groups["model"]), **groups,
                 "runtime": runtime, "api_errors": api_errors, "context": context,
-                "compact_hint_tokens": self.compact.hint_tokens, "scan_errors": scan_errors,
-                "sessions": sessions[:queries.DEFAULT_SESSION_LIMIT], "costly_sessions": queries.costliest(sessions)}
+                "compact_hint_tokens": self.compact.hint_tokens, "compaction_savings": savings,
+                "scan_errors": scan_errors, "sessions": sessions[:queries.DEFAULT_SESSION_LIMIT],
+                "costly_sessions": queries.costliest(sessions)}
 
     def chat(self, session_id: str, agent_id: str | None) -> Payload | None:
         """/api/session/<id>/chat[?agent=<id>]: the conversation of the main thread or a subagent, read from the
@@ -313,8 +316,9 @@ class UsageApp:
         return self.compaction_history
 
     def session(self, session_id: str) -> Payload | None:
-        """/api/session/<id>, with the main thread's current context against the auto-compact point and whether the
-        session is live (the page polls it faster then); None for an unknown id."""
+        """/api/session/<id>, with the main thread's current context against the auto-compact point, what its
+        compactions saved so far and whether the session is live (the page polls it faster then); None for an
+        unknown id."""
         with self.lock:
             self.refresh()
             detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False,
@@ -323,12 +327,13 @@ class UsageApp:
                                               self.stored_comparisons())
             path = queries.transcript_path(self.store, session_id, None)
             live = queries.session_live(self.store, session_id, self.live_minutes)
+            savings = queries.compaction_savings(self.store, self.prices, self.compact, session_id=session_id)
         if detail is None:
             return None
         # a file read needn't hold up the other requests
         prompt = None if path is None else transcripts.first_prompt(path)
         return {**detail, "prompt": prompt, "compact_hint_tokens": self.compact.hint_tokens, "current": current,
-                "live": live}
+                "live": live, "compaction_savings": savings}
 
 
 def route_live(app: UsageApp, match: re.Match[str], query: str) -> Payload:

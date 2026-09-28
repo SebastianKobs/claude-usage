@@ -48,7 +48,8 @@ function renderDrilldown(detail, refresh = false) {
     el("div", {class: "muted", text: `${detail.project}${detail.git_branch ? " · " + detail.git_branch : ""} · ${when(detail.first_ts)} – ${when(detail.last_ts)} · ${detail.session_id}`}),
     // the page's tile rows with this session's numbers: its whole usage, main thread, subagents and background
     el("div", {class: "kpis session-kpis"},
-       ...kpiTiles(detail, "this session", detail.context, detail.compact_hint_tokens)),
+       ...kpiTiles(detail, "this session", detail.context, detail.compact_hint_tokens,
+                 detail.compaction_savings)),
     // from the cost record Claude Code writes when its process exits, until then estimated from the transcripts
     detail.runtime ? el("div", {class: "kpis session-kpis"},
                         ...runtimeTiles(detail.runtime, detail.runtime.source === "cost_record"
@@ -611,5 +612,6 @@ function compactionTable(agent) {
         el("td", {title: verdictTitle(comparison)}, verdictBadge(comparison)));
     }));
   return el("div", {}, table, el("div", {class: "note", text: `${VERSUS_KEEPING_NOTE} Each compaction is ` +
-                                                               "compared on its own, so they don't add up."}));
+                                                               "compared over its own stretch, up to the next one; " +
+                                                               "the Estimated cost tile adds up the main thread's."}));
 }

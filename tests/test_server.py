@@ -330,6 +330,16 @@ class ApiTest(ServerCase):
         _, payload = self.get_json("/api/session/s1")
         self.assertEqual(payload["current"]["compact_now"]["stored_compactions"], 1)
 
+    def test_summary_and_session_say_what_compacting_saved_so_far(self):
+        self.compacted(usage(new=2, cache_5m=50, output=5))
+        _, summary = self.get_json("/api/summary?days=7")
+        _, session = self.get_json("/api/session/s1")
+        # without an output speed its summary is unknown, so it is counted, not summed
+        self.assertEqual((summary["compaction_savings"]["compactions"], summary["compaction_savings"]["unknown"]),
+                         (0, 1))
+        self.assertEqual(session["compaction_savings"], summary["compaction_savings"])
+        self.assertIsNone(self.get_json("/api/session/s2")[1]["compaction_savings"])
+
     def test_the_compaction_history_is_computed_again_only_after_the_store_changed(self):
         computed = server.queries.compaction_history
         with mock.patch.object(server.queries, "compaction_history", wraps=computed) as history:
