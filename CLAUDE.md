@@ -235,6 +235,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     Once Claude Code has deleted the file, it answers `available: false`.
   - Hidden context in a row (attachments with `rendered`, meta records, skill text, the compact summary) is one
     `injected` entry of items (kind, full length, text cut to `CHAT_TEXT_LIMIT`); a tool result doesn't split it.
+    `FOLDED_ATTACHMENTS` (the token reminder) are no items: their characters go on the next call's usage
+    (`reminder_chars`) and the chat sums them (`reminders`), since a line before each call buried the badges.
     A compaction marker carries its metadata. Each call's usage carries `growth` and `rebuild` from `turns.steps`
     over every call of the file, shown or not; on real data they match the store's (14 rebuilds, same causes).
 - **Dashboard:**

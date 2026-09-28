@@ -49,7 +49,15 @@ function renderChat(container, chat) {
     container.replaceChildren(el("div", {class: "empty", text: "No conversation in this transcript yet."}));
     return;
   }
-  container.replaceChildren(el("div", {class: "chat"}, ...chat.entries.map(chatEntry)));
+  container.replaceChildren(reminderNote(chat.reminders), el("div", {class: "chat"}, ...chat.entries.map(chatEntry)));
+}
+
+// Claude Code's token reminder comes before almost every call: summed here once, not shown as a line each
+function reminderNote(reminders) {
+  if (!reminders || !reminders.calls) return null;
+  return el("div", {class: "chat-reminders muted",
+    text: `Claude Code's token reminder went with ${whole(reminders.calls)} calls, ` +
+          `${whole(reminders.chars)} characters in all; each call's badge counts it (hover the badge).`});
 }
 
 function cutNote(shown, total) {
@@ -240,7 +248,7 @@ function toolResult(entry, fields) {
   return el("pre", {class: "code", text: entry.result});
 }
 
-// An API call's tokens and cost, under its last entry: a badge, the cost in bold at its end
+// An API call's tokens and cost, under its last entry: a badge, the cost in bold at its start
 // A reminder at a milestone past a hint already shown: a chip at the end of the usage badge, one short line
 function compactChip(hint) {
   if (hint.kind === "auto_reminder") {
@@ -279,8 +287,12 @@ function usageLine(usage, hint) {
   const reminder = hint && hint.kind.endsWith("_reminder") ? compactChip(hint) : null;
   // a reminder tints the whole badge in its status color, so it reads at a glance while scrolling
   const tint = !reminder ? "" : hint.kind === "auto_reminder" ? " chat-usage-remind-auto" : " chat-usage-remind";
-  return el("div", {class: `chat-usage${tint}`}, el("span", {text: `${parts.join(" · ")} · `}),
-            el("strong", {text: usage.cost === null ? "no price" : money(usage.cost)}), reminder,
+  // the cost first, so each call's price reads at a glance while scrolling
+  const title = usage.reminder_chars
+    ? `The context includes Claude Code's token reminder (${whole(usage.reminder_chars)} characters)` : null;
+  return el("div", {class: `chat-usage${tint}`, title},
+            el("strong", {text: usage.cost === null ? "no price" : money(usage.cost)}),
+            el("span", {text: ` · ${parts.join(" · ")}`}), reminder,
             usage.rebuild ? rebuildChip(usage.rebuild) : null);
 }
 

@@ -125,14 +125,23 @@ def usage_payload(usage: transcripts.MessageUsage, prices: pricing.Prices) -> Pa
 
 
 def entry_payload(entry: conversation.ChatEntry, prices: pricing.Prices) -> Payload:
-    """A conversation entry as JSON-ready fields, a reply's usage with its cost, its growth and its cache rebuild."""
+    """A conversation entry as JSON-ready fields, a reply's usage with its cost, its growth, its cache rebuild and
+    the token reminder sent with it."""
     fields = dataclasses.asdict(entry)
     step = fields.pop("step")
+    reminder_chars = fields.pop("reminder_chars")
     usage = None
     if entry.usage is not None:
         usage = {**usage_payload(entry.usage, prices), "growth": step["growth"] if step else None,
-                 "rebuild": step["rebuild"] if step else None}
+                 "rebuild": step["rebuild"] if step else None, "reminder_chars": reminder_chars}
     return {**fields, "timestamp": scan.iso(entry.timestamp), "usage": usage}
+
+
+def reminder_totals(entries: list[Payload]) -> Payload:
+    """How many calls had the token reminder folded into their usage, and its characters in all."""
+    usages = [entry["usage"] for entry in entries if entry["usage"]]
+    chars = [usage["reminder_chars"] for usage in usages if usage["reminder_chars"]]
+    return {"calls": len(chars), "chars": sum(chars)}
 
 
 def day_navigation(days: int, until: date, previous_day: date | None, next_day: date | None,
@@ -253,9 +262,11 @@ class UsageApp:
         try:
             entries = [entry_payload(entry, self.prices) for entry in conversation.conversation(path, self.prices)]
         except OSError:
-            return {"session_id": session_id, "agent_id": agent_id, "available": False, "entries": []}
+            return {"session_id": session_id, "agent_id": agent_id, "available": False, "entries": [],
+                    "reminders": reminder_totals([])}
         compact.compact_hints(entries, self.compact)
-        return {"session_id": session_id, "agent_id": agent_id, "available": True, "entries": entries}
+        return {"session_id": session_id, "agent_id": agent_id, "available": True, "entries": entries,
+                "reminders": reminder_totals(entries)}
 
     def session(self, session_id: str) -> Payload | None:
         """/api/session/<id>, with the main thread's current context against the auto-compact point; None for an

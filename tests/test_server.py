@@ -438,6 +438,14 @@ class ChatTest(ServerCase):
         self.assertIsNone(first["rebuild"])
         self.assertNotIn("step", payload["entries"][-1])
 
+    def test_the_token_reminders_are_summed_and_on_each_calls_usage(self):
+        for index in (8, 9):
+            self.main.attachment("total_tokens_reminder", "r" * 86)
+            self.main.assistant(f"m{index}", [text_block("a")], usage(output=1))
+        _, payload = self.get_json("/api/session/s1/chat")
+        self.assertEqual([entry["usage"]["reminder_chars"] for entry in payload["entries"][-2:]], [86, 86])
+        self.assertEqual(payload["reminders"], {"calls": 2, "chars": 172})
+
     def test_compactions_and_injected_context_come_with_their_details(self):
         self.main.compaction(trigger="auto", pre_tokens=170_000, post_tokens=9_000, duration_ms=41_000)
         self.main.user("the summary", isCompactSummary=True)
@@ -473,7 +481,8 @@ class ChatTest(ServerCase):
         self.get_json("/api/summary?days=7")
         self.main.path.unlink()
         status, payload = self.get_json("/api/session/s1/chat")
-        self.assertEqual((status, payload["available"], payload["entries"]), (200, False, []))
+        self.assertEqual((status, payload["available"], payload["entries"], payload["reminders"]),
+                         (200, False, [], {"calls": 0, "chars": 0}))
 
     def test_unknown_session_or_agent_is_404(self):
         for path in ("/api/session/nope/chat", "/api/session/s1/chat?agent=nope"):

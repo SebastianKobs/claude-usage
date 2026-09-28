@@ -13,6 +13,9 @@ from claude_usage import turns
 CHAT_TOOL_LIMIT = 4000                  # characters of a tool's input or result the view gets
 CHAT_TEXT_LIMIT = 20000                 # of a prompt or reply (a pasted log can be huge)
 SUMMARY_LIMIT = 200
+# attachments that come before almost every call (the token reminder, 86 characters): folded into the usage of the
+# call they go with, as a line each would bury the calls' usage
+FOLDED_ATTACHMENTS = ("total_tokens_reminder",)
 # the input field that says what a call does, in order: the first one a call has is its summary
 SUMMARY_FIELDS = ("command", "file_path", "path", "pattern", "url", "query", "description", "skill", "prompt")
 
@@ -64,6 +67,7 @@ class ChatEntry:
     step: turns.Step | None = None      # with the usage: what the call's context grew by, and a cache rebuild
     items: tuple[Injected, ...] = ()    # of an injected entry, in order
     compaction: CompactionMarker | None = None
+    reminder_chars: int = 0             # with the usage: the folded attachments sent with the call
 
 
 def cut(text: str, limit: int) -> str:
@@ -151,16 +155,17 @@ def as_turn(usage: transcripts.MessageUsage) -> turns.Turn:
 
 
 def add_usage(entries: list[ChatEntry], accumulator: transcripts.MessageAccumulator,
-              last_entries: dict[str, int], prices: pricing.Prices) -> None:
-    """Put each API call's final usage and step on its last entry (a call without a shown entry has nowhere to go,
-    but still counts for the growth of the next)."""
+              last_entries: dict[str, int], prices: pricing.Prices, reminders: dict[str, int]) -> None:
+    """Put each API call's final usage, step and folded reminder characters (reminders, by message id) on its last
+    entry (a call without a shown entry has nowhere to go, but still counts for the growth of the next)."""
     usages = accumulator.usages()
     moments = tuple(entry.timestamp for entry in entries if entry.kind == "compaction" and entry.timestamp)
     steps = turns.steps([as_turn(usage) for usage in usages], moments, prices)
     for usage, step in zip(usages, steps):
         index = last_entries.get(usage.message_id)
         if index is not None:
-            entries[index] = replace(entries[index], usage=usage, step=step)
+            entries[index] = replace(entries[index], usage=usage, step=step,
+                                     reminder_chars=reminders.get(usage.message_id, 0))
 
 
 def add_results(record: transcripts.Record, calls: dict[str, int], entries: list[ChatEntry]) -> None:
@@ -227,14 +232,16 @@ def compaction_marker(record: transcripts.Record) -> CompactionMarker:
 def conversation(path: Path, prices: pricing.Prices) -> list[ChatEntry]:
     """The conversation of one transcript file in order: prompts, reply text and thinking with text, tool calls
     with their results, compactions with their metadata, failed API calls, and the hidden context in between
-    (attachments that reach the model, meta records, skill text, compact summaries) grouped per run. The last
-    entry of each API call carries its final usage and its step (growth, cache rebuild priced at prices). Raises
-    OSError if the file is gone."""
+    (attachments that reach the model, meta records, skill text, compact summaries) grouped per run, without
+    FOLDED_ATTACHMENTS. The last entry of each API call carries its final usage, its step (growth, cache rebuild
+    priced at prices) and the folded characters sent with it. Raises OSError if the file is gone."""
     entries: list[ChatEntry] = []
     calls: dict[str, int] = {}
     accumulator = transcripts.MessageAccumulator()
     last_entries: dict[str, int] = {}
     last_user_ts: datetime | None = None
+    pending_reminder = 0                # folded characters waiting for the next call
+    reminders: dict[str, int] = {}
     for record in transcripts.iter_lines(path):
         kind = record.get("type")
         timestamp = transcripts.parse_timestamp(record.get("timestamp"))
@@ -250,7 +257,14 @@ def conversation(path: Path, prices: pricing.Prices) -> list[ChatEntry]:
             error = transcripts.text_or_none(record.get("error")) or "unknown"
             entries.append(ChatEntry("error", timestamp, f"{error} ({status})" if isinstance(status, int) else error))
         elif kind == "assistant":
+            message = transcripts.message_of(record) or {}
+            message_id = transcripts.text_or_none(message.get("id"))
+            if pending_reminder and message_id and message_id not in accumulator.messages:
+                reminders[message_id] = pending_reminder
+                pending_reminder = 0
             reply_entries(record, calls, entries, accumulator, last_entries, last_user_ts)
+        elif item is not None and item.kind in FOLDED_ATTACHMENTS:
+            pending_reminder += item.chars
         elif item is not None:
             add_injected(item, timestamp, entries)
         elif kind == "user":
@@ -258,5 +272,5 @@ def conversation(path: Path, prices: pricing.Prices) -> list[ChatEntry]:
             text = transcripts.prompt_text(record)
             if text and text.strip():
                 entries.append(ChatEntry("prompt", timestamp, cut(text, CHAT_TEXT_LIMIT)))
-    add_usage(entries, accumulator, last_entries, prices)
+    add_usage(entries, accumulator, last_entries, prices, reminders)
     return entries

@@ -70,6 +70,20 @@ class ConversationTest(TempDirTestCase):
         self.main.attachment("model", "sonnet")
         self.assertEqual(self.items(), [[("date", "today"), ("model", "sonnet")]])
 
+    def test_the_token_reminder_is_folded_into_the_next_calls_usage(self):
+        self.main.assistant("m1", [tool_use_block("t1", "Read")], usage(output=1))
+        self.main.attachment("total_tokens_reminder", "r" * 86)
+        self.main.tool_result("t1", "ok")
+        self.main.assistant("m2", [text_block("done")], usage(output=1))
+        entries = conversation.conversation(self.main.path, PRICES)
+        self.assertEqual([entry.kind for entry in entries], ["tool", "text"])
+        self.assertEqual([entry.reminder_chars for entry in entries], [0, 86])
+
+    def test_only_the_reminder_leaves_a_group(self):
+        self.main.attachment("total_tokens_reminder", "r" * 86)
+        self.main.attachment("date", "today")
+        self.assertEqual(self.items(), [[("date", "today")]])
+
     def test_an_injected_entry_has_the_time_of_its_first_item(self):
         self.main.at(datetime(2026, 9, 1, 12, 0, tzinfo=UTC)).attachment("date", "today")
         self.main.attachment("model", "sonnet")

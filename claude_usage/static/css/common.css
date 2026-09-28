@@ -171,7 +171,8 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 .chat-usage { display: block; margin-top: 6px; padding: 4px 12px; border: 1px solid var(--border);
   border-radius: 6px; background: var(--wash); color: var(--text-secondary); font-size: 12px; text-align: left;
   font-variant-numeric: tabular-nums; }
-.chat-usage strong { color: var(--text-primary); font-weight: 600; }
+.chat-usage strong { color: var(--text-primary); font-weight: 600; font-size: 13px; }
+.chat-reminders { font-size: 12px; margin-bottom: 8px; }
 /* a tool call's parts, and highlight.js's token classes on the theme's code colors */
 .tool-description { color: var(--text-primary); margin: 6px 0 2px; overflow-wrap: anywhere; }
 .tool-fields { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; margin: 4px 0 8px; }
