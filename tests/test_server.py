@@ -20,6 +20,7 @@ from claude_usage import pricing
 from claude_usage import scan
 from claude_usage import server
 from claude_usage import store
+from claude_usage import turns
 from helpers import MILLION
 from helpers import TempDirTestCase
 from helpers import text_block
@@ -285,6 +286,25 @@ class ApiTest(ServerCase):
         self.assertEqual((current["context"], current["auto_compact"], current["hint_tokens"],
                           current["turns_since_compaction"]), (110, 967_000, 200_000, 1))
 
+    def compacted(self, next_usage):
+        """A compaction after m1 (context 110, reply 50), then a call with next_usage."""
+        self.main.compaction()
+        self.main.user("go on")
+        self.main.assistant("m8", [text_block("b")], next_usage)
+
+    def test_session_compactions_are_compared_with_keeping_the_context(self):
+        self.compacted(usage(new=2, cache_5m=50, output=5))
+        _, payload = self.get_json("/api/session/s1")
+        [row] = payload["agents"][0]["compactions"]
+        self.assertEqual((row["next_context"], row["versus_keeping"]["difference"]), (52, 108))
+        self.assertIn(row["versus_keeping"]["verdict"], turns.VERDICTS)
+
+    def test_a_compaction_that_never_pays_off_still_answers(self):
+        self.compacted(usage(cache_5m=5_000, output=5))
+        status, payload = self.get_json("/api/session/s1")
+        comparison = payload["agents"][0]["compactions"][0]["versus_keeping"]
+        self.assertEqual((status, comparison["breakeven_call"]), (200, None))
+
     def test_the_prompt_is_read_outside_the_lock(self):
         held = []
         read = server.transcripts.first_prompt
@@ -461,6 +481,19 @@ class ChatTest(ServerCase):
         self.assertEqual(marker["compaction"], {"trigger": "auto", "pre_tokens": 170_000, "post_tokens": 9_000,
                                                 "duration_ms": 41_000})
         self.assertEqual(injected["items"], [{"kind": "summary", "chars": 11, "text": "the summary"}])
+
+    def test_a_compaction_marker_carries_its_comparison_with_keeping(self):
+        self.main.compaction()
+        self.main.user("go on")
+        self.main.assistant("m8", [text_block("b")], usage(new=2, cache_5m=50, output=5))
+        _, payload = self.get_json("/api/session/s1/chat")
+        [marker] = [entry for entry in payload["entries"] if entry["kind"] == "compaction"]
+        self.assertEqual(marker["versus_keeping"]["difference"], 108)
+
+    def test_a_compaction_without_a_call_after_it_has_no_comparison(self):
+        self.main.compaction()
+        _, payload = self.get_json("/api/session/s1/chat")
+        self.assertIsNone(payload["entries"][-1]["versus_keeping"])
 
     def test_tool_calls_carry_their_input_fields(self):
         self.main.assistant("m8", [tool_use_block("t8", "Bash", {"command": "ls", "description": "List"})],

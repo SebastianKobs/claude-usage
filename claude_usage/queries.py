@@ -1,6 +1,7 @@
 """The queries behind the report and the dashboard, over the usage_rows view (messages and background usage) and
 the other tables of the store.
 """
+import dataclasses
 import sqlite3
 import statistics
 import time
@@ -300,6 +301,68 @@ def compaction_rows(store: Store, path: str) -> list[Row]:
         "ORDER BY ts, rowid", (path,))]
 
 
+def compaction_list(compactions: list[Row]) -> tuple[turns.Compaction, ...]:
+    """compaction_rows as the Compaction records turns.py works on."""
+    return tuple(turns.Compaction(ts=stored_time(row["ts"]), trigger=row["trigger"], pre_tokens=row["pre_tokens"],
+                                  post_tokens=row["post_tokens"], duration_ms=row["duration_ms"])
+                 for row in compactions)
+
+
+def output_rates(store: Store) -> dict[str, turns.OutputRate]:
+    """Each model's output speed on the main threads (subagents run other work), from each reply's request to its
+    last record."""
+    rows = store.connection.execute(
+        "SELECT m.model AS model, m.output AS output, m.request_ts AS request_ts, m.end_ts AS end_ts "
+        "FROM messages m JOIN transcripts t ON t.path = m.path "
+        "WHERE t.agent_id IS NULL AND m.output >= ? AND m.request_ts IS NOT NULL AND m.end_ts IS NOT NULL",
+        (turns.RATE_FASTEST_MIN_OUTPUT,))
+    return turns.output_rates([(row["model"], row["output"],
+                                (stored_time(row["end_ts"]) - stored_time(row["request_ts"])).total_seconds())
+                               for row in rows])
+
+
+def versus_keeping_payload(comparison: turns.VersusKeeping | None) -> Row | None:
+    """A compaction's comparison with keeping the context as JSON-ready fields."""
+    if comparison is None:
+        return None
+    fields = dataclasses.asdict(comparison)
+    call = fields.pop("call")
+    return {**fields, "call_low": call["low"], "call_cost": call["cost"], "call_high": call["high"],
+            "summary_tokens": call["summary_tokens"], "summary_high": call["summary_high"]}
+
+
+def next_context(history: list[turns.Turn], moment: datetime | None) -> int | None:
+    """The context of the first call at or after a compaction; None without one."""
+    if moment is None:
+        return None
+    return next((turn.context for turn in history if turn.ts is not None and turn.ts >= moment), None)
+
+
+def compared_compactions(history: list[turns.Turn], compactions: list[Row], steps: list[turns.Step],
+                         prices: pricing.Prices, settings: compact.CompactSettings,
+                         rates: dict[str, turns.OutputRate]) -> list[Row]:
+    """compaction_rows with the next call's context and the comparison with keeping the context."""
+    records = compaction_list(compactions)
+    comparisons = turns.versus_keeping(history, steps, records, prices, settings, rates)
+    return [{**row, "next_context": next_context(history, record.ts),
+             "versus_keeping": versus_keeping_payload(comparison)}
+            for row, record, comparison in zip(compactions, records, comparisons)]
+
+
+def compaction_comparisons(store: Store, session_id: str, agent_id: str | None, prices: pricing.Prices,
+                           settings: compact.CompactSettings) -> dict[str, Row | None]:
+    """The comparison with keeping the context of each compaction of one transcript, by its stored time: what the
+    conversation's compaction markers show."""
+    path = transcript_path(store, session_id, agent_id)
+    if path is None:
+        return {}
+    history = as_turns(turn_contexts(store, str(path)))
+    compactions = compaction_rows(store, str(path))
+    steps = turns.steps(history, compaction_times(compactions), prices)
+    rows = compared_compactions(history, compactions, steps, prices, settings, output_rates(store))
+    return {row["ts"]: row["versus_keeping"] for row in rows if row["ts"] is not None}
+
+
 def compaction_times(compactions: list[Row]) -> tuple[datetime, ...]:
     """The times of compaction_rows, without the ones that have none."""
     return tuple(stored_time(row["ts"]) for row in compactions if row["ts"] is not None)
@@ -422,10 +485,11 @@ def live_sessions(store: Store, minutes: float, prices: pricing.Prices, now: flo
     return sessions
 
 
-def agent_detail(store: Store, row: sqlite3.Row, prices: pricing.Prices) -> Row:
+def agent_detail(store: Store, row: sqlite3.Row, prices: pricing.Prices, settings: compact.CompactSettings,
+                 rates: dict[str, turns.OutputRate]) -> Row:
     """One transcript of a session: its turns (each with its context parts, growth and cache rebuild), context
-    first -> last, input split, output, tools and cost, its compactions, the fixed overhead, the rebuilds, the
-    biggest growth steps, and for a subagent what it returned."""
+    first -> last, input split, output, tools and cost, its compactions (each compared with keeping the context),
+    the fixed overhead, the rebuilds, the biggest growth steps, and for a subagent what it returned."""
     rows = turn_contexts(store, row["path"])
     history = as_turns(rows)
     compactions = compaction_rows(store, row["path"])
@@ -450,21 +514,24 @@ def agent_detail(store: Store, row: sqlite3.Row, prices: pricing.Prices) -> Row:
                                   "cache_read": turn["cache_read"], "growth": step.growth,
                                   "rebuild": rebuild_payload(step.rebuild)}
                                  for turn, step in zip(rows, steps)],
-            "tools": [dict(tool) for tool in tools], "compactions": compactions,
+            "tools": [dict(tool) for tool in tools],
+            "compactions": compared_compactions(history, compactions, steps, prices, settings, rates),
             "overhead": None if overhead is None else {"tokens": overhead.tokens, "cost": overhead.cost},
             "rebuilds": rebuild_totals(steps), "top_growth": top_growth(store, row["path"], history, steps),
             "returned_chars": returned_chars(store, row["tool_use_id"])}
 
 
-def session_detail(store: Store, session_id: str, prices: pricing.Prices, read_prompt: bool = True) -> Row | None:
+def session_detail(store: Store, session_id: str, prices: pricing.Prices, read_prompt: bool = True,
+                   settings: compact.CompactSettings = compact.DEFAULT_COMPACT) -> Row | None:
     """The main thread plus each subagent of a session, or None for an unknown id. The prompt is read from the
     transcript on demand (never stored) and is None once the file is gone, or without read_prompt: the server
-    reads it after letting go of the store."""
+    reads it after letting go of the store. settings give the auto-compact points the compactions are compared at."""
     rows = session_rows(store, session_id)
     if not rows:
         return None
     main = rows[0]
     prompt = transcripts.first_prompt(Path(main["path"])) if read_prompt and main["agent_id"] is None else None
+    rates = output_rates(store)
     return {"session_id": session_id, "project": main["project"], "title": main["title"],
             "git_branch": main["git_branch"],
             "first_ts": min((row["first_ts"] for row in rows if row["first_ts"]), default=None),
@@ -480,7 +547,8 @@ def session_detail(store: Store, session_id: str, prices: pricing.Prices, read_p
                      if row[group] is not None]
                for key, group in (("skills", "skill"), ("mcp_servers", "mcp_server"))},
             "api_errors": api_error_events(store, None, limit=NO_LIMIT, session_id=session_id),
-            "agents": [agent_detail(store, row, prices) for row in rows] + background_detail(store, session_id, prices)}
+            "agents": [agent_detail(store, row, prices, settings, rates) for row in rows]
+            + background_detail(store, session_id, prices)}
 
 
 def milliseconds_between(start: str | None, end: str | None) -> int:

@@ -49,7 +49,7 @@ function renderChat(container, chat) {
     container.replaceChildren(el("div", {class: "empty", text: "No conversation in this transcript yet."}));
     return;
   }
-  container.replaceChildren(reminderNote(chat.reminders), el("div", {class: "chat"}, ...chat.entries.map(chatEntry)));
+  fill(container, reminderNote(chat.reminders), el("div", {class: "chat"}, ...chat.entries.map(chatEntry)));
 }
 
 // Claude Code's token reminder comes before almost every call: summed here once, not shown as a line each
@@ -329,16 +329,91 @@ function chatEntry(entry) {
   return el("div", {}, shown, usageLine(entry.usage, hint), announced);
 }
 
-// A compaction's line: how it was triggered, the context before and after, and how long the summary took
+// A compaction's line: how it was triggered, the context before and after (the next call's, which carries the
+// system prompt, tools and CLAUDE.md again, once known), and how long the summary took
 function compactionText(entry) {
   const marker = entry.compaction || {};
   const parts = [entry.text];
   if (marker.trigger) parts.push(marker.trigger);
   if (marker.pre_tokens !== null && marker.pre_tokens !== undefined) {
-    parts.push(`${compact(marker.pre_tokens)} → ${compact(marker.post_tokens)} tokens`);
+    const after = entry.versus_keeping ? `next call ${compact(entry.versus_keeping.after)}`
+                                       : `${compact(marker.post_tokens)} tokens`;
+    parts.push(`${compact(marker.pre_tokens)} → ${after}`);
   }
   if (marker.duration_ms) parts.push(`took ${duration(marker.duration_ms)}`);
   return parts.join(" · ");
+}
+
+// --- a compaction against keeping the context (turns.versus_keeping) ------------------------------------------
+
+const COMPACTION_VERDICTS = {saved: "saved", cost_more: "cost more", even: "about even",
+                             forced: "forced: keeping would have auto-compacted", open: "not paid off by the last call",
+                             unknown: "unknown without an output speed or duration"};
+const VERSUS_KEEPING_NOTE = "Compared with keeping the context: the same later calls, each reading the dropped " +
+  "tokens again from the cache, at API list prices. ~ marks the summary call's output, estimated from its " +
+  "duration at your output speed; saved holds even at your fastest. Re-reading files after compacting isn't counted.";
+
+// the verdict with its amount; ~ where it includes the estimated summary
+function verdictText(comparison) {
+  if (comparison.verdict === "saved") return `saved ~${money(comparison.net)}`;
+  if (comparison.verdict === "cost_more") {
+    return comparison.net === null ? `cost at least ${money(-comparison.net_high)} more`
+                                   : `cost ~${money(-comparison.net)} more`;
+  }
+  if (comparison.verdict === "unknown" && comparison.net_high > 0) {
+    return `saved at most ${money(comparison.net_high)}, the summary call unknown`;
+  }
+  return COMPACTION_VERDICTS[comparison.verdict];
+}
+
+// the break-even call, judged at the fastest summary like saved; without a summary estimate a lower bound; none
+// for a forced compaction, which had nothing to pay off against
+function breakevenCall(comparison) {
+  if (comparison.verdict === "forced") return null;
+  if (comparison.breakeven_call === null) return "never";
+  return `${comparison.breakeven_at_least ? "≥ " : ""}call ${whole(comparison.breakeven_call)}`;
+}
+
+function breakevenText(comparison) {
+  const call = breakevenCall(comparison);
+  if (call === null) return null;
+  if (call === "never") return "never pays off";
+  if (comparison.breakeven_at_least) return `pays off at call ${whole(comparison.breakeven_call)} or later`;
+  return comparison.breakeven_call > comparison.calls_after ? `would pay off at ${call}` : `paid off at ${call}`;
+}
+
+// the summary call and the rewrite; only the input side is known without an output speed
+function oneTimeText(comparison) {
+  return comparison.one_time === null ? `at least ${money(comparison.call_low + comparison.rewrite)}`
+                                      : `~${money(comparison.one_time)}`;
+}
+
+function oneTimeTitle(comparison) {
+  const summary = comparison.summary_tokens === null ? "its summary unknown"
+    : `a summary of about ${compact(comparison.summary_tokens)} tokens, at most ${compact(comparison.summary_high)}`;
+  const cache = comparison.cache_warm ? "warm" : "cold";
+  return `The summary call ${comparison.call_cost === null ? "" : `~${money(comparison.call_cost)} `}(${summary}; ` +
+    `input ${money(comparison.call_low)}, cache ${cache}) and rewriting the next call's context ` +
+    `${money(comparison.rewrite)}`;
+}
+
+// the re-work that would cancel a saving, and where the kept session would have auto-compacted itself
+function verdictTitle(comparison) {
+  const notes = [];
+  if (comparison.rework_margin !== null) {
+    notes.push(`Re-reading about ${compact(comparison.rework_margin)} tokens after compacting would cancel the saving`);
+  }
+  if (comparison.capped_at !== null) {
+    notes.push(`The kept session would have auto-compacted at call ${whole(comparison.capped_at)}`);
+  }
+  return notes.join(". ") || null;
+}
+
+function versusKeepingLine(comparison) {
+  const parts = [verdictText(comparison), breakevenText(comparison), `${whole(comparison.calls_after)} calls after`,
+                 `one-time ${oneTimeText(comparison)}`];
+  return el("div", {class: "muted", title: VERSUS_KEEPING_NOTE,
+                    text: `vs keeping: ${parts.filter(Boolean).join(" · ")}`});
 }
 
 // the kinds of hidden context that aren't an attachment type
@@ -362,7 +437,8 @@ function chatBlock(entry) {
   const time = el("span", {class: "muted", text: when(entry.timestamp)});
   if (entry.kind === "compaction" || entry.kind === "error") {
     return el("div", {class: "chat-marker"},
-              entry.kind === "error" ? `⚠ API error: ${entry.text}` : compactionText(entry), " ", time);
+              entry.kind === "error" ? `⚠ API error: ${entry.text}` : compactionText(entry), " ", time,
+              entry.versus_keeping ? versusKeepingLine(entry.versus_keeping) : null);
   }
   if (entry.kind === "injected") return injectedBlock(entry, time);
   if (entry.kind === "tool") {

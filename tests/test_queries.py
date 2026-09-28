@@ -9,6 +9,7 @@ from claude_usage import compact
 from claude_usage import queries
 from claude_usage import scan
 from claude_usage import store
+from claude_usage import turns
 from helpers import DAY_1
 from helpers import DAY_3
 from helpers import HAIKU
@@ -752,10 +753,21 @@ class ContextPartsTest(StoreCase):
         self.assertAlmostEqual(self.main["rebuilds"]["cost"], lost * (2.5 - 0.2) / MILLION)
 
     def test_the_compactions_of_the_file(self):
-        self.assertEqual(self.main["compactions"],
-                         [{"ts": self.boundary["timestamp"].replace("Z", "+00:00"), "trigger": "manual",
-                           "pre_tokens": 150_000, "post_tokens": 12_000, "duration_ms": 30_000}])
+        [row] = self.main["compactions"]
+        self.assertEqual({key: row[key] for key in ("ts", "trigger", "pre_tokens", "post_tokens", "duration_ms")},
+                         {"ts": self.boundary["timestamp"].replace("Z", "+00:00"), "trigger": "manual",
+                          "pre_tokens": 150_000, "post_tokens": 12_000, "duration_ms": 30_000})
         self.assertEqual(self.agent["compactions"], [])
+
+    def test_a_compaction_carries_the_next_calls_context(self):
+        self.assertEqual(self.main["compactions"][0]["next_context"], 3_000)
+
+    def test_a_compaction_is_compared_with_keeping_the_context(self):
+        comparison = self.main["compactions"][0]["versus_keeping"]
+        # the last call before carried 21,105 and replied 20; the next call's context is 3,000
+        self.assertEqual((comparison["before"], comparison["difference"], comparison["calls_after"]),
+                         (21_125, 18_125, 1))
+        self.assertIn(comparison["verdict"], turns.VERDICTS)
 
     def test_the_fixed_overhead_and_what_reading_it_again_cost(self):
         self.assertEqual(self.main["overhead"]["tokens"], 20_010)
@@ -779,6 +791,20 @@ class ContextPartsTest(StoreCase):
 
     def test_no_current_context_without_main_thread_turns(self):
         self.assertIsNone(queries.current_context(self.store, "nope", compact.DEFAULT_COMPACT, PRICES))
+
+
+class OutputRateTest(StoreCase):
+    def test_output_speeds_come_from_the_main_threads_only(self):
+        main = self.projects.session("s1")
+        main.user("go")
+        main.assistant("m1", [text_block("a")], usage(cache_5m=10, output=4_000))
+        agent = self.projects.subagent("s1", "a1")
+        agent.user("look")
+        agent.assistant("a1-m1", [text_block("b")], usage(cache_5m=10, output=9_000), model="claude-opus-5")
+        self.scan()
+        rates = queries.output_rates(self.store)
+        self.assertEqual(set(rates), {"claude-sonnet-5"})
+        self.assertEqual(rates["claude-sonnet-5"].median, 4_000.0)
 
 
 class CostliestTest(StoreCase):

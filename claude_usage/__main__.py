@@ -90,7 +90,8 @@ def run_report(context: Context) -> int:
         if not args.no_scan:
             scan.scan(usage_store, context.projects_dir, args.project, retention)
         if args.session:
-            detail = queries.session_detail(usage_store, args.session, context.prices)
+            detail = queries.session_detail(usage_store, args.session, context.prices,
+                                            settings=compact.parse_compact_settings(context.config.values))
             if detail is None:
                 raise CliError(f"unknown session {args.session}")
             if args.json:

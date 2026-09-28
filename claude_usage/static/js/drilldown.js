@@ -412,11 +412,34 @@ function growthTable(agent) {
       cell(step.tools.length ? toolSummary(step.tools) : "none: a prompt or attachments"))));
 }
 
+// each compaction with what it cost once and saved per later call against keeping the context
 function compactionTable(agent) {
   if (!agent.compactions.length) return el("div", {class: "empty", text: "No compactions."});
-  return dataTable([headCell("Time"), headCell("Trigger"), headCell("Before", true), headCell("After", true),
-                    headCell("Took", true)],
-    agent.compactions.map(row => el("tr", {}, cell(when(row.ts)),
-      cell(COMPACTION_TRIGGERS[row.trigger] || row.trigger || "–"), cell(compact(row.pre_tokens), true),
-      cell(compact(row.post_tokens), true), cell(duration(row.duration_ms), true))));
+  const table = dataTable([headCell("Time"), headCell("Trigger"), headCell("Before", true), headCell("After", true),
+                           headCell("Took", true), headCell("Each later call", true), headCell("One-time", true),
+                           headCell("Pays off at", true), headCell("Calls after", true), headCell("Versus keeping")],
+    agent.compactions.map(row => {
+      const comparison = row.versus_keeping;
+      const after = el("td", {class: "num", text: compact(row.next_context ?? row.post_tokens),
+                              title: `Claude Code reports ${compact(row.post_tokens)}: without the system prompt, ` +
+                                     "tools and CLAUDE.md the next call sends again"});
+      if (!comparison) {
+        return el("tr", {}, cell(when(row.ts)), cell(COMPACTION_TRIGGERS[row.trigger] || row.trigger || "–"),
+                  cell(compact(row.pre_tokens), true), after, cell(duration(row.duration_ms), true),
+                  el("td", {colspan: 5, class: "muted", text: "no call after it, or no price for its model"}));
+      }
+      const dropped = comparison.difference > 0
+        ? `−${compact(comparison.difference)} · ${money(comparison.saving_per_call)}`
+        : `+${compact(-comparison.difference)} · nothing saved`;
+      return el("tr", {}, cell(when(row.ts)), cell(COMPACTION_TRIGGERS[row.trigger] || row.trigger || "–"),
+        cell(compact(row.pre_tokens), true), after, cell(duration(row.duration_ms), true), cell(dropped, true),
+        el("td", {class: "num", title: oneTimeTitle(comparison), text: oneTimeText(comparison)}),
+        el("td", {class: "num", text: breakevenCall(comparison) ?? "–",
+                  title: comparison.breakeven_call > comparison.calls_after ? "projected past the last call" : null}),
+        el("td", {class: "num", text: whole(comparison.calls_after),
+                  title: comparison.last_stretch ? "up to the last call" : "up to the next compaction"}),
+        el("td", {title: verdictTitle(comparison), text: verdictText(comparison)}));
+    }));
+  return el("div", {}, table, el("div", {class: "note", text: `${VERSUS_KEEPING_NOTE} Each compaction is ` +
+                                                               "compared on its own, so they don't add up."}));
 }

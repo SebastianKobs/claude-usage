@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from claude_usage import server
+from claude_usage import turns
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = Path(server.__file__).resolve().parent / "static"
@@ -47,6 +48,9 @@ class ScriptTest(unittest.TestCase):
 
     def test_every_injected_kind_that_is_no_attachment_type_has_its_words(self):
         self.assertEqual(object_keys("chat.js", "INJECTED_KINDS"), {"meta", "skill", "summary"})
+
+    def test_every_compaction_verdict_has_its_words(self):
+        self.assertEqual(object_keys("chat.js", "COMPACTION_VERDICTS"), set(turns.VERDICTS))
 
     def test_every_compaction_trigger_has_its_words(self):
         self.assertEqual(object_keys("drilldown.js", "COMPACTION_TRIGGERS"), {"manual", "auto"})

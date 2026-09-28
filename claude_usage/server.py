@@ -258,6 +258,7 @@ class UsageApp:
         with self.lock:
             self.refresh()
             path = queries.transcript_path(self.store, session_id, agent_id)
+            comparisons = queries.compaction_comparisons(self.store, session_id, agent_id, self.prices, self.compact)
         if path is None:
             return None
         try:
@@ -265,6 +266,10 @@ class UsageApp:
         except OSError:
             return {"session_id": session_id, "agent_id": agent_id, "available": False, "entries": [],
                     "reminders": reminder_totals([])}
+        for entry in entries:
+            if entry["kind"] == "compaction":
+                # both times come from the same record through scan.iso
+                entry["versus_keeping"] = comparisons.get(entry["timestamp"])
         compact.compact_hints(entries, self.compact)
         return {"session_id": session_id, "agent_id": agent_id, "available": True, "entries": entries,
                 "reminders": reminder_totals(entries)}
@@ -274,7 +279,8 @@ class UsageApp:
         unknown id."""
         with self.lock:
             self.refresh()
-            detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False)
+            detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False,
+                                            settings=self.compact)
             current = queries.current_context(self.store, session_id, self.compact, self.prices)
             path = queries.transcript_path(self.store, session_id, None)
         if detail is None:

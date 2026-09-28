@@ -58,7 +58,8 @@ claude_usage/
   queries.py                 what the report and the dashboard read from the store
   pricing.py                 prices by model prefix, cost per category, web-search fee
   compact.py                 the conversation's compact hints and their settings
-  turns.py                   growth per turn, cache rebuilds, the fixed overhead, the current-context gauge
+  turns.py                   growth per turn, cache rebuilds, the fixed overhead, the current-context gauge,
+                             each compaction against keeping the context
   server.py                  loopback-only http.server + JSON API (a route table)
   static/                    the page: vanilla JS, inline SVG, no external resources (three vendored libraries)
     dashboard.html           the markup only
@@ -112,6 +113,12 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   (`trigger` manual or auto, `preTokens`, `postTokens`, `durationMs`, `cumulativeDroppedTokens`); checked
   2026-09-28 (10 of 10 with metadata). The summary follows as a user record with `isCompactSummary`. One row per
   uuid in `compactions`, owned by the file that stored it first. No microcompact records seen.
+  - Checked 2026-09-28 on 11 compactions, counts only: `preTokens` is the last call's context plus its reply, and
+    0 to 841 more. `postTokens` is not the next call's context: that call is 35K to 48K larger, since it sends the
+    system prompt, tools and CLAUDE.md again (and reads them from the cache).
+  - The compaction call is in no transcript, only in the cost-state totals. There it reads the last call's cache
+    read, sends about 2.1K as plain input and writes the rest to the 5-minute cache, even where the main thread
+    writes for an hour (Claude Code's costUSD matches to 1e-6).
 - **Attachments:** `attachment` records (`uuid`, `timestamp`, `attachment.type`) carry what Claude Code adds to the
   next request; `rendered` is a list of `{content}` (the text the model gets; a string, rarely text blocks), or null
   for bookkeeping types (`hook_success`, `deferred_tools_record`, …). Never stored, like prompts. Checked 2026-09-28
@@ -205,6 +212,34 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     left at that pace.
   - The biggest growth steps list the tools the call before ran (tool_use blocks between its first and last
     record); a subagent's `returned_chars` is its spawning Agent call's result size (`transcripts.tool_use_id`).
+- **Compaction versus keeping** (`turns.versus_keeping`, per request, nothing stored; checked 2026-09-28 against
+  11 real compactions, counts only):
+  - The assumption: the kept session would have made the same later calls, each carrying D = the last call's
+    context and reply minus the next call's context. It is a model; re-reading files after compacting isn't
+    counted (tool inputs aren't stored), so the page gives the re-read tokens that would cancel a saving.
+  - The one-time cost:
+    - The compaction call, whose input side is known: warm, it reads the last cache read and writes the rest but
+      `COMPACT_UNCACHED_TAIL` at the 5m price; cold (its start past the last request's `cache_ttl`), it writes all
+      but the tail.
+    - Its summary is estimated as the duration times the model's median main-thread output speed
+      (`queries.output_rates`), bounded by the fastest. The page marks these amounts with ~.
+    - Plus the rewrite: the next call's cache writes beyond the last reply, at the write price minus the read price.
+  - Each later call saves D at its read price, or at its write price where it rebuilt the cache anyway. A kept
+    first call after the cache expired would have written everything, the static prefix too. A following
+    compaction's call reads D once more.
+  - Where the kept context would have reached the auto-compact point, the kept session stops saving and compacts
+    itself: at least reading its context from the cache, then rewriting as the actual next call did.
+  - Verdicts:
+    - `forced`: keeping couldn't go on (the last context and reply at the auto-compact point, or not even the next
+      call fitting, e.g. after a switch to a 200K model).
+    - `saved`: even at the fastest summary.
+    - `cost_more`: a finished stretch fell short even of the input side alone.
+    - `unknown`: no summary estimate (no output speed for the model, or no duration).
+    - `open`: the last stretch hasn't paid off yet.
+    - `even`: in between.
+  - The break-even call is judged at the fastest summary, like `saved`; without an estimate at the input side
+    alone (`breakeven_at_least`). It is projected past the last call, and None is "never". Compactions are
+    compared one at a time, so no totals.
 - **Pricing:**
   - The longest model-id prefix wins, and a `[1m]` suffix is ignored.
   - Fast mode multiplies every category, cache included.

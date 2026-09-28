@@ -173,6 +173,17 @@ class ReportCommandTest(CliCase):
         detail = json.loads(out)
         self.assertEqual((detail["title"], detail["agents"][0]["tools"][0]["tool"]), ("Parser fix", "Read"))
 
+    def test_session_json_compares_compactions_at_the_configured_auto_compact_points(self):
+        # the shipped config puts claude-haiku-4-5 at 200K: a 205K context was forced to compact
+        self.main.assistant("m3", [text_block("a")], usage(cache_1h=5_000, cache_read=190_000, output=10_000),
+                            model="claude-haiku-4-5")
+        self.main.compaction()
+        self.main.user("go on")
+        self.main.assistant("m4", [text_block("b")], usage(cache_1h=20_000, output=10), model="claude-haiku-4-5")
+        _, out, _ = self.run_cli("report", "--session", "s1", "--json")
+        [row] = json.loads(out)["agents"][0]["compactions"]
+        self.assertEqual(row["versus_keeping"]["verdict"], "forced")
+
     def test_session_text(self):
         code, out, _ = self.run_cli("report", "--session", "s1")
         self.assertEqual(code, 0)

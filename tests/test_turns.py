@@ -1,10 +1,12 @@
 """turns.py: growth per step, cache rebuilds, the fixed overhead and the current-context gauge."""
+import math
 import unittest
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 
 from claude_usage import compact
+from claude_usage import pricing
 from claude_usage import turns
 from helpers import MILLION
 from helpers import PRICES
@@ -119,6 +121,240 @@ class RebuildTest(unittest.TestCase):
         first = turns.Turn("m0", None, SONNET, "standard", 0, 20_000, 0, 0, 0, None, None)
         second = turns.Turn("m1", None, SONNET, "standard", 0, 20_000, 0, 0, 0, None, None)
         self.assertEqual(turns.steps([first, second], (), PRICES)[1].rebuild.cause, "prefix")
+
+
+class CacheTtlTest(unittest.TestCase):
+    def test_mostly_1h_writes_live_an_hour(self):
+        self.assertEqual(turns.cache_ttl(turn(0, cache_5m=10, cache_1h=20)), timedelta(hours=1))
+
+    def test_mostly_5m_writes_live_five_minutes(self):
+        self.assertEqual(turns.cache_ttl(turn(0, cache_5m=20, cache_1h=10)), timedelta(minutes=5))
+
+    def test_without_writes_five_minutes(self):
+        self.assertEqual(turns.cache_ttl(turn(0, cache_read=10)), timedelta(minutes=5))
+
+
+class OutputRateTest(unittest.TestCase):
+    def test_the_median_of_long_replies_and_the_fastest_of_all_but_short_ones(self):
+        rates = turns.output_rates([(SONNET, 4_000, 40), (SONNET, 6_000, 50), (SONNET, 3_000, 30),
+                                    (SONNET, 1_500, 10), (SONNET, 500, 1)])
+        self.assertEqual(rates, {SONNET: turns.OutputRate(median=100.0, fastest=150.0)})
+
+    def test_without_long_replies_the_median_of_the_others(self):
+        rates = turns.output_rates([(SONNET, 1_000, 10), (SONNET, 2_000, 10)])
+        self.assertEqual(rates[SONNET], turns.OutputRate(median=150.0, fastest=200.0))
+
+    def test_short_replies_and_no_time_give_no_rate(self):
+        self.assertEqual(turns.output_rates([(SONNET, 999, 1), (SONNET, 5_000, 0)]), {})
+
+
+# L at START: context 200K (190K read from the cache, 10K written for an hour), reply 1K. A compaction 30 s later
+# that took 20 s. F a minute after L: context 50K, 30K of it the cached system prompt and tools, 20K written.
+COMPACTED_AT = START + timedelta(seconds=30)
+COMPACTION = turns.Compaction(ts=COMPACTED_AT, trigger="manual", pre_tokens=201_000, post_tokens=12_000,
+                              duration_ms=20_000)
+RATES = {SONNET: turns.OutputRate(median=100.0, fastest=150.0)}
+DIFFERENCE = 200_000 + 1_000 - 50_000
+REWRITE = (20_000 - 1_000) * (4.0 - 0.2) / MILLION
+CALL_INPUT = (190_000 * 0.2 + 2_100 * 2.0 + (10_000 + 1_000 + 1_400 - 2_100) * 2.5) / MILLION
+CALL = CALL_INPUT + 20 * 100 * 10.0 / MILLION           # the summary at 100 tokens per second for 20 s
+CALL_HIGH = CALL_INPUT + 20 * 150 * 10.0 / MILLION
+SAVING = DIFFERENCE * 0.2 / MILLION
+
+
+def last_call():
+    """L: the call before the compaction."""
+    return turn(0, cache_1h=10_000, cache_read=190_000, output=1_000)
+
+
+def next_call(index=1, **timing):
+    """F: the first call after it."""
+    return turn(index, cache_1h=20_000, cache_read=30_000, output=500, **timing)
+
+
+def later(index, base=50_000):
+    """A later call of the stretch, reading the one before it from the cache."""
+    return turn(index, cache_1h=500, cache_read=base + 500 * (index - 2), output=500)
+
+
+def compacted(calls_after):
+    """L, the compaction, F and calls_after - 1 later calls."""
+    return [last_call(), next_call()] + [later(index) for index in range(2, calls_after + 1)]
+
+
+def twice_compacted(calls_after):
+    """As compacted, then a second compaction and two calls after it."""
+    history = compacted(calls_after)
+    second = START + timedelta(minutes=calls_after, seconds=30)
+    history += [next_call(calls_after + 1), later(calls_after + 2)]
+    return history, (COMPACTION, turns.Compaction(second, "manual", 60_000, 12_000, 20_000))
+
+
+class CompactionCallTest(unittest.TestCase):
+    def rates(self):
+        """The prices of L as $ per token."""
+        return turns.turn_rates(PRICES, last_call())
+
+    def test_a_warm_call_reads_the_last_cache_read_and_writes_the_rest_for_five_minutes(self):
+        call = turns.compaction_call(last_call(), COMPACTION, RATES[SONNET], self.rates(), warm=True)
+        self.assertAlmostEqual(call.low, CALL_INPUT)
+
+    def test_a_cold_call_writes_all_but_the_tail(self):
+        call = turns.compaction_call(last_call(), COMPACTION, RATES[SONNET], self.rates(), warm=False)
+        self.assertAlmostEqual(call.low, ((190_000 + 12_400 - 2_100) * 2.5 + 2_100 * 2.0) / MILLION)
+
+    def test_the_summary_is_estimated_from_the_duration(self):
+        call = turns.compaction_call(last_call(), COMPACTION, RATES[SONNET], self.rates(), warm=True)
+        self.assertEqual((call.summary_tokens, call.summary_high), (2_000, 3_000))
+        self.assertAlmostEqual(call.cost, CALL)
+        self.assertAlmostEqual(call.high, CALL_HIGH)
+
+    def test_without_a_rate_the_summary_is_unknown(self):
+        call = turns.compaction_call(last_call(), COMPACTION, None, self.rates(), warm=True)
+        self.assertEqual((call.summary_tokens, call.cost, call.high), (None, None, None))
+        self.assertAlmostEqual(call.low, CALL_INPUT)
+
+
+class VersusKeepingTest(unittest.TestCase):
+    def compare(self, history, compactions=(COMPACTION,), settings=compact.DEFAULT_COMPACT, rates=None):
+        """versus_keeping over these turns, with steps computed as the session view does."""
+        moments = tuple(compaction.ts for compaction in compactions)
+        return turns.versus_keeping(history, turns.steps(history, moments, PRICES), compactions, PRICES, settings,
+                                    RATES if rates is None else rates)
+
+    def test_the_difference_is_the_last_context_and_reply_minus_the_next_context(self):
+        [result] = self.compare(compacted(3))
+        self.assertEqual((result.before, result.after, result.difference), (201_000, 50_000, DIFFERENCE))
+
+    def test_the_rewrite_is_what_the_next_call_wrote_beyond_the_reply(self):
+        [result] = self.compare(compacted(3))
+        self.assertAlmostEqual(result.rewrite, REWRITE)
+
+    def test_the_one_time_cost_is_the_call_and_the_rewrite(self):
+        [result] = self.compare(compacted(3))
+        self.assertAlmostEqual(result.one_time, CALL + REWRITE)
+
+    def test_each_later_call_saves_the_difference_at_the_read_price(self):
+        [result] = self.compare(compacted(3))
+        self.assertAlmostEqual(result.saving_per_call, SAVING)
+
+    def test_it_pays_off_at_the_first_call_whose_savings_reach_the_one_time_cost_at_the_fastest_summary(self):
+        [result] = self.compare(compacted(10))
+        self.assertEqual((result.breakeven_call, result.breakeven_at_least),
+                         (math.ceil((CALL_HIGH + REWRITE) / SAVING), False))
+        self.assertEqual((result.calls_after, result.verdict), (10, "saved"))
+        self.assertAlmostEqual(result.net, 10 * SAVING - CALL - REWRITE)
+
+    def test_the_break_even_is_projected_past_the_last_call(self):
+        [result] = self.compare(compacted(3))
+        self.assertEqual(result.breakeven_call, math.ceil((CALL_HIGH + REWRITE) / SAVING))
+
+    def test_the_last_stretch_before_its_break_even_is_open(self):
+        [result] = self.compare(compacted(3))
+        self.assertEqual((result.last_stretch, result.verdict), (True, "open"))
+
+    def test_a_stretch_that_ended_before_its_break_even_cost_more(self):
+        history, compactions = twice_compacted(3)
+        first = self.compare(history, compactions)[0]
+        # three calls, and the next compaction's call reads the difference once more
+        self.assertEqual((first.calls_after, first.last_stretch, first.verdict), (3, False, "cost_more"))
+        self.assertAlmostEqual(first.net, 4 * SAVING - CALL - REWRITE)
+
+    def test_a_following_compaction_reads_the_difference_even_as_the_last_record(self):
+        second = turns.Compaction(START + timedelta(minutes=3, seconds=30), "manual", 60_000, 12_000, 20_000)
+        first = self.compare(compacted(3), (COMPACTION, second))[0]
+        self.assertAlmostEqual(first.net, 4 * SAVING - CALL - REWRITE)
+
+    def test_a_net_within_the_summary_estimate_is_about_even(self):
+        history, compactions = twice_compacted(4)
+        self.assertEqual(self.compare(history, compactions)[0].verdict, "even")
+
+    def test_a_compaction_at_the_auto_compact_point_was_forced(self):
+        settings = compact.CompactSettings(hint_tokens=100_000, warn_share=0.8, auto_compact={"default": 150_000})
+        [result] = self.compare(compacted(10), settings=settings)
+        self.assertEqual(result.verdict, "forced")
+
+    def test_the_kept_session_stops_saving_where_it_would_have_auto_compacted_and_pays_for_that(self):
+        # the kept context is each call's context plus the difference: 201K, 201.5K, then 202K at the third call.
+        # There the kept session compacts itself: it reads its 201.5K from the cache and rewrites like F did
+        settings = compact.CompactSettings(hint_tokens=100_000, warn_share=0.8, auto_compact={"default": 202_000})
+        [result] = self.compare(compacted(10), settings=settings)
+        kept_compaction = (50_500 + DIFFERENCE) * 0.2 / MILLION + REWRITE
+        self.assertEqual((result.capped_at, result.verdict, result.breakeven_call), (3, "saved", 3))
+        self.assertAlmostEqual(result.net, 2 * SAVING + kept_compaction - CALL - REWRITE)
+
+    def test_a_kept_session_that_could_not_make_the_next_call_was_forced(self):
+        # after the compaction the session goes on with a 200K model: the kept 201K would not have fit
+        settings = compact.CompactSettings(hint_tokens=100_000, warn_share=0.8,
+                                           auto_compact={"default": 967_000, "claude-haiku": 200_000})
+        history = [last_call(), turn(1, cache_1h=20_000, cache_read=30_000, output=500, model="claude-haiku-4-5")]
+        [result] = self.compare(history, settings=settings)
+        self.assertEqual(result.verdict, "forced")
+
+    def test_without_a_summary_estimate_the_break_even_is_at_least_the_input_sides(self):
+        untimed = turns.Compaction(COMPACTED_AT, "manual", 201_000, 12_000, None)
+        [result] = self.compare(compacted(10), (untimed,))
+        self.assertEqual((result.breakeven_call, result.breakeven_at_least),
+                         (math.ceil((CALL_INPUT + REWRITE) / SAVING), True))
+
+    def test_without_a_summary_estimate_a_stretch_that_saved_beyond_its_input_side_is_unknown(self):
+        history, compactions = twice_compacted(10)
+        untimed = turns.Compaction(COMPACTED_AT, "manual", 201_000, 12_000, None)
+        self.assertEqual(self.compare(history, (untimed, compactions[1]))[0].verdict, "unknown")
+
+    def test_without_a_summary_estimate_a_stretch_below_its_input_side_cost_more(self):
+        history, compactions = twice_compacted(2)
+        untimed = turns.Compaction(COMPACTED_AT, "manual", 201_000, 12_000, None)
+        self.assertEqual(self.compare(history, (untimed, compactions[1]))[0].verdict, "cost_more")
+
+    def test_a_free_next_call_gives_no_rework_margin(self):
+        free = pricing.parse_prices({"free": {"input": 0, "cache_write_5m": 0, "cache_write_1h": 0, "cache_read": 0,
+                                              "output": 0}, "claude-sonnet-5": {"input": 2.0, "cache_write_5m": 2.5,
+                                                                                 "cache_write_1h": 4.0,
+                                                                                 "cache_read": 0.2, "output": 10.0}})
+        history = [last_call(), turn(1, cache_1h=20_000, cache_read=30_000, output=500, model="free"), later(2)]
+        [result] = turns.versus_keeping(history, turns.steps(history, (COMPACTED_AT,), free), (COMPACTION,), free,
+                                        compact.DEFAULT_COMPACT, RATES)
+        self.assertIsNone(result.rework_margin)
+
+    def test_a_later_rebuild_saves_the_difference_at_the_write_price(self):
+        history = [last_call(), next_call(), turn(2, cache_1h=51_000, seconds=2 * 3_600)]
+        [result] = self.compare(history)
+        self.assertAlmostEqual(result.net, SAVING + DIFFERENCE * 4.0 / MILLION - CALL - REWRITE)
+
+    def test_a_kept_first_call_after_the_cache_expired_would_have_written_everything(self):
+        [result] = self.compare([last_call(), next_call(seconds=2 * 3_600)])
+        saving = (DIFFERENCE * 4.0 + 30_000 * (4.0 - 0.2)) / MILLION + REWRITE
+        self.assertAlmostEqual(result.net, saving - CALL - REWRITE)
+
+    def test_a_compaction_long_after_the_last_call_finds_the_cache_cold(self):
+        late = turns.Compaction(START + timedelta(hours=2), "manual", 201_000, 12_000, 20_000)
+        [result] = self.compare([last_call(), next_call(seconds=2 * 3_600 + 60)], (late,))
+        self.assertFalse(result.cache_warm)
+        self.assertAlmostEqual(result.call.low, ((190_000 + 12_400 - 2_100) * 2.5 + 2_100 * 2.0) / MILLION)
+
+    def test_a_compaction_that_dropped_nothing_never_pays_off(self):
+        history = [last_call(), turn(1, cache_1h=250_000, output=500), later(2, base=250_000)]
+        [result] = self.compare(history)
+        self.assertIsNone(result.breakeven_call)
+
+    def test_the_rework_margin_is_the_re_read_tokens_that_would_cancel_the_saving(self):
+        [result] = self.compare(compacted(10))
+        net_low = 10 * SAVING - CALL_HIGH - REWRITE
+        self.assertEqual(result.rework_margin, math.floor(net_low / ((4.0 + 0.2 * 9) / MILLION)))
+
+    def test_without_a_rate_nothing_is_proven_saved(self):
+        [result] = self.compare(compacted(10), rates={})
+        self.assertEqual((result.net, result.verdict), (None, "unknown"))
+
+    def test_no_call_before_or_after_means_no_comparison(self):
+        early = turns.Compaction(START - timedelta(minutes=1), "manual", 1, 1, 1)
+        self.assertEqual(self.compare([last_call()], (early, COMPACTION)), [None, None])
+
+    def test_an_unpriced_model_means_no_comparison(self):
+        history = [turn(0, cache_1h=10_000, cache_read=190_000, output=1_000, model="gpt-x"),
+                   turn(1, cache_1h=20_000, cache_read=30_000, model="gpt-x")]
+        self.assertEqual(self.compare(history), [None])
 
 
 class OverheadTest(unittest.TestCase):
