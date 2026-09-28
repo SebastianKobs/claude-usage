@@ -51,7 +51,8 @@ holds:
   cost: what each call re-reads, until when the cache stays warm and what keeping costs after that, and from your
   stored compactions after how many replies compacting would pay off. While the session runs and compacting now
   would likely save money, a callout above it says so in plain words, with a button that copies `/compact`. It
-  waits until the last compaction has saved at least what it cost;
+  waits until the last compaction has saved at least what it cost, except once the cache has expired: then compacting
+  saves at once;
 - the context per turn as cache read, cache write and new input, with each `/compact` or auto-compact as a rule;
   the picker switches between the main thread and its subagents;
 - for that transcript, the fixed overhead (the first call's context, which every later call reads again), the
@@ -119,7 +120,7 @@ paid off: saved in green, cost more in red, and the latest one, while it is stil
 - The gauge in the session view: what each reply re-reads, when the cache runs out, and what compacting now would
   cost and after how many replies it would pay off.
 - The callout above it, with a button that copies `/compact`, while compacting now likely saves money and the
-  last compaction has already paid for itself.
+  last compaction has already paid for itself, or once the cache has expired and compacting saves at once.
 - The conversation: a warning at the reply where compacting started to pay, sterner than the 200K hint.
 - The compactions table and the marker at each compaction in the conversation: how each past one worked out.
 - The Estimated cost tile, in the session view and on the overview: what compacting saved so far, all added up.

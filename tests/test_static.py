@@ -185,9 +185,13 @@ class CompactCallTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_no_call_while_the_last_compaction_has_not_paid_for_itself(self):
         self.assertIsNone(self.kind(self.detail(compactions=[self.compaction(0.4), self.compaction(-0.1)])))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_once_the_cache_has_expired_the_call_does_not_wait_for_the_last_compaction(self):
+        # compacting cold saves at once, so waiting would not pay off
         expired = "2026-09-28T11:00:00.000+00:00"
-        self.assertIsNone(self.kind(self.detail(warm_until=expired, cold_saving=1.2,
-                                                compactions=[self.compaction(-0.1)])))
+        self.assertEqual(self.kind(self.detail(warm_until=expired, cold_saving=1.2,
+                                               compactions=[self.compaction(-0.1)])), "cold")
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_no_call_right_after_a_compaction_with_no_call_since(self):
