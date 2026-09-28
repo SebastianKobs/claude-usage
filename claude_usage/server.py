@@ -125,15 +125,16 @@ def usage_payload(usage: transcripts.MessageUsage, prices: pricing.Prices) -> Pa
 
 
 def entry_payload(entry: conversation.ChatEntry, prices: pricing.Prices) -> Payload:
-    """A conversation entry as JSON-ready fields, a reply's usage with its cost, its growth, its cache rebuild and
-    the token reminder sent with it."""
+    """A conversation entry as JSON-ready fields, a reply's usage with its cost, its growth, the previous reply it
+    sent again, its cache rebuild and the token reminder sent with it."""
     fields = dataclasses.asdict(entry)
     step = fields.pop("step")
     reminder_chars = fields.pop("reminder_chars")
     usage = None
     if entry.usage is not None:
         usage = {**usage_payload(entry.usage, prices), "growth": step["growth"] if step else None,
-                 "rebuild": step["rebuild"] if step else None, "reminder_chars": reminder_chars}
+                 "reply": step["reply"] if step else None, "rebuild": step["rebuild"] if step else None,
+                 "reminder_chars": reminder_chars}
     return {**fields, "timestamp": scan.iso(entry.timestamp), "usage": usage}
 
 

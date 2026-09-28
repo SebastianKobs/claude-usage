@@ -61,6 +61,7 @@ class Step:
     """What one turn added to the context, and whether it rebuilt the cache."""
     growth: int | None                  # None for the first turn and the first after a compaction
     rebuild: Rebuild | None
+    reply: int | None = None            # the previous call's output, sent again; growth leaves it out
 
 
 @dataclass(frozen=True)
@@ -136,7 +137,8 @@ def steps(turns: list[Turn], compactions: tuple[datetime, ...], prices: pricing.
         if previous is None or compacted_between(compactions, previous, current):
             result.append(Step(None, None))
             continue
-        result.append(Step(current.context - previous.context - previous.output, rebuild(previous, current, prices)))
+        result.append(Step(current.context - previous.context - previous.output, rebuild(previous, current, prices),
+                           previous.output))
     return result
 
 

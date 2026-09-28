@@ -41,6 +41,15 @@ class GrowthTest(unittest.TestCase):
         steps = turns.steps(spaced((10, 20_000, 0, 5_000), (5, 0, 20_000, 50)), (), PRICES)
         self.assertEqual(steps[1].growth, 20_005 - 20_010 - 5_000)
 
+    def test_each_step_carries_the_previous_reply(self):
+        steps = turns.steps(spaced((10, 20_000, 0, 100), (5, 1_000, 20_010, 50)), (), PRICES)
+        self.assertEqual([step.reply for step in steps], [None, 100])
+
+    def test_no_reply_right_after_a_compaction(self):
+        history = spaced((10, 20_000, 0, 100), (5, 3_000, 0, 50))
+        steps = turns.steps(history, (START + timedelta(seconds=30),), PRICES)
+        self.assertIsNone(steps[1].reply)
+
     def test_no_growth_right_after_a_compaction(self):
         history = spaced((10, 20_000, 0, 100), (5, 3_000, 0, 50), (5, 100, 3_000, 50))
         compacted = (START + timedelta(seconds=30),)

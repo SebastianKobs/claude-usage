@@ -274,8 +274,17 @@ function rebuildChip(rebuild) {
 // what the call added beyond the previous one's context and output, signed
 function growthText(growth) { return ` (${signed(growth)})`; }
 
+// the context's change since the previous call, split into the previous reply (sent again) and what was added
+// from outside (tool results, prompts, attachments), so the parts add up: " (+6.3K: reply 0.4K, added 5.9K)"
+function contextChange(usage) {
+  if (usage.growth === null || usage.growth === undefined) return "";
+  if (!usage.reply) return growthText(usage.growth);
+  const added = usage.growth < 0 ? signed(usage.growth) : compact(usage.growth);
+  return ` (${signed(usage.reply + usage.growth)}: reply ${compact(usage.reply)}, added ${added})`;
+}
+
 function usageLine(usage, hint) {
-  const growth = usage.growth === null || usage.growth === undefined ? "" : growthText(usage.growth);
+  const growth = contextChange(usage);
   const parts = [`context ${compact(usage.context)}${growth}`, `in ${compact(usage.new_input)}`];
   if (usage.cache_write) parts.push(`cache write ${compact(usage.cache_write)}`);
   if (usage.cache_read) parts.push(`cache read ${compact(usage.cache_read)}`);

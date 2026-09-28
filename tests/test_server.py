@@ -438,6 +438,13 @@ class ChatTest(ServerCase):
         self.assertIsNone(first["rebuild"])
         self.assertNotIn("step", payload["entries"][-1])
 
+    def test_each_calls_usage_carries_the_previous_reply(self):
+        self.main.assistant("m8", [text_block("a")], usage(new=10, cache_5m=20_000, output=100))
+        self.main.user("go on")
+        self.main.assistant("m9", [text_block("b")], usage(new=5, cache_5m=1_000, cache_read=20_010, output=50))
+        _, payload = self.get_json("/api/session/s1/chat")
+        self.assertEqual(payload["entries"][-1]["usage"]["reply"], 100)
+
     def test_the_token_reminders_are_summed_and_on_each_calls_usage(self):
         for index in (8, 9):
             self.main.attachment("total_tokens_reminder", "r" * 86)
