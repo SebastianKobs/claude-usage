@@ -61,10 +61,11 @@ holds:
   paid off, and whether it saved (green) or cost more (red), at API list prices with the summary call estimated.
   The conversation shows the same at each compaction marker, and the Estimated cost tile, here and on the
   overview, what compacting saved so far;
-- the conversation, on request: newest first, or in the transcript's order with "Oldest first". It hints at
-  compacting where the context passes 200K, warns more sternly where compacting now would pay for itself within
-  the replies that, going by your past compactions, you make on average before the next one, and most sternly
-  near the auto-compact point.
+- the conversation, on request, right after the agents while its transcript still exists (the tools table then
+  moves to the end): newest first, or in the transcript's order with "Oldest first". It hints at compacting where
+  the context passes 200K, warns more sternly where compacting now would pay for itself within the replies that,
+  going by your past compactions, you make on average before the next one, and most sternly near the auto-compact
+  point.
 
 ## How the compaction estimate works
 All amounts are at API list prices, as if you paid per token; on a subscription they show where your limits go.

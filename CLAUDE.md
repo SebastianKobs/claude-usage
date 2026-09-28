@@ -376,6 +376,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - The conversation lists newest first: the calls in reverse, each call's entries (one `message_id`) in their
     order above its usage badge. "Oldest first" (`aria-pressed`, kept as a preference) switches to the transcript's
     order and draws the loaded conversation again.
+  - While the main transcript exists (`transcript` in `/api/session`), the conversation takes the Tools table's
+    place, after the agents, and the tools go last (`toolsAndChat`); without it the conversation stays last.
   - All data goes into the DOM via `textContent`. Two exceptions, both in `chat.js`:
     - `highlighted()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans
       with classes.

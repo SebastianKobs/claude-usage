@@ -39,6 +39,8 @@ function renderDrilldown(detail, refresh = false) {
                                           el("th", {class: "num", text: "Result characters"}))),
          el("tbody", {}, ...toolRows))
     : el("div", {class: "empty", text: "No tool calls."});
+  const order = toolsAndChat(detail.transcript, [el("h3", {text: "Tools"}), el("div", {class: "table-wrap"}, tools)],
+                             kept ? kept.chat : [chatControls(detail), el("div", {id: "chat"})]);
   fill(panel,
     el("div", {class: "chart-head"},
        el("h2", {id: "drilldown-title", tabindex: -1, text: detail.title || "Untitled session"}),
@@ -71,7 +73,7 @@ function renderDrilldown(detail, refresh = false) {
     themed("h3", "By model"), el("div", {class: "table-wrap"}, sessionModelTable(detail)),
     el("h3", {text: "Main thread and subagents"}), el("div", {class: "table-wrap"}, el("table", {},
        el("thead", {}, head), el("tbody", {}, ...agents))),
-    el("h3", {text: "Tools"}), el("div", {class: "table-wrap"}, tools),
+    ...order[0],
     el("div", {class: "grid-2"},
        el("div", {}, themed("h3", "By skill"), el("div", {class: "table-wrap"},
           usageTable(detail.skills, "Skill", row => row.skill, "No turns attributed to a skill."))),
@@ -80,7 +82,7 @@ function renderDrilldown(detail, refresh = false) {
                      "No turns attributed to an MCP server.")))),
     themed("h3", "Rate limits and API errors"),
     el("div", {class: "table-wrap"}, limitEventsTable(detail.api_errors, "No API errors in this session.", false)),
-    ...(kept ? kept.chat : [chatControls(detail), el("div", {id: "chat"})]));
+    ...order[1]);
   document.getElementById("context-table-toggle").addEventListener("click", event => {
     const table = document.getElementById("context-table");
     table.hidden = !table.hidden;
@@ -91,6 +93,12 @@ function renderDrilldown(detail, refresh = false) {
   renderContext(detail);                                  // after unhiding, so the chart can measure its width
   if (kept) restoreFocusAndScroll(panel, kept);
   scheduleGaugeRefresh(detail);
+}
+
+// the conversation in the Tools table's place while its transcript exists, the tools at the end then; without it
+// the conversation, which can only say it is gone, stays last
+function toolsAndChat(transcript, tools, chat) {
+  return transcript ? [chat, tools] : [tools, chat];
 }
 
 // What a refresh keeps: the conversation's nodes as they are (moved into the new view, so a loaded conversation

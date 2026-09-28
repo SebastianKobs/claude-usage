@@ -317,8 +317,8 @@ class UsageApp:
 
     def session(self, session_id: str) -> Payload | None:
         """/api/session/<id>, with the main thread's current context against the auto-compact point, what its
-        compactions saved so far and whether the session is live (the page polls it faster then); None for an
-        unknown id."""
+        compactions saved so far, whether the session is live (the page polls it faster then) and whether its main
+        transcript still exists (the page shows the conversation higher up then); None for an unknown id."""
         with self.lock:
             self.refresh()
             detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False,
@@ -333,7 +333,7 @@ class UsageApp:
         # a file read needn't hold up the other requests
         prompt = None if path is None else transcripts.first_prompt(path)
         return {**detail, "prompt": prompt, "compact_hint_tokens": self.compact.hint_tokens, "current": current,
-                "live": live, "compaction_savings": savings}
+                "live": live, "compaction_savings": savings, "transcript": path is not None and path.exists()}
 
 
 def route_live(app: UsageApp, match: re.Match[str], query: str) -> Payload:

@@ -288,6 +288,11 @@ class ApiTest(ServerCase):
         self.assertTrue(self.get_json("/api/session/s1")[1]["live"])
         self.assertFalse(self.get_json("/api/session/s2")[1]["live"])
 
+    def test_session_detail_says_whether_its_transcript_still_exists(self):
+        self.assertTrue(self.get_json("/api/session/s1")[1]["transcript"])
+        self.other.path.unlink()
+        self.assertFalse(self.get_json("/api/session/s2")[1]["transcript"])
+
     def test_session_detail_has_the_current_context(self):
         _, payload = self.get_json("/api/session/s1")
         current = payload["current"]

@@ -200,6 +200,21 @@ class ChatOrderTest(unittest.TestCase):
         self.assertEqual(run_function("chat.js", "orderedEntries", entries, True), entries)
 
 
+class SessionSectionsTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_conversation_takes_the_tools_place_while_its_transcript_exists(self):
+        self.assertEqual(run_function("drilldown.js", "toolsAndChat", True, ["tools"], ["chat"]),
+                         [["chat"], ["tools"]])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_without_a_transcript_the_tools_stay_and_the_conversation_comes_last(self):
+        self.assertEqual(run_function("drilldown.js", "toolsAndChat", False, ["tools"], ["chat"]),
+                         [["tools"], ["chat"]])
+
+    def test_the_session_view_places_them_by_it(self):
+        self.assertIn("toolsAndChat(detail.transcript", read(STATIC / "js" / "drilldown.js"))
+
+
 class SessionPollTest(unittest.TestCase):
     def function_body(self, name):
         """main.js's function `name`, from its line to its closing brace."""
