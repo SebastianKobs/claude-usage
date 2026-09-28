@@ -272,9 +272,7 @@ function rebuildChip(rebuild) {
 }
 
 // what the call added beyond the previous one's context and output, signed
-function growthText(growth) {
-  return growth < 0 ? ` (−${compact(-growth)})` : ` (+${compact(growth)})`;
-}
+function growthText(growth) { return ` (${signed(growth)})`; }
 
 function usageLine(usage, hint) {
   const growth = usage.growth === null || usage.growth === undefined ? "" : growthText(usage.growth);

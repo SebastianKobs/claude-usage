@@ -265,6 +265,13 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     `retention_days` and `history_since` (the first stored day); the page hides the longer buttons, falls back
     from a saved longer range, and says "history since" when a range starts before the history does.
   - The session view takes focus on open; Escape or Close returns focus and scroll to the link that opened it.
+  - The session view's context section (`drilldown.js`): the gauge (`current`) as a meter with the compact hint
+    marked; the context per turn stacked as cache read, cache write and new input (`--context-read/-write/-new`,
+    blue 400/550/700 in light and 500/350/200 in dark, validated as ordinal ramps), a dashed rule per compaction
+    labelled by trigger where it fits, the compact hint as a reference line when the plot reaches it. A picker
+    (only with subagents) switches the chart, its table view, the tiles (overhead, rebuilds, compactions, mean
+    growth), the biggest growth steps and the compactions to one transcript; another session starts at the main
+    thread.
   - All data goes into the DOM via `textContent`. Two exceptions, both in `chat.js`:
     - `highlighted()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans
       with classes.

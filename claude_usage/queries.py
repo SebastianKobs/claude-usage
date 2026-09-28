@@ -444,8 +444,8 @@ def agent_detail(store: Store, row: sqlite3.Row, prices: pricing.Prices) -> Row:
             "context_first": rows[0]["context"] if rows else None,
             "context_last": rows[-1]["context"] if rows else None,
             "input_total": sum(turn["context"] for turn in rows),
-            "context_per_turn": [{"ts": turn["ts"], "context": turn["context"], "effort": turn["effort"],
-                                  "new_input": turn["new_input"],
+            "context_per_turn": [{"message_id": turn["message_id"], "ts": turn["ts"], "context": turn["context"],
+                                  "effort": turn["effort"], "new_input": turn["new_input"],
                                   "cache_write": turn["cache_write_5m"] + turn["cache_write_1h"],
                                   "cache_read": turn["cache_read"], "growth": step.growth,
                                   "rebuild": rebuild_payload(step.rebuild)}

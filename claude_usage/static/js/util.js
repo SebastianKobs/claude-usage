@@ -38,6 +38,8 @@ function svg(tag, attributes) {
 const compactFormat = new Intl.NumberFormat("en", {notation: "compact", maximumFractionDigits: 1});
 const wholeFormat = new Intl.NumberFormat("en");
 function compact(value) { return value === null || value === undefined ? "–" : compactFormat.format(value); }
+// a change with its sign: +12K, −3K
+function signed(value) { return value < 0 ? `−${compact(-value)}` : `+${compact(value)}`; }
 function whole(value) { return value === null || value === undefined ? "–" : wholeFormat.format(value); }
 function money(value) {
   if (value === null || value === undefined) return "–";

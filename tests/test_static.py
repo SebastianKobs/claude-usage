@@ -48,6 +48,13 @@ class ScriptTest(unittest.TestCase):
     def test_every_injected_kind_that_is_no_attachment_type_has_its_words(self):
         self.assertEqual(object_keys("chat.js", "INJECTED_KINDS"), {"meta", "skill", "summary"})
 
+    def test_every_compaction_trigger_has_its_words(self):
+        self.assertEqual(object_keys("drilldown.js", "COMPACTION_TRIGGERS"), {"manual", "auto"})
+
+    def test_the_context_chart_stacks_the_three_parts_of_a_turn(self):
+        body = re.search(r"const CONTEXT_PARTS = \[(.*?)\];", read(STATIC / "js" / "drilldown.js"), re.DOTALL).group(1)
+        self.assertEqual(re.findall(r'field: "(\w+)"', body), ["cache_read", "cache_write", "new_input"])
+
     def test_html_is_inserted_only_by_the_two_sanitized_paths_in_chat_js(self):
         uses = {path.name: len(re.findall(r"\binnerHTML\b", read(path))) for path in OWN_SCRIPTS}
         self.assertEqual({name: count for name, count in uses.items() if count}, {"chat.js": 2})

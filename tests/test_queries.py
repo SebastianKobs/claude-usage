@@ -736,6 +736,9 @@ class ContextPartsTest(StoreCase):
         self.assertEqual(parts, [(10, 20_000, 0, None), (5, 1_000, 20_010, 905), (5, 21_000, 100, 40),
                                  (0, 3_000, 0, None)])
 
+    def test_each_turn_has_its_message_id(self):
+        self.assertEqual([turn["message_id"] for turn in self.main["context_per_turn"]], ["m1", "m2", "m3", "m4"])
+
     def test_a_turn_that_rewrote_the_cache_carries_its_rebuild(self):
         rebuilds = [turn["rebuild"] for turn in self.main["context_per_turn"]]
         lost = 21_015 - 100

@@ -37,6 +37,17 @@ checkout, with the absolute interpreter path (cron's `python3` may be older than
 ```
 Errors go to stderr, so cron mails them.
 
+## The session view
+Click a session to open it. Besides its cost, time and tables, it shows what its context holds:
+- the main thread's latest context against the auto-compact point, with the compact hint marked, the turns since
+  the last compaction and an estimate of the turns left at the recent pace;
+- the context per turn as cache read, cache write and new input, with each `/compact` or auto-compact as a rule;
+  the picker switches between the main thread and its subagents;
+- for that transcript, the fixed overhead (the first call's context, which every later call reads again), the
+  cache rebuilds and what they cost extra, the compactions, and the turns that grew the context most with the
+  tools the call before ran;
+- per subagent, what it returned to the main thread.
+
 ## Keeping the history safe
 After each scan, sessions whose last activity is older than `retention_days` are deleted from the store; the
 dashboard offers no range longer than that. Lowering it deletes the older sessions at the next scan. SQLite reuses
