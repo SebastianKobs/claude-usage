@@ -305,6 +305,14 @@ function currentGauge(current) {
 function compactCallKind(detail, now) {
   const preview = detail.live && detail.current ? detail.current.compact_now : null;
   if (!preview || !preview.estimate) return null;
+  // not again before the last compaction has saved what it cost: its net, else the input side alone; none with no
+  // call after it yet
+  const compactions = detail.agents.find(agent => agent.agent_id === null)?.compactions || [];
+  if (compactions.length) {
+    const last = compactions[compactions.length - 1].versus_keeping;
+    const net = last ? last.net ?? last.net_high : null;
+    if (net === null || net < 0) return null;
+  }
   const until = preview.cache_warm_until;
   if (until !== null && Date.parse(until) < Date.parse(now)) {
     return preview.estimate.cold_saving !== null && preview.estimate.cold_saving >= 0 ? "cold" : null;

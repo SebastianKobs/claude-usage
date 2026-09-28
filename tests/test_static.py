@@ -144,11 +144,18 @@ class VerdictToneTest(unittest.TestCase):
 class CompactCallTest(unittest.TestCase):
     NOW = "2026-09-28T12:00:00.000+00:00"
 
-    def detail(self, live=True, likely=True, warm_until="2026-09-28T12:30:00.000+00:00", cold_saving=-0.5):
-        """A session's detail with the gauge's preview of compacting now."""
-        return {"live": live, "current": {"compact_now": {
-            "likely_pays": likely, "cache_warm_until": warm_until,
-            "estimate": {"breakeven_calls": 6, "calls_ahead": 40.2, "cold_saving": cold_saving}}}}
+    def detail(self, live=True, likely=True, warm_until="2026-09-28T12:30:00.000+00:00", cold_saving=-0.5,
+               compactions=()):
+        """A session's detail with the gauge's preview of compacting now, and the main thread's compactions."""
+        return {"live": live, "agents": [{"agent_id": None, "compactions": list(compactions)},
+                                         {"agent_id": "a1", "compactions": [{"versus_keeping": None}]}],
+                "current": {"compact_now": {
+                    "likely_pays": likely, "cache_warm_until": warm_until,
+                    "estimate": {"breakeven_calls": 6, "calls_ahead": 40.2, "cold_saving": cold_saving}}}}
+
+    def compaction(self, net, net_high=None):
+        """A compaction row with its comparison against keeping the context."""
+        return {"versus_keeping": {"net": net, "net_high": net_high}}
 
     def kind(self, detail):
         """compactCallKind of this detail at NOW."""
@@ -169,6 +176,27 @@ class CompactCallTest(unittest.TestCase):
         expired = "2026-09-28T11:00:00.000+00:00"
         self.assertEqual(self.kind(self.detail(likely=False, warm_until=expired, cold_saving=1.2)), "cold")
         self.assertIsNone(self.kind(self.detail(warm_until=expired, cold_saving=-0.5)))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_call_comes_once_the_last_compaction_has_paid_for_itself(self):
+        self.assertEqual(self.kind(self.detail(compactions=[self.compaction(-1.0), self.compaction(0.0)])), "warm")
+        self.assertEqual(self.kind(self.detail(compactions=[self.compaction(0.4)])), "warm")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_no_call_while_the_last_compaction_has_not_paid_for_itself(self):
+        self.assertIsNone(self.kind(self.detail(compactions=[self.compaction(0.4), self.compaction(-0.1)])))
+        expired = "2026-09-28T11:00:00.000+00:00"
+        self.assertIsNone(self.kind(self.detail(warm_until=expired, cold_saving=1.2,
+                                                compactions=[self.compaction(-0.1)])))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_no_call_right_after_a_compaction_with_no_call_since(self):
+        self.assertIsNone(self.kind(self.detail(compactions=[{"versus_keeping": None}])))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_without_a_summary_estimate_the_known_input_side_must_be_paid_off(self):
+        self.assertEqual(self.kind(self.detail(compactions=[self.compaction(None, 0.2)])), "warm")
+        self.assertIsNone(self.kind(self.detail(compactions=[self.compaction(None, -0.2)])))
 
     def test_the_copy_button_is_wired_in_the_script_not_inline(self):
         script = read(STATIC / "js" / "drilldown.js")
