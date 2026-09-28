@@ -40,7 +40,7 @@ function renderDrilldown(detail, refresh = false) {
          el("tbody", {}, ...toolRows))
     : el("div", {class: "empty", text: "No tool calls."});
   const order = toolsAndChat(detail.transcript, [el("h3", {text: "Tools"}), el("div", {class: "table-wrap"}, tools)],
-                             kept ? kept.chat : [chatControls(detail), el("div", {id: "chat"})]);
+                             kept ? kept.chat : [chatSection(detail)]);
   fill(panel,
     el("div", {class: "chart-head"},
        el("h2", {id: "drilldown-title", tabindex: -1, text: detail.title || "Untitled session"}),
@@ -104,11 +104,10 @@ function toolsAndChat(transcript, tools, chat) {
 // What a refresh keeps: the conversation's nodes as they are (moved into the new view, so a loaded conversation
 // and its picker stay), the table view and the workflow runs shown, focus, and the element at the top of the window
 function keptView(panel) {
-  const chat = document.getElementById("chat");
   const active = panel.contains(document.activeElement) ? document.activeElement : null;
   const anchor = scrollAnchor([...panel.children]);
   return {
-    chat: [chat.previousElementSibling, chat],
+    chat: [document.getElementById("chat-section")],
     table: !document.getElementById("context-table").hidden,
     runs: new Set([...panel.querySelectorAll("[data-run][aria-expanded='true']")].map(node => node.dataset.run)),
     active,

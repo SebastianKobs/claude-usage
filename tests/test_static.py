@@ -220,6 +220,28 @@ class ChatOrderTest(unittest.TestCase):
         self.assertIn("savePreference(CHAT_ORDER_PREFERENCE", script)
         self.assertIn("readPreference(CHAT_ORDER_PREFERENCE)", script)
 
+    def test_the_order_switch_is_an_arrow_turning_with_the_order(self):
+        script = read(STATIC / "js" / "chat.js")
+        self.assertIn('class: "chat-order-arrow"', script)
+        self.assertIn('"aria-label": "Oldest first"', script)
+        rule = css_block(read(STATIC / "css" / "common.css"), '#chat-order[aria-pressed="true"] .chat-order-arrow')
+        self.assertIn("rotate(180deg)", rule)
+
+    def test_the_conversation_is_its_own_framed_section(self):
+        script = read(STATIC / "js" / "chat.js")
+        self.assertIn('el("section", {class: "chat-section", id: "chat-section"', script)
+        self.assertIn("border", css_block(read(STATIC / "css" / "common.css"), ".chat-section {"))
+        self.assertIn('document.getElementById("chat-section")', read(STATIC / "js" / "drilldown.js"))
+
+    def test_a_shown_conversation_can_be_closed(self):
+        script = read(STATIC / "js" / "chat.js")
+        self.assertIn('id: "chat-close"', script)
+        closing = script[script.index("function closeChat"):]
+        closing = closing[:closing.index("\n}\n")]
+        self.assertIn("chatRequest++", closing)
+        self.assertIn("shownChat = null", closing)
+        self.assertIn("focus()", closing)
+
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_newest_first_keeps_each_calls_entries_in_their_order(self):
         entries = [{"kind": "prompt", "message_id": None}, {"kind": "thinking", "message_id": "a"},

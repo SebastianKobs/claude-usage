@@ -10,29 +10,54 @@ let shownChat = null;                                     // the conversation on
 
 function oldestFirst() { return readPreference(CHAT_ORDER_PREFERENCE) === "true"; }
 
-// The picker (main thread or a subagent) and the button that loads the conversation into #chat
-function chatControls(detail) {
+// The conversation's own framed section: its head (the picker of main thread or a subagent, the order, the buttons
+// that load and close it) stays in view while scrolling through it; the conversation loads into #chat
+function chatSection(detail) {
   const agents = detail.agents.filter(agent => agent.agent_type !== "(background)");
   const label = agent => (agent.agent_id === null ? "Main thread"
     : `${agent.agent_type}${agent.description ? " · " + agent.description : ""}`);
   const picker = el("select", {id: "chat-agent", "aria-label": "Conversation of"},
     ...agentOptions(agents, agent => agent.agent_id || "", label, null));
   const button = el("button", {type: "button", id: "chat-load", text: "Show conversation"});
-  button.addEventListener("click", () => loadChat(detail.session_id, picker.value || null, button));
-  picker.addEventListener("change", () => {
-    if (button.textContent !== "Show conversation") loadChat(detail.session_id, picker.value || null, button);
+  const close = el("button", {type: "button", id: "chat-close", text: "Close", hidden: true});
+  button.addEventListener("click", () => {
+    close.hidden = false;
+    loadChat(detail.session_id, picker.value || null, button);
   });
+  close.addEventListener("click", () => closeChat(button, close));
+  picker.addEventListener("change", () => {
+    if (!close.hidden) loadChat(detail.session_id, picker.value || null, button);
+  });
+  // an arrow as for any sort: down for newest first (descending), turned up for oldest first
   const order = el("button", {type: "button", id: "chat-order", "aria-pressed": String(oldestFirst()),
-                              text: "Oldest first"});
+                              "aria-label": "Oldest first", title: orderTitle()},
+                   el("span", {class: "chat-order-arrow", "aria-hidden": "true", text: "↓"}));
   order.addEventListener("click", () => {
     savePreference(CHAT_ORDER_PREFERENCE, String(!oldestFirst()));
     order.setAttribute("aria-pressed", String(oldestFirst()));
+    order.title = orderTitle();
     if (shownChat) renderChat(shownChat.container, shownChat.chat, shownChat.agentId);
   });
   shownChat = null;
-  return el("div", {class: "chart-head"}, themed("h3", "Conversation"),
-            el("span", {class: "muted", text: "read from the transcript when you ask, never stored"}),
-            el("span", {class: "spacer"}), picker, order, button);
+  return el("section", {class: "chat-section", id: "chat-section", "aria-labelledby": "chat-heading"},
+            el("div", {class: "chart-head chat-section-head"}, themed("h3", "Conversation", {id: "chat-heading"}),
+               el("span", {class: "muted", text: "read from the transcript when you ask, never stored"}),
+               el("span", {class: "spacer"}), picker, order, button, close),
+            el("div", {id: "chat"}));
+}
+
+function orderTitle() {
+  return oldestFirst() ? "Oldest first: click for newest first" : "Newest first: click for oldest first";
+}
+
+// Close: the conversation leaves the page (a load still under way is dropped), and the refresh stops reading it
+function closeChat(button, close) {
+  chatRequest++;
+  shownChat = null;
+  document.getElementById("chat").replaceChildren();
+  button.textContent = "Show conversation";
+  close.hidden = true;
+  button.focus();
 }
 
 // Newest first by default: the calls in reverse, each call's entries (one message id) kept in their order, so its

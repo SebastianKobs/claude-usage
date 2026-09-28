@@ -150,6 +150,19 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 .session-kpis { margin-top: 12px; }
 /* a session's conversation: text tokens only, the roles told apart by label and a rule, not by color alone */
 .chat { display: flex; flex-direction: column; gap: 8px; }
+/* the conversation apart from the tables around it; its head stays in view while scrolling through it */
+.chat-section { margin: 24px 0; border: 1px solid var(--border); border-top: 3px solid var(--text-secondary);
+  border-radius: 10px; padding: 0 16px 6px; }
+.chat-section-head { position: sticky; top: 0; z-index: 2; background: var(--surface); padding: 10px 0;
+  border-bottom: 1px solid var(--border); }
+#chat { margin: 12px 0 10px; }
+.chat-section-head h3 { margin: 0; font-size: 16px; }
+.chat-section-head button[hidden] { display: none; }
+#chat:empty { display: none; }
+#chat-order { min-width: 2.4em; font-size: 16px; line-height: 1.2; font-weight: 600; }
+.chat-order-arrow { display: inline-block; transition: transform 0.2s ease; }
+#chat-order[aria-pressed="true"] .chat-order-arrow { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .chat-order-arrow { transition: none; } }
 .chat-entry { padding: 8px 12px; border-radius: 8px; border-left: 3px solid var(--border); }
 .chat-user { background: var(--wash); border-left-color: var(--split-strong); }
 .chat-head { display: flex; gap: 8px; align-items: baseline; font-size: 13px; margin-bottom: 4px; }

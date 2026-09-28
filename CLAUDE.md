@@ -375,9 +375,11 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     reply's re-read, the size after, the cost once, the replies to pay it back, the replies ahead on average, and
     compacting before a break) with a "Copy /compact" button: the clipboard, else the command selected in a field. It
     turns with the cache, like the gauge. The gauge's notes say the same in sentences.
-  - The conversation lists newest first: the calls in reverse, each call's entries (one `message_id`) in their
-    order above its usage badge. "Oldest first" (`aria-pressed`, kept as a preference) switches to the transcript's
-    order and draws the loaded conversation again.
+  - The conversation is its own framed section (`chatSection`), its head sticky while scrolling through it. It lists
+    newest first: the calls in reverse, each call's entries (one `message_id`) in their order above its usage badge. The
+    order is an arrow button (`aria-label` "Oldest first", `aria-pressed`, kept as a preference): down for newest first,
+    turned up for oldest first, the transcript's order; it draws the loaded conversation again. Close (`closeChat`)
+    empties it, drops a load under way and stops its refresh, and returns focus to "Show conversation".
   - While the main transcript exists (`transcript` in `/api/session`), the conversation takes the Tools table's
     place, after the agents, and the tools go last (`toolsAndChat`); without it the conversation stays last.
   - All data goes into the DOM via `textContent`. Two exceptions, both in `chat.js`:
