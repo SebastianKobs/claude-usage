@@ -24,6 +24,7 @@ AGENT_PREFIX = "agent-"
 META_SUFFIX = ".meta.json"
 MCP_PREFIX = "mcp__"
 COST_STATE = "cost-state"
+COMPACT_BOUNDARY = "compact_boundary"   # the subtype of the system record a compaction leaves
 # Claude Code's cost records name the 1M-context variant "claude-opus-5-5[1m]"; assistant records don't.
 CONTEXT_SUFFIX = re.compile(r"\[[^\]]*\]$")
 
@@ -85,6 +86,18 @@ class ApiError:
 
 
 @dataclass(frozen=True)
+class Compaction:
+    """A compaction of the conversation: Claude Code's compact_boundary system record and its compactMetadata. The
+    counts are None when the record has no metadata."""
+    record_id: str                      # the record's uuid
+    timestamp: datetime | None
+    trigger: str | None                 # manual (/compact) or auto
+    pre_tokens: int | None              # the context before
+    post_tokens: int | None             # and after
+    duration_ms: int | None             # how long the summary took
+
+
+@dataclass(frozen=True)
 class ModelTotals:
     """One model's cumulative usage in a cost-state record."""
     model: str                          # without a [1m]-style suffix
@@ -135,6 +148,8 @@ class Chunk:
     cost_state: CostState | None = None  # the last one in this part
     last_user_ts: datetime | None = None  # of the last user record in this part, the request of a reply in the next
     api_errors: tuple[ApiError, ...] = ()
+    compactions: tuple[Compaction, ...] = ()
+    tool_use_id: str | None = None      # of a subagent, the Agent tool call that spawned it (the meta's toolUseId)
 
 
 # --- reading -----------------------------------------------------------------------------------------------------
@@ -415,6 +430,29 @@ def api_errors(records: Iterable[Record]) -> list[ApiError]:
     return list(errors.values())
 
 
+def count_or_none(value: Any) -> int | None:
+    """An integer count, or None if it is missing or not an integer."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return None
+
+
+def compactions(records: Iterable[Record]) -> list[Compaction]:
+    """The compactions, once per record uuid; records without one are skipped."""
+    found: dict[str, Compaction] = {}
+    for record in records:
+        record_id = text_or_none(record.get("uuid"))
+        if record.get("type") != "system" or record.get("subtype") != COMPACT_BOUNDARY or record_id is None:
+            continue
+        metadata = record.get("compactMetadata") if isinstance(record.get("compactMetadata"), dict) else {}
+        found.setdefault(record_id, Compaction(
+            record_id=record_id, timestamp=parse_timestamp(record.get("timestamp")),
+            trigger=text_or_none(metadata.get("trigger")), pre_tokens=count_or_none(metadata.get("preTokens")),
+            post_tokens=count_or_none(metadata.get("postTokens")),
+            duration_ms=count_or_none(metadata.get("durationMs"))))
+    return list(found.values())
+
+
 def cost_usd(value: Any) -> float:
     """A dollar amount; missing or non-numeric values count as 0."""
     if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -514,11 +552,13 @@ def parse(path: Path, offset: int = 0, last_user_ts: datetime | None = None) -> 
         agent_id: str | None = path.stem[len(AGENT_PREFIX):]
         agent_type = text_or_none(meta.get("agentType")) or UNKNOWN_AGENT_TYPE
         description = text_or_none(meta.get("description"))
+        tool_use_id = text_or_none(meta.get("toolUseId"))
     else:
         session_id = parse_session_id(path)
         agent_id = None
         agent_type = MAIN_AGENT_TYPE
         description = None
+        tool_use_id = None
 
     cwd = None
     git_branch = None
@@ -548,6 +588,7 @@ def parse(path: Path, offset: int = 0, last_user_ts: datetime | None = None) -> 
                  tool_results=tuple(tool_results(records)),
                  first_ts=min(timestamps, default=None), last_ts=max(timestamps, default=None),
                  cost_state=cost_state, api_errors=tuple(api_errors(records)),
+                 compactions=tuple(compactions(records)), tool_use_id=tool_use_id,
                  last_user_ts=user_timestamps[-1] if user_timestamps else None)
 
 

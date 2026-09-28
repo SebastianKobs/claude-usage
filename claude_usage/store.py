@@ -12,12 +12,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 10                     # 2: cost_states and background; 3: web_searches; 4: start_ts;
+SCHEMA_VERSION = 11                     # 2: cost_states and background; 3: web_searches; 4: start_ts;
                                         # 5: the run totals of cost_states; 6: skill and mcp_server;
                                         # 7: api_errors; 8: the times and lines the run totals
                                         # are estimated from without a cost record; 9: effort;
-                                        # 10: meta_mtime_ns
-REREAD_BELOW = 9                        # stores older than this lack data only a new read of every file gives
+                                        # 10: meta_mtime_ns; 11: compactions and tool_use_id
+REREAD_BELOW = 11                       # stores older than this lack data only a new read of every file gives
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS transcripts (
     first_ts TEXT,
     last_ts TEXT,
     last_user_ts TEXT,              -- of the last user record read: the request of a reply in the next read
-    meta_mtime_ns INTEGER           -- of a subagent's meta file when it was read, NULL without one
+    meta_mtime_ns INTEGER,          -- of a subagent's meta file when it was read (NULL without one)
+    tool_use_id TEXT                -- of a subagent: the Agent tool call that spawned it
 );
 CREATE TABLE IF NOT EXISTS messages (
     message_id TEXT PRIMARY KEY,
@@ -111,6 +112,16 @@ CREATE TABLE IF NOT EXISTS api_errors (
     limit_type TEXT,                -- for a rate limit, the quota that was hit, e.g. five_hour
     resets_at TEXT                  -- and when it resets
 );
+CREATE TABLE IF NOT EXISTS compactions (
+    record_id TEXT PRIMARY KEY,     -- the compact_boundary record's uuid
+    path TEXT NOT NULL,             -- the file that stored the id first owns it
+    ts TEXT,
+    day TEXT,                       -- local date of ts
+    trigger TEXT,                   -- manual or auto; NULL without compactMetadata, like the counts
+    pre_tokens INTEGER,             -- the context before
+    post_tokens INTEGER,            -- and after
+    duration_ms INTEGER
+);
 CREATE TABLE IF NOT EXISTS dirty_sessions (
     session_id TEXT PRIMARY KEY     -- a file of it was scanned, its background is not recomputed yet
 );
@@ -122,6 +133,7 @@ CREATE INDEX IF NOT EXISTS messages_path ON messages (path);
 CREATE INDEX IF NOT EXISTS messages_day ON messages (day);
 CREATE INDEX IF NOT EXISTS tool_calls_path ON tool_calls (path);
 CREATE INDEX IF NOT EXISTS api_errors_day ON api_errors (day);
+CREATE INDEX IF NOT EXISTS compactions_path ON compactions (path);
 """
 # A view holds no data, so it is replaced whenever its definition here changes.
 VIEW = """CREATE VIEW usage_rows AS
@@ -138,7 +150,9 @@ FROM background b JOIN transcripts t ON t.path = b.path"""
 BACKGROUND = "(background)"               # the agent type of background rows, as in VIEW
 # the run totals of a cost-state record, as cost_states columns and CostState fields
 RUN_FIELDS = ("duration_ms", "api_ms", "api_ms_without_retries", "tool_ms", "lines_added", "lines_removed")
-# columns added after version 1, for stores created before them: (table, column, declaration)
+# columns added after version 1, for stores created before them: (table, column, declaration). No comma in the
+# comment before a table's last column: SQLite's DROP COLUMN, which the migration tests use, takes it for the
+# separator.
 ADDED_COLUMNS = (("messages", "web_searches", "INTEGER NOT NULL DEFAULT 0"),
                  ("background", "web_searches", "INTEGER NOT NULL DEFAULT 0"),
                  ("cost_states", "start_ts", "TEXT"),
@@ -154,6 +168,7 @@ ADDED_COLUMNS = (("messages", "web_searches", "INTEGER NOT NULL DEFAULT 0"),
                  ("tool_calls", "lines_removed", "INTEGER NOT NULL DEFAULT 0"),
                  ("transcripts", "last_user_ts", "TEXT"),
                  ("transcripts", "meta_mtime_ns", "INTEGER"),
+                 ("transcripts", "tool_use_id", "TEXT"),
                  *(("cost_states", column, "INTEGER NOT NULL DEFAULT 0") for column in RUN_FIELDS))
 Row = dict[str, Any]
 

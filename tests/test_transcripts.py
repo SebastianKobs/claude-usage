@@ -207,6 +207,15 @@ class AgentTest(ParseCase):
         agent = self.projects.subagent("s1", "a7", meta=False)
         self.assertEqual((self.parse(agent).agent_type, self.parse(agent).description), ("?", None))
 
+    def test_subagent_carries_the_tool_call_that_spawned_it(self):
+        agent = self.projects.subagent("s1", "a7")
+        self.assertEqual(self.parse(agent).tool_use_id, "toolu_a7")
+
+    def test_main_transcript_and_subagent_without_meta_have_no_spawning_call(self):
+        agent = self.projects.subagent("s1", "a8", meta=False)
+        self.main.user("hi")
+        self.assertEqual((self.parse().tool_use_id, self.parse(agent).tool_use_id), (None, None))
+
     def test_unreadable_meta_counts_as_missing(self):
         agent = self.projects.subagent("s1", "a7")
         agent.path.with_name("agent-a7.meta.json").write_text("{broken", encoding="utf-8")
@@ -386,6 +395,38 @@ class ApiErrorTest(ParseCase):
         del record["uuid"]
         self.main.bare(record)
         self.assertEqual(self.parse().api_errors, ())
+
+
+class CompactionTest(ParseCase):
+    def test_a_compaction_with_its_metadata(self):
+        self.main.at(datetime(2026, 9, 1, 14, 3, tzinfo=UTC)).compaction(
+            "c1", trigger="auto", pre_tokens=167_000, post_tokens=9_000, duration_ms=41_000)
+        self.assertEqual(self.parse().compactions, (transcripts.Compaction(
+            record_id="c1", timestamp=datetime(2026, 9, 1, 14, 3, tzinfo=UTC), trigger="auto", pre_tokens=167_000,
+            post_tokens=9_000, duration_ms=41_000),))
+
+    def test_a_compaction_without_metadata_has_no_counts(self):
+        self.main.compaction("c1", trigger=None)
+        compaction = self.parse().compactions[0]
+        self.assertEqual((compaction.trigger, compaction.pre_tokens, compaction.post_tokens, compaction.duration_ms),
+                         (None, None, None, None))
+
+    def test_a_compaction_without_a_record_id_is_skipped(self):
+        record = self.main.compaction("c1")
+        self.main.path.write_text("", encoding="utf-8")
+        del record["uuid"]
+        self.main.bare(record)
+        self.assertEqual(self.parse().compactions, ())
+
+    def test_other_system_records_are_no_compactions(self):
+        self.main.record("system", subtype="turn_duration", uuid="x1", durationMs=5)
+        self.main.attachment("skill_listing", "skills")
+        self.assertEqual(self.parse().compactions, ())
+
+    def test_compactions_keep_their_order(self):
+        self.main.compaction("c1")
+        self.main.compaction("c2", trigger="auto")
+        self.assertEqual([compaction.record_id for compaction in self.parse().compactions], ["c1", "c2"])
 
 
 class OffsetTest(ParseCase):

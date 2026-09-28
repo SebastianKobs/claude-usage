@@ -172,6 +172,24 @@ class Transcript:
                    "content": [text_block("API Error")], "usage": usage()}
         return self.record("assistant", message=message, **fields)
 
+    def compaction(self, record_id="c1", trigger="manual", pre_tokens=150_000, post_tokens=12_000, duration_ms=30_000):
+        """A compact_boundary system record as Claude Code writes it, followed by nothing (the summary is a separate
+        isCompactSummary user record). trigger=None leaves compactMetadata out."""
+        fields = {"subtype": "compact_boundary", "content": "Conversation compacted", "level": "info",
+                  "uuid": record_id}
+        if trigger is not None:
+            fields["compactMetadata"] = {"trigger": trigger, "preTokens": pre_tokens, "postTokens": post_tokens,
+                                         "durationMs": duration_ms, "cumulativeDroppedTokens": 0}
+        return self.record("system", **fields)
+
+    def attachment(self, kind, rendered=None, **fields):
+        """An attachment record: what Claude Code attaches to the next request. rendered is the text that reaches
+        the model (a string, a list of strings for several parts, or None for a bookkeeping record)."""
+        parts = [rendered] if isinstance(rendered, str) else rendered
+        return self.record("attachment", attachment={"type": kind, **fields},
+                           rendered=None if parts is None else [{"content": part} for part in parts],
+                           uuid=f"att-{kind}")
+
     def tool_result(self, tool_use_id, content, is_error=None, **fields):
         """A user record carrying a tool result; content is a string or a list of text blocks. is_error True marks
         a failed call; fields adds e.g. toolUseResult (see edit_result and create_result)."""

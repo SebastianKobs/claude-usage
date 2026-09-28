@@ -234,6 +234,40 @@ class ScanTest(StoreCase):
         self.scan()
         self.assertEqual(self.rows("SELECT agent_type FROM transcripts WHERE agent_id = 'a1'"), [("Explore",)])
 
+    def test_a_subagent_keeps_the_tool_call_that_spawned_it(self):
+        _, agent = build_session(self.projects)
+        self.scan()
+        agent.path.with_name("agent-a1.meta.json").unlink()
+        agent.user("more")
+        self.scan()
+        self.assertEqual(self.rows("SELECT agent_id, tool_use_id FROM transcripts ORDER BY agent_id NULLS FIRST"),
+                         [(None, None), ("a1", "toolu_a1")])
+
+    def test_a_meta_file_that_appears_later_sets_the_spawning_call(self):
+        agent = self.projects.subagent("s1", "a1", meta=False)
+        agent.assistant("m1", [text_block("a")], usage(output=5))
+        self.scan()
+        meta_path = agent.path.with_name("agent-a1.meta.json")
+        meta_path.write_text('{"agentType": "Explore", "toolUseId": "toolu_x"}', encoding="utf-8")
+        later = agent.path.stat().st_mtime_ns + 1_000_000_000
+        os.utime(meta_path, ns=(later, later))
+        self.scan()
+        self.assertEqual(self.rows("SELECT tool_use_id FROM transcripts"), [("toolu_x",)])
+
+    def test_compactions_are_stored_once_by_the_file_that_had_them_first(self):
+        original = self.projects.session("s1")
+        original.at(DAY_1).compaction("c1", trigger="auto", pre_tokens=167_000, post_tokens=9_000,
+                                      duration_ms=41_000)
+        self.scan()
+        copy = self.projects.session("s2")
+        copy.compaction("c1", trigger="manual", pre_tokens=1, post_tokens=1, duration_ms=1)
+        self.scan()
+        self.scan()
+        self.assertEqual(self.rows("SELECT record_id, path, ts, day, trigger, pre_tokens, post_tokens, duration_ms "
+                                   "FROM compactions"),
+                         [("c1", str(original.path), scan.iso(DAY_1), local_day(DAY_1), "auto", 167_000, 9_000,
+                           41_000)])
+
     def test_time_range_widens_across_reads(self):
         main = self.projects.session("s1")
         main.at(DAY_1).user("hi")
@@ -442,6 +476,7 @@ class RetentionTest(StoreCase):
         old.assistant("o1", [tool_use_block("ot1", "Read")], usage(output=10))
         old.tool_result("ot1", "abc")
         old.api_error("oe1")
+        old.compaction("oc1")
         old.cost_state({HAIKU: (100, 0, 0, 10, 0.01)}, totalDuration=1000)
         self.projects.subagent("old", "a1").at(DAY_1).assistant("o2", [text_block("b")], usage(output=5))
         self.projects.session("new").at(DAY_3).assistant("n1", [text_block("c")], usage(output=20))
@@ -463,7 +498,7 @@ class RetentionTest(StoreCase):
     def test_an_old_session_goes_from_every_table(self):
         result = self.scan_keeping(7)
         self.assertEqual(result.sessions_pruned, 1)
-        for table in ("messages", "tool_calls", "api_errors", "background", "cost_states"):
+        for table in ("messages", "tool_calls", "api_errors", "compactions", "background", "cost_states"):
             with self.subTest(table=table):
                 self.assertNotIn("old", self.sessions(table))
         self.assertEqual(self.sessions("messages"), ["mixed", "new"])

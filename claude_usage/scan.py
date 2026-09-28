@@ -68,16 +68,17 @@ def upsert_transcript(store: Store, chunk: transcripts.Chunk, size: int, mtime_n
     store.connection.execute("""
         INSERT INTO transcripts (path, slug, cwd, project, session_id, agent_id, agent_type, description, title,
                                  git_branch, size, mtime_ns, meta_mtime_ns, read_offset, head_hash, first_ts,
-                                 last_ts, last_user_ts)
+                                 last_ts, last_user_ts, tool_use_id)
         VALUES (:path, :slug, :cwd, COALESCE(:cwd, :slug), :session_id, :agent_id, :agent_type, :description,
                 :title, :git_branch, :size, :mtime_ns, :meta_mtime_ns, :read_offset, :head_hash, :first_ts,
-                :last_ts, :last_user_ts)
+                :last_ts, :last_user_ts, :tool_use_id)
         ON CONFLICT (path) DO UPDATE SET
             cwd = COALESCE(transcripts.cwd, excluded.cwd),
             project = COALESCE(transcripts.cwd, excluded.cwd, excluded.slug),
             agent_type = CASE WHEN excluded.agent_type = :unknown THEN transcripts.agent_type
                               ELSE excluded.agent_type END,
             description = COALESCE(excluded.description, transcripts.description),
+            tool_use_id = COALESCE(excluded.tool_use_id, transcripts.tool_use_id),
             title = COALESCE(excluded.title, transcripts.title),
             git_branch = COALESCE(excluded.git_branch, transcripts.git_branch),
             size = excluded.size,
@@ -96,7 +97,7 @@ def upsert_transcript(store: Store, chunk: transcripts.Chunk, size: int, mtime_n
               "meta_mtime_ns": meta_mtime_ns,
               "read_offset": chunk.end_offset, "head_hash": head, "first_ts": iso(chunk.first_ts),
               "last_ts": iso(chunk.last_ts), "last_user_ts": iso(chunk.last_user_ts),
-              "unknown": transcripts.UNKNOWN_AGENT_TYPE})
+              "tool_use_id": chunk.tool_use_id, "unknown": transcripts.UNKNOWN_AGENT_TYPE})
 
 
 def upsert_messages(store: Store, chunk: transcripts.Chunk) -> int:
@@ -153,6 +154,16 @@ def insert_api_errors(store: Store, chunk: transcripts.Chunk) -> None:
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [(error.record_id, str(chunk.path), iso(error.timestamp), local_day(error.timestamp), error.error,
           error.status, error.limit_type, iso(error.resets_at)) for error in chunk.api_errors])
+
+
+def insert_compactions(store: Store, chunk: transcripts.Chunk) -> None:
+    """Insert the chunk's compactions; ids already stored (by this or another file) are kept as they are."""
+    store.connection.executemany(
+        "INSERT OR IGNORE INTO compactions (record_id, path, ts, day, trigger, pre_tokens, post_tokens, duration_ms) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [(compaction.record_id, str(chunk.path), iso(compaction.timestamp), local_day(compaction.timestamp),
+          compaction.trigger, compaction.pre_tokens, compaction.post_tokens, compaction.duration_ms)
+         for compaction in chunk.compactions])
 
 
 def upsert_cost_state(store: Store, chunk: transcripts.Chunk, previous_last_ts: str | None) -> None:
@@ -253,6 +264,7 @@ def scan_file(store: Store, path: Path, known: sqlite3.Row | None) -> tuple[int,
         insert_tool_calls(store, chunk)
         update_tool_results(store, chunk)
         insert_api_errors(store, chunk)
+        insert_compactions(store, chunk)
         # with the file's data, so a scan that stops before update_background leaves the session for the next one
         store.connection.execute("INSERT OR IGNORE INTO dirty_sessions (session_id) VALUES (?)", (chunk.session_id,))
     return upserted, chunk.end_offset - offset
@@ -266,10 +278,10 @@ def last_activity(last_ts: str | None, mtime_ns: int) -> date:
 
 def prune(store: Store, first_day: date) -> int:
     """Delete the sessions whose last activity (over all their files) lies before first_day, in one transaction:
-    their messages, tool calls, API errors, background and cost-state rows, whole sessions only, so no background
-    or run total loses half its session. A transcript row stays while its file exists: it holds the offset the file
-    was read to, and without it the next scan would read the old data back in. Returns the sessions that lost
-    rows."""
+    their messages, tool calls, API errors, compactions, background and cost-state rows, whole sessions only, so no
+    background or run total loses half its session. A transcript row stays while its file exists: it holds the
+    offset the file was read to, and without it the next scan would read the old data back in. Returns the sessions
+    that lost rows."""
     sessions = store.connection.execute(
         "SELECT session_id, MAX(last_ts) AS last_ts, MAX(mtime_ns) AS mtime_ns FROM transcripts GROUP BY session_id")
     old = [row["session_id"] for row in sessions if last_activity(row["last_ts"], row["mtime_ns"]) < first_day]
@@ -279,7 +291,7 @@ def prune(store: Store, first_day: date) -> int:
             before = store.connection.total_changes
             paths = [row["path"] for row in store.connection.execute(
                 "SELECT path FROM transcripts WHERE session_id = ?", (session_id,))]
-            for table in ("messages", "tool_calls", "api_errors"):
+            for table in ("messages", "tool_calls", "api_errors", "compactions"):
                 store.connection.executemany(f"DELETE FROM {table} WHERE path = ?", [(path,) for path in paths])
             for table in ("background", "cost_states", "dirty_sessions"):
                 store.connection.execute(f"DELETE FROM {table} WHERE session_id = ?", (session_id,))

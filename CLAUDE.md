@@ -80,8 +80,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   replaced by `-`.
   - `<session-id>.jsonl` is the main thread.
   - `<session-id>/subagents/agent-<id>.jsonl` plus `agent-<id>.meta.json` is a subagent. The meta file holds
-    `agentType`, `description`, `toolUseId`, `spawnDepth` and `parentAgentId`. It is often without `model`, and
-    may be missing, in which case the type is `?`.
+    `agentType`, `description`, `toolUseId` (the Agent tool call that spawned it; kept in
+    `transcripts.tool_use_id`), `spawnDepth` and `parentAgentId`. It is often without `model`, and may be missing,
+    in which case the type is `?`.
   - `tool-results/`, `memory/` and anything else: ignore.
   - Paths sort a session's `subagents/` before its main file.
 - **Records:** one JSON object per line. Skip unreadable lines (also nested too deeply to decode) and non-objects.
@@ -103,6 +104,13 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
 - **API errors:** a failed call is a `<synthetic>` assistant record with `isApiErrorMessage: true`, `uuid`, `error`
   (`rate_limit`, `server_error`, …) and usually `apiErrorStatus` (429). A rate limit adds `quotaLimits` with
   `rateLimitType` (`five_hour`, …) and `resetsAt` in epoch seconds.
+- **Compactions:** a `system` record with `subtype: "compact_boundary"`, `uuid` and `compactMetadata`
+  (`trigger` manual or auto, `preTokens`, `postTokens`, `durationMs`, `cumulativeDroppedTokens`); checked
+  2026-09-28 (10 of 10 with metadata). The summary follows as a user record with `isCompactSummary`. One row per
+  uuid in `compactions`, owned by the file that stored it first. No microcompact records seen.
+- **Attachments:** `attachment` records (`uuid`, `timestamp`, `attachment.type`) carry what Claude Code adds to the
+  next request; `rendered` is a list of `{content}` (the text the model gets), or null for bookkeeping types
+  (`hook_success`, `deferred_tools_record`, …). Never stored, like prompts.
 - **Edits:** the user record of an Edit's or a Write's result carries `toolUseResult`: `structuredPatch` hunks
   whose `lines` start with `+`, `-` or a space, or for a new file `type: "create"` with `content`. Count the lines,
   never keep them. Counted this way, lines match `totalLinesAdded`/`Removed` for most sessions.

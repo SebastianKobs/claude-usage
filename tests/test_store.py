@@ -139,7 +139,7 @@ class SchemaTest(TempDirTestCase):
             self.assertEqual(scan.scan(second, self.projects.root).files_scanned, 1)
             self.assertEqual(second.connection.execute("SELECT effort FROM messages").fetchone()[0], "max")
 
-    def test_a_version_9_store_gets_the_meta_mtime_column_without_reading_its_files_again(self):
+    def test_a_version_9_store_gets_the_meta_mtime_column(self):
         main = self.projects.session("s1")
         main.at(DAY_1).assistant("m1", [text_block("a")], usage(output=5))
         with store.Store(self.store_path) as first:
@@ -148,9 +148,24 @@ class SchemaTest(TempDirTestCase):
             first.connection.execute("ALTER TABLE transcripts DROP COLUMN meta_mtime_ns")
             first.connection.execute("UPDATE meta SET value = '9' WHERE key = 'schema_version'")
         with store.Store(self.store_path) as second:
-            self.assertEqual(scan.scan(second, self.projects.root).files_scanned, 0)
             columns = {row["name"] for row in second.connection.execute("PRAGMA table_info(transcripts)")}
             self.assertIn("meta_mtime_ns", columns)
+
+    def test_a_version_10_store_gets_compactions_and_spawning_calls_by_reading_its_files_again(self):
+        main = self.projects.session("s1")
+        main.at(DAY_1).compaction("c1")
+        self.projects.subagent("s1", "a1").at(DAY_1).assistant("m1", [text_block("a")], usage(output=5))
+        with store.Store(self.store_path) as first:
+            scan.scan(first, self.projects.root)
+            # what a version-10 store looks like: no compactions table, transcripts without tool_use_id
+            first.connection.execute("DROP TABLE compactions")
+            first.connection.execute("ALTER TABLE transcripts DROP COLUMN tool_use_id")
+            first.connection.execute("UPDATE meta SET value = '10' WHERE key = 'schema_version'")
+        with store.Store(self.store_path) as second:
+            self.assertEqual(scan.scan(second, self.projects.root).files_scanned, 2)
+            self.assertEqual(second.connection.execute("SELECT record_id FROM compactions").fetchone()[0], "c1")
+            self.assertEqual(second.connection.execute(
+                "SELECT tool_use_id FROM transcripts WHERE agent_id = 'a1'").fetchone()[0], "toolu_a1")
 
     def test_reopening_leaves_the_schema_alone(self):
         with store.Store(self.store_path) as first:
