@@ -367,6 +367,11 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     (only with subagents) switches the chart, its table view, the tiles (overhead, rebuilds, compactions, mean
     growth), the biggest growth steps and the compactions to one transcript; another session starts at the main
     thread.
+  - The call to compact (`compactCall`, above the gauge): for a live session where `compact_now.likely_pays`
+    (`turns.likely_pays`), or once the cache has expired where compacting cold saves at once (`compactCallKind`),
+    in plain words (each reply's re-read, the size after, the cost once, the replies to pay it back, the replies
+    ahead on average, and compacting before a break) with a "Copy /compact" button: the clipboard, else the command
+    selected in a field. It turns with the cache, like the gauge. The gauge's notes say the same in sentences.
   - The conversation lists newest first: the calls in reverse, each call's entries (one `message_id`) in their
     order above its usage badge. "Oldest first" (`aria-pressed`, kept as a preference) switches to the transcript's
     order and draws the loaded conversation again.

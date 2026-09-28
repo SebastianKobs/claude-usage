@@ -131,6 +131,42 @@ class VerdictToneTest(unittest.TestCase):
                 self.assertIn("--loss-text:", text)
 
 
+class CompactCallTest(unittest.TestCase):
+    NOW = "2026-09-28T12:00:00.000+00:00"
+
+    def detail(self, live=True, likely=True, warm_until="2026-09-28T12:30:00.000+00:00", cold_saving=-0.5):
+        """A session's detail with the gauge's preview of compacting now."""
+        return {"live": live, "current": {"compact_now": {
+            "likely_pays": likely, "cache_warm_until": warm_until,
+            "estimate": {"breakeven_calls": 6, "calls_ahead": 40.2, "cold_saving": cold_saving}}}}
+
+    def kind(self, detail):
+        """compactCallKind of this detail at NOW."""
+        return run_function("drilldown.js", "compactCallKind", detail, self.NOW)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_live_session_where_compacting_likely_pays_gets_the_call(self):
+        self.assertEqual(self.kind(self.detail()), "warm")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_no_call_where_it_likely_does_not_pay_or_the_session_has_ended(self):
+        self.assertIsNone(self.kind(self.detail(likely=False)))
+        self.assertIsNone(self.kind(self.detail(live=False)))
+        self.assertIsNone(self.kind({"live": True, "current": None}))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_once_the_cache_has_expired_the_call_comes_where_compacting_cold_saves_at_once(self):
+        expired = "2026-09-28T11:00:00.000+00:00"
+        self.assertEqual(self.kind(self.detail(likely=False, warm_until=expired, cold_saving=1.2)), "cold")
+        self.assertIsNone(self.kind(self.detail(warm_until=expired, cold_saving=-0.5)))
+
+    def test_the_copy_button_is_wired_in_the_script_not_inline(self):
+        script = read(STATIC / "js" / "drilldown.js")
+        self.assertIn('id: "compact-copy"', script)
+        self.assertIn("navigator.clipboard", script)
+        self.assertNotIn("onclick", script)
+
+
 class ChatOrderTest(unittest.TestCase):
     def test_the_order_switch_is_a_toggle_kept_as_a_preference(self):
         script = read(STATIC / "js" / "chat.js")

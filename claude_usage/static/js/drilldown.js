@@ -56,6 +56,7 @@ function renderDrilldown(detail, refresh = false) {
                                           ? "from its cost record" : "estimated from the transcripts",
                                         sessionCostPer100Lines(detail)))
                    : null,
+    compactCall(detail),
     currentGauge(detail.current),
     el("div", {class: "chart-head"}, el("h3", {text: "Context per turn"}),
        el("span", {id: "context-note", class: "muted"}),
@@ -291,6 +292,66 @@ function currentGauge(current) {
     ...compactNowNotes(current.compact_now));
 }
 
+// whether the session view calls for compacting: "warm" where a live session's compacting now likely pays
+// (turns.likely_pays), "cold" once the cache has expired and compacting first saves at once, else null
+function compactCallKind(detail, now) {
+  const preview = detail.live && detail.current ? detail.current.compact_now : null;
+  if (!preview || !preview.estimate) return null;
+  const until = preview.cache_warm_until;
+  if (until !== null && Date.parse(until) < Date.parse(now)) {
+    return preview.estimate.cold_saving !== null && preview.estimate.cold_saving >= 0 ? "cold" : null;
+  }
+  return preview.likely_pays ? "warm" : null;
+}
+
+// the call to compact above the gauge, in plain words, with a button that copies /compact
+function compactCall(detail) {
+  const kind = compactCallKind(detail, new Date().toISOString());
+  if (!kind) return null;
+  const preview = detail.current.compact_now;
+  const estimate = preview.estimate;
+  const shrink = `Compacting would shrink it to about ${compact(estimate.after)}.`;
+  const lines = kind === "cold"
+    ? [`The cache has expired, so the next reply sends your whole conversation (${compact(preview.before)}) again ` +
+       `at the full price. ${shrink} Doing it now saves about ${money(estimate.cold_saving)} at once.`]
+    : [`Every reply sends your whole conversation again: ${compact(preview.before)}, ` +
+       `~${money(preview.reread_cost)} each time from the cache. ${shrink} That costs ~${money(estimate.one_time)} ` +
+       `once, and the cheaper replies pay it back after about ${whole(estimate.breakeven_calls)} replies. ` +
+       (estimate.ahead_from === "longer"
+         ? `After your past compactions, a stretch this long went on for about ${whole(Math.round(estimate.calls_ahead))} ` +
+           "more replies on average."
+         : `After your past compactions you went on for about ${whole(Math.round(estimate.calls_ahead))} replies on average.`)];
+  if (kind === "warm" && estimate.before_break !== null && estimate.before_break > 0 &&
+      preview.cache_warm_until !== null) {
+    lines.push(`Taking a break past ${when(preview.cache_warm_until)}? Compact before it: the cache expires ` +
+               `then, and compacting first saves about ${money(estimate.before_break)} at the next reply.`);
+  }
+  const status = el("span", {class: "compact-call-status", role: "status"});
+  const button = el("button", {type: "button", id: "compact-copy", text: "Copy /compact"});
+  button.addEventListener("click", () => copyCompact(status));
+  return el("div", {class: "card compact-call", id: "compact-call", role: "region",
+                    "aria-labelledby": "compact-call-title"},
+    el("strong", {id: "compact-call-title", text: "⚠ Compacting now would likely save money"}),
+    ...lines.map(line => el("p", {text: line})),
+    el("div", {class: "compact-call-actions"}, button, status));
+}
+
+// copies /compact for pasting into Claude Code; where the clipboard is refused, shows it selected to copy by hand
+function copyCompact(status) {
+  const fallback = () => {
+    const field = el("input", {type: "text", readonly: true, value: "/compact", "aria-label": "The command to copy",
+                               class: "compact-call-field"});
+    status.replaceChildren("Copy it from here: ", field);
+    field.select();
+  };
+  if (!navigator.clipboard) {
+    fallback();
+    return;
+  }
+  navigator.clipboard.writeText("/compact").then(
+    () => { status.textContent = "Copied: paste it into Claude Code."; }, fallback);
+}
+
 // " (low–high)", or nothing where both ends read the same
 function spread(low, high) { return low === high ? "" : ` (${low}–${high})`; }
 
@@ -301,12 +362,13 @@ function compactNowNotes(preview) {
   const until = preview.cache_warm_until;
   const expired = until !== null && Date.parse(until) < Date.now();
   const cache = until === null ? null
-    : expired ? `the cache has likely expired (${when(until)}): the next call rewrites it all, ` +
-                `+${money(preview.keep_across_break)}`
-    : `cache warm until ${when(until)} (${preview.cache_ttl_minutes} min from the last request); after that, ` +
-      `keeping costs +${money(preview.keep_across_break)} at the next call`;
-  const reread = `Each call re-reads ${compact(preview.before)} (${money(preview.reread_cost)})`;
-  const exact = el("div", {class: "note", text: [reread, cache].filter(Boolean).join(" · ")});
+    : expired ? `The cache has likely expired (${when(until)}): the next reply sends it all at the full price, ` +
+                `${money(preview.keep_across_break)} more.`
+    : `The cache stays warm until ${when(until)} (${preview.cache_ttl_minutes} min after the last request); ` +
+      `after that, the next reply costs ${money(preview.keep_across_break)} more.`;
+  const reread = `Every reply sends the whole conversation again: ${compact(preview.before)}, ` +
+                 `${money(preview.reread_cost)} each time from the cache.`;
+  const exact = el("div", {class: "note", text: [reread, cache].filter(Boolean).join(" ")});
   const estimate = preview.estimate;
   if (!estimate) {
     const stored = preview.stored_compactions;
@@ -316,20 +378,19 @@ function compactNowNotes(preview) {
     return [exact, el("div", {class: "note", text: `No estimate of compacting now: ${why}.`})];
   }
   const count = `${whole(estimate.compactions)} stored ${estimate.compactions === 1 ? "compaction" : "compactions"}`;
-  const parts = [`If you compact now: ${payoffText(estimate, expired)}`,
-                 `context after about ${compact(estimate.after)}` +
-                 spread(compact(estimate.after_low), compact(estimate.after_high)),
-                 expired ? null : `costs ~${money(estimate.one_time)} once`, `estimated from ${count}`].filter(Boolean);
-  if (estimate.calls_after_low !== null) {
-    const low = whole(estimate.calls_after_low);
-    const high = whole(estimate.calls_after_high);
-    parts.push(`${low === high ? low : `${low}–${high}`} calls followed them until the next compaction`);
-  }
+  const parts = [`If you compacted now, it would shrink to about ${compact(estimate.after)}` +
+                 `${spread(compact(estimate.after_low), compact(estimate.after_high))}.`,
+                 expired ? `Compacting ${payoffText(estimate, expired)}.`
+                         : `That costs ~${money(estimate.one_time)} once and ${payoffText(estimate, expired)}.`];
+  const low = whole(estimate.calls_after_low);
+  const high = whole(estimate.calls_after_high);
+  const followed = estimate.calls_after_low === null ? ""
+    : `, which were followed by ${low === high ? low : `${low}–${high}`} replies until the next one`;
+  parts.push(`Learnt from your ${count}${followed}.`);
   if (estimate.before_break !== null && !expired && until !== null) {
-    parts.push(`compacting before a break past ${when(until)} pays off at once ` +
-               `(about ${money(estimate.before_break)})`);
+    parts.push(`Compacting before a break past ${when(until)} saves about ${money(estimate.before_break)} at once.`);
   }
-  return [exact, el("div", {class: "note", text: parts.join(" · ")})];
+  return [exact, el("div", {class: "note", text: parts.join(" ")})];
 }
 
 // when compacting now pays off: warm against the next calls' reads; once the cache has expired, cold against
@@ -338,17 +399,17 @@ function payoffText(estimate, expired) {
   if (expired) {
     if (estimate.breakeven_cold === null) return "would never pay off: the context is below what compacting leaves";
     return estimate.cold_saving >= 0
-      ? `pays off at once (about ${money(estimate.cold_saving)}), since the next call rewrites it all anyway`
-      : `would pay off after about ${whole(estimate.breakeven_cold)} calls`;
+      ? `pays off at once (about ${money(estimate.cold_saving)}), since the next reply sends it all anyway`
+      : `would pay off after about ${whole(estimate.breakeven_cold)} replies`;
   }
   const calls = value => (value === null ? "never" : whole(value));
   if (estimate.breakeven_calls !== null) {
-    return `would pay off after about ${whole(estimate.breakeven_calls)} calls` +
+    return `would pay off after about ${whole(estimate.breakeven_calls)} replies` +
            spread(calls(estimate.breakeven_low), calls(estimate.breakeven_high));
   }
   return estimate.breakeven_low === null
     ? "would never pay off: the context is below what compacting leaves"
-    : `would likely not pay off (at best after about ${whole(estimate.breakeven_low)} calls)`;
+    : `would likely not pay off (at best after about ${whole(estimate.breakeven_low)} replies)`;
 }
 
 // the gauge's cache wording turns once the cache expires: draw it again then, if the session is still open
@@ -361,7 +422,13 @@ function scheduleGaugeRefresh(detail) {
   if (wait <= 0 || wait > 2 ** 31 - 1) return;
   gaugeTimer = setTimeout(() => {
     const gauge = document.getElementById("current-gauge");
-    if (gauge && state.session === detail) gauge.replaceWith(currentGauge(detail.current));
+    if (!gauge || state.session !== detail) return;
+    gauge.replaceWith(currentGauge(detail.current));
+    // the call to compact turns with the cache too: shown, gone or reworded
+    const call = compactCall(detail);
+    const shown = document.getElementById("compact-call");
+    if (shown) shown.remove();
+    if (call) document.getElementById("current-gauge").before(call);
   }, wait + 1000);
 }
 

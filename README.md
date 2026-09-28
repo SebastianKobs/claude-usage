@@ -49,7 +49,8 @@ holds:
 - the main thread's latest context against the auto-compact point, with the compact hint marked, the turns since
   the last compaction and an estimate of the turns left at the recent pace. Below it, what compacting now would
   cost: what each call re-reads, until when the cache stays warm and what keeping costs after that, and from your
-  stored compactions after how many calls compacting would pay off;
+  stored compactions after how many replies compacting would pay off. While the session runs and compacting now
+  would likely save money, a callout above it says so in plain words, with a button that copies `/compact`;
 - the context per turn as cache read, cache write and new input, with each `/compact` or auto-compact as a rule;
   the picker switches between the main thread and its subagents;
 - for that transcript, the fixed overhead (the first call's context, which every later call reads again), the

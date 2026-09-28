@@ -465,6 +465,16 @@ class PreviewTest(unittest.TestCase):
         estimate = turns.compact_preview(CURRENT, stretches, PRICES, calls_so_far=1)["estimate"]
         self.assertEqual((estimate["calls_ahead"], estimate["ahead_from"]), (None, None))
 
+    def test_the_preview_says_whether_compacting_now_likely_pays(self):
+        [first] = self.past()
+        stretches = [dataclasses.replace(first, last_stretch=False, calls_after=calls) for calls in (30, 40, 50)]
+        preview = turns.compact_preview(CURRENT, stretches, PRICES, calls_so_far=1)
+        self.assertEqual(preview["likely_pays"], turns.likely_pays(preview["estimate"]))
+        self.assertTrue(preview["likely_pays"])
+
+    def test_without_an_estimate_compacting_now_is_not_likely_to_pay(self):
+        self.assertFalse(self.preview(CURRENT)["likely_pays"])
+
     def test_open_stretches_tell_nothing_about_the_calls_that_follow(self):
         estimate = self.preview(CURRENT, self.past())["estimate"]
         self.assertEqual((estimate["calls_after_low"], estimate["calls_after_high"]), (None, None))
