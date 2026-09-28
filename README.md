@@ -48,7 +48,7 @@ Click a session to open it. Besides its cost, time and tables, it shows what its
 - for that transcript, the fixed overhead (the first call's context, which every later call reads again), the
   cache rebuilds and what they cost extra, the compactions, and the turns that grew the context most with the
   tools the call before ran;
-- per subagent, what it returned to the main thread;
+- per subagent, what it returned to the main thread; a Workflow run's agents under one row per run;
 - each compaction against keeping the context: what it cost once, what each later call saved, the call at which it
   paid off, and whether it saved or cost more (at API list prices, with the summary call estimated). The
   conversation shows the same at each compaction marker.

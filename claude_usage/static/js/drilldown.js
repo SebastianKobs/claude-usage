@@ -27,16 +27,7 @@ function renderDrilldown(detail) {
                   el("th", {class: "num", text: "Returned",
                             title: "what a subagent handed back: its result's characters"}),
                   el("th", {class: "num", text: "Cost"}));
-  const agents = detail.agents.map(agent => el("tr", {},
-    el("td", {}, el("strong", {text: agent.agent_type}), el("span", {class: "sub", text: agent.description || ""})),
-    el("td", {}, ...agentModels(agent)), el("td", {class: "num", text: whole(agent.turns)}),
-    el("td", {class: "num", text: `${compact(agent.context_first)} → ${compact(agent.context_last)}`}),
-    el("td", {class: "num", text: compact(agent.input_total)}),
-    el("td", {class: "num", text: percent(agent.cache_read, agent.input_total)}),
-    el("td", {class: "num", text: compact(agent.output)}),
-    searches ? el("td", {class: "num", text: whole(agent.web_searches)}) : null,
-    el("td", {class: "num", text: compact(agent.returned_chars)}),
-    el("td", {class: "num", text: money(agent.cost)})));
+  const agents = agentRows(detail.agents, searches);
   const toolRows = detail.agents.flatMap(agent => agent.tools.map(tool => el("tr", {},
     el("td", {text: agent.agent_type}), el("td", {text: tool.tool}), el("td", {class: "num", text: whole(tool.calls)}),
     el("td", {class: "num", text: compact(tool.result_chars)}))));
@@ -94,6 +85,66 @@ function renderDrilldown(detail) {
   panel.hidden = false;
   renderContext(detail);                                  // after unhiding, so the chart can measure its width
   scheduleGaugeRefresh(detail);
+}
+
+// one row per transcript; a workflow run's agents under one row per run, whose button shows or hides them
+function agentRows(agents, searches) {
+  const rows = [];
+  const runs = new Map();
+  for (const agent of agents) {
+    if (agent.workflow_run === null) {
+      rows.push(agentRow(agent, searches));
+    } else if (runs.has(agent.workflow_run)) {
+      runs.get(agent.workflow_run).push(agent);
+    } else {
+      const members = [agent];
+      runs.set(agent.workflow_run, members);
+      rows.push(members);                                 // filled in below, in the place of its first agent
+    }
+  }
+  return rows.flatMap(row => (Array.isArray(row) ? workflowRows(row, searches) : [row]));
+}
+
+function agentRow(agent, searches, className = null) {
+  const phase = agent.workflow_phase ? ` · ${agent.workflow_phase}` : "";
+  return el("tr", {class: className},
+    el("td", {}, el("strong", {text: agent.agent_type}),
+       el("span", {class: "sub", text: `${agent.description || ""}${phase}`})),
+    el("td", {}, ...agentModels(agent)), el("td", {class: "num", text: whole(agent.turns)}),
+    el("td", {class: "num", text: `${compact(agent.context_first)} → ${compact(agent.context_last)}`}),
+    el("td", {class: "num", text: compact(agent.input_total)}),
+    el("td", {class: "num", text: percent(agent.cache_read, agent.input_total)}),
+    el("td", {class: "num", text: compact(agent.output)}),
+    searches ? el("td", {class: "num", text: whole(agent.web_searches)}) : null,
+    el("td", {class: "num", text: compact(agent.returned_chars)}),
+    el("td", {class: "num", text: money(agent.cost)}));
+}
+
+// a workflow run: its totals, then its agents, hidden until the button shows them
+function workflowRows(agents, searches) {
+  const sum = field => agents.reduce((total, agent) => total + (agent[field] || 0), 0);
+  const costs = agents.map(agent => agent.cost).filter(cost => cost !== null);
+  const name = agents[0].workflow_name || agents[0].workflow_run;
+  const members = agents.map(agent => agentRow(agent, searches, "sub-row workflow-member"));
+  for (const row of members) row.hidden = true;
+  const toggle = el("button", {type: "button", class: "link-button", "aria-expanded": "false",
+                               text: `${whole(agents.length)} agents`});
+  toggle.addEventListener("click", () => {
+    const open = toggle.getAttribute("aria-expanded") !== "true";
+    toggle.setAttribute("aria-expanded", String(open));
+    for (const row of members) row.hidden = !open;
+  });
+  const models = [...new Set(agents.flatMap(agent => agent.models))];
+  const head = el("tr", {class: "group-row"},
+    el("td", {}, el("strong", {text: `workflow · ${name}`}), el("span", {class: "sub"}, toggle)),
+    el("td", {}, ...models.map(model => el("div", {text: model}))), el("td", {class: "num", text: whole(sum("turns"))}),
+    el("td", {class: "num", text: "–"}), el("td", {class: "num", text: compact(sum("input_total"))}),
+    el("td", {class: "num", text: percent(sum("cache_read"), sum("input_total"))}),
+    el("td", {class: "num", text: compact(sum("output"))}),
+    searches ? el("td", {class: "num", text: whole(sum("web_searches"))}) : null,
+    el("td", {class: "num", text: "–"}),
+    el("td", {class: "num", text: costs.length ? money(costs.reduce((total, cost) => total + cost, 0)) : "–"}));
+  return [head, ...members];
 }
 
 // an agent's models, one line each with its effort levels ("claude-opus-5-5 · high, max"); background calls
@@ -159,8 +210,7 @@ function contextPicker(detail) {
   if (agents.length < 2) return null;
   const picked = pickedAgent(detail);
   const select = el("select", {id: "context-agent", "aria-label": "Transcript the context section shows"},
-    ...agents.map(agent => el("option", {value: agentKey(agent), selected: agent === picked,
-                                         text: agentName(agent)})));
+    ...agentOptions(agents, agentKey, agentName, picked));
   select.addEventListener("change", () => {
     contextAgent = select.value;
     renderContext(detail);

@@ -85,6 +85,13 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     `agentType`, `description`, `toolUseId` (the Agent tool call that spawned it; kept in
     `transcripts.tool_use_id`), `spawnDepth` and `parentAgentId`. It is often without `model`, and may be missing,
     in which case the type is `?`.
+  - `<session-id>/subagents/workflows/<run>/agent-<id>.jsonl` plus its `.meta.json` is a Workflow run's agent
+    (checked 2026-09-28, counts only: 39 agents in 3 runs). It has the same format as a subagent (the parent's
+    `sessionId`). Its meta holds `agentType` ("workflow-subagent", or Explore/Plan when set), `description`,
+    `workflowPhase` and `spawnDepth`, but no `toolUseId`. The run is the folder's name (`wf_…`), and its name is
+    `workflowName` in `<session-id>/workflows/<run>.json`: only that key is read, since the file also holds the
+    script and the agents' results. `journal.jsonl` and `workflows/scripts/` carry no usage and are not read. The
+    session view groups a run's agents under one row.
   - `tool-results/`, `memory/` and anything else: ignore.
   - Paths sort a session's `subagents/` before its main file.
 - **Records:** one JSON object per line. Skip unreadable lines (also nested too deeply to decode) and non-objects.

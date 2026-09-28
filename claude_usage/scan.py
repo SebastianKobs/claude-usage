@@ -68,10 +68,10 @@ def upsert_transcript(store: Store, chunk: transcripts.Chunk, size: int, mtime_n
     store.connection.execute("""
         INSERT INTO transcripts (path, slug, cwd, project, session_id, agent_id, agent_type, description, title,
                                  git_branch, size, mtime_ns, meta_mtime_ns, read_offset, head_hash, first_ts,
-                                 last_ts, last_user_ts, tool_use_id)
+                                 last_ts, last_user_ts, tool_use_id, workflow_run, workflow_phase, workflow_name)
         VALUES (:path, :slug, :cwd, COALESCE(:cwd, :slug), :session_id, :agent_id, :agent_type, :description,
                 :title, :git_branch, :size, :mtime_ns, :meta_mtime_ns, :read_offset, :head_hash, :first_ts,
-                :last_ts, :last_user_ts, :tool_use_id)
+                :last_ts, :last_user_ts, :tool_use_id, :workflow_run, :workflow_phase, :workflow_name)
         ON CONFLICT (path) DO UPDATE SET
             cwd = COALESCE(transcripts.cwd, excluded.cwd),
             project = COALESCE(transcripts.cwd, excluded.cwd, excluded.slug),
@@ -79,6 +79,9 @@ def upsert_transcript(store: Store, chunk: transcripts.Chunk, size: int, mtime_n
                               ELSE excluded.agent_type END,
             description = COALESCE(excluded.description, transcripts.description),
             tool_use_id = COALESCE(excluded.tool_use_id, transcripts.tool_use_id),
+            workflow_run = COALESCE(excluded.workflow_run, transcripts.workflow_run),
+            workflow_phase = COALESCE(excluded.workflow_phase, transcripts.workflow_phase),
+            workflow_name = COALESCE(excluded.workflow_name, transcripts.workflow_name),
             title = COALESCE(excluded.title, transcripts.title),
             git_branch = COALESCE(excluded.git_branch, transcripts.git_branch),
             size = excluded.size,
@@ -97,7 +100,9 @@ def upsert_transcript(store: Store, chunk: transcripts.Chunk, size: int, mtime_n
               "meta_mtime_ns": meta_mtime_ns,
               "read_offset": chunk.end_offset, "head_hash": head, "first_ts": iso(chunk.first_ts),
               "last_ts": iso(chunk.last_ts), "last_user_ts": iso(chunk.last_user_ts),
-              "tool_use_id": chunk.tool_use_id, "unknown": transcripts.UNKNOWN_AGENT_TYPE})
+              "tool_use_id": chunk.tool_use_id, "workflow_run": chunk.workflow_run,
+              "workflow_phase": chunk.workflow_phase, "workflow_name": chunk.workflow_name,
+              "unknown": transcripts.UNKNOWN_AGENT_TYPE})
 
 
 def upsert_messages(store: Store, chunk: transcripts.Chunk) -> int:

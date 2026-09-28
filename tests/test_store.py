@@ -167,6 +167,18 @@ class SchemaTest(TempDirTestCase):
             self.assertEqual(second.connection.execute(
                 "SELECT tool_use_id FROM transcripts WHERE agent_id = 'a1'").fetchone()[0], "toolu_a1")
 
+    def test_a_version_11_store_gets_the_workflow_columns(self):
+        self.projects.session("s1").at(DAY_1).assistant("m1", [text_block("a")], usage(output=5))
+        with store.Store(self.store_path) as first:
+            scan.scan(first, self.projects.root)
+            # what a version-11 store looks like: transcripts without the workflow columns
+            for column in ("workflow_run", "workflow_phase", "workflow_name"):
+                first.connection.execute(f"ALTER TABLE transcripts DROP COLUMN {column}")
+            first.connection.execute("UPDATE meta SET value = '11' WHERE key = 'schema_version'")
+        with store.Store(self.store_path) as second:
+            columns = {row["name"] for row in second.connection.execute("PRAGMA table_info(transcripts)")}
+            self.assertLessEqual({"workflow_run", "workflow_phase", "workflow_name"}, columns)
+
     def test_reopening_leaves_the_schema_alone(self):
         with store.Store(self.store_path) as first:
             before = first.connection.execute("PRAGMA schema_version").fetchone()[0]

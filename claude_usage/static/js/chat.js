@@ -9,10 +9,10 @@ let chatRequest = 0;
 // The picker (main thread or a subagent) and the button that loads the conversation into #chat
 function chatControls(detail) {
   const agents = detail.agents.filter(agent => agent.agent_type !== "(background)");
+  const label = agent => (agent.agent_id === null ? "Main thread"
+    : `${agent.agent_type}${agent.description ? " · " + agent.description : ""}`);
   const picker = el("select", {id: "chat-agent", "aria-label": "Conversation of"},
-    ...agents.map(agent => el("option", {value: agent.agent_id || "",
-      text: agent.agent_id === null ? "Main thread"
-                                    : `${agent.agent_type}${agent.description ? " · " + agent.description : ""}`})));
+    ...agentOptions(agents, agent => agent.agent_id || "", label, null));
   const button = el("button", {type: "button", id: "chat-load", text: "Show conversation"});
   button.addEventListener("click", () => loadChat(detail.session_id, picker.value || null, button));
   picker.addEventListener("change", () => {
@@ -21,6 +21,26 @@ function chatControls(detail) {
   return el("div", {class: "chart-head"}, themed("h3", "Conversation"),
             el("span", {class: "muted", text: "read from the transcript when you ask, never stored"}),
             el("span", {class: "spacer"}), picker, button);
+}
+
+// a picker's options: one per transcript, a workflow run's agents in one group per run
+function agentOptions(agents, valueOf, labelOf, picked) {
+  const option = agent => el("option", {value: valueOf(agent), selected: agent === picked, text: labelOf(agent)});
+  const items = [];
+  const groups = new Map();
+  for (const agent of agents) {
+    if (agent.workflow_run === null) {
+      items.push(option(agent));
+      continue;
+    }
+    if (!groups.has(agent.workflow_run)) {
+      const group = el("optgroup", {label: `workflow · ${agent.workflow_name || agent.workflow_run}`});
+      groups.set(agent.workflow_run, group);
+      items.push(group);
+    }
+    groups.get(agent.workflow_run).append(option(agent));
+  }
+  return items;
 }
 
 async function loadChat(sessionId, agentId, button) {

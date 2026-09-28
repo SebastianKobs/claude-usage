@@ -216,6 +216,27 @@ class AgentTest(ParseCase):
         self.main.user("hi")
         self.assertEqual((self.parse().tool_use_id, self.parse(agent).tool_use_id), (None, None))
 
+    def test_a_workflow_agent_belongs_to_its_session(self):
+        agent = self.projects.workflow_agent("s1", "wf_1", "b1", name="review")
+        chunk = self.parse(agent)
+        self.assertEqual((chunk.slug, chunk.session_id, chunk.agent_id, chunk.agent_type, chunk.description),
+                         (self.main.path.parent.name, "s1", "b1", "workflow-subagent", "step b1"))
+
+    def test_a_workflow_agent_carries_its_run_phase_and_workflow_name(self):
+        agent = self.projects.workflow_agent("s1", "wf_1", "b1", name="review")
+        chunk = self.parse(agent)
+        self.assertEqual((chunk.workflow_run, chunk.workflow_phase, chunk.workflow_name), ("wf_1", "Review", "review"))
+
+    def test_a_workflow_without_its_run_file_has_no_name(self):
+        agent = self.projects.workflow_agent("s1", "wf_1", "b1")
+        self.assertEqual((self.parse(agent).workflow_run, self.parse(agent).workflow_name), ("wf_1", None))
+
+    def test_other_transcripts_belong_to_no_workflow(self):
+        agent = self.projects.subagent("s1", "a7")
+        self.main.user("hi")
+        self.assertEqual([(chunk.workflow_run, chunk.workflow_phase) for chunk in (self.parse(), self.parse(agent))],
+                         [(None, None), (None, None)])
+
     def test_unreadable_meta_counts_as_missing(self):
         agent = self.projects.subagent("s1", "a7")
         agent.path.with_name("agent-a7.meta.json").write_text("{broken", encoding="utf-8")
@@ -534,6 +555,12 @@ class FindTranscriptsTest(TempDirTestCase):
         (self.projects.project_dir() / "notes.jsonl.bak").write_text("x", encoding="utf-8")
         found = transcripts.find_transcripts(self.projects.root)
         self.assertEqual(sorted(found), sorted([main.path, agent.path, other.path]))
+
+    def test_workflow_agents_but_not_their_journal(self):
+        main = self.projects.session("s1")
+        agent = self.projects.workflow_agent("s1", "wf_1", "b1", name="review")
+        found = transcripts.find_transcripts(self.projects.root)
+        self.assertEqual(sorted(found), sorted([main.path, agent.path]))
 
     def test_missing_projects_dir_raises(self):
         with self.assertRaises(FileNotFoundError):

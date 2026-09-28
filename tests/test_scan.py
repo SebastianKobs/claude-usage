@@ -345,6 +345,13 @@ class BackgroundTest(StoreCase):
         scan.update_background(self.store, {"s1"})
         self.assertEqual(self.background(), [(HAIKU, 1500, 0, 0, 90)])
 
+    def test_workflow_agents_count_as_transcripts_not_background(self):
+        workflow = self.projects.workflow_agent("s1", "wf_1", "b1")
+        workflow.at(DAY_3).assistant("m3", [text_block("c")], usage(new=5, cache_read=500, output=20))
+        self.main.cost_state({"claude-sonnet-5": (15, 100, 1500, 100, 1.0)})
+        self.scan()
+        self.assertEqual(self.background(), [])
+
     def test_a_category_below_the_transcripts_counts_as_zero(self):
         self.main.cost_state({"claude-sonnet-5": (0, 50, 1000, 90, 1.0)})
         self.scan()

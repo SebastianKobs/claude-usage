@@ -20,6 +20,7 @@ UNKNOWN_AGENT_TYPE = "?"
 SYNTHETIC_MODEL = "<synthetic>"
 STANDARD_SPEED = "standard"
 SUBAGENTS_DIR = "subagents"
+WORKFLOWS_DIR = "workflows"             # <session-id>/subagents/workflows/<run>/: a Workflow run's agents
 AGENT_PREFIX = "agent-"
 META_SUFFIX = ".meta.json"
 MCP_PREFIX = "mcp__"
@@ -150,6 +151,9 @@ class Chunk:
     api_errors: tuple[ApiError, ...] = ()
     compactions: tuple[Compaction, ...] = ()
     tool_use_id: str | None = None      # of a subagent, the Agent tool call that spawned it (the meta's toolUseId)
+    workflow_run: str | None = None     # of a workflow agent, its run's folder (wf_...)
+    workflow_phase: str | None = None   # the meta's workflowPhase
+    workflow_name: str | None = None    # the run's workflowName, from <session-id>/workflows/<run>.json
 
 
 # --- reading -----------------------------------------------------------------------------------------------------
@@ -498,9 +502,39 @@ def cost_state_of(record: Record, snapshot_ts: datetime | None) -> CostState:
 
 # --- files -------------------------------------------------------------------------------------------------------
 
+def session_folder(path: Path) -> Path | None:
+    """The <session-id> folder of a subagent (<session-id>/subagents/agent-<id>.jsonl) or a workflow agent
+    (<session-id>/subagents/workflows/<run>/agent-<id>.jsonl); None for a main transcript."""
+    if not path.name.startswith(AGENT_PREFIX):
+        return None
+    if path.parent.name == SUBAGENTS_DIR:
+        return path.parents[1]
+    if len(path.parents) > 3 and path.parents[1].name == WORKFLOWS_DIR and path.parents[2].name == SUBAGENTS_DIR:
+        return path.parents[3]
+    return None
+
+
 def is_subagent_file(path: Path) -> bool:
-    """<slug>/<session-id>/subagents/agent-<id>.jsonl"""
-    return path.parent.name == SUBAGENTS_DIR and path.name.startswith(AGENT_PREFIX)
+    """A subagent's or a workflow agent's transcript."""
+    return session_folder(path) is not None
+
+
+def workflow_run(path: Path) -> str | None:
+    """A workflow agent's run (its folder's name); None for other transcripts."""
+    if not is_subagent_file(path) or path.parent.name == SUBAGENTS_DIR:
+        return None
+    return path.parent.name
+
+
+def workflow_name(path: Path, run: str) -> str | None:
+    """The workflowName in the run's <session-id>/workflows/<run>.json, or None if it is missing or unreadable. The
+    file also holds the run's script and results: only the name is read out of it."""
+    folder = session_folder(path)
+    try:
+        values = json.loads((folder / WORKFLOWS_DIR / f"{run}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, RecursionError):
+        return None
+    return text_or_none(values.get("workflowName")) if isinstance(values, dict) else None
 
 
 def slug_for(project_path: str) -> str:
@@ -510,16 +544,14 @@ def slug_for(project_path: str) -> str:
 
 def project_slug(path: Path) -> str:
     """The <slug> folder a transcript belongs to."""
-    if is_subagent_file(path):
-        return path.parents[2].name
-    return path.parent.name
+    folder = session_folder(path)
+    return path.parent.name if folder is None else folder.parent.name
 
 
 def parse_session_id(path: Path) -> str:
     """The session a transcript belongs to, from its path."""
-    if is_subagent_file(path):
-        return path.parents[1].name
-    return path.stem
+    folder = session_folder(path)
+    return path.stem if folder is None else folder.name
 
 
 def meta_path(path: Path) -> Path:
@@ -544,7 +576,8 @@ def find_transcripts(projects_dir: Path) -> list[Path]:
         raise FileNotFoundError(f"projects folder not found: {projects_dir}")
     main = projects_dir.glob("*/*.jsonl")
     subagents = projects_dir.glob(f"*/*/{SUBAGENTS_DIR}/{AGENT_PREFIX}*.jsonl")
-    return sorted(path for path in [*main, *subagents] if path.is_file())
+    workflow_agents = projects_dir.glob(f"*/*/{SUBAGENTS_DIR}/{WORKFLOWS_DIR}/*/{AGENT_PREFIX}*.jsonl")
+    return sorted(path for path in [*main, *subagents, *workflow_agents] if path.is_file())
 
 
 def parse(path: Path, offset: int = 0, last_user_ts: datetime | None = None) -> Chunk:
@@ -558,12 +591,15 @@ def parse(path: Path, offset: int = 0, last_user_ts: datetime | None = None) -> 
         agent_type = text_or_none(meta.get("agentType")) or UNKNOWN_AGENT_TYPE
         description = text_or_none(meta.get("description"))
         tool_use_id = text_or_none(meta.get("toolUseId"))
+        phase = text_or_none(meta.get("workflowPhase"))
     else:
         session_id = parse_session_id(path)
         agent_id = None
         agent_type = MAIN_AGENT_TYPE
         description = None
         tool_use_id = None
+        phase = None
+    run = workflow_run(path)
 
     cwd = None
     git_branch = None
@@ -594,7 +630,9 @@ def parse(path: Path, offset: int = 0, last_user_ts: datetime | None = None) -> 
                  first_ts=min(timestamps, default=None), last_ts=max(timestamps, default=None),
                  cost_state=cost_state, api_errors=tuple(api_errors(records)),
                  compactions=tuple(compactions(records)), tool_use_id=tool_use_id,
-                 last_user_ts=user_timestamps[-1] if user_timestamps else None)
+                 last_user_ts=user_timestamps[-1] if user_timestamps else None,
+                 workflow_run=run, workflow_phase=phase if run else None,
+                 workflow_name=None if run is None else workflow_name(path, run))
 
 
 def prompt_text(record: Record) -> str | None:

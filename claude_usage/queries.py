@@ -523,6 +523,8 @@ def agent_detail(store: Store, row: sqlite3.Row, prices: pricing.Prices, setting
         "SELECT tool, COUNT(*) AS calls, COALESCE(SUM(result_chars), 0) AS result_chars FROM tool_calls "
         "WHERE path = ? GROUP BY tool ORDER BY calls DESC, tool", (row["path"],))
     return {"agent_id": row["agent_id"], "agent_type": row["agent_type"], "description": row["description"],
+            "workflow_run": row["workflow_run"], "workflow_phase": row["workflow_phase"],
+            "workflow_name": row["workflow_name"],
             "first_ts": row["first_ts"], "last_ts": row["last_ts"],
             "models": sorted({turn["model"] for turn in rows}),
             "model_efforts": [{"model": model, "effort": effort} for model, effort in
@@ -639,6 +641,7 @@ def background_detail(store: Store, session_id: str, prices: pricing.Prices) -> 
         return []
     usage = usage_where(store, "u.session_id = ? AND u.turn = 0", (session_id,), prices).as_dict()
     return [{"agent_id": None, "agent_type": BACKGROUND, "description": BACKGROUND_DESCRIPTION,
+             "workflow_run": None, "workflow_phase": None, "workflow_name": None,
              "first_ts": rows[0]["ts"], "last_ts": rows[0]["ts"], "models": [row["model"] for row in rows],
              **usage, "context_first": None, "context_last": None,
              "input_total": input_total(usage), "model_efforts": [],

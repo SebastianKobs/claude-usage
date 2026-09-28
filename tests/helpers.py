@@ -245,6 +245,25 @@ class ProjectsDir:
             meta_path.write_text(json.dumps(meta_values), encoding="utf-8")
         return transcript
 
+    def workflow_agent(self, session_id, run_id, agent_id, project=DEFAULT_PROJECT, meta=None, name=None, **options):
+        """A workflow agent's transcript <slug>/<session-id>/subagents/workflows/<run>/agent-<id>.jsonl, with its
+        meta file (a workflow-subagent in phase Review unless meta overrides it), the run's journal.jsonl (never
+        read) and, with name, the run's <session-id>/workflows/<run>.json that names the workflow."""
+        folder = self.project_dir(project) / session_id / "subagents" / "workflows" / run_id
+        transcript = Transcript(folder / f"agent-{agent_id}.jsonl", session_id, cwd=project, agent_id=agent_id,
+                                **options)
+        meta_values = {"agentType": "workflow-subagent", "description": f"step {agent_id}", "spawnDepth": 1,
+                       "requestNonInteractive": True, "workflowPhase": "Review"}
+        meta_values.update(meta or {})
+        (folder / f"agent-{agent_id}.meta.json").write_text(json.dumps(meta_values), encoding="utf-8")
+        (folder / "journal.jsonl").write_text(json.dumps({"type": "launched"}) + "\n", encoding="utf-8")
+        if name is not None:
+            run_file = self.project_dir(project) / session_id / "workflows" / f"{run_id}.json"
+            run_file.parent.mkdir(parents=True, exist_ok=True)
+            run_file.write_text(json.dumps({"runId": run_id, "workflowName": name, "script": "SCRIPT-MARKER"}),
+                                encoding="utf-8")
+        return transcript
+
     def tool_results_file(self, session_id, name, text="output", project=DEFAULT_PROJECT):
         """A file in <slug>/<session-id>/tool-results/, which the parser must ignore."""
         path = self.project_dir(project) / session_id / "tool-results" / name

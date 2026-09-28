@@ -822,6 +822,18 @@ class CompactionHistoryTest(StoreCase):
         self.assertEqual([(item.calls_after, item.last_stretch) for item in history], [(4, False), (3, True)])
 
 
+class WorkflowAgentTest(StoreCase):
+    def test_a_sessions_workflow_agents_carry_their_run(self):
+        self.projects.session("s1").at(DAY_1).assistant("m1", [text_block("a")], usage(output=5))
+        agent = self.projects.workflow_agent("s1", "wf_1", "b1", name="review")
+        agent.at(DAY_1).assistant("m2", [text_block("b")], usage(cache_read=100, output=7))
+        self.scan()
+        agents = queries.session_detail(self.store, "s1", PRICES)["agents"]
+        self.assertEqual([(row["agent_type"], row["workflow_run"], row["workflow_phase"], row["workflow_name"],
+                           row["output"]) for row in agents],
+                         [("main", None, None, None, 5), ("workflow-subagent", "wf_1", "Review", "review", 7)])
+
+
 class OutputRateTest(StoreCase):
     def test_output_speeds_come_from_the_main_threads_only(self):
         main = self.projects.session("s1")

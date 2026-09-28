@@ -12,11 +12,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 11                     # 2: cost_states and background; 3: web_searches; 4: start_ts;
+SCHEMA_VERSION = 12                     # 2: cost_states and background; 3: web_searches; 4: start_ts;
                                         # 5: the run totals of cost_states; 6: skill and mcp_server;
                                         # 7: api_errors; 8: the times and lines the run totals
                                         # are estimated from without a cost record; 9: effort;
-                                        # 10: meta_mtime_ns; 11: compactions and tool_use_id
+                                        # 10: meta_mtime_ns; 11: compactions and tool_use_id;
+                                        # 12: workflow_run, workflow_phase and workflow_name (the files
+                                        # were never read, so no re-read)
 REREAD_BELOW = 11                       # stores older than this lack data only a new read of every file gives
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -42,7 +44,10 @@ CREATE TABLE IF NOT EXISTS transcripts (
     last_ts TEXT,
     last_user_ts TEXT,              -- of the last user record read: the request of a reply in the next read
     meta_mtime_ns INTEGER,          -- of a subagent's meta file when it was read (NULL without one)
-    tool_use_id TEXT                -- of a subagent: the Agent tool call that spawned it
+    tool_use_id TEXT,               -- of a subagent: the Agent tool call that spawned it
+    workflow_run TEXT,              -- of a workflow agent: its run (wf_...)
+    workflow_phase TEXT,            -- the phase it ran in
+    workflow_name TEXT              -- and the workflow's name
 );
 CREATE TABLE IF NOT EXISTS messages (
     message_id TEXT PRIMARY KEY,
@@ -169,6 +174,9 @@ ADDED_COLUMNS = (("messages", "web_searches", "INTEGER NOT NULL DEFAULT 0"),
                  ("transcripts", "last_user_ts", "TEXT"),
                  ("transcripts", "meta_mtime_ns", "INTEGER"),
                  ("transcripts", "tool_use_id", "TEXT"),
+                 ("transcripts", "workflow_run", "TEXT"),
+                 ("transcripts", "workflow_phase", "TEXT"),
+                 ("transcripts", "workflow_name", "TEXT"),
                  *(("cost_states", column, "INTEGER NOT NULL DEFAULT 0") for column in RUN_FIELDS))
 Row = dict[str, Any]
 
