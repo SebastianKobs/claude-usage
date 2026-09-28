@@ -608,7 +608,7 @@ function compactionTable(agent) {
                   title: comparison.breakeven_call > comparison.calls_after ? "projected past the last call" : null}),
         el("td", {class: "num", text: whole(comparison.calls_after),
                   title: comparison.last_stretch ? "up to the last call" : "up to the next compaction"}),
-        el("td", {title: verdictTitle(comparison), text: verdictText(comparison)}));
+        el("td", {title: verdictTitle(comparison)}, verdictBadge(comparison)));
     }));
   return el("div", {}, table, el("div", {class: "note", text: `${VERSUS_KEEPING_NOTE} Each compaction is ` +
                                                                "compared on its own, so they don't add up."}));

@@ -116,6 +116,21 @@ class CompactionWordingTest(unittest.TestCase):
                 self.assertEqual([text for text in strings if re.search(r"one-time", text, re.IGNORECASE)], [])
 
 
+class VerdictToneTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_saving_is_a_gain_a_proven_loss_a_loss_the_rest_neutral(self):
+        tones = {verdict: run_function("chat.js", "verdictTone", {"verdict": verdict}) for verdict in turns.VERDICTS}
+        self.assertEqual(tones, {"saved": "gain", "cost_more": "loss", "even": None, "forced": None, "open": None,
+                                 "unknown": None})
+
+    def test_both_tones_have_a_text_color_in_every_theme(self):
+        for theme in ("light", "dark"):
+            text = read(STATIC / "css" / "themes" / f"{theme}.css")
+            with self.subTest(theme=theme):
+                self.assertIn("--gain-text:", text)
+                self.assertIn("--loss-text:", text)
+
+
 class ChatOrderTest(unittest.TestCase):
     def test_the_order_switch_is_a_toggle_kept_as_a_preference(self):
         script = read(STATIC / "js" / "chat.js")

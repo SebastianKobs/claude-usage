@@ -20,6 +20,8 @@
     --context-read: #256abf; --context-write: #5598e7; --context-new: #9ec5f4;
     --hint-warning-edge: #fab219;
     --hint-critical-edge: #e05a5a;
+    --gain-text: #4fbf4f;
+    --loss-text: #ef7070;
     /* effort shades: mixed toward white, away from the dark surface; every shade clears 3:1 */
     /* code in the conversation: every token >= 4.5:1 on the wash of the dark and fun themes */
     --code-keyword: #b9b5f4; --code-string: #7eb779; --code-number: #ec9577; --code-comment: #a3a29b;
@@ -51,6 +53,8 @@
   --context-read: #256abf; --context-write: #5598e7; --context-new: #9ec5f4;
   --hint-warning-edge: #fab219;
   --hint-critical-edge: #e05a5a;
+  --gain-text: #4fbf4f;
+  --loss-text: #ef7070;
   --code-keyword: #b9b5f4; --code-string: #7eb779; --code-number: #ec9577; --code-comment: #a3a29b;
   --code-title: #80b2f1; --code-attr: #f1adc0; --code-addition: #7eb779; --code-deletion: #f5a5a1;
   --shade-ink: #ffffff;

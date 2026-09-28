@@ -280,6 +280,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     - `unknown`: no summary estimate (no output speed for the model, or no duration).
     - `open`: the last stretch hasn't paid off yet.
     - `even`: in between.
+  - The page shows `saved` as a gain (▲ +$, `--gain-text`) and `cost_more` as a loss (▼ −$, `--loss-text`), the
+    other verdicts in neutral words (`verdictTone`); the sign and the arrow carry it, not the color (≥ 4.5:1 on the
+    surface, the page and the hover wash in both modes).
   - The break-even call is judged at the fastest summary, like `saved`; without an estimate at the input side
     alone (`breakeven_at_least`). It is projected past the last call, and None is "never". Compactions are
     compared one at a time, so no totals.

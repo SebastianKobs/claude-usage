@@ -238,6 +238,9 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 .compact-auto { border-color: var(--status-critical); background: color-mix(in srgb, var(--status-critical) 14%,
   var(--surface)); color: var(--text-primary); font-size: 14px; padding: 10px 14px; }
 .compact-auto strong { font-size: 16px; }
+/* a compaction's gain or loss against keeping: the sign and arrow carry it, the color follows */
+.verdict-gain { color: var(--gain-text); font-weight: 600; }
+.verdict-loss { color: var(--loss-text); font-weight: 600; }
 /* compacting likely pays: a notch sterner than the soft hint, the critical edge on the warning wash */
 .compact-pays { border-color: var(--hint-critical-edge); color: var(--text-primary); font-size: 14px; }
 /* a reminder at a milestone past a hint already shown: a chip at the end of the usage badge, in the same tints */

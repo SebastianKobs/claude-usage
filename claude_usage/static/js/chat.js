@@ -471,19 +471,35 @@ const COMPACTION_VERDICTS = {saved: "saved", cost_more: "cost more", even: "abou
                              unknown: "unknown without an output speed or duration"};
 const VERSUS_KEEPING_NOTE = "Compared with keeping the context: the same later calls, each reading the dropped " +
   "tokens again from the cache, at API list prices. ~ marks the summary call's output, estimated from its " +
-  "duration at your output speed; saved holds even at your fastest. Re-reading files after compacting isn't counted.";
+  "duration at your output speed; ▲ + (saved, green) holds even at your fastest, ▼ − (cost more, red) even without " +
+  "the summary. Re-reading files after compacting isn't counted.";
 
-// the verdict with its amount; ~ where it includes the estimated summary
+// a saving is a gain, a proven loss a loss; the rest (about even, not paid off yet, forced, unknown) is neutral
+function verdictTone(comparison) {
+  if (comparison.verdict === "saved") return "gain";
+  if (comparison.verdict === "cost_more") return "loss";
+  return null;
+}
+
+// the verdict with its amount: a gain or loss signed, with an arrow, in green or red (the sign and the arrow carry
+// it, not the color); the other verdicts in words
 function verdictText(comparison) {
-  if (comparison.verdict === "saved") return `saved ~${money(comparison.net)}`;
+  if (comparison.verdict === "saved") return `▲ +${money(comparison.net)}`;
   if (comparison.verdict === "cost_more") {
-    return comparison.net === null ? `cost at least ${money(-comparison.net_high)} more`
-                                   : `cost ~${money(-comparison.net)} more`;
+    return comparison.net === null ? `▼ −${money(-comparison.net_high)} or more` : `▼ −${money(-comparison.net)}`;
   }
   if (comparison.verdict === "unknown" && comparison.net_high > 0) {
     return `saved at most ${money(comparison.net_high)}, the summary call unknown`;
   }
   return COMPACTION_VERDICTS[comparison.verdict];
+}
+
+// the verdict as an element: a gain or loss in its tone, with the words in its title
+function verdictBadge(comparison) {
+  const tone = verdictTone(comparison);
+  const words = tone === "gain" ? "Saved against keeping the context"
+    : tone === "loss" ? "Cost more than keeping the context" : null;
+  return el("span", {class: tone ? `verdict-${tone}` : null, title: words, text: verdictText(comparison)});
 }
 
 // the break-even call, judged at the fastest summary like saved; without a summary estimate a lower bound; none
@@ -530,10 +546,10 @@ function verdictTitle(comparison) {
 }
 
 function versusKeepingLine(comparison) {
-  const parts = [verdictText(comparison), breakevenText(comparison), `${whole(comparison.calls_after)} calls after`,
+  const parts = [breakevenText(comparison), `${whole(comparison.calls_after)} calls after`,
                  `cost ${oneTimeText(comparison)} once`];
-  return el("div", {class: "muted", title: VERSUS_KEEPING_NOTE,
-                    text: `vs keeping: ${parts.filter(Boolean).join(" · ")}`});
+  return el("div", {class: "muted", title: VERSUS_KEEPING_NOTE}, "vs keeping: ", verdictBadge(comparison),
+            ` · ${parts.filter(Boolean).join(" · ")}`);
 }
 
 // the kinds of hidden context that aren't an attachment type
