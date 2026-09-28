@@ -675,7 +675,30 @@ function renderContextDetails(agent) {
        card("Growth per turn", meanGrowth === null ? "–" : signed(Math.round(meanGrowth)),
             "mean of what each turn added beyond the last reply: tool results, prompts, attachments")),
     el("h3", {text: "Biggest growth steps"}), el("div", {class: "table-wrap"}, growthTable(agent)),
-    el("h3", {text: "Compactions"}), el("div", {class: "table-wrap"}, compactionTable(agent)));
+    el("h3", {}, "Compactions", compactionTotalText(compactionTotal(agent.compactions))),
+    el("div", {class: "table-wrap"}, compactionTable(agent)));
+}
+
+// what this transcript's compactions saved against keeping the context, summed like turns.savings_total: forced
+// ones left out, those without a summary estimate counted but not summed; null without one to count
+function compactionTotal(compactions) {
+  const counted = compactions.map(row => row.versus_keeping)
+    .filter(comparison => comparison && comparison.verdict !== "forced");
+  if (!counted.length) return null;
+  const nets = counted.map(comparison => comparison.net).filter(net => net !== null);
+  const net = nets.reduce((sum, value) => sum + value, 0);
+  return {net, compactions: nets.length, unknown: counted.length - nets.length};
+}
+
+// the total beside the heading, as a gain or a loss (the sign and arrow carry it, like the Estimated cost tile)
+function compactionTotalText(total) {
+  if (!total || !total.compactions) return null;
+  const gain = total.net >= 0;
+  return el("span", {class: `compaction-total verdict-${gain ? "gain" : "loss"}`,
+                     title: "Each compaction against keeping its context, over its stretch up to the next one, " +
+                            "summed; a stretch not paid off yet as it stands, forced compactions left out" +
+                            (total.unknown ? `, ${whole(total.unknown)} without an estimate not summed` : "") + ".",
+                     text: gain ? `▲ saved ~${money(total.net)} so far` : `▼ cost ~${money(-total.net)} more so far`});
 }
 
 // the tools a call ran, by name with their count and result size: "Read ×3 12.4K, Bash 30"

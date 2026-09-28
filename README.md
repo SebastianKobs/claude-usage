@@ -61,9 +61,9 @@ holds:
   tools the call before ran;
 - per subagent, what it returned to the main thread; a Workflow run's agents under one row per run;
 - each compaction against keeping the context: what it cost once, what each later call saved, the call at which it
-  paid off, and whether it saved (green) or cost more (red), at API list prices with the summary call estimated.
-  The conversation shows the same at each compaction marker, and the Estimated cost tile, here and on the
-  overview, what compacting saved so far;
+  paid off, and whether it saved (green) or cost more (red), at API list prices with the summary call estimated. The
+  table's heading adds them up. The conversation shows the same at each compaction marker, and the Estimated cost
+  tile, here and on the overview, what compacting saved so far;
 - the conversation, on request, in its own frame right after the agents while its transcript still exists (the tools
   table then moves to the end), with Close to put it away again: newest first, or in the transcript's order with the
   arrow (down: newest first, up: oldest first). It hints at compacting where the context passes 200K, warns more
@@ -124,7 +124,8 @@ paid off: saved in green, cost more in red, and the latest one, while it is stil
   last compaction has gained at least what it cost, once the cache has expired and compacting saves at once, and
   whenever the context is past your compact hint.
 - The conversation: a warning at the reply where compacting started to pay, sterner than the 200K hint.
-- The compactions table and the marker at each compaction in the conversation: how each past one worked out.
+- The compactions table and the marker at each compaction in the conversation: how each past one worked out,
+  and the table's heading the total.
 - The Estimated cost tile, in the session view and on the overview: what compacting saved so far, all added up.
 
 ## Keeping the history safe

@@ -294,6 +294,28 @@ class SessionSectionsTest(unittest.TestCase):
         self.assertIn("toolsAndChat(detail.transcript", read(STATIC / "js" / "drilldown.js"))
 
 
+class CompactionTotalTest(unittest.TestCase):
+    @staticmethod
+    def row(verdict, net):
+        """A compaction row compared against keeping the context."""
+        return {"versus_keeping": {"verdict": verdict, "net": net}}
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_nets_are_summed_like_the_estimated_cost_tile(self):
+        rows = [self.row("saved", 1.25), self.row("open", -0.25), self.row("forced", 9.0), self.row("unknown", None),
+                {"versus_keeping": None}]
+        self.assertEqual(run_function("drilldown.js", "compactionTotal", rows),
+                         {"net": 1.0, "compactions": 2, "unknown": 1})
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_nothing_to_sum_gives_none(self):
+        rows = [self.row("forced", 2.0), {"versus_keeping": None}]
+        self.assertIsNone(run_function("drilldown.js", "compactionTotal", rows))
+
+    def test_the_compactions_heading_carries_the_total(self):
+        self.assertIn("compactionTotal(agent.compactions)", read(STATIC / "js" / "drilldown.js"))
+
+
 class SessionPollTest(unittest.TestCase):
     def function_body(self, name):
         """main.js's function `name`, from its line to its closing brace."""

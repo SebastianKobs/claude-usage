@@ -290,7 +290,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     `queries.compaction_savings` (by range, project or session) sums the main threads' nets
     (`turns.savings_total`: a stretch not paid off yet as it stands, forced compactions left out, those without a
     summary estimate counted, not summed). The Estimated cost tile shows it as a gain or loss, in the overview
-    (`compaction_savings` in `/api/summary`, the compactions of the range's days) and the session view.
+    (`compaction_savings` in `/api/summary`, the compactions of the range's days) and the session view. The compactions
+    table's heading shows the same total for the transcript picked (`compactionTotal`, summed on the page).
 - **Pricing:**
   - The longest model-id prefix wins, and a `[1m]` suffix is ignored.
   - Fast mode multiplies every category, cache included.
