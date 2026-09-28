@@ -66,6 +66,61 @@ holds:
   the replies that, going by your past compactions, you make on average before the next one, and most sternly
   near the auto-compact point.
 
+## How the compaction estimate works
+All amounts are at API list prices, as if you paid per token; on a subscription they show where your limits go.
+
+**Every reply re-reads the whole conversation.** Claude has no memory between replies: each one sends everything
+said so far again. Most of it comes from the prompt cache, which is cheap, but you pay for it on every single reply.
+A long conversation costs a little more with each reply, forever.
+
+**Compacting costs once.** `/compact` has Claude write a summary and starts again from it. That costs once: the
+summary call reads the conversation one last time and writes the summary, and the next reply has to put the new,
+shorter start into the cache.
+
+**Then every reply is cheaper.** From then on each reply re-reads the short version instead of the long one. The
+break-even is the number of replies after which these small savings have covered the one-time cost.
+
+**A worked example** (Opus 5.5, cache reads at $0.20 per million tokens):
+- The conversation holds 300K tokens, so every reply re-reads it for about $0.06.
+- Compacting would shrink it to about 50K. Each reply then re-reads 250K less and saves about $0.05.
+- Compacting costs about $0.40 once (the summary plus caching the new start).
+- $0.40 ÷ $0.05 = 8: after about 8 replies compacting has paid for itself; every reply after that is profit.
+- After your past compactions you went on for 25 replies on average. 8 is less than 25, so compacting now would
+  likely save money, and the page says so.
+
+**Where the numbers come from.** The 300K and the $0.06 are exact: they are your last call. The rest is learnt from
+your stored compactions: how big the context was right after them (the summary plus what Claude Code sends every
+time: the system prompt, tools and CLAUDE.md), how long the summaries took, and how many replies followed until the
+next compaction. That is why each figure comes with a range, and why there is no estimate before your first
+compaction. Once the current stretch has run a while, it is compared only with the past stretches that lasted at
+least that long, if there are enough of them.
+
+**Breaks.** The cache forgets a conversation after 5 minutes without a reply (an hour, where Claude Code pays for
+the longer cache). The first reply after that writes the whole conversation into the cache again, at up to 40 times
+the read price: about $1.50 for the 300K above, against about $0.25 for the compacted 50K. So compacting right
+before a longer break pays off at once, and the page gives the time the cache runs out and what that saves. Once
+the cache has expired, compacting still saves at once if the summary costs less than rewriting everything.
+
+**What it can't know.**
+- How many replies you will make: the average of your past stretches is a guess, not a promise. Guessing too long
+  loses at most the one-time cost; guessing too short misses a saving on every reply.
+- Which files Claude has to read again after compacting, since they were in the old conversation. The transcripts
+  don't keep tool inputs, so this isn't counted; the compactions table gives how many re-read tokens would cancel a
+  saving.
+- The summary's exact size: it isn't in any transcript, so it is estimated from how long the compaction took.
+
+**Afterwards.** Each past compaction is checked against keeping the context: the same later replies, each carrying
+the longer conversation. It shows what compacting cost once, what each later reply saved and the reply at which it
+paid off: saved in green, cost more in red, and the latest one, while it is still behind, as its loss so far.
+
+**Where the page shows it.**
+- The gauge in the session view: what each reply re-reads, when the cache runs out, and what compacting now would
+  cost and after how many replies it would pay off.
+- The callout above it, with a button that copies `/compact`, while compacting now likely saves money.
+- The conversation: a warning at the reply where compacting started to pay, sterner than the 200K hint.
+- The compactions table and the marker at each compaction in the conversation: how each past one worked out.
+- The Estimated cost tile, in the session view and on the overview: what compacting saved so far, all added up.
+
 ## Keeping the history safe
 After each scan, sessions whose last activity is older than `retention_days` are deleted from the store; the
 dashboard offers no range longer than that. Lowering it deletes the older sessions at the next scan. SQLite reuses
