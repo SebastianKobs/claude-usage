@@ -5,6 +5,7 @@ import unittest
 from datetime import date
 from datetime import timedelta
 
+from claude_usage import compact
 from claude_usage import queries
 from claude_usage import scan
 from claude_usage import store
@@ -703,6 +704,78 @@ class SessionContextTest(StoreCase):
     def test_no_main_thread_turns_means_no_context(self):
         session = self.sessions()["s2"]
         self.assertEqual((session["context_avg"], session["context_peak"]), (None, None))
+
+
+class ContextPartsTest(StoreCase):
+    """Per turn parts, growth and rebuilds, the compactions, the fixed overhead and the biggest growth steps."""
+
+    def setUp(self):
+        super().setUp()
+        main = self.projects.session("s1")
+        main.user("go")
+        main.assistant("m1", [tool_use_block("t1", "Read")], usage(new=10, cache_5m=20_000, output=100))
+        main.tool_result("t1", "x" * 4000)
+        main.assistant("m2", [tool_use_block("t2", "Bash")],
+                       usage(new=5, cache_5m=1_000, cache_read=20_010, output=50))
+        main.tool_result("t2", "y" * 30)
+        main.assistant("m3", [tool_use_block("toolu_a1", "Agent")],
+                       usage(new=5, cache_5m=21_000, cache_read=100, output=20))
+        main.tool_result("toolu_a1", "z" * 700)
+        self.boundary = main.compaction("c1")
+        main.user("again")
+        main.assistant("m4", [text_block("ok")], usage(cache_5m=3_000, output=10))
+        self.projects.subagent("s1", "a1").assistant("a1-m1", [text_block("found")], usage(cache_5m=5_000))
+        self.projects.subagent("s1", "a2", meta=False).assistant("a2-m1", [text_block("x")], usage(cache_5m=10))
+        self.scan()
+        agents = queries.session_detail(self.store, "s1", PRICES)["agents"]
+        self.main, self.agent, self.metaless = agents[:3]
+
+    def test_each_turn_has_its_parts_and_growth(self):
+        parts = [(turn["new_input"], turn["cache_write"], turn["cache_read"], turn["growth"])
+                 for turn in self.main["context_per_turn"]]
+        self.assertEqual(parts, [(10, 20_000, 0, None), (5, 1_000, 20_010, 905), (5, 21_000, 100, 40),
+                                 (0, 3_000, 0, None)])
+
+    def test_a_turn_that_rewrote_the_cache_carries_its_rebuild(self):
+        rebuilds = [turn["rebuild"] for turn in self.main["context_per_turn"]]
+        lost = 21_015 - 100
+        self.assertEqual(rebuilds[:2] + rebuilds[3:], [None, None, None])
+        self.assertEqual((rebuilds[2]["cause"], rebuilds[2]["lost"]), ("prefix", lost))
+        self.assertAlmostEqual(rebuilds[2]["extra_cost"], lost * (2.5 - 0.2) / MILLION)
+
+    def test_the_rebuilds_add_up(self):
+        lost = 21_015 - 100
+        self.assertEqual((self.main["rebuilds"]["count"], self.main["rebuilds"]["lost"]), (1, lost))
+        self.assertAlmostEqual(self.main["rebuilds"]["cost"], lost * (2.5 - 0.2) / MILLION)
+
+    def test_the_compactions_of_the_file(self):
+        self.assertEqual(self.main["compactions"],
+                         [{"ts": self.boundary["timestamp"].replace("Z", "+00:00"), "trigger": "manual",
+                           "pre_tokens": 150_000, "post_tokens": 12_000, "duration_ms": 30_000}])
+        self.assertEqual(self.agent["compactions"], [])
+
+    def test_the_fixed_overhead_and_what_reading_it_again_cost(self):
+        self.assertEqual(self.main["overhead"]["tokens"], 20_010)
+        self.assertAlmostEqual(self.main["overhead"]["cost"], (20_010 + 100) * 0.2 / MILLION)
+
+    def test_the_biggest_growth_steps_with_the_tools_before_them(self):
+        top = [(step["message_id"], step["growth"], step["tools"]) for step in self.main["top_growth"]]
+        self.assertEqual(top, [("m2", 905, [{"tool": "Read", "result_chars": 4000}]),
+                               ("m3", 40, [{"tool": "Bash", "result_chars": 30}])])
+
+    def test_a_subagent_has_what_it_returned(self):
+        self.assertEqual((self.main["returned_chars"], self.agent["returned_chars"]), (None, 700))
+
+    def test_a_subagent_without_meta_returned_nothing_known(self):
+        self.assertIsNone(self.metaless["returned_chars"])
+
+    def test_the_current_context_of_the_main_thread(self):
+        current = queries.current_context(self.store, "s1", compact.DEFAULT_COMPACT, PRICES)
+        self.assertEqual((current["context"], current["turns_since_compaction"], current["last_compaction"]),
+                         (3_000, 1, self.boundary["timestamp"].replace("Z", "+00:00")))
+
+    def test_no_current_context_without_main_thread_turns(self):
+        self.assertIsNone(queries.current_context(self.store, "nope", compact.DEFAULT_COMPACT, PRICES))
 
 
 class CostliestTest(StoreCase):

@@ -278,6 +278,12 @@ class ApiTest(ServerCase):
         self.assertEqual([agent["agent_type"] for agent in payload["agents"]], ["main", "general-purpose"])
         self.assertEqual(payload["agents"][0]["tools"], [{"tool": "Read", "calls": 1, "result_chars": 3}])
 
+    def test_session_detail_has_the_current_context(self):
+        _, payload = self.get_json("/api/session/s1")
+        current = payload["current"]
+        self.assertEqual((current["context"], current["auto_compact"], current["hint_tokens"],
+                          current["turns_since_compaction"]), (110, 967_000, 200_000, 1))
+
     def test_the_prompt_is_read_outside_the_lock(self):
         held = []
         read = server.transcripts.first_prompt

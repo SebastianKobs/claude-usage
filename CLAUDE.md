@@ -58,6 +58,7 @@ claude_usage/
   queries.py                 what the report and the dashboard read from the store
   pricing.py                 prices by model prefix, cost per category, web-search fee
   compact.py                 the conversation's compact hints and their settings
+  turns.py                   growth per turn, cache rebuilds, the fixed overhead, the current-context gauge
   server.py                  loopback-only http.server + JSON API (a route table)
   static/                    the page: vanilla JS, inline SVG, no external resources (three vendored libraries)
     dashboard.html           the markup only
@@ -185,6 +186,21 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     quiet.
   - The Input tokens tile shows the median and p90 context per main-thread turn (`queries.context_stats`) to choose
     the threshold by.
+- **Context per turn** (`turns.py`, per request from the stored turns, nothing stored; checked 2026-09-28 against
+  8,126 real turns, counts only):
+  - Growth: context − previous context − previous output (tool results, prompts, attachments). None for the first
+    turn and the first after a stored compaction; it may be negative (thinking dropped, context edited).
+  - Cache rebuild: previous context ≥ `REBUILD_MIN_CONTEXT`, a cache read below half of it, and cache writes. Lost
+    tokens = min(previous context − cache read, cache writes), priced at the write rate minus the read rate. Cause
+    `model` (the model changed), `idle` (request − previous reply's end over the cache lifetime: 1 h for mostly
+    1h writes, else 5 min), else `prefix`. Real data: 14 rebuilds, 11 of them idle.
+  - Fixed overhead: the first turn's context; its cost carried is each later turn's cache read up to that size at
+    the read price.
+  - The gauge (`current` in `/api/session`): the main thread's last context against the auto-compact point, turns
+    since the last compaction, the mean growth and context step over the last 10 steps since then, and the turns
+    left at that pace.
+  - The biggest growth steps list the tools the call before ran (tool_use blocks between its first and last
+    record); a subagent's `returned_chars` is its spawning Agent call's result size (`transcripts.tool_use_id`).
 - **Pricing:**
   - The longest model-id prefix wins, and a `[1m]` suffix is ignored.
   - Fast mode multiplies every category, cache included.

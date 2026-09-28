@@ -253,16 +253,18 @@ class UsageApp:
         return {"session_id": session_id, "agent_id": agent_id, "available": True, "entries": entries}
 
     def session(self, session_id: str) -> Payload | None:
-        """/api/session/<id>, or None for an unknown id."""
+        """/api/session/<id>, with the main thread's current context against the auto-compact point; None for an
+        unknown id."""
         with self.lock:
             self.refresh()
             detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False)
+            current = queries.current_context(self.store, session_id, self.compact, self.prices)
             path = queries.transcript_path(self.store, session_id, None)
         if detail is None:
             return None
         # a file read needn't hold up the other requests
         prompt = None if path is None else transcripts.first_prompt(path)
-        return {**detail, "prompt": prompt, "compact_hint_tokens": self.compact.hint_tokens}
+        return {**detail, "prompt": prompt, "compact_hint_tokens": self.compact.hint_tokens, "current": current}
 
 
 def route_live(app: UsageApp, match: re.Match[str], query: str) -> Payload:

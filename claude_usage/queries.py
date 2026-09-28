@@ -12,8 +12,10 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
+from claude_usage import compact
 from claude_usage import pricing
 from claude_usage import transcripts
+from claude_usage import turns
 from claude_usage.store import BACKGROUND
 from claude_usage.store import RUN_FIELDS
 from claude_usage.store import Row
@@ -57,6 +59,7 @@ NO_LIMIT = -1                             # SQLite's LIMIT for all rows
 ID_BATCH = 500                            # ids per IN list: SQLite before 3.32 allows 999 variables
 # effort levels from least to most; others sort after them by name, as on the dashboard
 EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max")
+TOP_GROWTH = 5                            # the biggest growth steps a transcript's detail lists
 
 
 class UsageSum:
@@ -265,11 +268,106 @@ def effort_order(effort: str | None) -> tuple[int, str]:
 
 
 def turn_contexts(store: Store, path: str) -> list[sqlite3.Row]:
-    """The file's messages in time order with their time, context size, model, output and effort level."""
+    """The file's messages in time order with their id, time, context size and its parts, model, speed, output,
+    effort level, and request and end times."""
     return store.connection.execute(
-        f"SELECT m.ts AS ts, {CONTEXT} AS context, m.output AS output, m.model AS model, m.effort AS effort "
+        f"SELECT m.message_id AS message_id, m.ts AS ts, {CONTEXT} AS context, m.new_input AS new_input, "
+        "m.cache_write_5m AS cache_write_5m, m.cache_write_1h AS cache_write_1h, m.cache_read AS cache_read, "
+        "m.output AS output, m.model AS model, m.speed AS speed, m.effort AS effort, m.request_ts AS request_ts, "
+        "m.end_ts AS end_ts "
         "FROM messages m "
         "WHERE m.path = ? ORDER BY m.ts, m.rowid", (path,)).fetchall()
+
+
+def stored_time(text: str | None) -> datetime | None:
+    """A stored ISO timestamp as a datetime, None for none."""
+    return None if text is None else datetime.fromisoformat(text)
+
+
+def as_turns(rows: list[sqlite3.Row]) -> list[turns.Turn]:
+    """turn_contexts rows as the Turn records turns.py works on."""
+    return [turns.Turn(message_id=row["message_id"], ts=stored_time(row["ts"]), model=row["model"],
+                       speed=row["speed"], new_input=row["new_input"], cache_write_5m=row["cache_write_5m"],
+                       cache_write_1h=row["cache_write_1h"], cache_read=row["cache_read"], output=row["output"],
+                       request_ts=stored_time(row["request_ts"]), end_ts=stored_time(row["end_ts"]))
+            for row in rows]
+
+
+def compaction_rows(store: Store, path: str) -> list[Row]:
+    """The compactions a file stored, in time order."""
+    return [dict(row) for row in store.connection.execute(
+        "SELECT ts, trigger, pre_tokens, post_tokens, duration_ms FROM compactions WHERE path = ? "
+        "ORDER BY ts, rowid", (path,))]
+
+
+def compaction_times(compactions: list[Row]) -> tuple[datetime, ...]:
+    """The times of compaction_rows, without the ones that have none."""
+    return tuple(stored_time(row["ts"]) for row in compactions if row["ts"] is not None)
+
+
+def previous_call_tools(store: Store, path: str, turn: turns.Turn) -> list[Row]:
+    """The tools a call ran (their tool_use blocks lie between its first and last record), with their result
+    sizes: what the next call's context grew by."""
+    start = turn.ts
+    end = turn.end_ts or turn.ts
+    if start is None or end is None:
+        return []
+    rows = store.connection.execute(
+        "SELECT tool, COALESCE(result_chars, 0) AS result_chars FROM tool_calls "
+        "WHERE path = ? AND call_ts >= ? AND call_ts <= ? ORDER BY call_ts, rowid",
+        (path, start.isoformat(timespec="milliseconds"), end.isoformat(timespec="milliseconds")))
+    return [dict(row) for row in rows]
+
+
+def top_growth(store: Store, path: str, history: list[turns.Turn], steps: list[turns.Step]) -> list[Row]:
+    """The TOP_GROWTH turns that grew the context most (only growing ones), biggest first, each with the tools the
+    call before it ran."""
+    grown = sorted((index for index, step in enumerate(steps) if step.growth is not None and step.growth > 0),
+                   key=lambda index: steps[index].growth, reverse=True)[:TOP_GROWTH]
+    return [{"message_id": history[index].message_id, "ts": turn_time(history[index]),
+             "growth": steps[index].growth, "tools": previous_call_tools(store, path, history[index - 1])}
+            for index in grown]
+
+
+def turn_time(turn: turns.Turn) -> str | None:
+    """A turn's time as stored."""
+    return None if turn.ts is None else turn.ts.isoformat(timespec="milliseconds")
+
+
+def rebuild_payload(rebuild: turns.Rebuild | None) -> Row | None:
+    """A rebuild as JSON-ready fields."""
+    if rebuild is None:
+        return None
+    return {"cause": rebuild.cause, "lost": rebuild.lost, "extra_cost": rebuild.extra_cost}
+
+
+def rebuild_totals(steps: list[turns.Step]) -> Row:
+    """How many turns rebuilt the cache, the tokens they wrote again and what that cost extra (None if no rebuild
+    had a price)."""
+    rebuilds = [step.rebuild for step in steps if step.rebuild is not None]
+    costs = [rebuild.extra_cost for rebuild in rebuilds if rebuild.extra_cost is not None]
+    return {"count": len(rebuilds), "lost": sum(rebuild.lost for rebuild in rebuilds),
+            "cost": sum(costs) if costs or not rebuilds else None}
+
+
+def returned_chars(store: Store, tool_use_id: str | None) -> int | None:
+    """What a subagent handed back: the result size of the Agent call that spawned it; None if unknown."""
+    if tool_use_id is None:
+        return None
+    row = store.connection.execute("SELECT result_chars FROM tool_calls WHERE tool_use_id = ?",
+                                   (tool_use_id,)).fetchone()
+    return None if row is None else row["result_chars"]
+
+
+def current_context(store: Store, session_id: str, settings: compact.CompactSettings,
+                    prices: pricing.Prices) -> Row | None:
+    """The gauge of the session's main thread (turns.gauge), or None without main-thread turns."""
+    path = transcript_path(store, session_id, None)
+    if path is None:
+        return None
+    history = as_turns(turn_contexts(store, str(path)))
+    moments = compaction_times(compaction_rows(store, str(path)))
+    return turns.gauge(history, turns.steps(history, moments, prices), moments, settings)
 
 
 def transcript_path(store: Store, session_id: str, agent_id: str | None) -> Path | None:
@@ -325,24 +423,37 @@ def live_sessions(store: Store, minutes: float, prices: pricing.Prices, now: flo
 
 
 def agent_detail(store: Store, row: sqlite3.Row, prices: pricing.Prices) -> Row:
-    """One transcript of a session: its turns, context first -> last, input split, output, tools and cost."""
-    turns = turn_contexts(store, row["path"])
+    """One transcript of a session: its turns (each with its context parts, growth and cache rebuild), context
+    first -> last, input split, output, tools and cost, its compactions, the fixed overhead, the rebuilds, the
+    biggest growth steps, and for a subagent what it returned."""
+    rows = turn_contexts(store, row["path"])
+    history = as_turns(rows)
+    compactions = compaction_rows(store, row["path"])
+    steps = turns.steps(history, compaction_times(compactions), prices)
+    overhead = turns.overhead(history, prices)
     tools = store.connection.execute(
         "SELECT tool, COUNT(*) AS calls, COALESCE(SUM(result_chars), 0) AS result_chars FROM tool_calls "
         "WHERE path = ? GROUP BY tool ORDER BY calls DESC, tool", (row["path"],))
     return {"agent_id": row["agent_id"], "agent_type": row["agent_type"], "description": row["description"],
             "first_ts": row["first_ts"], "last_ts": row["last_ts"],
-            "models": sorted({turn["model"] for turn in turns}),
+            "models": sorted({turn["model"] for turn in rows}),
             "model_efforts": [{"model": model, "effort": effort} for model, effort in
-                              sorted({(turn["model"], turn["effort"]) for turn in turns if turn["effort"]},
+                              sorted({(turn["model"], turn["effort"]) for turn in rows if turn["effort"]},
                                      key=lambda pair: (pair[0], effort_order(pair[1])))],
             **usage_where(store, "u.path = ? AND u.turn = 1", (row["path"],), prices).as_dict(),
-            "context_first": turns[0]["context"] if turns else None,
-            "context_last": turns[-1]["context"] if turns else None,
-            "input_total": sum(turn["context"] for turn in turns),
-            "context_per_turn": [{"ts": turn["ts"], "context": turn["context"], "effort": turn["effort"]}
-                                 for turn in turns],
-            "tools": [dict(tool) for tool in tools]}
+            "context_first": rows[0]["context"] if rows else None,
+            "context_last": rows[-1]["context"] if rows else None,
+            "input_total": sum(turn["context"] for turn in rows),
+            "context_per_turn": [{"ts": turn["ts"], "context": turn["context"], "effort": turn["effort"],
+                                  "new_input": turn["new_input"],
+                                  "cache_write": turn["cache_write_5m"] + turn["cache_write_1h"],
+                                  "cache_read": turn["cache_read"], "growth": step.growth,
+                                  "rebuild": rebuild_payload(step.rebuild)}
+                                 for turn, step in zip(rows, steps)],
+            "tools": [dict(tool) for tool in tools], "compactions": compactions,
+            "overhead": None if overhead is None else {"tokens": overhead.tokens, "cost": overhead.cost},
+            "rebuilds": rebuild_totals(steps), "top_growth": top_growth(store, row["path"], history, steps),
+            "returned_chars": returned_chars(store, row["tool_use_id"])}
 
 
 def session_detail(store: Store, session_id: str, prices: pricing.Prices, read_prompt: bool = True) -> Row | None:
@@ -439,7 +550,8 @@ def background_detail(store: Store, session_id: str, prices: pricing.Prices) -> 
              "first_ts": rows[0]["ts"], "last_ts": rows[0]["ts"], "models": [row["model"] for row in rows],
              **usage, "context_first": None, "context_last": None,
              "input_total": input_total(usage), "model_efforts": [],
-             "context_per_turn": [], "tools": []}]
+             "context_per_turn": [], "tools": [], "compactions": [], "overhead": None,
+             "rebuilds": rebuild_totals([]), "top_growth": [], "returned_chars": None}]
 
 
 def context_stats(store: Store, since: date | None, project: str | None = None, until: date | None = None,
