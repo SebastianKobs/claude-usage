@@ -103,6 +103,16 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
   background: var(--split-strong); }
 .gauge-hint { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px;
   background: var(--text-secondary); }
+/* the estimate of compacting now: full-size text set off by a hairline, quieter than the gauge's value; only the
+   pay-off phrase in the primary color */
+.compact-estimate { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--border);
+  color: var(--text-secondary); line-height: 1.5; }
+.compact-estimate strong { color: var(--text-primary); }
+/* how soon it pays off, before the pay-off phrase; the words after it carry the tone */
+.payoff-mark { display: inline-block; width: 0.7em; height: 0.7em; margin-right: 6px; border-radius: 50%; }
+.payoff-soon { background: var(--gain-text); }
+.payoff-close { background: var(--hint-warning-edge); }
+.payoff-unlikely { background: var(--hint-critical-edge); }
 .panel-title { fill: var(--text-secondary); font-size: 12px; }
 .axis-text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .value-text { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }

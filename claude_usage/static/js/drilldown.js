@@ -647,19 +647,52 @@ function compactNowNotes(preview) {
     return [exact, el("div", {class: "note", text: `No estimate of compacting now: ${why}.`})];
   }
   const count = `${whole(estimate.compactions)} stored ${estimate.compactions === 1 ? "compaction" : "compactions"}`;
-  const parts = [`If you compacted now, it would shrink to about ${compact(estimate.after)}` +
-                 `${spread(compact(estimate.after_low), compact(estimate.after_high))}.`,
-                 expired ? `Compacting ${payoffText(estimate, expired)}.`
-                         : `That costs ~${money(estimate.one_time)} once and ${payoffText(estimate, expired)}.`];
   const low = whole(estimate.calls_after_low);
   const high = whole(estimate.calls_after_high);
   const followed = estimate.calls_after_low === null ? ""
     : `, which were followed by ${low === high ? low : `${low}–${high}`} replies until the next one`;
-  parts.push(`Learnt from your ${count}${followed}.`);
+  const tone = payoffTone(estimate, expired);
+  const after = [payoffAhead(tone, estimate, expired), `Learnt from your ${count}${followed}.`];
   if (estimate.before_break !== null && !expired && until !== null) {
-    parts.push(`Compacting before a break past ${when(until)} saves about ${money(estimate.before_break)} at once.`);
+    after.push(`Compacting before a break past ${when(until)} saves about ${money(estimate.before_break)} at once.`);
   }
-  return [exact, el("div", {class: "note", text: parts.join(" ")})];
+  // the estimate is what the reader acts on, so it reads as text, not as a muted note like the exact parts
+  return [exact, el("p", {class: "compact-estimate"},
+    `If you compacted now, it would shrink to about ${compact(estimate.after)}` +
+    `${spread(compact(estimate.after_low), compact(estimate.after_high))}. `,
+    expired ? "Compacting " : `That costs ~${money(estimate.one_time)} once and `,
+    tone ? el("span", {class: `payoff-mark payoff-${tone}`, "aria-hidden": "true"}) : null,
+    el("strong", {text: payoffText(estimate, expired)}),
+    `. ${after.filter(Boolean).join(" ")}`)];
+}
+
+// how soon compacting now pays off against the replies still ahead on average (calls_ahead): "soon" within half of
+// them, "close" within them, "unlikely" past them or never; null without calls ahead to compare with
+function payoffTone(estimate, expired) {
+  const ahead = estimate.calls_ahead;
+  let breakeven = estimate.breakeven_calls;
+  if (expired) {
+    if (estimate.cold_saving >= 0) return "soon";
+    breakeven = estimate.breakeven_cold;
+  }
+  if (breakeven === null) return "unlikely";
+  if (ahead === null || ahead === undefined) return null;
+  if (breakeven <= ahead / 2) return "soon";
+  return breakeven <= ahead ? "close" : "unlikely";
+}
+
+const PAYOFF_WORDS = {soon: "Soon", close: "Close", unlikely: "Likely too late"};
+
+// the tone in words, which carry it, not the mark's color: against the replies still ahead on average; nothing
+// where the pay-off phrase already says it all (never, likely not, or at once)
+function payoffAhead(tone, estimate, expired) {
+  if (!tone || estimate.calls_ahead === null || estimate.calls_ahead === undefined) return null;
+  const breakeven = expired ? (estimate.cold_saving >= 0 ? null : estimate.breakeven_cold) : estimate.breakeven_calls;
+  if (breakeven === null) return null;
+  const ahead = whole(Math.round(estimate.calls_ahead));
+  return `${PAYOFF_WORDS[tone]}: ` + (estimate.ahead_from === "longer"
+    ? `after your past compactions, a stretch this long went on for about ${ahead} more replies on average.`
+    : `after your past compactions you went on for about ${ahead} replies on average.`);
 }
 
 // when compacting now pays off: warm against the next calls' reads; once the cache has expired, cold against

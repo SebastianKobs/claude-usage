@@ -451,6 +451,14 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     (only with subagents) switches the chart, its table view, the tiles (overhead, rebuilds, compactions, mean
     growth), the biggest growth steps and the compactions to one transcript; another session starts at the main
     thread.
+  - Under the gauge the exact parts are a muted note; the estimate (`compact-estimate`) is full-size text in
+    `--text-secondary` under a `--border` hairline, its pay-off phrase bold in `--text-primary` after a mark by
+    `payoffTone` against `calls_ahead`: `soon` within half of them (`--gain-text`), `close` within them
+    (`--hint-warning-edge`), `unlikely` past them or never (`--hint-critical-edge`); once the cache has expired by
+    the cold break-even, at once being soon. Words after it
+    ("Soon:", "Close:", "Likely too late:" with the replies ahead) carry the tone, not the mark's color. It calls
+    for nothing: replayed on the stored sessions (38 main threads, 2026-09-29, counts only), heeding a warm hint
+    below the threshold on top of it added at best $0.03, and lost with 10K re-read after compacting.
   - The call to compact (`compactCall`, above the gauge), for a live session (`compactCallKind`): cold once the cache
     has expired where compacting cold saves at once; else `threshold` where the context is at or past `hint_tokens`,
     whatever the savings, since the replies still to come can't be predicted (the user's choice over waiting for a

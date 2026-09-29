@@ -349,6 +349,59 @@ class DelegateCallTest(unittest.TestCase):
                 self.assertFalse(self.shown(detail))
 
 
+class PayoffToneTest(unittest.TestCase):
+    def tone(self, expired=False, **estimate):
+        """payoffTone of an estimate with 40 calls ahead on average, updated by the given fields."""
+        values = {"breakeven_calls": 10, "breakeven_low": 5, "calls_ahead": 40.0, "cold_saving": -0.5,
+                  "breakeven_cold": 10}
+        values.update(estimate)
+        return run_function("drilldown.js", "payoffTone", values, expired)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_within_half_the_calls_ahead_it_pays_back_soon(self):
+        self.assertEqual(self.tone(breakeven_calls=20), "soon")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_within_the_calls_ahead_it_is_close(self):
+        self.assertEqual(self.tone(breakeven_calls=21), "close")
+        self.assertEqual(self.tone(breakeven_calls=40), "close")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_past_the_calls_ahead_or_never_it_likely_does_not(self):
+        self.assertEqual(self.tone(breakeven_calls=41), "unlikely")
+        self.assertEqual(self.tone(breakeven_calls=None), "unlikely")
+        self.assertEqual(self.tone(breakeven_calls=None, breakeven_low=None, calls_ahead=None), "unlikely")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_without_calls_ahead_a_break_even_has_no_tone(self):
+        self.assertIsNone(self.tone(calls_ahead=None))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_an_expired_cache_goes_by_the_cold_break_even(self):
+        self.assertEqual(self.tone(expired=True, cold_saving=0.2), "soon")
+        self.assertEqual(self.tone(expired=True, breakeven_cold=30), "close")
+        self.assertEqual(self.tone(expired=True, breakeven_cold=None), "unlikely")
+
+    def test_each_tone_has_its_mark_color(self):
+        css = read(STATIC / "css" / "common.css")
+        for tone, color in (("soon", "--gain-text"), ("close", "--hint-warning-edge"),
+                            ("unlikely", "--hint-critical-edge")):
+            with self.subTest(tone=tone):
+                self.assertIn(f"var({color})", css_block(css, f".payoff-{tone}"))
+
+    def test_the_estimate_is_full_size_text_under_a_divider_its_pay_off_in_the_primary_color(self):
+        css = read(STATIC / "css" / "common.css")
+        block = css_block(css, ".compact-estimate {")
+        self.assertIn("border-top: 1px solid var(--border)", block)
+        self.assertIn("var(--text-secondary)", block)
+        self.assertNotIn("font-size", block)
+        self.assertIn("var(--text-primary)", css_block(css, ".compact-estimate strong"))
+        source = read(STATIC / "js" / "drilldown.js")
+        notes = source[source.index("function compactNowNotes("):source.index("\n}\n", source.index(
+            "function compactNowNotes("))]
+        self.assertIn('class: "compact-estimate"', notes)
+
+
 class CompactCallTest(unittest.TestCase):
     NOW = "2026-09-28T12:00:00.000+00:00"
     EXPIRED = "2026-09-28T11:00:00.000+00:00"
