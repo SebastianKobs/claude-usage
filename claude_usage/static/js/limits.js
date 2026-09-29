@@ -113,7 +113,7 @@ function renderLimitsTable(buckets, at) {
 
 function renderLimitEvents(events) {
   document.getElementById("limit-events").replaceChildren(
-    limitEventsTable(events, "No API errors in this range.", true));
+    paged("limit-events", limitEventsTable(events, "No API errors in this range.", true)));
 }
 
 // failed API calls as a table; withSession adds the session column (the session view leaves it out)

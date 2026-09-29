@@ -385,6 +385,12 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     empties it, drops a load under way and stops its refresh, and returns focus to "Show conversation".
   - While the main transcript exists (`transcript` in `/api/session`), the conversation takes the Tools table's
     place, after the agents, and the tools go last (`toolsAndChat`); without it the conversation stays last.
+  - Tables page (`paged(key, table)` in `tables.js`, every table and chart table view): past 10 groups of rows (a
+    sub-row, an effort level or a workflow run's agent, stays with the row above it) a pager follows the table: 10, 25
+    or 50 rows (25 by default, kept as a preference and applied to every table at once), previous and next, and
+    "rows 11–20 of 84". Each table keeps its page by key across redraws (the session view's keys carry the session and
+    the picked transcript, so another one starts at the first page), and its controls keep focus. Rows off the page
+    get the `off-page` class, since a workflow run's switch uses `hidden`.
   - All data goes into the DOM via `textContent`. Two exceptions, both in `chat.js`:
     - `highlighted()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans
       with classes.

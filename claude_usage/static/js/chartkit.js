@@ -173,7 +173,7 @@ function dataTable(head, rows) {
   return el("table", {}, el("thead", {}, el("tr", {}, ...head)), el("tbody", {}, ...rows));
 }
 
-// a chart's table view into its container: newest first, as the tables read best
+// a chart's table view into its container: newest first, as the tables read best, paged by its id
 function fillTableView(id, head, rows) {
-  document.getElementById(id).replaceChildren(dataTable(head, rows));
+  document.getElementById(id).replaceChildren(paged(id, dataTable(head, rows)));
 }

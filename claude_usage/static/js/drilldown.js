@@ -39,7 +39,10 @@ function renderDrilldown(detail, refresh = false) {
                                           el("th", {class: "num", text: "Result characters"}))),
          el("tbody", {}, ...toolRows))
     : el("div", {class: "empty", text: "No tool calls."});
-  const order = toolsAndChat(detail.transcript, [el("h3", {text: "Tools"}), el("div", {class: "table-wrap"}, tools)],
+  // the session's tables page by their own keys, so another session starts at the first page
+  const key = name => `${detail.session_id}-${name}`;
+  const order = toolsAndChat(detail.transcript,
+                             [el("h3", {text: "Tools"}), el("div", {class: "table-wrap"}, paged(key("tools"), tools))],
                              kept ? kept.chat : [chatSection(detail)]);
   fill(panel,
     el("div", {class: "chart-head"},
@@ -70,18 +73,20 @@ function renderDrilldown(detail, refresh = false) {
     el("div", {id: "context-chart", class: "chart"}),
     el("div", {id: "context-table", class: "table-wrap", hidden: true}),
     el("div", {id: "context-details"}),
-    themed("h3", "By model"), el("div", {class: "table-wrap"}, sessionModelTable(detail)),
-    el("h3", {text: "Main thread and subagents"}), el("div", {class: "table-wrap"}, el("table", {},
-       el("thead", {}, head), el("tbody", {}, ...agents))),
+    themed("h3", "By model"), el("div", {class: "table-wrap"}, paged(key("models"), sessionModelTable(detail))),
+    el("h3", {text: "Main thread and subagents"}), el("div", {class: "table-wrap"}, paged(key("agents"), el("table", {},
+       el("thead", {}, head), el("tbody", {}, ...agents)))),
     ...order[0],
     el("div", {class: "grid-2"},
        el("div", {}, themed("h3", "By skill"), el("div", {class: "table-wrap"},
-          usageTable(detail.skills, "Skill", row => row.skill, "No turns attributed to a skill."))),
+          paged(key("skills"), usageTable(detail.skills, "Skill", row => row.skill,
+                                          "No turns attributed to a skill.")))),
        el("div", {}, themed("h3", "By MCP server"), el("div", {class: "table-wrap"},
-          usageTable(detail.mcp_servers, "MCP server", row => row.mcp_server,
-                     "No turns attributed to an MCP server.")))),
+          paged(key("mcp-servers"), usageTable(detail.mcp_servers, "MCP server", row => row.mcp_server,
+                                               "No turns attributed to an MCP server."))))),
     themed("h3", "Rate limits and API errors"),
-    el("div", {class: "table-wrap"}, limitEventsTable(detail.api_errors, "No API errors in this session.", false)),
+    el("div", {class: "table-wrap"}, paged(key("api-errors"),
+       limitEventsTable(detail.api_errors, "No API errors in this session.", false))),
     ...order[1]);
   document.getElementById("context-table-toggle").addEventListener("click", event => {
     const table = document.getElementById("context-table");
@@ -498,8 +503,10 @@ function renderContext(detail) {
   document.getElementById("context-note").textContent = agent
     ? `${agentName(agent)}: every turn sends its whole context again`
     : "";
-  renderContextTable(turns);
-  renderContextDetails(agent);
+  // the picked transcript's tables page by their own keys: another transcript starts at the first page
+  const key = `${detail.session_id}-${agent ? agentKey(agent) : "none"}`;
+  renderContextTable(turns, key);
+  renderContextDetails(agent, key);
   if (!turns.length) {
     container.replaceChildren(el("div", {class: "empty", text: "No turns with usage."}));
     return;
@@ -632,7 +639,7 @@ function turnFacts(turn) {
           ...turnNotes(turn)];
 }
 
-function renderContextTable(turns) {
+function renderContextTable(turns, key) {
   const table = dataTable(
     [headCell("Turn", true), headCell("Time"), headCell("Effort"),
      ...CONTEXT_PARTS.map(part => headCell(part.label, true)), headCell("Context", true), headCell("Growth", true),
@@ -642,12 +649,12 @@ function renderContextTable(turns) {
       cell(whole(turn.context), true), cell(turn.growth === null ? "–" : signed(turn.growth), true),
       cell(turn.rebuild ? `${turn.rebuild.cause} · ${compact(turn.rebuild.lost)}` : "–"))));
   document.getElementById("context-table").replaceChildren(
-    turns.length ? table : el("div", {class: "empty", text: "No turns with usage."}));
+    turns.length ? paged(`${key}-turns`, table) : el("div", {class: "empty", text: "No turns with usage."}));
 }
 
 // under the chart, for the same transcript: the overhead, rebuild, compaction and growth tiles, the biggest
 // growth steps and the compactions
-function renderContextDetails(agent) {
+function renderContextDetails(agent, key) {
   const target = document.getElementById("context-details");
   if (!agent) {
     target.replaceChildren();
@@ -676,7 +683,7 @@ function renderContextDetails(agent) {
             "mean of what each turn added beyond the last reply: tool results, prompts, attachments")),
     el("h3", {text: "Biggest growth steps"}), el("div", {class: "table-wrap"}, growthTable(agent)),
     el("h3", {}, "Compactions", compactionTotalText(compactionTotal(agent.compactions))),
-    el("div", {class: "table-wrap"}, compactionTable(agent)));
+    el("div", {class: "table-wrap"}, paged(`${key}-compactions`, compactionTable(agent))));
 }
 
 // what this transcript's compactions saved against keeping the context, summed like turns.savings_total: forced

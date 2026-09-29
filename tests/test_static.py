@@ -316,6 +316,57 @@ class CompactionTotalTest(unittest.TestCase):
         self.assertIn("compactionTotal(agent.compactions)", read(STATIC / "js" / "drilldown.js"))
 
 
+class PagingTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_sub_row_stays_on_the_page_of_its_group(self):
+        self.assertEqual(run_function("tables.js", "pageUnits", [False, True, True, False, False, True]),
+                         [0, 0, 0, 1, 2, 2])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_page_covers_its_share_of_the_groups(self):
+        self.assertEqual(run_function("tables.js", "pageWindow", 84, 10, 1),
+                         {"page": 1, "pages": 9, "first": 10, "last": 20})
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_last_page_holds_the_rest(self):
+        self.assertEqual(run_function("tables.js", "pageWindow", 84, 25, 3),
+                         {"page": 3, "pages": 4, "first": 75, "last": 84})
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_page_past_the_end_falls_back_to_the_last(self):
+        self.assertEqual(run_function("tables.js", "pageWindow", 30, 25, 5)["page"], 1)
+        self.assertEqual(run_function("tables.js", "pageWindow", 30, 25, -1)["page"], 0)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_pager_names_the_rows_shown(self):
+        window = {"page": 1, "pages": 9, "first": 10, "last": 20}
+        self.assertEqual(run_function("tables.js", "pageText", window, 84), "rows 11–20 of 84")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_saved_page_size_counts_only_if_offered(self):
+        self.assertEqual(run_function("tables.js", "pageSizeFrom", "50", [10, 25, 50], 25), 50)
+        self.assertEqual(run_function("tables.js", "pageSizeFrom", "7", [10, 25, 50], 25), 25)
+        self.assertEqual(run_function("tables.js", "pageSizeFrom", None, [10, 25, 50], 25), 25)
+
+    def test_the_page_size_is_a_preference(self):
+        script = read(STATIC / "js" / "tables.js")
+        self.assertIn("savePreference(PAGE_SIZE_PREFERENCE", script)
+        self.assertIn("const DEFAULT_PAGE_SIZE = 25;", script)
+        self.assertIn("readPreference(PAGE_SIZE_PREFERENCE)", script)
+        self.assertRegex(script, r"const PAGE_SIZES = \[10, 25, 50\];")
+
+    def test_every_table_is_paged(self):
+        sites = {"tables.js": 7, "limits.js": 1, "drilldown.js": 8, "chartkit.js": 1}
+        for script, count in sites.items():
+            with self.subTest(script=script):
+                self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)
+
+    def test_rows_off_the_page_are_hidden_by_a_class_not_by_hidden(self):
+        # a workflow run's agents are shown and hidden with `hidden`, so paging keeps to its own switch
+        self.assertIn("display: none", css_block(read(STATIC / "css" / "common.css"), "tr.off-page"))
+        self.assertIn('classList.toggle("off-page"', read(STATIC / "js" / "tables.js"))
+
+
 class SessionPollTest(unittest.TestCase):
     def function_body(self, name):
         """main.js's function `name`, from its line to its closing brace."""

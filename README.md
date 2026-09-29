@@ -10,6 +10,9 @@ Usage is split by model and effort level. Calls made while ultracode was on coun
 xhigh between switching ultracode on and switching it off or picking another effort level. Subagents and Workflow
 agents count by that time too.
 
+Tables longer than 10 rows come in pages, with 10, 25 or 50 rows per page (the choice is remembered) and
+previous and next below them; a refresh stays on the page you are reading.
+
 Python ≥ 3.12, standard library only. Run it from the checkout as it is, or install it with `pip install .` to get
 a `claude-usage` command.
 
