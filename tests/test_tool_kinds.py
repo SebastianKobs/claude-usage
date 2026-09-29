@@ -135,6 +135,36 @@ class CommandKindTest(unittest.TestCase):
         self.assertKinds("search", ["grep 'a > b; sed -i x' file", 'grep "x && cat y" z'])
 
 
+class FileToolTest(unittest.TestCase):
+    def test_a_file_tools_detail_is_its_files_type(self):
+        cases = {"src/App.TSX": ".tsx", "/srv/app/Makefile": "", "a.tar.gz": ".gz", "config/.env": ".env",
+                 "notes.v2 draft": ""}
+        for file_path, file_type in cases.items():
+            with self.subTest(file_path=file_path):
+                self.assertEqual(tool_kinds.call_class("Read", {"file_path": file_path})[1], file_type)
+
+    def test_a_notebooks_path_counts_too(self):
+        self.assertEqual(tool_kinds.call_class("NotebookEdit", {"notebook_path": "x/a.ipynb", "new_source": "y"}),
+                         (None, ".ipynb", ""))
+
+    def test_the_options_are_the_optional_inputs_given_by_name(self):
+        cases = [("Read", {"file_path": "a.go", "offset": 10, "limit": 40}, "limit offset"),
+                 ("Read", {"file_path": "a.go"}, ""), ("Read", {"file_path": "a.go", "offset": 0}, "offset"),
+                 ("Edit", {"file_path": "a.go", "old_string": "x", "new_string": "y", "replace_all": True},
+                  "replace_all"),
+                 ("Edit", {"file_path": "a.go", "old_string": "x", "new_string": "y", "replace_all": False}, ""),
+                 ("Write", {"file_path": "a.go", "content": "x"}, "")]
+        for tool, tool_input, options in cases:
+            with self.subTest(tool=tool, tool_input=tool_input):
+                self.assertEqual(tool_kinds.call_class(tool, tool_input)[2], options)
+
+    def test_a_path_missing_gives_no_type(self):
+        self.assertEqual(tool_kinds.call_class("Read", {}), (None, "", ""))
+
+    def test_other_tools_have_no_detail(self):
+        self.assertEqual(tool_kinds.call_class("Agent", {"prompt": "x"}), (None, None, None))
+
+
 class TranscriptToolsTest(TempDirTestCase):
     def setUp(self):
         super().setUp()
@@ -177,7 +207,7 @@ class TranscriptToolsTest(TempDirTestCase):
         self.assertEqual(order, [(None, None, None), ("git", None, None), ("git", "diff", None), ("git", "diff", ""),
                                  ("git", "log", None), ("git", "log", ""), ("git", "status", None),
                                  ("git", "status", ""), ("list", None, None), ("list", "ls", None),
-                                 ("list", "ls", ""), (None, None, None)])
+                                 ("list", "ls", ""), (None, None, None), (None, "", None), (None, "", "")])
 
     def test_each_kind_splits_by_its_detail_under_it(self):
         self.call("m1", "t1", "Bash", {"command": "node -e 'console.log(1)'"}, "x" * 10)
@@ -192,6 +222,16 @@ class TranscriptToolsTest(TempDirTestCase):
                           ("inline_script", "node", "-e", 1), ("list", None, None, 1), ("list", "ls", None, 1),
                           ("list", "ls", "", 1)])
         self.assertEqual((rows[2].result_chars, rows[3].result_chars), (50, 30))
+
+    def test_file_tools_split_by_file_type_then_options(self):
+        self.call("m1", "t1", "Read", {"file_path": "a.go"}, "x" * 10)
+        self.call("m2", "t2", "Read", {"file_path": "b.go", "offset": 5, "limit": 9}, "x" * 20)
+        self.call("m3", "t3", "Read", {"file_path": "c.php"}, "x" * 30)
+        rows = tool_kinds.transcript_tools(self.main.path, PRICES).rows
+        self.assertEqual([(row.kind, row.detail, row.options, row.calls) for row in rows],
+                         [(None, None, None, 3), (None, ".go", None, 2), (None, ".go", "", 1),
+                          (None, ".go", "limit offset", 1), (None, ".php", None, 1), (None, ".php", "", 1)])
+        self.assertEqual(rows[3].result_chars, 20)
 
     def test_errors_sizes_and_inputs(self):
         self.call("m1", "t1", "Edit", {"file_path": "a", "old_string": "x", "new_string": "y"}, "ok")

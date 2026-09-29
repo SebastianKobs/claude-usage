@@ -188,6 +188,8 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 .sub-row .effort, .sub-row .tool-kind { padding-left: 20px; }
 .sub-row .tool-detail { display: block; padding-left: 40px; }
 .sub-row .tool-options { display: block; padding-left: 60px; }
+.sub-row .tool-detail.under-tool { padding-left: 20px; }
+.sub-row .tool-options.under-tool { padding-left: 40px; }
 .workflow-member td:first-child { padding-left: 20px; }
 .link-button { border: none; background: none; padding: 0; color: inherit; text-decoration: underline;
   cursor: pointer; font: inherit; }

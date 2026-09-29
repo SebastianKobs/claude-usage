@@ -198,6 +198,15 @@ class ToolTableTest(unittest.TestCase):
         self.assertEqual(len({row["fold"] for row in rows}), 4)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_tool_without_kinds_folds_its_details_itself(self):
+        agent = {"agent_id": None, "agent_type": "main", "tools": [],
+                 "tool_kinds": [self.kind_row("Read", None, 2), self.kind_row("Read", None, 2, ".go"),
+                                self.kind_row("Read", None, 2, ".go", "")]}
+        rows = self.rows([agent])
+        self.assertEqual([row["sub"] for row in rows], [False, True, True])
+        self.assertEqual([row["parent"] for row in rows], [None, rows[0]["fold"], rows[1]["fold"]])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_each_agent_has_folds_of_its_own(self):
         def agent(agent_id):
             return {"agent_id": agent_id, "agent_type": "main", "tools": [],
@@ -211,7 +220,10 @@ class ToolTableTest(unittest.TestCase):
         cases = [({"tool": "Bash", "kind": "inline_script", "detail": None}, 2, "interpreters"),
                  ({"tool": "Bash", "kind": "git", "detail": None}, 1, "subcommand"),
                  ({"tool": "Bash", "kind": "search", "detail": None}, 3, "programs"),
-                 ({"tool": "Bash", "kind": "search", "detail": "grep"}, 2, "option sets")]
+                 ({"tool": "Bash", "kind": "search", "detail": "grep"}, 2, "option sets"),
+                 ({"tool": "Read", "kind": None, "detail": None}, 4, "file types"),
+                 ({"tool": "NotebookEdit", "kind": None, "detail": None}, 1, "file type"),
+                 ({"tool": "Read", "kind": None, "detail": ".go"}, 2, "option sets")]
         for row, count, noun in cases:
             with self.subTest(row=row):
                 self.assertEqual(run_function("drilldown.js", "detailNoun", row, count), noun)

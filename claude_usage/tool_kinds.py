@@ -66,6 +66,15 @@ VERSION_SUFFIX = re.compile(r"[0-9.]+$")
 # an option's name, without a value attached to it (-C3, -I/usr/include, --key=2): values can be paths or text
 OPTION_NAME = re.compile(r"--[A-Za-z][A-Za-z0-9-]*|-[A-Za-z]+")
 NUMBER_OPTION = re.compile(r"-[0-9]+")                  # head -20: -N, or every count would be a row of its own
+# tools that work on one file, with the input naming it and the inputs every call gives; the others are its options
+FILE_TOOLS = {"Read": ("file_path", frozenset({"file_path"})),
+              "Edit": ("file_path", frozenset({"file_path", "old_string", "new_string"})),
+              "MultiEdit": ("file_path", frozenset({"file_path", "edits"})),
+              "Write": ("file_path", frozenset({"file_path", "content"})),
+              "NotebookRead": ("notebook_path", frozenset({"notebook_path"})),
+              "NotebookEdit": ("notebook_path", frozenset({"notebook_path", "new_source"}))}
+# a file name's type: its last suffix, or a dotfile's name (.env); anything longer or odder is no type
+FILE_TYPE = re.compile(r"\.[A-Za-z0-9_+-]{1,10}")
 
 
 @dataclass(frozen=True)
@@ -249,11 +258,33 @@ def git_subcommand(words: list[str]) -> tuple[str, list[str]]:
 
 
 def call_class(name: str, tool_input: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
-    """A Bash call's command kind, detail and options (command_class); None for each for any other tool."""
-    if name != BASH:
-        return None, None, None
-    command = tool_input.get("command")
-    return command_class(command if isinstance(command, str) else "")
+    """A call's kind, detail and options: a Bash call's by command_class; a file tool's without a kind, its file's
+    type and the optional inputs it gave, by name (file_options); None for each for any other tool."""
+    if name == BASH:
+        command = tool_input.get("command")
+        return command_class(command if isinstance(command, str) else "")
+    if name in FILE_TOOLS:
+        path_key, _ = FILE_TOOLS[name]
+        file_path = tool_input.get(path_key)
+        return None, file_type(file_path if isinstance(file_path, str) else ""), file_options(name, tool_input)
+    return None, None, None
+
+
+def file_type(file_path: str) -> str:
+    """A file's type (FILE_TYPE), lower-cased, from its name alone; empty without one. Never the path or the name,
+    which can say more than a type."""
+    name = file_path.replace("\\", "/").rsplit("/", 1)[-1]
+    suffix = name[name.rfind("."):] if "." in name else ""
+    return suffix.lower() if FILE_TYPE.fullmatch(suffix) else ""
+
+
+def file_options(name: str, tool_input: dict[str, Any]) -> str:
+    """The optional inputs a file tool's call gave (offset, limit, replace_all), sorted, by name: not their values.
+    One set to false or null counts as not given."""
+    _, required = FILE_TOOLS[name]
+    given = (key for key, value in tool_input.items()
+             if key not in required and value is not None and value is not False)
+    return " ".join(sorted(given))
 
 
 # --- one transcript ----------------------------------------------------------------------------------------------
@@ -375,19 +406,27 @@ def grouped(facts: list[CallFact], key: Callable[[CallFact], Any]) -> list[tuple
 
 
 def tool_rows(facts: list[CallFact]) -> list[ToolKindRow]:
-    """One row per tool, the most called first; Bash's is followed by one per command kind, each kind's by one per
-    detail, each detail's by one per set of options."""
+    """One row per tool, the most called first; Bash's is followed by one per command kind, each kind's and a file
+    tool's by one per detail, each detail's by one per set of options."""
     rows = []
     for tool, tool_facts in grouped(facts, lambda fact: fact.tool):
         rows.append(tool_row(tool, None, tool_facts))
-        if tool != BASH:
-            continue
-        for kind, kind_facts in grouped(tool_facts, lambda fact: fact.kind):
-            rows.append(tool_row(tool, kind, kind_facts))
-            for detail, detail_facts in grouped(kind_facts, lambda fact: fact.detail):
-                rows.append(tool_row(tool, kind, detail_facts, detail))
-                rows += [tool_row(tool, kind, options_facts, detail, options)
-                         for options, options_facts in grouped(detail_facts, lambda fact: fact.options)]
+        if tool == BASH:
+            for kind, kind_facts in grouped(tool_facts, lambda fact: fact.kind):
+                rows.append(tool_row(tool, kind, kind_facts))
+                rows += detail_rows(tool, kind, kind_facts)
+        elif tool in FILE_TOOLS:
+            rows += detail_rows(tool, None, tool_facts)
+    return rows
+
+
+def detail_rows(tool: str, kind: str | None, facts: list[CallFact]) -> list[ToolKindRow]:
+    """One row per detail of these calls, each followed by one per set of options."""
+    rows = []
+    for detail, detail_facts in grouped(facts, lambda fact: fact.detail):
+        rows.append(tool_row(tool, kind, detail_facts, detail))
+        rows += [tool_row(tool, kind, options_facts, detail, options)
+                 for options, options_facts in grouped(detail_facts, lambda fact: fact.options)]
     return rows
 
 

@@ -342,7 +342,10 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       interpreter without path or version: `python3.12` is `python`), for git its subcommand; and that program's
       options (`option_names`, git's subcommand's): names only, each once, a number as `-N`, up to `--`. Values
       and arguments are left out (`-I/usr/include` is `-I`, `-m 'text'` is `-m`), since they hold paths and text.
-    - One row per detail under its kind, one per set of options under its detail. Each row that splits folds, until
+    - A file tool's call (`FILE_TOOLS`: Read, Edit, MultiEdit, Write, NotebookRead, NotebookEdit) has no kind; its
+      detail is the file's type (`file_type`: the last suffix or a dotfile's name, lower-cased, else empty; never
+      the path or the name), its options the optional inputs it gave, by name (`offset limit`, `replace_all`).
+    - One row per detail under its kind (a file tool's under the tool), one per set of options under its detail. Each row that splits folds, until
       the button in its label ("git (4 subcommands)", "grep (3 option sets)") opens it; the kinds always show. A
       row's `fold` is its key per agent, the rows under it carry it as `parent`, and a row shows while every fold
       above it is open.

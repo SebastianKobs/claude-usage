@@ -631,12 +631,13 @@ class ToolKindsTest(ServerCase):
         self.main.tool_result("t8", "src/a.go:1:x")
         self.assertEqual(self.kinds(), [("Bash", None, None, None, 1), ("Bash", "search", None, None, 1),
                                         ("Bash", "search", "grep", None, 1), ("Bash", "search", "grep", "-rn", 1),
-                                        ("Read", None, None, None, 1)])
+                                        ("Read", None, None, None, 1), ("Read", None, "", None, 1),
+                                        ("Read", None, "", "", 1)])
         self.assertEqual(self.kinds(1), [])
 
     def test_the_rows_carry_sizes_and_costs(self):
         _, payload = self.get_json("/api/session/s1")
-        [row] = payload["agents"][0]["tool_kinds"]
+        row = payload["agents"][0]["tool_kinds"][0]
         self.assertEqual((row["result_chars"], row["result_median"], row["errors"], row["calls_after_median"]),
                          (3, 3, 0, 0))
         self.assertIn("carried", row)

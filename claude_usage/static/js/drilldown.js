@@ -147,9 +147,10 @@ const TOOL_KINDS = {
 };
 
 // The Tools table's rows, agent by agent: from the transcript (tool_kinds) each tool with its sizes and costs, Bash
-// followed by a sub-row per command kind, each kind by one per detail (its programs), each detail by one per set of
-// options. A row's fold names it per agent; the rows it splits into carry it as their parent, except the kinds,
-// which are always shown. Once the transcript is gone the stored calls and characters, the rest unknown (null).
+// followed by a sub-row per command kind, each kind by one per detail (its programs), a file tool by one per file
+// type, each detail by one per set of options. A row's fold names it per agent; the rows it splits into carry it as
+// their parent, except the kinds, which are always shown. Once the transcript is gone the stored calls and
+// characters, the rest unknown (null).
 function toolTableRows(agents) {
   return agents.flatMap(agent => agent.tool_kinds
     ? agent.tool_kinds.map(row => {
@@ -181,8 +182,12 @@ function toolsTable(agents) {
   const folds = new Map();                                // a row's fold: its row, name, the rows under it
   const entries = [];                                     // each table row with the folds above it
   const body = rows.map((row, index) => {
-    const name = row.options !== null ? el("span", {class: "tool-options", text: row.options || "no options"})
-      : row.detail !== null ? el("span", {class: "tool-detail", text: row.detail || "(none)"})
+    // a file tool's details sit one step less deep: they have no kind above them
+    const depth = row.kind === null ? " under-tool" : "";
+    const name = row.options !== null
+      ? el("span", {class: `tool-options${depth}`, text: row.options || "no options"})
+      : row.detail !== null
+        ? el("span", {class: `tool-detail${depth}`, text: row.detail || (row.kind === null ? "no type" : "(none)")})
         : row.sub ? el("span", {class: "tool-kind", text: TOOL_KINDS[row.kind] || row.kind})
           : el("span", {text: row.tool});
     const tr = el("tr", {class: row.sub ? "sub-row" : rows[index + 1]?.sub ? "group-row" : null},
@@ -219,7 +224,8 @@ function toolsTable(agents) {
 // what a row's details are, for the count on its fold
 function detailNoun(row, count) {
   const nouns = {inline_script: ["interpreter", "interpreters"], git: ["subcommand", "subcommands"]};
-  const [one, many] = row.detail !== null ? ["option set", "option sets"] : nouns[row.kind] || ["program", "programs"];
+  const [one, many] = row.detail !== null ? ["option set", "option sets"]
+    : row.kind === null ? ["file type", "file types"] : nouns[row.kind] || ["program", "programs"];
   return count === 1 ? one : many;
 }
 
