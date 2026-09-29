@@ -44,8 +44,18 @@ VENDOR_LINKS = (b"https://github.com/highlightjs/highlight.js/issues/2277",
                 b"https://github.com/markedjs/marked.", b'"http://"',
                 b"http://www.w3.org/1998/Math/MathML", b"http://www.w3.org/1999/xhtml",
                 b"https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE")
+
+
+class KeepRedirect(urllib.request.HTTPRedirectHandler):
+    """Hands a redirect back as the answer instead of following it, so a test sees its headers."""
+
+    def redirect_request(self, *arguments):
+        return None
+
+
 # urllib must not route 127.0.0.1 through a proxy from the environment
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+NO_REDIRECT_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), KeepRedirect)
 
 
 class FakeClock:
@@ -91,19 +101,23 @@ class ServerCase(TempDirTestCase):
         self.addCleanup(self.httpd.shutdown)
         self.port = self.httpd.server_address[1]
 
-    def get(self, path, headers=None):
-        """(status, headers, body) of a GET request; HTTP errors are returned, not raised."""
-        request = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", headers=headers or {})
+    def get(self, path, headers=None, token=True, opener=OPENER):
+        """(status, headers, body) of a GET request, with the token's cookie unless token is False or headers set a
+        Cookie; HTTP errors are returned, not raised."""
+        sent = dict(headers or {})
+        if token:
+            sent.setdefault("Cookie", f"{server.cookie_name(self.port)}={self.app.token}")
+        request = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", headers=sent)
         try:
-            with OPENER.open(request, timeout=10) as response:
+            with opener.open(request, timeout=10) as response:
                 return response.status, response.headers, response.read()
         except urllib.error.HTTPError as error:
             with error:
                 return error.code, error.headers, error.read()
 
-    def get_json(self, path, headers=None):
+    def get_json(self, path, headers=None, token=True):
         """(status, parsed JSON body) of a GET request."""
-        status, response_headers, body = self.get(path, headers)
+        status, response_headers, body = self.get(path, headers, token)
         self.assertEqual(response_headers["Content-Type"], "application/json; charset=utf-8")
         return status, json.loads(body)
 
@@ -845,6 +859,68 @@ class HostTest(ServerCase):
         for host in (f"localhost:{self.port}", f"127.0.0.1:{self.port}", f"[::1]:{self.port}", "localhost"):
             with self.subTest(host=host):
                 self.assertEqual(self.get("/api/live", headers={"Host": host})[0], 200)
+
+
+class TokenTest(ServerCase):
+    def test_the_api_refuses_a_request_without_the_token(self):
+        for path in ("/api/live", "/api/summary?days=7", "/api/session/s1", "/api/session/s1/chat", "/api/nothing"):
+            with self.subTest(path=path):
+                status, payload = self.get_json(path, token=False)
+                self.assertEqual(status, 403)
+                self.assertIn("make status", payload["error"])
+
+    def test_a_wrong_or_old_token_is_refused(self):
+        for cookie in (f"{server.cookie_name(self.port)}=wrong", f"{server.cookie_name(self.port)}=",
+                       f"{server.cookie_name(self.port + 1)}={self.app.token}", "\x00; =; ;;"):
+            with self.subTest(cookie=cookie):
+                self.assertEqual(self.get_json("/api/live", headers={"Cookie": cookie})[0], 403)
+
+    def test_the_token_among_other_cookies_is_found(self):
+        cookie = f'_xsrf="2|a,b]"; {server.cookie_name(self.port)}={self.app.token}; theme=dark'
+        self.assertEqual(self.get_json("/api/live", headers={"Cookie": cookie})[0], 200)
+
+    def test_the_page_and_its_scripts_hold_no_data_and_need_no_token(self):
+        for path in ("/", "/static/js/util.js"):
+            with self.subTest(path=path):
+                self.assertEqual(self.get(path, token=False)[0], 200)
+
+    def test_the_link_sets_the_cookie_and_takes_the_token_out_of_the_address(self):
+        status, headers, _ = self.get(f"/?token={self.app.token}", token=False, opener=NO_REDIRECT_OPENER)
+        self.assertEqual((status, headers["Location"]), (303, "/"))
+        cookie = headers["Set-Cookie"]
+        self.assertTrue(cookie.startswith(f"{server.cookie_name(self.port)}={self.app.token};"))
+        for attribute in ("Path=/", "HttpOnly", "SameSite=Strict", "Max-Age="):
+            with self.subTest(attribute=attribute):
+                self.assertIn(attribute, cookie)
+
+    def test_a_link_with_a_wrong_token_sets_no_cookie(self):
+        status, headers, _ = self.get("/?token=wrong", token=False, opener=NO_REDIRECT_OPENER)
+        self.assertEqual((status, headers["Location"], headers["Set-Cookie"]), (303, "/", None))
+
+    def test_the_cookie_answers_the_api(self):
+        _, headers, _ = self.get(f"/?token={self.app.token}", token=False, opener=NO_REDIRECT_OPENER)
+        cookie = headers["Set-Cookie"].split(";")[0]
+        self.assertEqual(self.get_json("/api/live", headers={"Cookie": cookie})[0], 200)
+
+    def test_each_start_has_a_new_token(self):
+        other = server.UsageApp(self.store, self.projects.root, PRICES, live_minutes=5)
+        self.assertNotEqual(other.token, self.app.token)
+        self.assertGreaterEqual(len(other.token), 40)
+
+    def test_the_cookie_is_named_by_the_port(self):
+        # cookies don't tell ports apart: two dashboards on one host must not replace each other's
+        self.assertNotEqual(server.cookie_name(8765), server.cookie_name(8766))
+
+
+class CookieValueTest(unittest.TestCase):
+    def test_the_value_of_the_named_cookie(self):
+        self.assertEqual(server.cookie_value("a=1; b=2;c=3", "b"), "2")
+        self.assertEqual(server.cookie_value("a=1; b=2;c=3", "c"), "3")
+
+    def test_none_without_it(self):
+        for header in ("", "a=1", "b", "ab=2", "; ;"):
+            with self.subTest(header=header):
+                self.assertIsNone(server.cookie_value(header, "b"))
 
 
 class ScanTest(ServerCase):

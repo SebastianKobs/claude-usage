@@ -255,6 +255,11 @@ class ServeCommandTest(CliCase):
         self.assertEqual(code, 0)
         self.assertIn("http://127.0.0.1:", out)
 
+    def test_serve_prints_the_link_with_its_token(self):
+        with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
+            _, out, _ = self.run_cli("serve", "--port", "0")
+        self.assertRegex(out, r"(?m)^Serving http://127\.0\.0\.1:\d+/\?token=[A-Za-z0-9_-]{40,}  \(Ctrl\+C to stop\)$")
+
     def test_serve_prints_the_url_before_the_first_scan(self):
         printed_before_scan = []
 

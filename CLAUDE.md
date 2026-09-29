@@ -338,6 +338,14 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
 - **Server:**
   - It binds to loopback only, and refuses requests whose `Host` header isn't a loopback name. The API exposes
     titles and first prompts, so this blocks DNS rebinding.
+  - Loopback is open to every local user, so the API (every path but the page and its files, which hold no data)
+    answers only a request carrying this start's token in the cookie `claude_usage_<port>` (cookies don't tell ports
+    apart), else a JSON 403 that the page's banner shows once (`bannerText`). The token (`UsageApp.token`,
+    `secrets.token_urlsafe`, new per start, compared in constant time) comes with the link `serve` prints:
+    `/?token=…` sets the cookie (HttpOnly, SameSite=Strict, Path=/, 400 days) if it is right, and redirects to `/`
+    either way, so the token leaves the address bar. The Cookie header is split by hand (`cookie_value`), since
+    `http.cookies` stops at the first cookie it can't parse. `make start` writes its log, which shows the link,
+    under umask 077.
   - The page is served with a strict CSP: no inline scripts or stylesheets, only style attributes. JSON is
     `no-store`.
   - Only files under `static/css` and `static/js` are served, a list fixed at start: a new one needs a restart.

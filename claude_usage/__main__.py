@@ -126,7 +126,9 @@ def run_serve(context: Context) -> int:
         previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
         try:
             # before the first scan, which reads every file of a new store: `make start` waits for this line
-            print(f"Serving http://{HOST}:{httpd.server_address[1]}  (Ctrl+C to stop)", flush=True)
+            # the link carries this start's token, which the API asks for
+            print(f"Serving http://{HOST}:{httpd.server_address[1]}/?{server.TOKEN_PARAMETER}={app.token}  "
+                  "(Ctrl+C to stop)", flush=True)
             with app.lock:
                 app.refresh()              # so the first page load is quick; scan errors go to stderr
             httpd.serve_forever()

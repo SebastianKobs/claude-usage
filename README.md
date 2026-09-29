@@ -25,8 +25,8 @@ a `claude-usage` command.
 
 ## Usage
 ```
-make start                     # dashboard on http://127.0.0.1:8765 in the background (PORT=, LIVE_MINUTES=)
-make status | stop | restart | logs
+make start                     # dashboard in the background; prints its link (PORT=, LIVE_MINUTES=)
+make status | stop | restart | logs   # status prints the link again
 make scan                      # read new transcript data into the store
 make report ARGS="--days 7 --by project"
 make session ID=<session-id>   # one session: main thread, subagents, background, tools
@@ -40,10 +40,13 @@ The same without make (or with `claude-usage` instead of `python3 -m claude_usag
 python3 -m claude_usage scan [--project PATH]
 python3 -m claude_usage report --days 7       # totals as text (--json for JSON, --no-scan for the stored history)
 python3 -m claude_usage report --session ID   # one session
-python3 -m claude_usage serve                 # dashboard in the foreground, Ctrl+C to stop (--project PATH)
+python3 -m claude_usage serve                 # dashboard in the foreground, prints its link (--project PATH)
 python3 -m claude_usage backup FILE           # a copy of the store; never overwrites
 python3 -m claude_usage --version
 ```
+
+The dashboard's link carries a token, new at every start (`http://127.0.0.1:8765/?token=…`): opening it puts the
+token into a cookie, and only a browser holding it gets any data. After a restart, open the new link.
 
 To keep the history without the dashboard running, scan from cron. `make cron-line` prints the line for your
 checkout, with the absolute interpreter path (cron's `python3` may be older than 3.12):
@@ -56,12 +59,12 @@ Errors go to stderr, so cron mails them.
 ```
 make backup FILE=~/backups/usage-$(date +%F).sqlite   # optional; the store may hold days Claude Code deleted
 git pull --recurse-submodules
-make restart                                          # the running dashboard picks up the new code
+make restart                                          # the running dashboard picks up the new code; new link
 ```
 Installed with pip, run `pip install .` again in the updated checkout and restart `claude-usage serve`. The store
 updates itself on the next start or scan: migrations only add tables and columns, so no history is lost. Some
 updates need data only a new read gives; then the next scan reads every transcript again, which takes a little
-longer once. An open dashboard tab needs a reload for the new page.
+longer once. The restarted dashboard has a new token: open the link it prints.
 
 ## The session view
 Click a session to open it. While the session is running the view updates itself every few seconds, the
@@ -213,11 +216,14 @@ conversation (prompts, replies, tool inputs and results, cut to a few thousand c
 that one request. The paths of possible secret accesses are read the same way, and never their contents. The
 server answers only on loopback addresses and only to loopback host names.
 
-Loopback keeps other machines out, not other users of this one: anyone logged in to it can open the dashboard's
-port and read your sessions' titles, prompts and conversations through its API, with no password. Run the
-dashboard on single-user machines only. The store holds no prompts, but titles and project paths: it, its WAL files
-and its backups are yours alone (mode 600, whatever your umask), and a store from an older version is closed to
-others the next time it is opened. A new folder for it is yours alone too (700); an existing one keeps its mode.
+Loopback keeps other machines out, not other users of this one, so the API answers only a browser holding the
+token of this start: the link the dashboard prints carries it, and opening the link puts it into a cookie. The page
+and its scripts hold no data and load without it. The token lives only in the server's memory, your browser's
+cookie and `make start`'s log, which is yours alone (mode 600).
+
+The store holds no prompts, but titles and project paths: it, its WAL files and its backups are yours alone (mode
+600, whatever your umask), and a store from an older version is closed to others the next time it is opened. A new
+folder for it is yours alone too (700); an existing one keeps its mode.
 
 ## Development
 See `CLAUDE.md` for the working rules, the style, the transcript format and the design rules.

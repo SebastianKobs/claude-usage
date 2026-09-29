@@ -141,16 +141,20 @@ async function fetchJson(path) {
   } catch (error) {
     throw new Error(`${path}: HTTP ${response.status}, not JSON`);
   }
+  // refused (no token, or a foreign host name): the reason alone, the same for every request
+  if (response.status === 403) throw new Error(payload.error || "HTTP 403");
   if (!response.ok) throw new Error(`${path}: ${payload.error || "HTTP " + response.status}`);
   return payload;
 }
 
 // One message per source (live, summary, session, scan), so one source's success doesn't hide another's failure
 const errors = new Map();
+// each message once: two sources refused alike say the same
+function bannerText(messages) { return [...new Set(messages)].join("\n"); }
 function showError(source, message) {
   if (message) errors.set(source, message);
   else errors.delete(source);
-  document.getElementById("error").textContent = [...errors.values()].join("\n");
+  document.getElementById("error").textContent = bannerText(errors.values());
 }
 
 // Files the last scan skipped, or why it failed: the page still shows the stored history

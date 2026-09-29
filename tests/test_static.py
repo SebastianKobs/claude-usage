@@ -778,6 +778,16 @@ class SessionPollTest(unittest.TestCase):
         self.assertIn("refreshChat(session.session_id)", body)
 
 
+class BannerTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_same_message_from_two_sources_shows_once(self):
+        # without the token, the live sessions and the summary are refused alike
+        self.assertEqual(run_function("util.js", "bannerText", ["a", "b", "a"]), "a\nb")
+
+    def test_a_refused_request_says_why_without_its_address(self):
+        self.assertIn("if (response.status === 403) throw new Error(payload.error", read(STATIC / "js" / "util.js"))
+
+
 class LimitWindowTest(unittest.TestCase):
     WINDOW = {"start": "2026-09-01T12:00:00.000+00:00", "first_hit": "2026-09-01T15:12:00.000+00:00",
               "resets_at": "2026-09-01T17:00:00.000+00:00"}

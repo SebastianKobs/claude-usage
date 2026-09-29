@@ -28,7 +28,8 @@ start: ## start the dashboard in the background (PORT=, LIVE_MINUTES=)
 	@mkdir -p -m 700 data
 	@if $(ALIVE); then echo "already running (pid $$(cat $(PID_FILE))); make stop first"; exit 1; fi
 	@if [ -f $(LOG_FILE) ]; then mv -f $(LOG_FILE) $(LOG_FILE).1; fi
-	@nohup setsid $(CLI) serve $(SERVE_OPTIONS) > $(LOG_FILE) 2>&1 < /dev/null & echo $$! > $(PID_FILE)
+	@# the log shows the link with the token, so it is yours alone
+	@umask 077; nohup setsid $(CLI) serve $(SERVE_OPTIONS) > $(LOG_FILE) 2>&1 < /dev/null & echo $$! > $(PID_FILE)
 	@for i in 1 2 3 4 5 6 7 8 9 10; do \
 		if grep -q "^Serving" $(LOG_FILE) 2>/dev/null || ! $(ALIVE); then break; fi; \
 		sleep 0.5; \

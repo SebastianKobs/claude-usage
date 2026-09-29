@@ -3,13 +3,18 @@ stylesheets and scripts, and a small JSON API. Every API request first runs an i
 SCAN_INTERVAL seconds, behind a lock that also serializes all store access (one SQLite connection shared by the
 handler threads). A scan that fails still leaves the stored history to serve; its errors go into the payload.
 
-The API exposes session titles and first prompts, so besides binding to loopback the server refuses requests whose
-Host header isn't a loopback name: that stops a web page from reading it through DNS rebinding.
+The API exposes session titles, prompts and whole conversations, so besides binding to loopback the server refuses
+requests whose Host header isn't a loopback name: that stops a web page from reading it through DNS rebinding.
+Loopback is open to every user of the machine, though, so the API also answers only a browser holding the token of
+this start: the link printed at start (/?token=…) puts it into a cookie. The page and its scripts hold no data and
+are served without it.
 """
 import dataclasses
+import hmac
 import ipaddress
 import json
 import re
+import secrets
 import socket
 import sqlite3
 import sys
@@ -55,6 +60,12 @@ CHAT_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})/chat")
 AGENT_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
 SECRET_SEVERITIES = ("high", "medium", "low-medium", "low")
 HOST_WITH_PORT = re.compile(r"^\[?(?P<host>[^\]]*?)\]?(?::\d+)?$")
+TOKEN_BYTES = 32                        # of randomness in each start's token
+TOKEN_PARAMETER = "token"               # the link's query parameter that carries it
+COOKIE_PREFIX = "claude_usage_"
+COOKIE_MAX_AGE = 400 * 24 * 3600        # browsers keep a cookie 400 days at most; the next start's token replaces it
+TOKEN_NEEDED = ("this dashboard answers only a browser that opened the link it printed at its start, with its token "
+                "(make status shows it); after a restart, open the new link")
 # no inline scripts or stylesheets; style attributes stay allowed, as the charts set colors and sizes with them
 DASHBOARD_POLICY = ("default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; "
                     "connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
@@ -78,6 +89,26 @@ def is_loopback(host: str) -> bool:
         return ipaddress.ip_address(host).is_loopback
     except ValueError:
         return False
+
+
+def cookie_name(port: int) -> str:
+    """The token cookie's name: cookies don't tell ports apart, so dashboards on two ports need two names."""
+    return f"{COOKIE_PREFIX}{port}"
+
+
+def cookie_value(header: str, name: str) -> str | None:
+    """The value of one cookie of a Cookie header ("a=1; b=2"), None without it. By hand, not http.cookies, which
+    stops at the first cookie it can't parse, and other local apps set cookies on 127.0.0.1 too."""
+    for pair in header.split(";"):
+        key, separator, value = pair.strip().partition("=")
+        if separator and key == name:
+            return value
+    return None
+
+
+def token_matches(given: str | None, token: str) -> bool:
+    """True if given is the token, compared in constant time."""
+    return given is not None and hmac.compare_digest(given.encode("utf-8"), token.encode("utf-8"))
 
 
 def parse_days(query: str) -> int:
@@ -194,8 +225,11 @@ class UsageApp:
                  project: str | None = None, prices_checked: str | None = None, retention_days: int = 0,
                  clock: Callable[[], float] = time.monotonic,
                  compact: compact.CompactSettings = compact.DEFAULT_COMPACT,
-                 secret_settings: secret_paths.SecretSettings | None = None, home: str | None = None) -> None:
+                 secret_settings: secret_paths.SecretSettings | None = None, home: str | None = None,
+                 token: str | None = None) -> None:
         self.store = usage_store
+        # the API answers only requests with this start's token (a new one unless given)
+        self.token = token or secrets.token_urlsafe(TOKEN_BYTES)
         self.projects_dir = projects_dir
         self.prices = prices
         self.live_minutes = live_minutes
@@ -451,7 +485,8 @@ API_ROUTES: tuple[tuple[re.Pattern[str], Callable[[UsageApp, re.Match[str], str]
 
 
 class Handler(BaseHTTPRequestHandler):
-    """GET only: the dashboard at /, its stylesheets and scripts under /static/, the JSON API under /api/."""
+    """GET only: the dashboard at /, its stylesheets and scripts under /static/, the JSON API under /api/ (with the
+    token's cookie only)."""
     server: "UsageServer"
     server_version = "claude-usage"
     timeout = CONNECTION_TIMEOUT
@@ -465,10 +500,17 @@ class Handler(BaseHTTPRequestHandler):
         app = self.server.app
         try:
             if url.path == "/":
-                self.send_dashboard()
+                given = parse_qs(url.query).get(TOKEN_PARAMETER)
+                if given is not None:
+                    self.send_token_redirect(given[0])
+                else:
+                    self.send_dashboard()
                 return
             if url.path in ASSETS:
                 self.send_asset(ASSETS[url.path])
+                return
+            if not token_matches(cookie_value(self.headers.get("Cookie", ""), self.cookie_name()), app.token):
+                self.send_json(HTTPStatus.FORBIDDEN, {"error": TOKEN_NEEDED})
                 return
             for pattern, route in API_ROUTES:
                 match = pattern.fullmatch(url.path)
@@ -493,6 +535,19 @@ class Handler(BaseHTTPRequestHandler):
             return True
         match = HOST_WITH_PORT.match(header.strip())
         return match is not None and is_loopback(match.group("host"))
+
+    def cookie_name(self) -> str:
+        """The name of this server's token cookie."""
+        return cookie_name(self.server.server_address[1])
+
+    def send_token_redirect(self, given: str) -> None:
+        """/?token=…: the right token goes into the cookie; either way the page loads again without it, so the token
+        leaves the address bar and the history."""
+        headers = {"Location": "/", "Referrer-Policy": "no-referrer"}
+        if token_matches(given, self.server.app.token):
+            headers["Set-Cookie"] = (f"{self.cookie_name()}={self.server.app.token}; Path=/; "
+                                     f"Max-Age={COOKIE_MAX_AGE}; HttpOnly; SameSite=Strict")
+        self.send_body(HTTPStatus.SEE_OTHER, "text/plain; charset=utf-8", b"", headers)
 
     def send_body(self, status: HTTPStatus, content_type: str, body: bytes, headers: dict[str, str]) -> None:
         """Send a complete response."""
