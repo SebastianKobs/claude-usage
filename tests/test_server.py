@@ -21,6 +21,7 @@ from claude_usage import pricing
 from claude_usage import scan
 from claude_usage import server
 from claude_usage import store
+from claude_usage import tool_kinds
 from claude_usage import turns
 from helpers import MILLION
 from helpers import TempDirTestCase
@@ -613,6 +614,57 @@ class ChatTest(ServerCase):
         status, payload = self.get_json("/api/session/s1/chat?agent=..%2Fx")
         self.assertEqual(status, 400)
         self.assertIn("agent", payload["error"])
+
+
+class ToolKindsTest(ServerCase):
+    """Each transcript's tools by kind in /api/session, read from the transcript on demand."""
+
+    def kinds(self, agent_index=0):
+        """(tool, kind, calls) of one agent's tool_kinds, or None."""
+        _, payload = self.get_json("/api/session/s1")
+        rows = payload["agents"][agent_index]["tool_kinds"]
+        return None if rows is None else [(row["tool"], row["kind"], row["calls"]) for row in rows]
+
+    def test_each_transcript_has_its_tools_with_bash_by_kind(self):
+        self.main.assistant("m8", [tool_use_block("t8", "Bash", {"command": "grep -rn x src"})], usage(output=1))
+        self.main.tool_result("t8", "src/a.go:1:x")
+        self.assertEqual(self.kinds(), [("Bash", None, 1), ("Bash", "search", 1), ("Read", None, 1)])
+        self.assertEqual(self.kinds(1), [])
+
+    def test_the_rows_carry_sizes_and_costs(self):
+        _, payload = self.get_json("/api/session/s1")
+        [row] = payload["agents"][0]["tool_kinds"]
+        self.assertEqual((row["result_chars"], row["result_median"], row["errors"], row["calls_after_median"]),
+                         (3, 3, 0, 0))
+        self.assertIn("carried", row)
+        self.assertIn("input_cost", row)
+
+    def test_once_the_transcript_is_gone_only_the_stored_tools_remain(self):
+        self.get_json("/api/summary?days=7")
+        self.main.path.unlink()
+        _, payload = self.get_json("/api/session/s1")
+        self.assertIsNone(payload["agents"][0]["tool_kinds"])
+        self.assertEqual(payload["agents"][0]["tools"], [{"tool": "Read", "calls": 1, "result_chars": 3}])
+
+    def test_an_unchanged_transcript_is_not_read_again(self):
+        with mock.patch.object(tool_kinds, "read_calls", wraps=tool_kinds.read_calls) as read_calls:
+            self.get_json("/api/session/s1")
+            self.get_json("/api/session/s1")
+            self.assertEqual(read_calls.call_count, 2)          # the main thread and the subagent, once each
+            self.main.assistant("m8", [tool_use_block("t8", "Read")], usage(output=1))
+            self.assertEqual(self.kinds()[0], ("Read", None, 2))
+            self.assertEqual(read_calls.call_count, 3)
+
+    def test_no_command_reaches_the_payload_or_the_store(self):
+        command = "grep -rn COMMAND-MARKER-7a1 src"
+        self.main.assistant("m8", [tool_use_block("t8", "Bash", {"command": command})], usage(output=1))
+        self.main.tool_result("t8", "RESULT-MARKER-2b9")
+        _, payload = self.get_json("/api/session/s1")
+        self.assertNotIn("COMMAND-MARKER-7a1", json.dumps(payload))
+        self.store.connection.execute("PRAGMA wal_checkpoint")
+        stored = b"".join(path.read_bytes() for path in self.store_path.parent.glob(f"{self.store_path.name}*"))
+        self.assertNotIn(b"COMMAND-MARKER-7a1", stored)
+        self.assertNotIn(b"RESULT-MARKER-2b9", stored)
 
 
 class PageTest(unittest.TestCase):

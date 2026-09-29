@@ -53,6 +53,8 @@ claude_usage/
   config.toml                the defaults, including prices (shipped with the package)
   transcripts.py             parser: reads a transcript from a byte offset into a Chunk
   conversation.py            a transcript's conversation for the session view, read on demand
+  tool_kinds.py              a transcript's tool calls by tool and Bash command kind, sizes and carried cost, read on
+                             demand
   store.py                   the SQLite history: schema, migrations, backup
   scan.py                    incremental scan and background usage: transcripts into the store
   queries.py                 what the report and the dashboard read from the store
@@ -329,6 +331,19 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     go to stderr. Unexpected errors answer a JSON 500 and log their traceback.
   - `serve` prints "Serving …" before its first scan (a new store's reads every file), since `make start` waits
     for that line; SIGTERM (`make stop`) stops it like Ctrl+C.
+  - `/api/session/<id>` gives each agent `tool_kinds` (`tool_kinds.transcript_tools`), read from its transcript
+    and kept in memory by path until the file's size or mtime changes (`TOOLS_MEMO_LIMIT` files, counts only), None
+    once the file is gone; the Tools table then shows the stored `tools`.
+    - A Bash call's kind comes from its programs, never from a language (`command_kind`): past `cd`, assignments,
+      wrappers and quoted text, an edit in place anywhere (`sed -i`, `perl -i`), else by the first program: a file
+      written (a heredoc or `echo`/`printf`/`cat` redirected, `tee`), an inline script (any interpreter fed code by a
+      heredoc or `-c`/`-e`/`-r`), git's searches, search, view, list, git, else run.
+    - Checked 2026-09-29 on real transcripts (counts only): moving between Read/Edit/Write and Bash saves nothing
+      measurable (median results 3,066 for a whole-file Read against 6,600 for `cat` and 2,905 for `sed -n`; Edit
+      input 707 characters against 674 for `sed -i`; heredocs fail 5.6 % against Write's 0.8 %). What costs is what
+      later calls carry: a call's input and result at `CHARS_PER_TOKEN` (2.3, the median over 1,966 single-result
+      steps), written once by the next call and read by each one after it up to the next compaction, at the calling
+      message's rates. The input costs once more at the output price, since the model wrote it.
   - `/api/session/<id>/chat[?agent=<id>]` reads the conversation from the transcript per request, with tool inputs
     and results cut to `CHAT_TOOL_LIMIT`. Each reply carries its effort level, and the last entry of each API call
     its final usage with the cost at the configured prices, both computed per request. Nothing of it is stored,

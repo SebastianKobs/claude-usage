@@ -74,6 +74,9 @@ holds:
   cache rebuilds and what they cost extra, the compactions, and the turns that grew the context most with the
   tools the call before ran;
 - per subagent, what it returned to the main thread; a Workflow run's agents under one row per run;
+- the tools each transcript called, with Bash split by what a command does (search, view, edit in place, write a
+  file, inline script, git, run: by the programs, in any language), errors, result and input sizes, and an estimate
+  of what the later calls paid to carry each call's input and result in their context, while the transcript exists;
 - each compaction against keeping the context: what it cost once, what each later call saved, the call at which it
   paid off, and whether it saved (green) or cost more (red), at API list prices with the summary call estimated. The
   table's heading adds them up. The conversation shows the same at each compaction marker, and the Estimated cost

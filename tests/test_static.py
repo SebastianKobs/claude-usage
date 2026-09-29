@@ -9,6 +9,7 @@ from pathlib import Path
 from claude_usage import queries
 from claude_usage import server
 from claude_usage import store
+from claude_usage import tool_kinds
 from claude_usage import turns
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -155,6 +156,50 @@ class VerdictToneTest(unittest.TestCase):
             with self.subTest(theme=theme):
                 self.assertIn("--gain-text:", text)
                 self.assertIn("--loss-text:", text)
+
+
+class ToolTableTest(unittest.TestCase):
+    STORED = [{"tool": "Bash", "calls": 3, "result_chars": 450}]
+
+    def kind_row(self, tool, kind, calls):
+        """A tool_kinds row as /api/session sends it."""
+        return {"tool": tool, "kind": kind, "calls": calls, "errors": 1, "result_chars": 90, "result_median": 30,
+                "result_p90": 50, "input_median": 12, "calls_after_median": 4.5, "carried": 0.01,
+                "input_cost": 0.002}
+
+    def rows(self, agents):
+        """toolTableRows of these agents."""
+        return run_function("drilldown.js", "toolTableRows", agents)
+
+    def test_every_command_kind_has_its_words(self):
+        self.assertEqual(object_keys("drilldown.js", "TOOL_KINDS"), set(tool_kinds.KINDS))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_bash_kinds_are_sub_rows_under_bash(self):
+        agent = {"agent_type": "main", "tools": self.STORED,
+                 "tool_kinds": [self.kind_row("Bash", None, 3), self.kind_row("Bash", "search", 2),
+                                self.kind_row("Bash", "view", 1), self.kind_row("Read", None, 1)]}
+        rows = self.rows([agent])
+        self.assertEqual([(row["tool"], row["kind"], row["sub"]) for row in rows],
+                         [("Bash", None, False), ("Bash", "search", True), ("Bash", "view", True),
+                          ("Read", None, False)])
+        self.assertEqual((rows[1]["agent"], rows[1]["carried"], rows[1]["calls_after_median"]), ("main", 0.01, 4.5))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_without_the_transcript_the_stored_tools_show_without_what_only_it_tells(self):
+        [row] = self.rows([{"agent_type": "Explore", "tools": self.STORED, "tool_kinds": None}])
+        self.assertEqual((row["agent"], row["tool"], row["kind"], row["sub"], row["calls"], row["result_chars"]),
+                         ("Explore", "Bash", None, False, 3, 450))
+        for field in ("errors", "result_median", "result_p90", "input_median", "calls_after_median", "carried",
+                      "input_cost"):
+            with self.subTest(field=field):
+                self.assertIsNone(row[field])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_each_agents_rows_follow_each_other(self):
+        rows = self.rows([{"agent_type": "main", "tools": [], "tool_kinds": [self.kind_row("Read", None, 1)]},
+                          {"agent_type": "Explore", "tools": self.STORED, "tool_kinds": None}])
+        self.assertEqual([(row["agent"], row["tool"]) for row in rows], [("main", "Read"), ("Explore", "Bash")])
 
 
 class CompactCallTest(unittest.TestCase):

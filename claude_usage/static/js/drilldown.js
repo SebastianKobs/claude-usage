@@ -30,19 +30,11 @@ function renderDrilldown(detail, refresh = false) {
                             title: "what a subagent handed back: its result's characters"}),
                   el("th", {class: "num", text: "Cost"}));
   const agents = agentRows(detail.agents, searches);
-  const toolRows = detail.agents.flatMap(agent => agent.tools.map(tool => el("tr", {},
-    el("td", {text: agent.agent_type}), el("td", {text: tool.tool}), el("td", {class: "num", text: whole(tool.calls)}),
-    el("td", {class: "num", text: compact(tool.result_chars)}))));
-  const tools = toolRows.length
-    ? el("table", {}, el("thead", {}, el("tr", {}, el("th", {text: "Agent"}), el("th", {text: "Tool"}),
-                                          el("th", {class: "num", text: "Calls"}),
-                                          el("th", {class: "num", text: "Result characters"}))),
-         el("tbody", {}, ...toolRows))
-    : el("div", {class: "empty", text: "No tool calls."});
   // the session's tables page by their own keys, so another session starts at the first page
   const key = name => `${detail.session_id}-${name}`;
   const order = toolsAndChat(detail.transcript,
-                             [el("h3", {text: "Tools"}), el("div", {class: "table-wrap"}, paged(key("tools"), tools))],
+                             [el("h3", {text: "Tools"}), toolsNote(detail.agents),
+                              el("div", {class: "table-wrap"}, paged(key("tools"), toolsTable(detail.agents)))],
                              kept ? kept.chat : [chatSection(detail)]);
   fill(panel,
     el("div", {class: "chart-head"},
@@ -145,6 +137,57 @@ function restoreFocusAndScroll(panel, kept) {
 }
 
 // one row per transcript; a workflow run's agents under one row per run, whose button shows or hides them
+// what a Bash command does, by its programs (tool_kinds.command_kind), never by its language
+const TOOL_KINDS = {
+  search: "search (grep, find, …)", view: "view (cat, head, sed -n, …)", list: "list (ls, tree, …)",
+  edit_in_place: "edit in place (sed -i, …)", write_file: "write a file (heredoc, >)",
+  inline_script: "inline script (any interpreter)", git: "git", run: "run a program",
+};
+
+// The Tools table's rows, agent by agent: from the transcript (tool_kinds) each tool with its sizes and costs, Bash
+// followed by a sub-row per command kind; once the transcript is gone the stored calls and characters, the rest
+// unknown (null)
+function toolTableRows(agents) {
+  return agents.flatMap(agent => agent.tool_kinds
+    ? agent.tool_kinds.map(row => ({...row, agent: agent.agent_type, sub: row.kind !== null}))
+    : agent.tools.map(tool => ({agent: agent.agent_type, tool: tool.tool, kind: null, sub: false, calls: tool.calls,
+                                errors: null, result_chars: tool.result_chars, result_median: null, result_p90: null,
+                                input_median: null, calls_after_median: null, carried: null, input_cost: null})));
+}
+
+function toolsTable(agents) {
+  const rows = toolTableRows(agents);
+  if (!rows.length) return el("div", {class: "empty", text: "No tool calls."});
+  const heading = (text, title) => el("th", {class: "num", text, title});
+  const head = el("tr", {}, el("th", {text: "Agent"}), el("th", {text: "Tool"}), heading("Calls"),
+    heading("Errors", "calls whose result was an error"), heading("Result characters"),
+    heading("Median", "a result's characters, the median call"), heading("p90", "…and at the 90th percentile"),
+    heading("Input median", "the characters of a call's input, which the model wrote"),
+    heading("Calls after", "how many later calls carried it in their context, the median call, up to the next " +
+                           "compaction"),
+    heading("~Carried", "what the later calls paid to have its input and result in their context"),
+    heading("~Input cost", "its input at the output price"));
+  const body = rows.map((row, index) => el("tr", {class: row.sub ? "sub-row"
+                                                         : rows[index + 1]?.sub ? "group-row" : null},
+    el("td", {text: row.sub ? "" : row.agent}),
+    el("td", {}, row.sub ? el("span", {class: "tool-kind", text: TOOL_KINDS[row.kind] || row.kind}) : row.tool),
+    el("td", {class: "num", text: whole(row.calls)}), el("td", {class: "num", text: whole(row.errors)}),
+    el("td", {class: "num", text: compact(row.result_chars)}),
+    el("td", {class: "num", text: compact(row.result_median)}),
+    el("td", {class: "num", text: compact(row.result_p90)}), el("td", {class: "num", text: compact(row.input_median)}),
+    el("td", {class: "num", text: whole(row.calls_after_median)}),
+    el("td", {class: "num", text: money(row.carried)}), el("td", {class: "num", text: money(row.input_cost)})));
+  return el("table", {}, el("thead", {}, head), el("tbody", {}, ...body));
+}
+
+// how the costs are estimated, while a transcript tells them
+function toolsNote(agents) {
+  if (!agents.some(agent => agent.tool_kinds && agent.tool_kinds.length)) return null;
+  return el("div", {class: "note", text: "Bash splits by what a command does. A call's input and result stay in " +
+    "the context, so every later call up to the next compaction reads them again: ~Carried estimates what that " +
+    "cost, taking a token as 2.3 characters (measured on real transcripts, a heuristic)."});
+}
+
 function agentRows(agents, searches) {
   const rows = [];
   const runs = new Map();

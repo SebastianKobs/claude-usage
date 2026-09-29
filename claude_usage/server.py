@@ -32,6 +32,7 @@ from claude_usage import pricing
 from claude_usage import queries
 from claude_usage import scan
 from claude_usage import store
+from claude_usage import tool_kinds
 from claude_usage import transcripts
 from claude_usage import turns
 
@@ -43,6 +44,7 @@ ASSETS = {f"/static/{path.relative_to(STATIC).as_posix()}": path
           for folder in ("css", "js") for path in sorted((STATIC / folder).rglob("*")) if path.suffix in ASSET_TYPES}
 SCAN_INTERVAL = 5.0                     # seconds between scans triggered by requests
 CONNECTION_TIMEOUT = 30                 # seconds an idle connection may keep its handler thread
+TOOLS_MEMO_LIMIT = 256                  # transcripts whose tool rows stay in memory until the file changes
 MAX_DAYS = 3650
 SESSION_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})")
 CHAT_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})/chat")
@@ -196,6 +198,10 @@ class UsageApp:
         self.history_changes: int | None = None
         self.last_scan: float | None = None
         self.scan_errors: tuple[str, ...] = ()
+        # each transcript's tool rows (counts only) by its path, with the (size, mtime) they were read at, so an open
+        # session's poll reads only the files that changed; its own lock, as it is read outside self.lock
+        self.tools_memo: dict[str, tuple[tuple[int, int], list[Payload]]] = {}
+        self.tools_lock = threading.Lock()
 
     def refresh(self) -> None:
         """Scan if the last scan is SCAN_INTERVAL or more ago. Call with the lock held. A failure keeps the stored
@@ -317,8 +323,9 @@ class UsageApp:
 
     def session(self, session_id: str) -> Payload | None:
         """/api/session/<id>, with the main thread's current context against the auto-compact point, what its
-        compactions saved so far, whether the session is live (the page polls it faster then) and whether its main
-        transcript still exists (the page shows the conversation higher up then); None for an unknown id."""
+        compactions saved so far, whether the session is live (the page polls it faster then), whether its main
+        transcript still exists (the page shows the conversation higher up then) and each transcript's tools by
+        kind (tool_kinds, None once its file is gone); None for an unknown id."""
         with self.lock:
             self.refresh()
             detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False,
@@ -328,12 +335,36 @@ class UsageApp:
             path = queries.transcript_path(self.store, session_id, None)
             live = queries.session_live(self.store, session_id, self.live_minutes)
             savings = queries.compaction_savings(self.store, self.prices, self.compact, session_id=session_id)
+            paths = {row["agent_id"]: Path(row["path"]) for row in queries.session_rows(self.store, session_id)}
         if detail is None:
             return None
-        # a file read needn't hold up the other requests
+        # file reads needn't hold up the other requests
         prompt = None if path is None else transcripts.first_prompt(path)
+        for agent in detail["agents"]:
+            agent_path = paths.get(agent["agent_id"])
+            agent["tool_kinds"] = None if agent_path is None else self.transcript_tools(agent_path)
         return {**detail, "prompt": prompt, "compact_hint_tokens": self.compact.hint_tokens, "current": current,
                 "live": live, "compaction_savings": savings, "transcript": path is not None and path.exists()}
+
+    def transcript_tools(self, path: Path) -> list[Payload] | None:
+        """A transcript's tool rows (tool_kinds.transcript_tools), read again only once the file changed; None once
+        it is gone. Only the counts stay in memory, for at most TOOLS_MEMO_LIMIT files."""
+        try:
+            stat = path.stat()
+            version = (stat.st_size, stat.st_mtime_ns)
+            with self.tools_lock:
+                cached = self.tools_memo.get(str(path))
+            if cached is not None and cached[0] == version:
+                return cached[1]
+            rows = [dataclasses.asdict(row) for row in tool_kinds.transcript_tools(path, self.prices)]
+        except OSError:
+            return None
+        with self.tools_lock:
+            self.tools_memo.pop(str(path), None)
+            self.tools_memo[str(path)] = (version, rows)
+            while len(self.tools_memo) > TOOLS_MEMO_LIMIT:
+                del self.tools_memo[next(iter(self.tools_memo))]
+        return rows
 
 
 def route_live(app: UsageApp, match: re.Match[str], query: str) -> Payload:

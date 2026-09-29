@@ -185,7 +185,7 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 /* a model's row and its usage per effort level below it */
 .group-row td:first-child { font-weight: 600; }
 .sub-row td { color: var(--text-secondary); }
-.sub-row .effort { padding-left: 20px; }
+.sub-row .effort, .sub-row .tool-kind { padding-left: 20px; }
 .workflow-member td:first-child { padding-left: 20px; }
 .link-button { border: none; background: none; padding: 0; color: inherit; text-decoration: underline;
   cursor: pointer; font: inherit; }
