@@ -1,7 +1,11 @@
 """store.py: the schema, its migrations and backups."""
+import os
 import sqlite3
+import stat
 import unittest
 from datetime import timedelta
+from pathlib import Path
+from unittest import mock
 
 from claude_usage import scan
 from claude_usage import store
@@ -251,3 +255,61 @@ class SchemaTest(TempDirTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def mode(path):
+    """A file's or folder's permission bits."""
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+@unittest.skipUnless(os.name == "posix", "POSIX permissions")
+class PermissionTest(TempDirTestCase):
+    def test_a_new_store_and_its_new_folder_are_its_owners_alone(self):
+        path = self.tmp / "history" / "usage.sqlite"
+        with store.Store(path):
+            pass
+        self.assertEqual((mode(path), mode(path.parent)), (0o600, 0o700))
+
+    def test_the_wal_files_follow_the_store(self):
+        build_session(self.projects)
+        with store.Store(self.store_path) as opened:
+            scan.scan(opened, self.projects.root)
+            for suffix in ("-wal", "-shm"):
+                with self.subTest(suffix=suffix):
+                    self.assertEqual(mode(Path(f"{self.store_path}{suffix}")), 0o600)
+
+    def test_an_older_store_open_to_others_is_closed_when_opened(self):
+        with store.Store(self.store_path):
+            pass
+        self.store_path.chmod(0o644)
+        with store.Store(self.store_path):
+            self.assertEqual(mode(self.store_path), 0o600)
+
+    def test_wal_files_open_to_others_are_closed_too(self):
+        with store.Store(self.store_path):
+            wal = Path(f"{self.store_path}-wal")
+            wal.chmod(0o644)
+            with store.Store(self.store_path):
+                self.assertEqual(mode(wal), 0o600)
+
+    def test_a_store_of_another_owner_keeps_its_mode(self):
+        with store.Store(self.store_path):
+            pass
+        self.store_path.chmod(0o640)
+        with mock.patch.object(store.os, "geteuid", return_value=os.geteuid() + 1):
+            with store.Store(self.store_path):
+                self.assertEqual(mode(self.store_path), 0o640)
+
+    def test_a_backup_is_its_owners_alone(self):
+        target = self.tmp / "backups" / "copy.sqlite"
+        with store.Store(self.store_path) as opened:
+            store.backup(opened, target)
+        self.assertEqual(mode(target), 0o600)
+
+    def test_a_failed_backup_leaves_no_file(self):
+        target = self.tmp / "copy.sqlite"
+        with store.Store(self.store_path) as opened:
+            opened.connection.close()
+            with self.assertRaises(sqlite3.Error):
+                store.backup(opened, target)
+        self.assertFalse(target.exists())

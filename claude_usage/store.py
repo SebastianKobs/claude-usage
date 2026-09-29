@@ -5,8 +5,13 @@ it. Message and tool rows keep only the file path; project, session and agent co
 cwd or meta file that shows up later corrects every row at once. The usage_rows view puts messages and background
 rows (see scan.py) side by side, so every query includes both; background rows have no turns. scan.py fills the
 store, queries.py reads it.
+
+The store holds session titles and project paths, so it and its backups are its owner's alone (0600), as Claude
+Code's own folder usually is: whatever the umask, and an older store open to others is closed when opened.
 """
+import os
 import sqlite3
+import stat
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -222,12 +227,35 @@ class StoreError(Exception):
     """The store can't be used, e.g. it was written by a newer version of this tool."""
 
 
+PRIVATE_FILE = 0o600                    # the store, its WAL files and backups: read and written by their owner only
+PRIVATE_FOLDER = 0o700                  # a folder the store creates for itself
+SHARED_BITS = 0o077                     # the group's and everyone else's permissions
+WAL_SUFFIXES = ("-wal", "-shm")         # SQLite's files next to a WAL-mode store; new ones get the store's mode
+
+
+def make_private(path: Path) -> None:
+    """Take the group's and everyone else's permissions off a file its owner runs this for; another owner's file,
+    and any file on a system without POSIX permissions, keeps its mode."""
+    if os.name != "posix":
+        return
+    status = path.stat()
+    if status.st_uid == os.geteuid() and status.st_mode & SHARED_BITS:
+        path.chmod(stat.S_IMODE(status.st_mode) & ~SHARED_BITS)
+
+
 class Store:
     """An open usage history. Usable as a context manager; pass check_same_thread=False to share it between the
     server's threads (the server serializes access with a lock)."""
 
     def __init__(self, path: Path, check_same_thread: bool = True) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(mode=PRIVATE_FOLDER, parents=True, exist_ok=True)
+        # an empty file is an empty database to SQLite, which creates the WAL files with the store's mode; an
+        # existing store is left untouched, mtime and all
+        if not path.exists():
+            path.touch(mode=PRIVATE_FILE)
+        for private in (path, *(Path(f"{path}{suffix}") for suffix in WAL_SUFFIXES)):
+            if private.exists():
+                make_private(private)
         self.path = path
         # autocommit mode: transactions are opened explicitly, one per scanned file
         self.connection = sqlite3.connect(path, isolation_level=None, check_same_thread=check_same_thread,
@@ -298,9 +326,16 @@ class Store:
 
 
 def backup(store: Store, target: Path) -> None:
-    """A consistent copy of the store in a new file (VACUUM INTO, safe while others read or scan); raises
-    StoreError if target exists, so a backup never overwrites anything."""
-    if target.exists():
-        raise StoreError(f"{target} exists; pick a new file for the backup")
+    """A consistent copy of the store in a new file, its owner's alone (VACUUM INTO, safe while others read or
+    scan); raises StoreError if target exists, so a backup never overwrites anything. A failed copy leaves no file."""
     target.parent.mkdir(parents=True, exist_ok=True)
-    store.connection.execute("VACUUM INTO ?", (str(target),))
+    try:
+        # VACUUM INTO writes into an empty file, which keeps the mode it was created with
+        target.touch(mode=PRIVATE_FILE, exist_ok=False)
+    except FileExistsError as exc:
+        raise StoreError(f"{target} exists; pick a new file for the backup") from exc
+    try:
+        store.connection.execute("VACUUM INTO ?", (str(target),))
+    except sqlite3.Error:
+        target.unlink(missing_ok=True)
+        raise

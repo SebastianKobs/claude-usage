@@ -186,6 +186,11 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     usage wins); copies in forked or resumed sessions change nothing.
   - Tool calls and result sizes follow the same rule.
   - Message rows keep only the path; project, session and agent come from `transcripts`.
+- **Store files:** the store holds titles and project paths, so it is its owner's alone (`store.PRIVATE_FILE`,
+  0600, whatever the umask): created so, a new folder for it 0700, and an older store (and its `-wal`/`-shm` files)
+  open to others closed at every open (`store.make_private`, only the owner's files, only on POSIX). SQLite gives
+  new WAL files the store's mode. A backup is created empty at 0600 first (`O_EXCL`, so it never overwrites), which
+  `VACUUM INTO` fills; a failed one is removed.
 - **Queries:** optional filters come from `queries.range_filter`, which writes only the clauses that are set: a
   `(:x IS NULL OR day >= :x)` clause keeps SQLite off the day index. A subquery doesn't reach into the
   `usage_rows` view, a list of values does, so per-session sums pass the ids as `IN (?, …)` in batches.

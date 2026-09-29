@@ -215,9 +215,9 @@ server answers only on loopback addresses and only to loopback host names.
 
 Loopback keeps other machines out, not other users of this one: anyone logged in to it can open the dashboard's
 port and read your sessions' titles, prompts and conversations through its API, with no password. Run the
-dashboard on single-user machines only. The store holds no prompts, but titles and project paths, and gets your
-umask's permissions (usually readable by anyone who can reach its folder), while Claude Code keeps `~/.claude` to
-you alone.
+dashboard on single-user machines only. The store holds no prompts, but titles and project paths: it, its WAL files
+and its backups are yours alone (mode 600, whatever your umask), and a store from an older version is closed to
+others the next time it is opened. A new folder for it is yours alone too (700); an existing one keeps its mode.
 
 ## Development
 See `CLAUDE.md` for the working rules, the style, the transcript format and the design rules.

@@ -25,7 +25,7 @@ help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
 
 start: ## start the dashboard in the background (PORT=, LIVE_MINUTES=)
-	@mkdir -p data
+	@mkdir -p -m 700 data
 	@if $(ALIVE); then echo "already running (pid $$(cat $(PID_FILE))); make stop first"; exit 1; fi
 	@if [ -f $(LOG_FILE) ]; then mv -f $(LOG_FILE) $(LOG_FILE).1; fi
 	@nohup setsid $(CLI) serve $(SERVE_OPTIONS) > $(LOG_FILE) 2>&1 < /dev/null & echo $$! > $(PID_FILE)
