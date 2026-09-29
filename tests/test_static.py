@@ -453,14 +453,15 @@ class CompactCallTest(unittest.TestCase):
     EXPIRED = "2026-09-28T11:00:00.000+00:00"
 
     def detail(self, live=True, warm_until="2026-09-28T12:30:00.000+00:00", cold_saving=-0.5, context=150_000,
-               estimate=True):
+               estimate=True, compacted=None):
         """A session's detail with the gauge (its context against a 200K hint) and its preview of compacting now,
-        where compacting likely pays (the conversation's hint)."""
+        where compacting likely pays (the conversation's hint); none once it compacted after its last call."""
+        preview = {"likely_pays": True, "cache_warm_until": warm_until,
+                   "estimate": {"breakeven_calls": 6, "calls_ahead": 40.2, "cold_saving": cold_saving}
+                   if estimate else None}
         return {"live": live, "agents": [{"agent_id": None, "compactions": []}],
-                "current": {"context": context, "hint_tokens": 200_000, "compact_now": {
-                    "likely_pays": True, "cache_warm_until": warm_until,
-                    "estimate": {"breakeven_calls": 6, "calls_ahead": 40.2, "cold_saving": cold_saving}
-                    if estimate else None}}}
+                "current": {"context": context, "hint_tokens": 200_000, "compacted": compacted,
+                            "compact_now": None if compacted else preview}}
 
     def kind(self, detail):
         """compactCallKind of this detail at NOW."""
@@ -495,11 +496,30 @@ class CompactCallTest(unittest.TestCase):
     def test_past_the_hint_an_ended_session_gets_no_call(self):
         self.assertIsNone(self.kind(self.detail(context=250_000, live=False)))
 
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_after_a_compaction_without_a_call_since_there_is_no_call(self):
+        self.assertIsNone(self.kind(self.detail(context=250_000, compacted=self.NOW)))
+
     def test_the_copy_button_is_wired_in_the_script_not_inline(self):
         script = read(STATIC / "js" / "drilldown.js")
         self.assertIn('id: "compact-copy"', script)
         self.assertIn("navigator.clipboard", script)
         self.assertNotIn("onclick", script)
+
+
+class CompactedGaugeTest(unittest.TestCase):
+    USES = ("util.js:compactFormat", "util.js:compact")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_after_a_compaction_without_a_call_since_the_gauge_gives_the_context_before_it(self):
+        note = run_function("drilldown.js", "compactedNote", {"context": 250_000, "auto_compact": 967_000},
+                            uses=self.USES)
+        self.assertEqual(note, "Before it, the context was 250K of 967K. The next reply shows the new one: the "
+                               "summary, with the system prompt, tools and CLAUDE.md sent again.")
+
+    def test_the_gauge_draws_the_compaction_in_place_of_the_meter(self):
+        body = function_body("drilldown.js", "currentGauge")
+        self.assertLess(body.index("current.compacted"), body.index('role: "meter"'))
 
 
 class ChatOrderTest(unittest.TestCase):
@@ -734,14 +754,16 @@ class LiveStateTest(unittest.TestCase):
             "figures.js:liveSecretBadge", "figures.js:liveCompactBadge")
 
     def badges(self, secrets=None, context=150_000, warm_until="2026-09-28T12:30:00.000+00:00", estimate=True,
-               current=True, **fields):
+               current=True, compacted=None, **fields):
         """liveStateBadges at NOW of a state with a 200K hint and an estimate with 40 calls ahead on average,
-        updated by the given fields, and the secret accesses by severity."""
+        updated by the given fields (no preview once it compacted after its last call), and the secret accesses by
+        severity."""
         values = {"breakeven_calls": 10, "breakeven_low": 5, "calls_ahead": 40.0, "cold_saving": -0.5,
                   "breakeven_cold": 10}
         values.update(fields)
-        gauge = {"context": context, "hint_tokens": 200_000,
-                 "compact_now": {"cache_warm_until": warm_until, "estimate": values if estimate else None}}
+        gauge = {"context": context, "hint_tokens": 200_000, "compacted": compacted,
+                 "compact_now": None if compacted else {"cache_warm_until": warm_until,
+                                                        "estimate": values if estimate else None}}
         state = {"current": gauge if current else None,
                  "secrets": {"high": 0, "medium": 0, "low-medium": 0, "low": 0, **(secrets or {})}}
         return run_function("figures.js", "liveStateBadges", state, self.NOW, uses=self.USES)
@@ -793,6 +815,10 @@ class LiveStateTest(unittest.TestCase):
     def test_past_the_hint_it_says_so(self):
         self.assertTrue(self.badge(context=250_000)[2].endswith(" Past your 200K compact hint."))
         self.assertEqual(self.badge(context=250_000, estimate=False), ("compact", None, "Past your 200K compact hint."))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_after_a_compaction_without_a_call_since_there_is_no_compact_badge(self):
+        self.assertEqual(self.badges(context=250_000, compacted=self.NOW), [])
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_without_a_gauge_or_an_estimate_below_the_hint_there_is_no_compact_badge(self):

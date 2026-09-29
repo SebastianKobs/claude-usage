@@ -1241,6 +1241,25 @@ class ContextPartsTest(StoreCase):
         self.assertIsNone(queries.current_context(self.store, "nope", compact.DEFAULT_COMPACT, PRICES))
 
 
+class CompactedSinceTest(StoreCase):
+    """A main thread compacted after its last call, with no call since."""
+
+    def setUp(self):
+        super().setUp()
+        main = self.projects.session("s1")
+        main.user("go")
+        main.assistant("m1", [text_block("ok")], usage(cache_5m=250_000, output=100))
+        self.boundary = main.compaction("c1")
+        self.scan()
+        self.current = queries.current_context(self.store, "s1", compact.DEFAULT_COMPACT, PRICES)
+
+    def test_the_gauge_notes_the_compaction(self):
+        self.assertEqual(self.current["compacted"], self.boundary["timestamp"].replace("Z", "+00:00"))
+
+    def test_there_is_nothing_to_compact_now(self):
+        self.assertIsNone(self.current["compact_now"])
+
+
 class CompactionHistoryTest(StoreCase):
     """Every stored main-thread compaction compared with keeping the context, what the preview learns from."""
 

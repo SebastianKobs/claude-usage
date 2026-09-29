@@ -393,9 +393,17 @@ function contextPicker(detail) {
   return select;
 }
 
-// the main thread's latest context against the auto-compact point, with the soft hint marked on the bar
+// the main thread's latest context against the auto-compact point, with the soft hint marked on the bar; once it
+// compacted after its last call, the compaction, since the context it now has shows only with the next call
 function currentGauge(current) {
   if (!current) return null;
+  if (current.compacted) {
+    return el("div", {class: "card gauge-card", id: "current-gauge"},
+      el("div", {class: "label", text: `Latest context, main thread · ${current.model}`}),
+      el("div", {class: "tile-value"}, "Compacted ",
+         el("span", {class: "secondary", text: `at ${when(current.compacted)}, no reply since`})),
+      el("div", {class: "note", text: compactedNote(current)}));
+  }
   const share = Math.min(1, current.context / current.auto_compact);
   const hint = current.hint_tokens < current.auto_compact ? current.hint_tokens / current.auto_compact : null;
   const since = current.last_compaction ? `since the last compaction (${when(current.last_compaction)})`
@@ -420,6 +428,13 @@ function currentGauge(current) {
       hint === null ? null : `the mark is the compact hint at ${compact(current.hint_tokens)}, a heuristic`,
       `${whole(current.turns_since_compaction)} turns ${since}`, pace].filter(Boolean).join(" · ")}),
     ...compactNowNotes(current.compact_now));
+}
+
+// the gauge's words after a compaction without a reply since: the context before it; what it left shows with the
+// next call, which sends the prefix again (postTokens isn't that call's context)
+function compactedNote(current) {
+  return `Before it, the context was ${compact(current.context)} of ${compact(current.auto_compact)}. The next ` +
+         "reply shows the new one: the summary, with the system prompt, tools and CLAUDE.md sent again.";
 }
 
 // whether the session view calls for compacting: "cold" once a live session's cache has expired and compacting

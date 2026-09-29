@@ -502,8 +502,8 @@ def returned_chars(store: Store, tool_use_id: str | None) -> int | None:
 def current_context(store: Store, session_id: str, settings: compact.CompactSettings, prices: pricing.Prices,
                     past: list[turns.VersusKeeping | None] | None = None) -> Row | None:
     """The gauge of the session's main thread (turns.gauge) with what compacting now would cost and when it would
-    pay off (turns.compact_preview, learning from past, by default every stored compaction), or None without
-    main-thread turns."""
+    pay off (turns.compact_preview, learning from past, by default every stored compaction; None once it compacted
+    after its last call, which leaves nothing to compact), or None without main-thread turns."""
     path = transcript_path(store, session_id, None)
     if path is None:
         return None
@@ -512,6 +512,8 @@ def current_context(store: Store, session_id: str, settings: compact.CompactSett
     gauge = turns.gauge(history, turns.steps(history, moments, prices), moments, settings)
     if gauge is None:
         return None
+    if gauge["compacted"] is not None:
+        return {**gauge, "compact_now": None}
     if past is None:
         past = compaction_history(store, prices, settings)
     return {**gauge, "compact_now": turns.compact_preview(history, past, prices, gauge["turns_since_compaction"],

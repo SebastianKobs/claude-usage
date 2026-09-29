@@ -244,13 +244,16 @@ def gauge(turns: list[Turn], turn_steps: list[Step], compactions: tuple[datetime
           settings: compact.CompactSettings) -> dict[str, Any] | None:
     """Where the last turn's context stands: against the model's auto-compact point and the soft hint, the turns
     since the last compaction, the mean growth and context step over the last GAUGE_STEPS steps since then, and
-    the turns left until auto-compact at that pace (None if it doesn't grow). None without turns."""
+    the turns left until auto-compact at that pace (None if it doesn't grow). A compaction after the last turn
+    (compacted) starts a stretch without turns yet: the context is the one before it until the next call. None
+    without turns."""
     if not turns:
         return None
     last = turns[-1]
     point = compact.auto_compact_point(settings, last.model)
+    since = [moment for moment in compactions if last.ts is not None and moment > last.ts]
     # the stretch since the last compaction starts at the latest step without growth
-    start = max(index for index, step in enumerate(turn_steps) if step.growth is None)
+    start = len(turns) if since else max(index for index, step in enumerate(turn_steps) if step.growth is None)
     recent = range(max(start + 1, len(turns) - GAUGE_STEPS), len(turns))
     growths = [turn_steps[index].growth for index in recent]
     context_steps = [turns[index].context - turns[index - 1].context for index in recent]
@@ -258,10 +261,12 @@ def gauge(turns: list[Turn], turn_steps: list[Step], compactions: tuple[datetime
     headroom = point - last.context
     turns_left = math.floor(headroom / mean_step) if mean_step and mean_step > 0 and headroom > 0 else None
     past = [moment for moment in compactions if last.ts is None or moment <= last.ts]
+    latest = max(since or past, default=None)
     return {"context": last.context, "model": last.model, "auto_compact": point,
             "hint_tokens": settings.hint_tokens, "share": round(last.context / point, 2), "headroom": headroom,
             "turns_since_compaction": len(turns) - start,
-            "last_compaction": max(past).isoformat(timespec="milliseconds") if past else None,
+            "last_compaction": None if latest is None else latest.isoformat(timespec="milliseconds"),
+            "compacted": max(since).isoformat(timespec="milliseconds") if since else None,
             "mean_growth": round(statistics.mean(growths)) if growths else None, "mean_step": mean_step,
             "turns_left": turns_left}
 

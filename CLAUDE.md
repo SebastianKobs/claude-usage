@@ -284,7 +284,10 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     the read price.
   - The gauge (`current` in `/api/session`): the main thread's last context against the auto-compact point, turns
     since the last compaction, the mean growth and context step over the last 10 steps since then, and the turns
-    left at that pace. Its `compact_now` (`turns.compact_preview`) previews compacting after the last call:
+    left at that pace. A compaction after the last call (`compacted`) starts a stretch without a call yet: until the
+    next one the gauge shows the compaction and the context before it, and `compact_now` is None, so neither the
+    call to compact nor a live card's trash compactor shows (the context left isn't known: `postTokens` isn't the
+    next call's). Its `compact_now` (`turns.compact_preview`) previews compacting after the last call:
     - Exact: each call's re-read (the last context and reply at the read price), the cache warm until the last
       request plus the `cache_ttl` of the latest call that wrote (a lower bound: other requests may refresh it),
       and keeping across a break past that (rewriting it all).

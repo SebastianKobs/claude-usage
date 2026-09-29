@@ -696,6 +696,26 @@ class GaugeTest(unittest.TestCase):
         gauge = self.gauge(history, (START + timedelta(seconds=90),))
         self.assertEqual(gauge["mean_step"], 1_000)
 
+    def test_a_compaction_after_the_last_turn_is_noted(self):
+        moment = START + timedelta(minutes=5)
+        gauge = self.gauge(spaced((0, 100_000, 0, 0), (0, 1_000, 100_000, 0)), (moment,))
+        self.assertEqual((gauge["compacted"], gauge["last_compaction"]),
+                         (moment.isoformat(timespec="milliseconds"), moment.isoformat(timespec="milliseconds")))
+
+    def test_a_compaction_before_the_last_turn_is_not_noted(self):
+        gauge = self.gauge(spaced((0, 100_000, 0, 0), (0, 1_000, 0, 0)), (START + timedelta(seconds=30),))
+        self.assertIsNone(gauge["compacted"])
+
+    def test_after_a_compaction_without_a_turn_none_counts_yet(self):
+        history = spaced((0, 100_000, 0, 0), (0, 1_000, 100_000, 0), (0, 1_000, 101_000, 0))
+        gauge = self.gauge(history, (START + timedelta(minutes=5),))
+        self.assertEqual((gauge["turns_since_compaction"], gauge["mean_growth"], gauge["mean_step"],
+                          gauge["turns_left"]), (0, None, None, None))
+
+    def test_after_a_compaction_without_a_turn_the_context_is_the_one_before_it(self):
+        gauge = self.gauge(spaced((0, 100_000, 0, 0), (0, 1_000, 100_000, 0)), (START + timedelta(minutes=5),))
+        self.assertEqual(gauge["context"], 101_000)
+
 
 if __name__ == "__main__":
     unittest.main()

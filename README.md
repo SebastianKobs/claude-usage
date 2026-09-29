@@ -95,7 +95,8 @@ Click a session to open it. While the session is running the view updates itself
 conversation too, without closing what you opened. Besides its cost, time and tables, it shows what its context
 holds:
 - the main thread's latest context against the auto-compact point, with the compact hint marked, the turns since
-  the last compaction and an estimate of the turns left at the recent pace. Below it, what compacting now would
+  the last compaction and an estimate of the turns left at the recent pace (right after a compaction, until the
+  next reply, the compaction and the context before it, with no call to compact). Below it, what compacting now would
   cost: what each call re-reads, until when the cache stays warm and what keeping costs after that, and from your
   stored compactions after how many replies compacting would pay off, marked green (soon: within half the replies
   you usually still make), yellow (close), grey (not yet: the context is still too small, and at its recent pace
