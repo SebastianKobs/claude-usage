@@ -347,10 +347,14 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       the path or the name), its options the optional inputs it gave, by name (`offset limit`, `replace_all`).
       Grep's detail is its output mode (`files_with_matches` when none is given), since it sets the result's size;
       Glob's the file type its pattern matches. Their options likewise (`-C -n glob`, `path`), never the values.
-    - One row per detail under its kind (a file tool's under the tool), one per set of options under its detail. Each row that splits folds, until
-      the button in its label ("git (4 subcommands)", "grep (3 option sets)") opens it; the kinds always show. A
-      row's `fold` is its key per agent, the rows under it carry it as `parent`, and a row shows while every fold
-      above it is open.
+      Agent's (and the older Task's) detail is its subagent type (`general-purpose` when none is given), Skill's its
+      skill (`DELEGATING_TOOLS`). MCP tools count under one tool, `MCP` (`call_tool`), whose kinds are the servers
+      and details their tools, the options every input given by name; a server's name is never a Bash kind, not
+      even for exploration.
+    - One row per detail under its kind (a file tool's under the tool), one per set of options under its detail. Each
+      row that splits folds, until the button in its label ("git (4 subcommands)", "grep (3 option sets)") opens
+      it; the kinds (and servers) always show. A row's `fold` is its key per agent, the rows under it carry it as
+      `parent`, and a row shows while every fold above it is open.
     - Checked 2026-09-29 on real transcripts (counts only): moving between Read/Edit/Write and Bash saves nothing
       measurable (median results 3,066 for a whole-file Read against 6,600 for `cat` and 2,905 for `sed -n`; Edit
       input 707 characters against 674 for `sed -i`; heredocs fail 5.6 % against Write's 0.8 %). What costs is what

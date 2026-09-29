@@ -162,7 +162,7 @@ class FileToolTest(unittest.TestCase):
         self.assertEqual(tool_kinds.call_class("Read", {}), (None, "", ""))
 
     def test_other_tools_have_no_detail(self):
-        self.assertEqual(tool_kinds.call_class("Agent", {"prompt": "x"}), (None, None, None))
+        self.assertEqual(tool_kinds.call_class("WebFetch", {"url": "x"}), (None, None, None))
 
 
 class SearchToolTest(unittest.TestCase):
@@ -187,6 +187,39 @@ class SearchToolTest(unittest.TestCase):
 
     def test_a_globs_options_are_its_inputs_by_name(self):
         self.assertEqual(tool_kinds.call_class("Glob", {"pattern": "*.go", "path": "/srv"}), (None, ".go", "path"))
+
+
+class DelegatingToolTest(unittest.TestCase):
+    def test_an_agent_splits_by_its_subagent_type(self):
+        tool_input = {"description": "d", "prompt": "p", "subagent_type": "Explore"}
+        self.assertEqual(tool_kinds.call_class("Agent", tool_input), (None, "Explore", ""))
+
+    def test_an_agent_without_a_type_is_general_purpose(self):
+        self.assertEqual(tool_kinds.call_class("Agent", {"prompt": "p"})[1], "general-purpose")
+
+    def test_the_older_task_tool_counts_alike(self):
+        self.assertEqual(tool_kinds.call_class("Task", {"prompt": "p", "subagent_type": "Plan"})[1], "Plan")
+
+    def test_an_agents_options_are_its_optional_inputs_by_name(self):
+        tool_input = {"description": "d", "prompt": "p", "subagent_type": "Explore", "model": "haiku",
+                      "run_in_background": True, "isolation": None}
+        self.assertEqual(tool_kinds.call_class("Agent", tool_input)[2], "model run_in_background")
+
+    def test_a_skill_splits_by_its_name_and_its_arguments_count_as_an_option(self):
+        self.assertEqual(tool_kinds.call_class("Skill", {"skill": "plugin:review", "args": "--all"}),
+                         (None, "plugin:review", "args"))
+
+    def test_a_skill_without_a_name_has_an_empty_detail(self):
+        self.assertEqual(tool_kinds.call_class("Skill", {}), (None, "", ""))
+
+    def test_an_mcp_tool_counts_under_mcp_by_server_then_tool(self):
+        self.assertEqual(tool_kinds.call_tool("mcp__code-index__search_graph"), "MCP")
+        self.assertEqual(tool_kinds.call_class("mcp__code-index__search_graph", {"query": "x", "limit": 5}),
+                         ("code-index", "search_graph", "limit query"))
+
+    def test_a_name_that_only_looks_like_mcp_stays_a_tool_of_its_own(self):
+        self.assertEqual(tool_kinds.call_tool("mcp__odd"), "mcp__odd")
+        self.assertEqual(tool_kinds.call_class("mcp__odd", {}), (None, None, None))
 
 
 class TranscriptToolsTest(TempDirTestCase):
@@ -216,8 +249,28 @@ class TranscriptToolsTest(TempDirTestCase):
 
     def test_other_tools_get_one_row_named_as_shown(self):
         self.call("m1", "t1", "Read", {"file_path": "a.go"}, "x" * 10)
-        self.call("m2", "t2", "mcp__srv__find", {"q": "y"}, "y")
-        self.assertEqual(set(self.rows()), {("Read", None), ("srv.find", None)})
+        self.call("m2", "t2", "WebFetch", {"url": "y"}, "y")
+        self.assertEqual(set(self.rows()), {("Read", None), ("WebFetch", None)})
+
+    def test_mcp_tools_split_by_server_then_tool_then_options(self):
+        self.call("m1", "t1", "mcp__srv__find", {"q": "y"}, "y" * 10)
+        self.call("m2", "t2", "mcp__srv__find", {"q": "y", "limit": 3}, "y" * 20)
+        self.call("m3", "t3", "mcp__other__get", {}, "y" * 30)
+        rows = tool_kinds.transcript_tools(self.main.path, PRICES).rows
+        self.assertEqual([(row.tool, row.kind, row.detail, row.options, row.calls) for row in rows],
+                         [("MCP", None, None, None, 3), ("MCP", "srv", None, None, 2), ("MCP", "srv", "find", None, 2),
+                          ("MCP", "srv", "find", "limit q", 1), ("MCP", "srv", "find", "q", 1),
+                          ("MCP", "other", None, None, 1), ("MCP", "other", "get", None, 1),
+                          ("MCP", "other", "get", "", 1)])
+        self.assertEqual(rows[1].result_chars, 30)
+
+    def test_agents_and_skills_split_by_their_detail_then_options(self):
+        self.call("m1", "t1", "Agent", {"prompt": "p", "subagent_type": "Explore"}, "x")
+        self.call("m2", "t2", "Skill", {"skill": "review"}, "x")
+        rows = tool_kinds.transcript_tools(self.main.path, PRICES).rows
+        self.assertEqual([(row.tool, row.detail, row.options) for row in rows],
+                         [("Agent", None, None), ("Agent", "Explore", None), ("Agent", "Explore", ""),
+                          ("Skill", None, None), ("Skill", "review", None), ("Skill", "review", "")])
 
     def test_rows_go_by_calls_with_the_kinds_under_their_tool(self):
         for index in range(3):
@@ -342,6 +395,8 @@ class TranscriptToolsTest(TempDirTestCase):
         self.call("m2", "t2", "Bash", {"command": "make test"}, "ok")
         self.call("m3", "t3", "mcp__srv__find", {}, "ok")
         self.call("m4", "t4", "Agent", {}, "ok")
+        # a server's name is no Bash kind, even where it reads like one
+        self.call("m5", "t5", "mcp__search__find", {}, "ok")
         self.assertIsNone(self.exploration())
 
     def test_exploration_starts_again_after_a_compaction(self):

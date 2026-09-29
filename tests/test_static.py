@@ -225,10 +225,30 @@ class ToolTableTest(unittest.TestCase):
                  ({"tool": "NotebookEdit", "kind": None, "detail": None}, 1, "file type"),
                  ({"tool": "Read", "kind": None, "detail": ".go"}, 2, "option sets"),
                  ({"tool": "Grep", "kind": None, "detail": None}, 2, "output modes"),
-                 ({"tool": "Glob", "kind": None, "detail": None}, 2, "file types")]
+                 ({"tool": "Glob", "kind": None, "detail": None}, 2, "file types"),
+                 ({"tool": "Agent", "kind": None, "detail": None}, 2, "subagent types"),
+                 ({"tool": "Task", "kind": None, "detail": None}, 1, "subagent type"),
+                 ({"tool": "Skill", "kind": None, "detail": None}, 3, "skills"),
+                 ({"tool": "MCP", "kind": "git", "detail": None}, 2, "tools"),
+                 ({"tool": "MCP", "kind": "srv", "detail": "find"}, 2, "option sets")]
         for row, count, noun in cases:
             with self.subTest(row=row):
                 self.assertEqual(run_function("drilldown.js", "detailNoun", row, count), noun)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_an_empty_detail_says_what_is_missing(self):
+        cases = [({"tool": "Bash", "kind": "run"}, "(none)"), ({"tool": "Read", "kind": None}, "no type"),
+                 ({"tool": "Glob", "kind": None}, "no single type"), ({"tool": "Skill", "kind": None}, "no name")]
+        for row, text in cases:
+            with self.subTest(row=row):
+                self.assertEqual(run_function("drilldown.js", "emptyDetail", row), text)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_kind_is_named_in_words_for_bash_and_as_it_is_for_an_mcp_server(self):
+        labels = {"run": "run a program"}
+        self.assertEqual(run_function("drilldown.js", "kindLabel", {"tool": "Bash", "kind": "run"}, labels),
+                         "run a program")
+        self.assertEqual(run_function("drilldown.js", "kindLabel", {"tool": "MCP", "kind": "run"}, labels), "run")
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_without_the_transcript_the_stored_tools_show_without_what_only_it_tells(self):

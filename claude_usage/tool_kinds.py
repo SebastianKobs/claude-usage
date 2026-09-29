@@ -21,6 +21,7 @@ from claude_usage import transcripts
 from claude_usage import turns
 
 BASH = "Bash"
+MCP = "MCP"                                             # every MCP server's tools, one kind per server
 # Characters per token of what tool calls add to the context, a heuristic: the median over 1,966 steps of real
 # transcripts that added a single tool result of 2,000 characters or more (checked 2026-09-29, counts only; code,
 # logs and JSON in several languages; 2.2 to 2.4 across Read, cat and grep).
@@ -76,8 +77,17 @@ FILE_TOOLS = {"Read": ("file_path", frozenset({"file_path"})),
 # Grep's output modes (they decide how large its result is), files_with_matches when none is given
 GREP_MODES = frozenset({"content", "files_with_matches", "count"})
 GREP_DEFAULT_MODE = "files_with_matches"
-# the tools whose rows split by a detail: the file tools, Grep by output mode, Glob by the file type it matches
-DETAILED_TOOLS = frozenset(FILE_TOOLS) | {"Grep", "Glob"}
+# the tools that hand work on, with the input naming what they hand it to and the inputs every call gives; Task is
+# Agent's older name. A call without a subagent type runs Claude Code's general-purpose agent.
+DELEGATING_TOOLS = {"Agent": ("subagent_type", frozenset({"subagent_type", "description", "prompt"})),
+                    "Task": ("subagent_type", frozenset({"subagent_type", "description", "prompt"})),
+                    "Skill": ("skill", frozenset({"skill"}))}
+DEFAULT_SUBAGENT = "general-purpose"
+# the tools whose rows split by a detail: the file tools, Grep by output mode, Glob by the file type it matches,
+# Agent by subagent type and Skill by skill
+DETAILED_TOOLS = frozenset(FILE_TOOLS) | frozenset(DELEGATING_TOOLS) | {"Grep", "Glob"}
+# the tools whose rows split by a kind first: Bash by what a command does, MCP by server
+KINDED_TOOLS = frozenset({BASH, MCP})
 # a file name's type: its last suffix, or a dotfile's name (.env); anything longer or odder is no type
 FILE_TYPE = re.compile(r"\.[A-Za-z0-9_+-]{1,10}")
 
@@ -86,7 +96,7 @@ FILE_TYPE = re.compile(r"\.[A-Za-z0-9_+-]{1,10}")
 class CallFact:
     """One tool call of a transcript, as counts: its tool, its Bash kind, its sizes and what later calls carry."""
     tool: str                           # the display name
-    kind: str | None                    # a Bash call's kind, else None
+    kind: str | None                    # a Bash call's kind, an MCP tool's server, else None
     input_chars: int                    # of its input as JSON: the model wrote it
     result_chars: int | None            # None while its result hasn't come
     error: bool
@@ -105,8 +115,8 @@ class CallFact:
 
     @property
     def exploring(self) -> bool:
-        """Whether it looks at code (EXPLORING_TOOLS, EXPLORING_KINDS)."""
-        return self.tool in EXPLORING_TOOLS or self.kind in EXPLORING_KINDS
+        """Whether it looks at code (EXPLORING_TOOLS, EXPLORING_KINDS), never by an MCP server's name."""
+        return self.tool in EXPLORING_TOOLS or (self.tool == BASH and self.kind in EXPLORING_KINDS)
 
 
 @dataclass(frozen=True)
@@ -121,8 +131,9 @@ class Exploration:
 
 @dataclass(frozen=True)
 class ToolKindRow:
-    """A tool's calls, a Bash kind's (kind set), a kind's detail's (detail set too: a program, an interpreter, a
-    git subcommand) or a detail's options' (options set too), in a transcript: counts, sizes and costs."""
+    """A tool's calls, a Bash kind's or an MCP server's (kind set), a kind's detail's (detail set too: a program, an
+    interpreter, a git subcommand, a server's tool) or a detail's options' (options set too), in a transcript:
+    counts, sizes and costs."""
     tool: str
     kind: str | None
     detail: str | None
@@ -262,13 +273,36 @@ def git_subcommand(words: list[str]) -> tuple[str, list[str]]:
     return "", []
 
 
+def mcp_tool(name: str) -> tuple[str, str] | None:
+    """An MCP tool's server and tool (mcp__<server>__<tool>); None for any other name."""
+    if not name.startswith(transcripts.MCP_PREFIX):
+        return None
+    server, separator, tool = name[len(transcripts.MCP_PREFIX):].partition("__")
+    return (server, tool) if separator else None
+
+
+def call_tool(name: str) -> str:
+    """The tool a call counts under: MCP for an MCP server's tool (call_class splits it), else its display name."""
+    return MCP if mcp_tool(name) else transcripts.display_name(name)
+
+
 def call_class(name: str, tool_input: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
-    """A call's kind, detail and options: a Bash call's by command_class. The other DETAILED_TOOLS have no kind,
-    and their optional inputs by name as options (input_options): a file tool's detail is its file's type, Grep's
-    its output mode, Glob's the file type its pattern matches. None for each for any other tool."""
+    """A call's kind, detail and options: a Bash call's by command_class, an MCP tool's by its server, its tool and
+    all the inputs it gave by name. The other DETAILED_TOOLS have no kind, and their optional inputs by name as
+    options (input_options): a file tool's detail is its file's type, Grep's its output mode, Glob's the file type
+    its pattern matches, Agent's its subagent type, Skill's its skill. None for each for any other tool."""
     if name == BASH:
         command = tool_input.get("command")
         return command_class(command if isinstance(command, str) else "")
+    server_tool = mcp_tool(name)
+    if server_tool is not None:
+        return *server_tool, input_options(tool_input, frozenset())
+    if name in DELEGATING_TOOLS:
+        detail_key, required = DELEGATING_TOOLS[name]
+        detail = text_input(tool_input, detail_key)
+        if detail_key == "subagent_type":
+            detail = detail or DEFAULT_SUBAGENT
+        return None, detail, input_options(tool_input, required)
     if name in FILE_TOOLS:
         path_key, required = FILE_TOOLS[name]
         return None, file_type(text_input(tool_input, path_key)), input_options(tool_input, required)
@@ -346,7 +380,7 @@ def read_calls(path: Path, prices: pricing.Prices) -> list[CallFact]:
                     continue
                 tool_input = block.get("input") if isinstance(block.get("input"), dict) else {}
                 kind, detail, options = call_class(name, tool_input)
-                calls[tool_use_id] = PendingCall(transcripts.display_name(name), kind,
+                calls[tool_use_id] = PendingCall(call_tool(name), kind,
                                                  len(json.dumps(tool_input, ensure_ascii=False)), message_id, detail,
                                                  options)
         elif kind == "user":
@@ -422,12 +456,13 @@ def grouped(facts: list[CallFact], key: Callable[[CallFact], Any]) -> list[tuple
 
 
 def tool_rows(facts: list[CallFact]) -> list[ToolKindRow]:
-    """One row per tool, the most called first; Bash's is followed by one per command kind, each kind's and each of
-    the other DETAILED_TOOLS' by one per detail, each detail's by one per set of options."""
+    """One row per tool, the most called first; Bash's is followed by one per command kind and MCP's by one per
+    server (KINDED_TOOLS), each kind's and each of the DETAILED_TOOLS' by one per detail, each detail's by one per
+    set of options."""
     rows = []
     for tool, tool_facts in grouped(facts, lambda fact: fact.tool):
         rows.append(tool_row(tool, None, tool_facts))
-        if tool == BASH:
+        if tool in KINDED_TOOLS:
             for kind, kind_facts in grouped(tool_facts, lambda fact: fact.kind):
                 rows.append(tool_row(tool, kind, kind_facts))
                 rows += detail_rows(tool, kind, kind_facts)

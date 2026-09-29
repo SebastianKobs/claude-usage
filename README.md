@@ -81,8 +81,9 @@ holds:
   file, inline script, git, run: by the programs, in any language; each kind by program, git by subcommand, and
   each of those by the options it ran with, never its arguments or paths, behind a button; Read, Edit and Write
   by file type and the options they gave, such as a line range; Grep by output mode, Glob by the file type it
-  matches), errors, result and input sizes, and an estimate of what the later calls paid to carry each call's input
-  and result in their context, while the transcript exists;
+  matches; Agent by subagent type, Skill by skill; MCP tools by server, then tool), errors, result and input
+  sizes, and an estimate of what the later calls paid to carry each call's input and result in their context,
+  while the transcript exists;
 - each compaction against keeping the context: what it cost once, what each later call saved, the call at which it
   paid off, and whether it saved (green) or cost more (red), at API list prices with the summary call estimated. The
   table's heading adds them up. The conversation shows the same at each compaction marker, and the Estimated cost
