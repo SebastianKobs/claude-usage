@@ -450,7 +450,9 @@ function secretAccesses(detail, pagerKey) {
                   el("th", {text: "Result"}));
   const rows = accesses.map(access => el("tr", {},
     el("td", {text: when(access.time)}), el("td", {text: access.agent_type}), el("td", {text: access.tool}),
-    el("td", {class: "secret-path", text: access.path}), el("td", {text: access.pattern}),
+    el("td", {}, el("span", {class: "secret-path", text: access.path}),
+       secretVia(access) ? el("span", {class: "secret-via", text: secretVia(access)}) : null),
+    el("td", {text: access.pattern}),
     el("td", {text: secretAccessResult(access)})));
   const calls = accesses.length === 1 ? "1 call" : `${whole(accesses.length)} calls`;
   return el("div", {class: "card secret-alert", id: "secret-alert", role: "region",
@@ -462,7 +464,14 @@ function secretAccesses(detail, pagerKey) {
                    "meant; an error means it was blocked or failed."}),
     el("div", {class: "table-wrap"}, paged(pagerKey, el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows)))),
     el("p", {class: "muted", text: "Matched against [secrets] patterns in the config: file tools by their path, " +
-                                   "commands by their words (quoted text only where it holds a path)."}));
+      "commands by their words with the variables they set (quoted text only where it holds a path), and scripts " +
+      "this transcript wrote and then ran by their text. Variables from earlier calls and other scripts are " +
+      "unknown."}));
+}
+
+// the script a path came from, where the call ran one the transcript wrote; null for a path the call named itself
+function secretVia(access) {
+  return access.via ? `in ${access.via}, which it ran` : null;
 }
 
 // whether a call that named a secret location ran

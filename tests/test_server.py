@@ -703,7 +703,8 @@ class SecretAccessTest(ServerCase):
         accesses = self.accesses()
         self.assertEqual([(access["agent_type"], access["agent_id"], access["tool"], access["path"], access["pattern"],
                            access["error"]) for access in accesses],
-                         [("main", None, "Read", ".env", ".env", True), ("general-purpose", "a1", "Bash", "~/.ssh", "~/.ssh", None)])
+                         [("main", None, "Read", ".env", ".env", True),
+                          ("general-purpose", "a1", "Bash", "~/.ssh", "~/.ssh", None)])
         self.assertTrue(all(access["time"] for access in accesses))
 
     def test_a_session_without_one_lists_none(self):

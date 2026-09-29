@@ -106,6 +106,24 @@ class CallPathsTest(unittest.TestCase):
         command = "python3 - <<'EOF'\nprint(open('/home/dev/.aws/credentials').read(), 'x')\nEOF"
         self.assertEqual(self.paths("Bash", {"command": command}), ["python3", "/home/dev/.aws/credentials"])
 
+    def test_a_variable_set_in_the_command_is_expanded(self):
+        self.assertIn("~/.ssh/id_rsa", self.paths("Bash", {"command": "D=~/.ss; cat ${D}h/id_rsa"}))
+        self.assertIn("~/.ssh/id_rsa", self.paths("Bash", {"command": "export D=~/.ssh; cat $D/id_rsa"}))
+
+    def test_a_quoted_value_is_expanded_too(self):
+        command = 'K="$HOME/.aws"; cat "$K/credentials"'
+        self.assertIn("$HOME/.aws/credentials", self.paths("Bash", {"command": command}))
+
+    def test_single_quoted_text_is_not_expanded(self):
+        self.assertIn("$F/y", self.paths("Bash", {"command": "F=x; echo '$F/y'"}))
+
+    def test_a_longer_name_is_another_variable(self):
+        self.assertIn("$Dh", self.paths("Bash", {"command": "D=~/.ssh; cat $Dh"}))
+
+    def test_an_option_is_no_assignment(self):
+        self.assertEqual(self.paths("Bash", {"command": "cut --delimiter=x $delimiter"}),
+                         ["cut", "x", "$delimiter"])
+
     def test_a_word_counts_once(self):
         self.assertEqual(self.paths("Bash", {"command": "cat .env .env"}), ["cat", ".env"])
 
@@ -116,12 +134,76 @@ class SecretMatchesTest(unittest.TestCase):
                                               "/srv/app")
         self.assertEqual(matches, [(".env", ".env"), ("~/.ssh/backup", "~/.ssh")])
 
-    def test_a_finder_matches_with_its_patterns_and_home(self):
-        find = secret_paths.finder(PATTERNS, HOME)
-        self.assertEqual(find("Read", {"file_path": ".ssh/config"}, "/home/dev"), [(".ssh/config", "~/.ssh")])
+    def test_a_finder_starts_a_scan_with_its_patterns_and_home(self):
+        scan = secret_paths.finder(PATTERNS, HOME)()
+        self.assertEqual(scan("Read", {"file_path": ".ssh/config"}, "/home/dev"), [(".ssh/config", "~/.ssh", None)])
+
+    def test_each_scan_starts_without_the_files_another_one_saw_written(self):
+        start = secret_paths.finder(PATTERNS, HOME)
+        start()("Write", {"file_path": "/srv/a.py", "content": "open('/home/dev/.aws/x')"}, "/srv")
+        self.assertEqual(start()("Bash", {"command": "python a.py"}, "/srv"), [])
 
     def test_without_patterns_nothing_matches(self):
         self.assertEqual(secret_paths.secret_matches("Read", {"file_path": ".env"}, (), HOME, None), [])
+
+
+class ScriptTest(unittest.TestCase):
+    """A script the transcript wrote, and later ran: its text is scanned as the command's."""
+
+    def setUp(self):
+        self.scan = secret_paths.TranscriptScan(PATTERNS, HOME)
+
+    def run_calls(self, *calls, cwd="/srv/app"):
+        """What the scan found in the last of these calls (name, input)."""
+        found = None
+        for name, tool_input in calls:
+            found = self.scan(name, tool_input, cwd)
+        return found
+
+    def test_a_script_run_names_the_paths_in_its_code(self):
+        found = self.run_calls(("Write", {"file_path": "/srv/app/deploy.py",
+                                          "content": "keys = open('/home/dev/.aws/credentials').read()\n"}),
+                               ("Bash", {"command": "python3 deploy.py --dry-run"}))
+        self.assertEqual(found, [("/home/dev/.aws/credentials", "~/.aws", "deploy.py")])
+
+    def test_writing_a_script_names_no_path_in_it(self):
+        found = self.run_calls(("Write", {"file_path": "/srv/app/deploy.py", "content": "open('/home/dev/.ssh/x')"}))
+        self.assertEqual(found, [])
+
+    def test_a_shell_script_is_scanned_like_a_command(self):
+        write = ("Write", {"file_path": "run.sh", "content": "#!/bin/sh\nD=~/.ssh\ncat $D/id_rsa\n"})
+        cases = {"bash run.sh": "run.sh", "./run.sh": "./run.sh", "sh /srv/app/run.sh": "/srv/app/run.sh",
+                 "source run.sh && make": "run.sh"}
+        for command, via in cases.items():
+            with self.subTest(command=command):
+                self.assertEqual(self.run_calls(write, ("Bash", {"command": command})),
+                                 [("~/.ssh", "~/.ssh", via), ("~/.ssh/id_rsa", "~/.ssh", via)])
+
+    def test_an_edit_adds_its_new_text(self):
+        found = self.run_calls(("Write", {"file_path": "a.py", "content": "print(1)"}),
+                               ("Edit", {"file_path": "/srv/app/a.py", "old_string": "print(1)",
+                                         "new_string": "print(open('/home/dev/.ssh/config').read())"}),
+                               ("Bash", {"command": "python a.py"}))
+        self.assertEqual(found, [("/home/dev/.ssh/config", "~/.ssh", "a.py")])
+
+    def test_a_write_replaces_what_was_written(self):
+        found = self.run_calls(("Write", {"file_path": "a.py", "content": "open('/home/dev/.ssh/config')"}),
+                               ("Write", {"file_path": "a.py", "content": "print(1)"}),
+                               ("Bash", {"command": "python a.py"}))
+        self.assertEqual(found, [])
+
+    def test_viewing_a_script_does_not_run_it(self):
+        found = self.run_calls(("Write", {"file_path": "a.py", "content": "open('/home/dev/.ssh/config')"}),
+                               ("Bash", {"command": "cat a.py"}))
+        self.assertEqual(found, [])
+
+    def test_a_script_not_written_here_is_unknown(self):
+        self.assertEqual(self.run_calls(("Bash", {"command": "python other.py"})), [])
+
+    def test_the_command_itself_still_counts(self):
+        found = self.run_calls(("Write", {"file_path": "a.py", "content": "open('/home/dev/.ssh/config')"}),
+                               ("Bash", {"command": "python a.py .env"}))
+        self.assertEqual(found, [(".env", ".env", None), ("/home/dev/.ssh/config", "~/.ssh", "a.py")])
 
 
 class ParsePatternsTest(unittest.TestCase):

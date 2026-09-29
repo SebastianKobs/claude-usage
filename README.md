@@ -79,7 +79,8 @@ holds:
 - per subagent, what it returned to the main thread; a Workflow run's agents under one row per run;
 - a warning under the tiles, with a red edge and a "!", listing every tool call that named a possible secret
   location (`.env`, keys, `~/.ssh`, `~/.aws`, … as set in `[secrets] patterns`): when, which agent and tool, the path,
-  the pattern it matched and whether it ran or was blocked, while the transcript exists;
+  the pattern it matched and whether it ran or was blocked, while the transcript exists. A command's own variables
+  are expanded, and a script the session wrote and then ran is checked by its text;
 - the tools each transcript called, with Bash split by what a command does (search, view, edit in place, write a
   file, inline script, git, run: by the programs, in any language; each kind by program, git by subcommand, and
   each of those by the options it ran with, never its arguments or paths, behind a button; Read, Edit and Write

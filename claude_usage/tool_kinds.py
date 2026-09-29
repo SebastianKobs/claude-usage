@@ -139,10 +139,14 @@ class SecretAccess:
     path: str
     pattern: str                        # the [secrets] pattern it matched
     error: bool | None                  # whether its result was an error (blocked or failed); None while it hasn't come
+    via: str | None = None              # the script it ran that named the path, as the command gave it
 
 
-# a call's name, input and working folder -> each path it named that marks a possible secret, with the pattern
-SecretFinder = Callable[[str, dict[str, Any], str | None], list[tuple[str, str]]]
+# a transcript's calls in order, each by its name, input and working folder -> each path it named that marks a
+# possible secret, with the pattern and the script it ran that named it (or None)
+SecretScan = Callable[[str, dict[str, Any], str | None], list[tuple[str, str, str | None]]]
+# starts a scan for one transcript read: a scan remembers the scripts the transcript wrote
+SecretFinder = Callable[[], SecretScan]
 
 
 @dataclass(frozen=True)
@@ -369,10 +373,11 @@ class PendingCall:
 def read_calls(path: Path, prices: pricing.Prices,
                find_secrets: SecretFinder | None = None) -> tuple[list[CallFact], list[SecretAccess]]:
     """Every tool call of a transcript file in order, as counts, and those that named a possible secret location
-    (find_secrets, with the record's working folder). A record written again (the same uuid) counts once; synthetic
-    messages (API errors) are no calls. Raises OSError if the file is gone."""
+    (a scan find_secrets starts, with the record's working folder). A record written again (the same uuid) counts
+    once; synthetic messages (API errors) are no calls. Raises OSError if the file is gone."""
     calls: dict[str, PendingCall] = {}
     secrets: list[tuple[str, SecretAccess]] = []
+    scan = None if find_secrets is None else find_secrets()
     results: dict[str, tuple[int, bool]] = {}
     positions: dict[str, tuple[int, int]] = {}      # message id -> (its call number, its stretch)
     accumulator = transcripts.MessageAccumulator()
@@ -402,11 +407,12 @@ def read_calls(path: Path, prices: pricing.Prices,
                 calls[tool_use_id] = PendingCall(call_tool(name), kind,
                                                  len(json.dumps(tool_input, ensure_ascii=False)), message_id, detail,
                                                  options)
-                if find_secrets is not None:
+                if scan is not None:
                     time = transcripts.text_or_none(record.get("timestamp"))
-                    secrets += [(tool_use_id, SecretAccess(time, transcripts.display_name(name), found, pattern, None))
-                                for found, pattern in find_secrets(name, tool_input,
-                                                                   transcripts.text_or_none(record.get("cwd")))]
+                    secrets += [(tool_use_id,
+                                 SecretAccess(time, transcripts.display_name(name), found, pattern, None, via))
+                                for found, pattern, via in scan(name, tool_input,
+                                                                transcripts.text_or_none(record.get("cwd")))]
         elif kind == "user":
             for block in transcripts.content_blocks(record):
                 tool_use_id = transcripts.text_or_none(block.get("tool_use_id"))

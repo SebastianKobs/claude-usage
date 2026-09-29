@@ -439,6 +439,13 @@ class TranscriptToolsTest(TempDirTestCase):
         self.call("m1", "t1", "Read", {"file_path": ".ssh/id_ed25519"}, "x")
         self.assertEqual([access.pattern for access in self.secrets()], ["~/.ssh"])
 
+    def test_a_script_written_then_run_names_its_paths_by_the_word_that_ran_it(self):
+        self.call("m1", "t1", "Write", {"file_path": "deploy.py", "content": "open('/home/dev/.ssh/config')"}, "ok")
+        self.call("m2", "t2", "Bash", {"command": "python deploy.py"}, "done")
+        [access] = self.secrets()
+        self.assertEqual((access.tool, access.path, access.pattern, access.via, access.error),
+                         ("Bash", "/home/dev/.ssh/config", "~/.ssh", "deploy.py", False))
+
     def test_without_a_matcher_nothing_is_listed(self):
         self.call("m1", "t1", "Read", {"file_path": ".env"}, "x")
         self.assertEqual(tool_kinds.transcript_tools(self.main.path, PRICES).secret_accesses, ())

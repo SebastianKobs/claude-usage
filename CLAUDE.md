@@ -372,7 +372,13 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     - The paths a call names (`call_paths`): a file tool's path inputs by name (`PATH_KEY`: `file_path`, `path`,
       `glob`, …; Glob's `pattern` too, never Grep's regular expression or text a call writes); a command's words
       and option values (`--env-file=.env`), quoted text only where it holds a slash (a commit message naming
-      `.env` is no access), no URLs, and a heredoc's quoted paths only for an inline script. A heuristic.
+      `.env` is no access), no URLs, and a heredoc's quoted paths only for an inline script. The variables a
+      command sets itself are expanded first (`D=~/.ss; cat ${D}h/id_rsa`), not in single quotes. A heuristic.
+    - Scripts (`TranscriptScan`, one per transcript read: `finder` starts it, `read_calls` hands it every call in
+      order): it remembers the text each file got (a Write's content, an Edit's or MultiEdit's new text added), and
+      a later command of kind `run` whose word is such a file has that text scanned, a shell script (by suffix or
+      `#!`) like a command, other code by its quoted paths. The row's `via` is that word. Variables from earlier
+      calls, scripts from elsewhere and a script written in another transcript are unknown.
     - The page shows them under the tiles, before the call to compact (`secretAccesses`): a card edged in
       `--status-critical`, its heading on the critical wash with a `!` mark, the table paged; nothing without one.
   - `/api/session/<id>/chat[?agent=<id>]` reads the conversation from the transcript per request, with tool inputs

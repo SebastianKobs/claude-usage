@@ -275,6 +275,11 @@ class SecretAccessTest(unittest.TestCase):
             with self.subTest(error=error):
                 self.assertEqual(run_function("drilldown.js", "secretAccessResult", {"error": error}), text)
 
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_path_a_script_named_says_which_script(self):
+        self.assertEqual(run_function("drilldown.js", "secretVia", {"via": "deploy.py"}), "in deploy.py, which it ran")
+        self.assertIsNone(run_function("drilldown.js", "secretVia", {"via": None}))
+
     def test_the_warning_comes_after_the_tiles_and_before_the_call_to_compact(self):
         source = read(STATIC / "js" / "drilldown.js")
         render = source[source.index("function renderDrilldown("):source.index("\n}\n", source.index(
