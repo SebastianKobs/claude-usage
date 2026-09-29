@@ -44,15 +44,19 @@ function pageSize() {
   return pageSizeFrom(readPreference(PAGE_SIZE_PREFERENCE), PAGE_SIZES, DEFAULT_PAGE_SIZE);
 }
 
-// A table with more groups of rows than the smallest page, with a pager below it: the page size (a preference),
+// A table with more groups of rows than the smallest page, with a pager above it: the page size (a preference),
 // previous and next, and which rows show. `node` is the table or an element holding it; the pager goes right
-// after the table. Rows off the page get a class, not `hidden`, which a workflow run's switch uses.
+// before the table. Rows off the page get a class, not `hidden`, which a workflow run's switch uses.
 function paged(key, node) {
   const table = node.tagName === "TABLE" ? node : node.querySelector("table");
   const rows = table ? [...table.tBodies[0].rows] : [];
   const units = pageUnits(rows.map(row => row.classList.contains("sub-row")));
   const count = units.length ? units[units.length - 1] + 1 : 0;
-  if (count <= PAGE_SIZES[0]) return node;
+  if (count <= PAGE_SIZES[0]) {
+    // a pager left in the title row from a longer draw goes
+    queueMicrotask(() => placePager(node, null));
+    return node;
+  }
   const id = `pager-${key}`;
   const refocus = document.activeElement && document.activeElement.id ? document.activeElement.id : null;
   const size = el("select", {id: `${id}-size`, "aria-label": "Rows per page"},
@@ -71,7 +75,7 @@ function paged(key, node) {
     next.disabled = shown.page === shown.pages - 1;
     status.textContent = pageText(shown, count);
   };
-  // the pager stays where it was on the screen while the table above it grows or shrinks
+  // the pager stays where it was on the screen while the tables above it grow or shrink with the page size
   const turn = page => {
     const anchor = scrollAnchor([pager]);
     show(page);
@@ -93,12 +97,34 @@ function paged(key, node) {
   };
   pagers.add({pager, keepFirst});
   show(tablePages.get(key) ?? 0);
+  // once the caller has put the table in the page; before the refocus, since moving a control drops its focus
+  queueMicrotask(() => placePager(pager, pager));
   if (refocus && [size, previous, next].some(control => control.id === refocus)) {
     queueMicrotask(() => document.getElementById(refocus)?.focus({preventScroll: true}));
   }
-  if (table === node) return el("div", {class: "paged"}, table, pager);
-  table.after(pager);
+  if (table === node) return el("div", {class: "paged"}, pager, table);
+  table.before(pager);
   return node;
+}
+
+// The pager into its table's title row, right-aligned: the heading right before the table's wrap (a note may sit
+// between them) becomes a row with it. A table without one, such as a chart's table view under its chart, keeps the
+// pager above it. A redraw finds the row already made and swaps its pager, or drops it for a table without one
+// (pager null); `node` is what the caller put in the page.
+function placePager(node, pager) {
+  const wrap = node.isConnected ? node.closest(".table-wrap") : null;
+  let title = wrap ? wrap.previousElementSibling : null;
+  while (title && title.classList.contains("note")) title = title.previousElementSibling;
+  if (!title) return;
+  if (title.classList.contains("title-row")) {
+    title.querySelector(":scope > .pager")?.remove();
+    if (pager) title.append(pager);
+    return;
+  }
+  if (!pager || !["H2", "H3"].includes(title.tagName)) return;
+  const row = el("div", {class: "title-row"});
+  title.replaceWith(row);
+  row.append(title, pager);
 }
 
 // --- tables --------------------------------------------------------------------------------------------------
@@ -159,10 +185,6 @@ function renderTables(summary) {
 
 function renderSessions(sessions) {
   const container = document.getElementById("sessions");
-  if (!sessions.length) {
-    container.replaceChildren(el("div", {class: "empty", text: "No sessions in this range."}));
-    return;
-  }
   const head = el("tr", {}, el("th", {text: "Last activity"}), el("th", {text: "Session"}),
                   el("th", {class: "num", text: "Subagents"}), el("th", {class: "num", text: "Turns"}),
                   el("th", {class: "num", text: "Avg context"}), el("th", {class: "num", text: "Peak context"}),
@@ -174,5 +196,8 @@ function renderSessions(sessions) {
     el("td", {class: "num", text: compact(session.context_avg)}),
     el("td", {class: "num", text: compact(session.context_peak)}),
     el("td", {class: "num", text: compact(session.output)}), el("td", {class: "num", text: money(session.cost)})));
-  container.replaceChildren(paged("sessions", el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows))));
+  // paged even when empty, so a pager left from a longer list goes
+  container.replaceChildren(paged("sessions", sessions.length
+    ? el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows))
+    : el("div", {class: "empty", text: "No sessions in this range."})));
 }

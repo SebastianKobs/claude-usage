@@ -140,9 +140,12 @@ table { border-collapse: collapse; width: 100%; font-size: 13px; }
 /* rows off a table's page; a workflow run's agents are shown and hidden with `hidden` on their own */
 tr.off-page { display: none; }
 /* sticky: it stays in view while a wide table scrolls sideways */
-.pager { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; font-size: 13px;
+.pager { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 13px;
          position: sticky; left: 0; }
 .pager span { font-variant-numeric: tabular-nums; }
+/* a table's heading with its pager, right-aligned; the heading keeps its margins, the pager sits on its baseline */
+.title-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; }
+.title-row .pager { margin-left: auto; margin-bottom: 0; position: static; }
 th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--grid); vertical-align: top; }
 th { color: var(--text-secondary); font-weight: 500; white-space: nowrap; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }

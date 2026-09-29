@@ -361,6 +361,22 @@ class PagingTest(unittest.TestCase):
             with self.subTest(script=script):
                 self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)
 
+    def test_the_pager_comes_before_the_table(self):
+        script = read(STATIC / "js" / "tables.js")
+        self.assertIn('el("div", {class: "paged"}, pager, table)', script)
+        self.assertIn("table.before(pager)", script)
+        self.assertNotIn("table.after(pager)", script)
+        self.assertIn("margin-bottom: 8px", css_block(read(STATIC / "css" / "common.css"), ".pager"))
+
+    def test_the_pager_joins_the_title_row(self):
+        script = read(STATIC / "js" / "tables.js")
+        self.assertIn("queueMicrotask(() => placePager(pager, pager))", script)
+        self.assertLess(script.index("queueMicrotask(() => placePager(pager, pager))"),
+                        script.index("queueMicrotask(() => document.getElementById(refocus)"))
+        css = read(STATIC / "css" / "common.css")
+        self.assertIn("display: flex", css_block(css, ".title-row {"))
+        self.assertIn("margin-left: auto", css_block(css, ".title-row .pager"))
+
     def test_rows_off_the_page_are_hidden_by_a_class_not_by_hidden(self):
         # a workflow run's agents are shown and hidden with `hidden`, so paging keeps to its own switch
         self.assertIn("display: none", css_block(read(STATIC / "css" / "common.css"), "tr.off-page"))
