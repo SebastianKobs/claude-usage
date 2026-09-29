@@ -52,13 +52,48 @@ class CommandKindTest(unittest.TestCase):
                  "Rscript -e 'print(1)'": "rscript", "bash -c 'echo hi'": "bash"}
         for command, interpreter in cases.items():
             with self.subTest(command=command):
-                self.assertEqual(tool_kinds.command_class(command), ("inline_script", interpreter))
+                self.assertEqual(tool_kinds.command_class(command)[:2], ("inline_script", interpreter))
 
     def assertClasses(self, cases):
         """Each command is of this kind with this detail."""
         for command, expected in cases.items():
             with self.subTest(command=command):
-                self.assertEqual(tool_kinds.command_class(command), expected)
+                self.assertEqual(tool_kinds.command_class(command)[:2], expected)
+
+    def assertOptions(self, cases):
+        """Each command's program ran with these options."""
+        for command, expected in cases.items():
+            with self.subTest(command=command):
+                self.assertEqual(tool_kinds.command_class(command)[2], expected)
+
+    def test_options_are_the_programs_flags_without_arguments_or_paths(self):
+        self.assertOptions({"grep -rn x src/": "-rn", "ls -la /tmp": "-la", "make test": "",
+                            "find . -name '*.go' -type f": "-name -type", "sed -n 1,9p a.go": "-n",
+                            "cd /srv/app && rg -l x": "-l"})
+
+    def test_an_options_value_is_left_out(self):
+        self.assertOptions({"grep --include='*.go' -e 'secret' x": "--include -e", "grep -C3 x a": "-C",
+                            "gcc -I/usr/include a.c": "-I", "sort --key=2 a": "--key"})
+
+    def test_a_number_as_an_option_is_n(self):
+        self.assertOptions({"head -20 a.txt": "-N", "tail -5 b.log": "-N"})
+
+    def test_options_end_where_the_arguments_do(self):
+        self.assertOptions({"grep -n -- -x a": "-n", "rg -n x | head -5": "-n"})
+
+    def test_an_option_counts_once_in_the_order_given(self):
+        self.assertOptions({"grep -n -i -n x": "-n -i"})
+
+    def test_git_gives_its_subcommands_options_not_its_own(self):
+        self.assertOptions({"git -C /srv/app log --oneline -5": "--oneline -N", "git commit -m 'text'": "-m",
+                            "git status": ""})
+
+    def test_an_edit_in_place_gives_the_editing_programs_options(self):
+        self.assertOptions({"find . | xargs sed -i -e 's/a/b/'": "-i -e"})
+
+    def test_an_inline_script_gives_its_interpreters_options(self):
+        self.assertOptions({"python3 -c 'print(1)'": "-c", "python3 - <<'EOF'\nprint(1)\nEOF": "-",
+                            "node <<'EOF'\nx\nEOF": ""})
 
     def test_other_kinds_name_their_program(self):
         self.assertClasses({"grep -rn x .": ("search", "grep"), "cd src && rg x": ("search", "rg"),
@@ -114,7 +149,7 @@ class TranscriptToolsTest(TempDirTestCase):
     def rows(self):
         """The rows by (tool, kind)."""
         return {(row.tool, row.kind): row for row in tool_kinds.transcript_tools(self.main.path, PRICES).rows
-                if row.detail is None}
+                if row.detail is None and row.options is None}
 
     def test_bash_calls_are_split_by_kind_under_their_total(self):
         self.call("m1", "t1", "Bash", {"command": "grep -rn x ."}, "a" * 100)
@@ -137,10 +172,12 @@ class TranscriptToolsTest(TempDirTestCase):
         self.call("m4", "t4", "Bash", {"command": "git status"}, "x")
         self.call("m5", "t5", "Bash", {"command": "git log"}, "x")
         self.call("m6", "t6", "Bash", {"command": "git diff"}, "x")
-        order = [(row.tool, row.kind, row.detail) for row in tool_kinds.transcript_tools(self.main.path, PRICES).rows]
-        self.assertEqual(order, [("Bash", None, None), ("Bash", "git", None), ("Bash", "git", "diff"),
-                                 ("Bash", "git", "log"), ("Bash", "git", "status"), ("Bash", "list", None),
-                                 ("Bash", "list", "ls"), ("Read", None, None)])
+        order = [(row.kind, row.detail, row.options)
+                 for row in tool_kinds.transcript_tools(self.main.path, PRICES).rows]
+        self.assertEqual(order, [(None, None, None), ("git", None, None), ("git", "diff", None), ("git", "diff", ""),
+                                 ("git", "log", None), ("git", "log", ""), ("git", "status", None),
+                                 ("git", "status", ""), ("list", None, None), ("list", "ls", None),
+                                 ("list", "ls", ""), (None, None, None)])
 
     def test_each_kind_splits_by_its_detail_under_it(self):
         self.call("m1", "t1", "Bash", {"command": "node -e 'console.log(1)'"}, "x" * 10)
@@ -148,11 +185,13 @@ class TranscriptToolsTest(TempDirTestCase):
         self.call("m3", "t3", "Bash", {"command": "python - <<'EOF'\nprint(1)\nEOF"}, "x" * 30)
         self.call("m4", "t4", "Bash", {"command": "ls"}, "x")
         rows = tool_kinds.transcript_tools(self.main.path, PRICES).rows
-        self.assertEqual([(row.tool, row.kind, row.detail, row.calls) for row in rows],
-                         [("Bash", None, None, 4), ("Bash", "inline_script", None, 3),
-                          ("Bash", "inline_script", "python", 2), ("Bash", "inline_script", "node", 1),
-                          ("Bash", "list", None, 1), ("Bash", "list", "ls", 1)])
-        self.assertEqual(rows[2].result_chars, 50)
+        self.assertEqual([(row.kind, row.detail, row.options, row.calls) for row in rows],
+                         [(None, None, None, 4), ("inline_script", None, None, 3),
+                          ("inline_script", "python", None, 2), ("inline_script", "python", "-", 1),
+                          ("inline_script", "python", "-c", 1), ("inline_script", "node", None, 1),
+                          ("inline_script", "node", "-e", 1), ("list", None, None, 1), ("list", "ls", None, 1),
+                          ("list", "ls", "", 1)])
+        self.assertEqual((rows[2].result_chars, rows[3].result_chars), (50, 30))
 
     def test_errors_sizes_and_inputs(self):
         self.call("m1", "t1", "Edit", {"file_path": "a", "old_string": "x", "new_string": "y"}, "ok")

@@ -63,6 +63,9 @@ ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=\S*")
 REDIRECT = re.compile(r"(?<![0-9&>])>>?\s*(?![&\s])(\S+)")
 IN_PLACE_FLAG = re.compile(r"-[a-zA-Z]*i\S*|--in-place\S*")
 VERSION_SUFFIX = re.compile(r"[0-9.]+$")
+# an option's name, without a value attached to it (-C3, -I/usr/include, --key=2): values can be paths or text
+OPTION_NAME = re.compile(r"--[A-Za-z][A-Za-z0-9-]*|-[A-Za-z]+")
+NUMBER_OPTION = re.compile(r"-[0-9]+")                  # head -20: -N, or every count would be a row of its own
 
 
 @dataclass(frozen=True)
@@ -79,6 +82,7 @@ class CallFact:
     current: bool = False               # in the transcript's last stretch, since its last compaction
     reread: float | None = None         # what each later call pays to read it again; None unpriced
     detail: str | None = None           # what splits its kind further (command_class), else None
+    options: str | None = None          # the options its detail ran with (command_class), else None
 
     @property
     def chars(self) -> int:
@@ -103,11 +107,12 @@ class Exploration:
 
 @dataclass(frozen=True)
 class ToolKindRow:
-    """A tool's calls, a Bash kind's (kind set) or a kind's detail's (detail set too: a program, an interpreter, a
-    git subcommand), in a transcript: counts, sizes and costs."""
+    """A tool's calls, a Bash kind's (kind set), a kind's detail's (detail set too: a program, an interpreter, a
+    git subcommand) or a detail's options' (options set too), in a transcript: counts, sizes and costs."""
     tool: str
     kind: str | None
     detail: str | None
+    options: str | None
     calls: int
     errors: int
     result_chars: int
@@ -169,42 +174,68 @@ def program_label(program: str) -> str:
     return bare if bare in INTERPRETERS else program
 
 
-def command_class(command: str) -> tuple[str, str]:
+def option_names(words: list[str]) -> str:
+    """A program's options as they were given, each once: their names only (OPTION_NAME), a number as -N, up to
+    `--`; its arguments, and with them any path or text, are left out."""
+    names: list[str] = []
+    for word in words:
+        if word == "--":
+            break
+        if not word.startswith("-"):
+            continue
+        if word == "-":
+            name = word                                 # the code comes on standard input
+        elif NUMBER_OPTION.fullmatch(word):
+            name = "-N"
+        else:
+            match = OPTION_NAME.match(word)
+            name = match.group(0) if match else None
+        if name is not None and name not in names:
+            names.append(name)
+    return " ".join(names)
+
+
+def command_class(command: str) -> tuple[str, str, str]:
     """What a Bash command does (one of KINDS), by its first program past setup (cd, export) and wrappers: an edit
     in place anywhere (sed -i, perl -i), a file written (a heredoc or echo, printf or cat redirected into one, tee),
     an inline script (an interpreter fed code by a heredoc or -c/-e/-r), git's searches, then searching, viewing
     and listing programs; everything else runs a program. With it the detail that splits the kind further: the
     program that does it (program_label: the one that edits, the interpreter), for git its subcommand ("git grep"
-    for a search); empty without a program or subcommand."""
+    for a search); empty without a program or subcommand. Then that program's options (option_names), for git its
+    subcommand's."""
     head = command_head(command)
     commands = [words for words in (program_words(part) for part in SEPARATORS.split(head)) if words]
     for words in commands:
         program = program_name(words[0])
         if program in IN_PLACE_PROGRAMS and any(IN_PLACE_FLAG.fullmatch(word) for word in words[1:]):
-            return "edit_in_place", program
+            return "edit_in_place", program, option_names(words[1:])
     commands = [words for words in commands if program_name(words[0]) not in SETUP_PROGRAMS]
     if not commands:
-        return "run", ""
+        return "run", "", ""
     words = commands[0]
     program = program_name(words[0])
     label = program_label(program)
+    options = option_names(words[1:])
     redirected = any(target != "/dev/null" for target in REDIRECT.findall(head))
     if program == "tee" or (program in WRITE_PROGRAMS
                             and (redirected or any(program_name(other[0]) == "tee" for other in commands[1:]))):
-        return "write_file", program
+        return "write_file", program, options
     if label in INTERPRETERS and ("<<" in head or (len(words) > 1 and words[1].lower() in INLINE_FLAGS)):
-        return "inline_script", label
+        return "inline_script", label, options
     if program == "git":
-        subcommand = git_subcommand(words[1:]) or ""
-        return ("search", f"git {subcommand}") if subcommand in GIT_SEARCHES else ("git", subcommand)
+        subcommand, rest = git_subcommand(words[1:])
+        if subcommand in GIT_SEARCHES:
+            return "search", f"git {subcommand}", option_names(rest)
+        return "git", subcommand, option_names(rest)
     for kind, programs in (("search", SEARCH_PROGRAMS), ("view", VIEW_PROGRAMS), ("list", LIST_PROGRAMS)):
         if program in programs:
-            return kind, program
-    return "run", label
+            return kind, program, options
+    return "run", label, options
 
 
-def git_subcommand(words: list[str]) -> str | None:
-    """git's subcommand, past its options (-C <path> and -c <name=value> take a value)."""
+def git_subcommand(words: list[str]) -> tuple[str, list[str]]:
+    """git's subcommand, past its options (-C <path> and -c <name=value> take a value), and the words after it;
+    empty and none without one."""
     index = 0
     while index < len(words):
         word = words[index]
@@ -213,14 +244,14 @@ def git_subcommand(words: list[str]) -> str | None:
         elif word.startswith("-"):
             index += 1
         else:
-            return word
-    return None
+            return word, words[index + 1:]
+    return "", []
 
 
-def call_class(name: str, tool_input: dict[str, Any]) -> tuple[str | None, str | None]:
-    """A Bash call's command kind and its detail (command_class); None and None for any other tool."""
+def call_class(name: str, tool_input: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
+    """A Bash call's command kind, detail and options (command_class); None for each for any other tool."""
     if name != BASH:
-        return None, None
+        return None, None, None
     command = tool_input.get("command")
     return command_class(command if isinstance(command, str) else "")
 
@@ -235,6 +266,7 @@ class PendingCall:
     input_chars: int
     message_id: str
     detail: str | None
+    options: str | None
 
 
 def read_calls(path: Path, prices: pricing.Prices) -> list[CallFact]:
@@ -266,9 +298,10 @@ def read_calls(path: Path, prices: pricing.Prices) -> list[CallFact]:
                 if block.get("type") != "tool_use" or tool_use_id is None or name is None or tool_use_id in calls:
                     continue
                 tool_input = block.get("input") if isinstance(block.get("input"), dict) else {}
-                kind, detail = call_class(name, tool_input)
+                kind, detail, options = call_class(name, tool_input)
                 calls[tool_use_id] = PendingCall(transcripts.display_name(name), kind,
-                                                 len(json.dumps(tool_input, ensure_ascii=False)), message_id, detail)
+                                                 len(json.dumps(tool_input, ensure_ascii=False)), message_id, detail,
+                                                 options)
         elif kind == "user":
             for block in transcripts.content_blocks(record):
                 tool_use_id = transcripts.text_or_none(block.get("tool_use_id"))
@@ -293,7 +326,8 @@ def read_calls(path: Path, prices: pricing.Prices) -> list[CallFact]:
             input_cost = call.input_chars / CHARS_PER_TOKEN * rates.output
             reread = tokens * rates.read
         facts.append(CallFact(call.tool, call.kind, call.input_chars, result_chars, error, calls_after, carried,
-                              input_cost, message_stretch == current_stretch, reread, call.detail))
+                              input_cost, message_stretch == current_stretch, reread, call.detail,
+                              call.options))
     return facts
 
 
@@ -316,12 +350,13 @@ def priced_sum(values: Iterable[float | None]) -> float | None:
     return sum(priced) if priced else None
 
 
-def tool_row(tool: str, kind: str | None, facts: list[CallFact], detail: str | None = None) -> ToolKindRow:
-    """One row over the calls of a tool, a Bash kind or a kind's detail."""
+def tool_row(tool: str, kind: str | None, facts: list[CallFact], detail: str | None = None,
+             options: str | None = None) -> ToolKindRow:
+    """One row over the calls of a tool, a Bash kind, a kind's detail or a detail's options."""
     sizes = [fact.result_chars for fact in facts if fact.result_chars is not None]
     result_median = median_or_none(sizes)
     input_median = median_or_none([fact.input_chars for fact in facts])
-    return ToolKindRow(tool=tool, kind=kind, detail=detail, calls=len(facts),
+    return ToolKindRow(tool=tool, kind=kind, detail=detail, options=options, calls=len(facts),
                        errors=sum(fact.error for fact in facts), result_chars=sum(sizes),
                        result_median=None if result_median is None else round(result_median),
                        result_p90=nearest_rank(sizes, 0.9),
@@ -341,7 +376,7 @@ def grouped(facts: list[CallFact], key: Callable[[CallFact], Any]) -> list[tuple
 
 def tool_rows(facts: list[CallFact]) -> list[ToolKindRow]:
     """One row per tool, the most called first; Bash's is followed by one per command kind, each kind's by one per
-    detail."""
+    detail, each detail's by one per set of options."""
     rows = []
     for tool, tool_facts in grouped(facts, lambda fact: fact.tool):
         rows.append(tool_row(tool, None, tool_facts))
@@ -349,8 +384,10 @@ def tool_rows(facts: list[CallFact]) -> list[ToolKindRow]:
             continue
         for kind, kind_facts in grouped(tool_facts, lambda fact: fact.kind):
             rows.append(tool_row(tool, kind, kind_facts))
-            rows += [tool_row(tool, kind, detail_facts, detail)
-                     for detail, detail_facts in grouped(kind_facts, lambda fact: fact.detail)]
+            for detail, detail_facts in grouped(kind_facts, lambda fact: fact.detail):
+                rows.append(tool_row(tool, kind, detail_facts, detail))
+                rows += [tool_row(tool, kind, options_facts, detail, options)
+                         for options, options_facts in grouped(detail_facts, lambda fact: fact.options)]
     return rows
 
 

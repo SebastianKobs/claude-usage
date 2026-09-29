@@ -147,13 +147,20 @@ const TOOL_KINDS = {
 };
 
 // The Tools table's rows, agent by agent: from the transcript (tool_kinds) each tool with its sizes and costs, Bash
-// followed by a sub-row per command kind, each kind by one per detail (its programs), which share the kind's fold;
-// once the transcript is gone the stored calls and characters, the rest unknown (null)
+// followed by a sub-row per command kind, each kind by one per detail (its programs), each detail by one per set of
+// options. A row's fold names it per agent; the rows it splits into carry it as their parent, except the kinds,
+// which are always shown. Once the transcript is gone the stored calls and characters, the rest unknown (null).
 function toolTableRows(agents) {
   return agents.flatMap(agent => agent.tool_kinds
-    ? agent.tool_kinds.map(row => ({...row, agent: agent.agent_type, sub: row.kind !== null || row.detail !== null,
-                                    fold: `tools:${agent.agent_id ?? ""}:${row.tool}:${row.kind ?? ""}`}))
-    : agent.tools.map(tool => ({agent: agent.agent_type, tool: tool.tool, kind: null, detail: null, fold: null,
+    ? agent.tool_kinds.map(row => {
+      const parts = [row.tool, row.kind, row.detail, row.options];
+      const depth = parts.findLastIndex(part => part !== null);
+      const key = keyParts => JSON.stringify([agent.agent_id ?? "", ...keyParts]);
+      const above = parts.map((part, index) => (index === depth ? null : part));
+      return {...row, agent: agent.agent_type, sub: depth > 0, fold: key(parts), parent: depth > 1 ? key(above) : null};
+    })
+    : agent.tools.map(tool => ({agent: agent.agent_type, tool: tool.tool, kind: null, detail: null, options: null,
+                                fold: null, parent: null,
                                 sub: false, calls: tool.calls, errors: null, result_chars: tool.result_chars,
                                 result_median: null, result_p90: null, input_median: null, calls_after_median: null,
                                 carried: null, input_cost: null})));
@@ -171,11 +178,13 @@ function toolsTable(agents) {
                            "compaction"),
     heading("~Carried", "what the later calls paid to have its input and result in their context"),
     heading("~Input cost", "its input at the output price"));
-  const folds = new Map();                                // a row's name and its details' rows
+  const folds = new Map();                                // a row's fold: its row, name, the rows under it
+  const entries = [];                                     // each table row with the folds above it
   const body = rows.map((row, index) => {
-    const name = row.detail !== null ? el("span", {class: "tool-detail", text: row.detail || "(none)"})
-      : row.sub ? el("span", {class: "tool-kind", text: TOOL_KINDS[row.kind] || row.kind})
-        : el("span", {text: row.tool});
+    const name = row.options !== null ? el("span", {class: "tool-options", text: row.options || "no options"})
+      : row.detail !== null ? el("span", {class: "tool-detail", text: row.detail || "(none)"})
+        : row.sub ? el("span", {class: "tool-kind", text: TOOL_KINDS[row.kind] || row.kind})
+          : el("span", {text: row.tool});
     const tr = el("tr", {class: row.sub ? "sub-row" : rows[index + 1]?.sub ? "group-row" : null},
       el("td", {text: row.sub ? "" : row.agent}), el("td", {}, name),
       el("td", {class: "num", text: whole(row.calls)}), el("td", {class: "num", text: whole(row.errors)}),
@@ -185,34 +194,44 @@ function toolsTable(agents) {
       el("td", {class: "num", text: compact(row.input_median)}),
       el("td", {class: "num", text: whole(row.calls_after_median)}),
       el("td", {class: "num", text: money(row.carried)}), el("td", {class: "num", text: money(row.input_cost)}));
-    if (row.detail !== null) folds.get(row.fold).members.push(tr);
-    else if (row.fold) folds.set(row.fold, {row, name, members: []});
+    const above = row.parent ? [...folds.get(row.parent).above, row.parent] : [];
+    if (row.parent) folds.get(row.parent).members.push(tr);
+    if (row.fold) folds.set(row.fold, {row, name, members: [], above});
+    entries.push({tr, above});
     return tr;
   });
+  // a row shows while every fold above it is open, so closing one hides what was open under it too
+  const toggles = new Map();
+  const closed = fold => toggles.get(fold).getAttribute("aria-expanded") !== "true";
+  const update = () => {
+    for (const {tr, above} of entries) tr.hidden = above.some(closed);
+  };
   for (const [fold, {row, name, members}] of folds) {
     if (!members.length) continue;
-    const count = `${whole(members.length)} ${detailNoun(row, members.length)}`;
-    name.append(" (", foldToggle(fold, members, count), ")");
+    const toggle = foldToggle(fold, `${whole(members.length)} ${detailNoun(row, members.length)}`, update);
+    toggles.set(fold, toggle);
+    name.append(" (", toggle, ")");
   }
+  update();
   return el("table", {}, el("thead", {}, head), el("tbody", {}, ...body));
 }
 
 // what a row's details are, for the count on its fold
 function detailNoun(row, count) {
   const nouns = {inline_script: ["interpreter", "interpreters"], git: ["subcommand", "subcommands"]};
-  const [one, many] = nouns[row.kind] || ["program", "programs"];
+  const [one, many] = row.detail !== null ? ["option set", "option sets"] : nouns[row.kind] || ["program", "programs"];
   return count === 1 ? one : many;
 }
 
-// A button that shows or hides these rows, hidden until then; a refresh opens it again by its data-fold
-function foldToggle(fold, members, text) {
-  for (const row of members) row.hidden = true;
+// A button that opens or closes a fold, closed at first: onToggle(open) shows or hides its rows. A refresh opens it
+// again by its data-fold.
+function foldToggle(fold, text, onToggle) {
   const toggle = el("button", {type: "button", class: "link-button", "aria-expanded": "false", "data-fold": fold,
                                text});
   toggle.addEventListener("click", () => {
     const open = toggle.getAttribute("aria-expanded") !== "true";
     toggle.setAttribute("aria-expanded", String(open));
-    for (const row of members) row.hidden = !open;
+    onToggle(open);
   });
   return toggle;
 }
@@ -263,7 +282,10 @@ function workflowRows(agents, searches) {
   const costs = agents.map(agent => agent.cost).filter(cost => cost !== null);
   const name = agents[0].workflow_name || agents[0].workflow_run;
   const members = agents.map(agent => agentRow(agent, searches, "sub-row workflow-member"));
-  const toggle = foldToggle(agents[0].workflow_run, members, `${whole(agents.length)} agents`);
+  for (const row of members) row.hidden = true;
+  const toggle = foldToggle(agents[0].workflow_run, `${whole(agents.length)} agents`, open => {
+    for (const row of members) row.hidden = !open;
+  });
   const models = [...new Set(agents.flatMap(agent => agent.models))];
   const head = el("tr", {class: "group-row"},
     el("td", {}, el("strong", {text: `workflow · ${name}`}), el("span", {class: "sub"}, toggle)),
