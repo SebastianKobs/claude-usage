@@ -3,10 +3,12 @@
 scan() reads each transcript from where the last scan stopped (the stored byte offset) and merges the new part into
 the rows it already has, in one transaction per file.
 
-Background usage: when a session ends, Claude Code writes a cost-state record with its cumulative usage per model,
-including calls no transcript shows (Haiku for titles, classifiers). The latest one per session is kept in
-cost_states; after each scan, the background table gets, per session and model, what that snapshot counts beyond
-the transcripts up to the snapshot time (per category, never below 0).
+Background usage: when a process ends, Claude Code writes a cost-state record with its cumulative usage per model
+since the process started, including calls no transcript shows (Haiku for titles, classifiers); a long session may
+write several. Every snapshot is kept in cost_snapshots, the latest one per session in cost_states (its run totals).
+After each scan, background_parts gets, per snapshot and model, what it counts beyond the transcripts of its process
+up to its time, less what the process's earlier snapshots counted so (per category, never below 0), filed under the
+snapshot's day: usage of an evening is not moved to the morning the process ended.
 
 Ultracode: no call records it, only a note on a human prompt in the main thread. After each scan, the messages of
 every touched session made at xhigh while it was on are marked (update_ultracode).
@@ -183,13 +185,28 @@ def insert_ultracode_states(store: Store, chunk: transcripts.Chunk) -> None:
          for state in chunk.ultracode_states])
 
 
+def snapshot_models(cost_state: transcripts.CostState) -> str:
+    """A snapshot's models as cost_states.models and cost_snapshots.models keep them: JSON by field name."""
+    return json.dumps([{field: getattr(model, field) for field in SNAPSHOT_FIELDS} for model in cost_state.models])
+
+
 def upsert_cost_state(store: Store, chunk: transcripts.Chunk, previous_last_ts: str | None) -> None:
-    """Keep the session's newest cost-state snapshot (only main transcripts write them). Without a timestamped
-    record before it in this read, the snapshot time is the last one seen in earlier reads."""
+    """Keep every cost-state snapshot of the session in cost_snapshots, and its newest one in cost_states (only
+    main transcripts write them). Without a timestamped record before it in this read, the snapshot time is the last
+    one seen in earlier reads; one without any stands only in cost_states."""
     cost_state = chunk.cost_state
     if cost_state is None or chunk.agent_id is not None:
         return
-    models = [{field: getattr(model, field) for field in SNAPSHOT_FIELDS} for model in cost_state.models]
+    for snapshot in chunk.cost_states:
+        moment = iso(snapshot.snapshot_ts) or previous_last_ts
+        if moment is None:
+            continue
+        # a snapshot repeated after the same record is the same one: the later copy wins
+        store.connection.execute(
+            "INSERT INTO cost_snapshots (session_id, path, snapshot_ts, start_ts, models) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT (session_id, snapshot_ts) DO UPDATE SET path = excluded.path, start_ts = excluded.start_ts, "
+            "models = excluded.models",
+            (chunk.session_id, str(chunk.path), moment, iso(snapshot.start_ts), snapshot_models(snapshot)))
     snapshot_ts = iso(cost_state.snapshot_ts) or previous_last_ts
     snapshot = datetime.fromisoformat(snapshot_ts) if snapshot_ts else None
     run_columns = ", ".join(RUN_FIELDS)
@@ -200,7 +217,7 @@ def upsert_cost_state(store: Store, chunk: transcripts.Chunk, previous_last_ts: 
         ON CONFLICT (session_id) DO UPDATE SET path = excluded.path, snapshot_ts = excluded.snapshot_ts,
                                                start_ts = excluded.start_ts, models = excluded.models,
                                                day = excluded.day, {run_updates}
-        """, (chunk.session_id, str(chunk.path), snapshot_ts, iso(cost_state.start_ts), json.dumps(models),
+        """, (chunk.session_id, str(chunk.path), snapshot_ts, iso(cost_state.start_ts), snapshot_models(cost_state),
               local_day(snapshot), *(getattr(cost_state, field) for field in RUN_FIELDS)))
 
 
@@ -212,36 +229,57 @@ def snapshot_model(entry: dict[str, Any] | list[Any]) -> dict[str, Any]:
     return {"web_searches": 0, **dict(zip(SNAPSHOT_FIELDS, entry))}
 
 
+def session_snapshots(store: Store, session_id: str) -> list[dict[str, Any]]:
+    """The session's snapshots in time order: every stored one, and the cost_states row where it isn't among them (a
+    store from before cost_snapshots whose transcript is gone, or a snapshot without a time), which sorts last."""
+    snapshots = [dict(row) for row in store.connection.execute(
+        "SELECT path, snapshot_ts, start_ts, models FROM cost_snapshots WHERE session_id = ? ORDER BY snapshot_ts",
+        (session_id,))]
+    latest = store.connection.execute(
+        "SELECT path, snapshot_ts, start_ts, models FROM cost_states WHERE session_id = ?", (session_id,)).fetchone()
+    if latest is not None and latest["snapshot_ts"] not in {snapshot["snapshot_ts"] for snapshot in snapshots}:
+        snapshots.append(dict(latest))
+    return snapshots
+
+
+def transcript_totals(store: Store, session_id: str, start: str | None, snapshot: str | None) -> dict[str, Any]:
+    """Per model, the session's transcript usage between a process start and a snapshot time (either may be
+    missing: no bound), as BACKGROUND_FIELDS."""
+    return {row["model"]: row for row in store.connection.execute("""
+        SELECT m.model AS model, SUM(m.new_input) AS new_input,
+               SUM(m.cache_write_5m + m.cache_write_1h) AS cache_write, SUM(m.cache_read) AS cache_read,
+               SUM(m.output) AS output, SUM(m.web_searches) AS web_searches
+        FROM messages m JOIN transcripts t ON t.path = m.path
+        WHERE t.session_id = :session AND (:snapshot IS NULL OR m.ts <= :snapshot)
+          AND (:start IS NULL OR m.ts >= :start)
+        GROUP BY m.model""", {"session": session_id, "snapshot": snapshot, "start": start})}
+
+
 def update_background(store: Store, session_ids: set[str]) -> None:
-    """Recompute the background rows of these sessions: per model and category, what the latest cost-state
-    snapshot counts beyond the session's transcripts between the process start and the snapshot time (the span the
-    snapshot covers), never below 0."""
+    """Recompute the background rows of these sessions. Per snapshot and model: what it counts beyond the session's
+    transcripts between its process's start and its time (the span it covers), per category and never below 0,
+    less what the process's earlier snapshots counted so. That is never below 0 either: a gap that shrinks (the
+    transcripts caught up) gives nothing back, so the parts add up to the largest gap."""
     for session_id in sorted(session_ids):
-        store.connection.execute("DELETE FROM background WHERE session_id = ?", (session_id,))
-        state = store.connection.execute("SELECT * FROM cost_states WHERE session_id = ?", (session_id,)).fetchone()
-        if state is None:
-            continue
-        seen = {row["model"]: row for row in store.connection.execute("""
-            SELECT m.model AS model, SUM(m.new_input) AS new_input,
-                   SUM(m.cache_write_5m + m.cache_write_1h) AS cache_write, SUM(m.cache_read) AS cache_read,
-                   SUM(m.output) AS output, SUM(m.web_searches) AS web_searches
-            FROM messages m JOIN transcripts t ON t.path = m.path
-            WHERE t.session_id = :session AND (:snapshot IS NULL OR m.ts <= :snapshot)
-              AND (:start IS NULL OR m.ts >= :start)
-            GROUP BY m.model""", {"session": session_id, "snapshot": state["snapshot_ts"], "start": state["start_ts"]})}
-        snapshot = datetime.fromisoformat(state["snapshot_ts"]) if state["snapshot_ts"] else None
-        for entry in map(snapshot_model, json.loads(state["models"])):
-            model = entry["model"]
-            counted = [entry[field] for field in BACKGROUND_FIELDS]
-            row = seen.get(model)
-            in_transcripts = [row[field] or 0 for field in BACKGROUND_FIELDS] if row else [0] * len(BACKGROUND_FIELDS)
-            missing = [max(0, total - known) for total, known in zip(counted, in_transcripts)]
-            if not any(missing):
-                continue
-            store.connection.execute(
-                "INSERT INTO background (session_id, model, path, ts, day, new_input, cache_write, cache_read, "
-                "output, web_searches) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (session_id, model, state["path"], state["snapshot_ts"], local_day(snapshot), *missing))
+        store.connection.execute("DELETE FROM background_parts WHERE session_id = ?", (session_id,))
+        counted_so_far: dict[tuple[str | None, str], list[int]] = {}
+        for snapshot in session_snapshots(store, session_id):
+            start = snapshot["start_ts"]
+            seen = transcript_totals(store, session_id, start, snapshot["snapshot_ts"])
+            moment = datetime.fromisoformat(snapshot["snapshot_ts"]) if snapshot["snapshot_ts"] else None
+            for entry in map(snapshot_model, json.loads(snapshot["models"])):
+                model = entry["model"]
+                row = seen.get(model)
+                gap = [max(0, entry[field] - ((row[field] or 0) if row else 0)) for field in BACKGROUND_FIELDS]
+                before = counted_so_far.get((start, model), [0] * len(BACKGROUND_FIELDS))
+                counted_so_far[(start, model)] = [max(earlier, now) for earlier, now in zip(before, gap)]
+                growth = [max(0, now - earlier) for earlier, now in zip(before, gap)]
+                if not any(growth):
+                    continue
+                store.connection.execute(
+                    "INSERT INTO background_parts (session_id, model, path, ts, day, new_input, cache_write, "
+                    "cache_read, output, web_searches) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (session_id, model, snapshot["path"], snapshot["snapshot_ts"], local_day(moment), *growth))
 
 
 def ultracode_spans(store: Store, session_id: str) -> list[tuple[str, str | None]]:
@@ -337,8 +375,8 @@ def last_activity(last_ts: str | None, mtime_ns: int) -> date:
 
 def prune(store: Store, first_day: date) -> int:
     """Delete the sessions whose last activity (over all their files) lies before first_day, in one transaction:
-    their messages, tool calls, API errors, compactions, ultracode states, background and cost-state rows, whole
-    sessions only, so no background or run total loses half its session. A transcript row stays while its file
+    their messages, tool calls, API errors, compactions, ultracode states, background, cost-state and snapshot rows,
+    whole sessions only, so no background or run total loses half its session. A transcript row stays while its file
     exists: it holds the offset the file was read to, and without it the next scan would read the old data back in.
     Returns the sessions that lost rows."""
     sessions = store.connection.execute(
@@ -352,7 +390,7 @@ def prune(store: Store, first_day: date) -> int:
                 "SELECT path FROM transcripts WHERE session_id = ?", (session_id,))]
             for table in ("messages", "tool_calls", "api_errors", "compactions", "ultracode_states"):
                 store.connection.executemany(f"DELETE FROM {table} WHERE path = ?", [(path,) for path in paths])
-            for table in ("background", "cost_states", "dirty_sessions"):
+            for table in ("background", "background_parts", "cost_states", "cost_snapshots", "dirty_sessions"):
                 store.connection.execute(f"DELETE FROM {table} WHERE session_id = ?", (session_id,))
             store.connection.executemany("DELETE FROM transcripts WHERE path = ?",
                                          [(path,) for path in paths if not Path(path).exists()])

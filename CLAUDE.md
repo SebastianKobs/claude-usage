@@ -150,12 +150,18 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   **Project:** the first `cwd`, else the slug. Many main transcripts start with a record without `cwd`.
 - **Background calls** (Haiku for titles and classifiers, WebSearch) are in no transcript. They appear only in
   `cost-state` records.
-  - When Claude Code writes one: when its process ends. The record has no timestamp; the record before it marks
-    the snapshot time.
+  - When Claude Code writes one: when its process ends, and sometimes while it runs (checked 2026-09-29, counts
+    only: one process wrote 4, two of them identical after the same record). The record has no timestamp; the
+    record before it marks the snapshot time.
+  - They may count much more than the transcripts show: one session's process counted 1.31M Opus output against
+    848K in its transcripts, with the missing input only about its 12 compaction calls'. The gap built up before a
+    snapshot at 21:47 (458K), the compaction after it added 3.8K, a normal summary. Its source is unknown: not the
+    compactions, the effort level, the workflow journals or a lost usage record.
   - `startTime` is the process start; the snapshot covers only that process's run.
   - Checked 2026-09-27 (161 transcripts): repeated cost-states in a main file share one `startTime` and their
-    totals only grow, and no message id appears in two files. Keeping one cost-state per session and letting the
-    first file scanned own an id rest on that; re-check (counts only) if resumed or forked sessions change.
+    totals only grow, and no message id appears in two files. Keeping the latest cost-state per session for the run
+    totals, taking each snapshot's growth over the one before, and letting the first file scanned own an id rest on
+    that; re-check (counts only) if resumed or forked sessions change.
   - `modelUsage` has per-model `inputTokens`, `cacheCreationInputTokens` (no 5m/1h split),
     `cacheReadInputTokens`, `outputTokens`, `webSearchRequests` and `costUSD`. Model ids there may carry a `[1m]`
     suffix.
@@ -181,11 +187,16 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   `(:x IS NULL OR day >= :x)` clause keeps SQLite off the day index. A subquery doesn't reach into the
   `usage_rows` view, a list of values does, so per-session sums pass the ids as `IN (?, …)` in batches.
 - **Background usage:**
-  - After each scan, per touched session and model: the latest snapshot minus the transcripts between the
-    snapshot's `startTime` and its snapshot time, per category, never below 0. A file's transaction marks its
-    session in `dirty_sessions`, so a scan that stops early leaves the recomputation to the next one.
-  - It goes into `background`. The `usage_rows` view unites it with the messages as agent type `(background)`,
-    without turns, filed under the snapshot's day.
+  - Every snapshot goes into `cost_snapshots` (by session and snapshot time; one without a time only into
+    `cost_states`, which also stands in for a store from before version 14 whose transcript is gone).
+  - After each scan, per touched session, snapshot and model: the snapshot minus the transcripts between its
+    `startTime` and its time, per category, never below 0, less what the same process's earlier snapshots counted
+    so (never below 0: a gap that shrinks gives nothing back). A file's transaction marks its session in
+    `dirty_sessions`, so a scan that stops early leaves the recomputation to the next one.
+  - It goes into `background_parts`, filed under each snapshot's time and day, so an evening's usage stays on its
+    evening when the process ends the next morning. `background` (one row per session and model) is no longer
+    written. The `usage_rows` view unites the parts with the messages as agent type `(background)` and effort
+    `background` (`store.BACKGROUND_EFFORT`), without turns.
 - **Ultracode** (`scan.update_ultracode`, after each scan for the touched sessions): a span runs from a note that
   it is on to a note that it is off, or to the first later main-thread call at another effort level (a call without
   one ends nothing). Every message of the session at xhigh inside a span gets `messages.ultracode = 1`, subagents'
@@ -336,6 +347,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     model's color for low or no effort, one shade further from the surface each for medium, high and max (xhigh
     shares max). Ultracode shares max's shade too, hatched at 45° with 2px lines one shade further (tone on tone,
     the dataviz texture), in the columns as an SVG pattern and on the legend and tooltip swatches as a gradient.
+    Background calls (effort `background`) wear the model's own color, hatched the other way (135°, `HATCH_TURNS`)
+    with lines one shade further, first in the model's stack; the legend, tooltip and tables say "background calls".
     `--shade-step-*` per slot and theme sizes the steps for a lightness gap of 0.065; re-run the `--ordinal` and
     contrast checks when a series color changes. Models are 4px apart in a column, shades 2px.
   - Load the `dataviz` skill before changing a chart, and run its palette validator for any new colors.

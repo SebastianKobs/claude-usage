@@ -549,8 +549,8 @@ class SessionEffortTest(StoreCase):
 
     def test_usage_per_model_and_effort_of_the_session(self):
         self.assertEqual([(row["model"], row["effort"], row["turns"]) for row in self.detail["model_effort"]],
-                         [(HAIKU, None, 0), ("claude-opus-5", "medium", 1), ("claude-sonnet-5", "high", 1),
-                          ("claude-sonnet-5", "max", 1)])
+                         [(HAIKU, store.BACKGROUND_EFFORT, 0), ("claude-opus-5", "medium", 1),
+                          ("claude-sonnet-5", "high", 1), ("claude-sonnet-5", "max", 1)])
 
     def test_each_agent_lists_its_models_and_effort_levels(self):
         main, agent = self.detail["agents"][:2]

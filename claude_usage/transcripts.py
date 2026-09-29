@@ -160,6 +160,7 @@ class Chunk:
     first_ts: datetime | None
     last_ts: datetime | None
     cost_state: CostState | None = None  # the last one in this part
+    cost_states: tuple[CostState, ...] = ()  # every one in this part, in file order
     last_user_ts: datetime | None = None  # of the last user record in this part, the request of a reply in the next
     api_errors: tuple[ApiError, ...] = ()
     compactions: tuple[Compaction, ...] = ()
@@ -643,7 +644,7 @@ def parse(path: Path, offset: int = 0, last_user_ts: datetime | None = None) -> 
     cwd = None
     git_branch = None
     title = None
-    cost_state = None
+    cost_states = []
     timestamps = []
     user_timestamps = []
     for record in records:
@@ -653,7 +654,7 @@ def parse(path: Path, offset: int = 0, last_user_ts: datetime | None = None) -> 
             title = text_or_none(record.get("aiTitle")) or title
         if record.get("type") == COST_STATE:
             # the record has no timestamp of its own; the one before it marks when the totals were taken
-            cost_state = cost_state_of(record, timestamps[-1] if timestamps else None)
+            cost_states.append(cost_state_of(record, timestamps[-1] if timestamps else None))
         timestamp = parse_timestamp(record.get("timestamp"))
         if timestamp is not None:
             timestamps.append(timestamp)
@@ -667,7 +668,8 @@ def parse(path: Path, offset: int = 0, last_user_ts: datetime | None = None) -> 
                  tool_calls=tuple(tool_calls(records)),
                  tool_results=tuple(tool_results(records)),
                  first_ts=min(timestamps, default=None), last_ts=max(timestamps, default=None),
-                 cost_state=cost_state, api_errors=tuple(api_errors(records)),
+                 cost_state=cost_states[-1] if cost_states else None, cost_states=tuple(cost_states),
+                 api_errors=tuple(api_errors(records)),
                  compactions=tuple(compactions(records)), ultracode_states=tuple(ultracode_states(records)),
                  tool_use_id=tool_use_id,
                  last_user_ts=user_timestamps[-1] if user_timestamps else None,

@@ -317,8 +317,13 @@ class BackgroundTest(StoreCase):
         agent.at(DAY_3).assistant("m2", [text_block("b")], usage(output=30))
 
     def background(self):
-        """The background rows as (model, new_input, cache_write, cache_read, output)."""
-        return self.rows("SELECT model, new_input, cache_write, cache_read, output FROM background ORDER BY model")
+        """The background per model over all snapshots, as (model, new_input, cache_write, cache_read, output)."""
+        return self.rows("SELECT model, SUM(new_input), SUM(cache_write), SUM(cache_read), SUM(output) "
+                         "FROM background_parts GROUP BY model ORDER BY model")
+
+    def parts(self):
+        """The background rows as (day, model, output), in time order."""
+        return self.rows("SELECT day, model, output FROM background_parts ORDER BY ts, model")
 
     def test_no_cost_state_no_background(self):
         self.scan()
@@ -342,6 +347,7 @@ class BackgroundTest(StoreCase):
         # as versions before named fields wrote it; the oldest lists lack web_searches
         old_row = json.dumps([[HAIKU, 1500, 0, 0, 90, 0.01]])
         self.store.connection.execute("UPDATE cost_states SET models = ?", (old_row,))
+        self.store.connection.execute("UPDATE cost_snapshots SET models = ?", (old_row,))
         scan.update_background(self.store, {"s1"})
         self.assertEqual(self.background(), [(HAIKU, 1500, 0, 0, 90)])
 
@@ -403,13 +409,68 @@ class BackgroundTest(StoreCase):
         self.scan()
         self.assertEqual(self.background(), [(HAIKU, 100, 0, 0, 10)])
 
-    def test_a_later_cost_state_replaces_the_earlier(self):
+    def test_a_later_snapshot_of_the_same_process_adds_its_growth_under_its_own_day(self):
         self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
         self.scan()
-        self.main.at(DATE_AFTER).user("resumed")
+        self.main.at(DATE_AFTER).user("next morning")
         self.main.cost_state({HAIKU: (300, 0, 0, 30, 0.03)})
         self.scan()
         self.assertEqual(self.background(), [(HAIKU, 300, 0, 0, 30)])
+        self.assertEqual(self.parts(), [(local_day(DAY_3), HAIKU, 10), (local_day(DATE_AFTER), HAIKU, 20)])
+
+    def test_snapshots_read_together_are_split_too(self):
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.main.at(DATE_AFTER).user("next morning")
+        self.main.cost_state({HAIKU: (300, 0, 0, 30, 0.03)})
+        self.scan()
+        self.assertEqual(self.parts(), [(local_day(DAY_3), HAIKU, 10), (local_day(DATE_AFTER), HAIKU, 20)])
+
+    def test_a_transcript_call_after_a_snapshot_is_not_background_of_the_next(self):
+        # the first snapshot counts m1 (50 output) and 20 more; the second adds m3's 500 and 30 more
+        self.main.cost_state({"claude-sonnet-5": (10, 100, 1000, 100, 1.0)})
+        self.main.at(DATE_AFTER).user("next morning")
+        self.main.assistant("m3", [text_block("c")], usage(output=500))
+        self.main.cost_state({"claude-sonnet-5": (10, 100, 1000, 630, 1.0)})
+        self.scan()
+        self.assertEqual(self.parts(), [(local_day(DAY_3), "claude-sonnet-5", 20),
+                                        (local_day(DATE_AFTER), "claude-sonnet-5", 30)])
+
+    def test_a_gap_that_shrinks_gives_back_nothing(self):
+        # the second snapshot counts less beyond the transcripts than the first: its growth is none, not negative
+        self.main.cost_state({"claude-sonnet-5": (10, 100, 1000, 100, 1.0)})
+        self.main.at(DATE_AFTER).user("next morning")
+        self.main.assistant("m3", [text_block("c")], usage(output=500))
+        self.main.cost_state({"claude-sonnet-5": (10, 100, 1000, 590, 1.0)})
+        self.scan()
+        self.assertEqual(self.parts(), [(local_day(DAY_3), "claude-sonnet-5", 20)])
+
+    def test_each_process_counts_its_own_snapshots(self):
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.main.at(DATE_AFTER).user("resumed")
+        self.main.cost_state({HAIKU: (40, 0, 0, 4, 0.01)}, start=DATE_AFTER - timedelta(minutes=1))
+        self.scan()
+        self.assertEqual(self.parts(), [(local_day(DAY_3), HAIKU, 10), (local_day(DATE_AFTER), HAIKU, 4)])
+
+    def test_a_repeated_snapshot_counts_once(self):
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.scan()
+        self.assertEqual(self.parts(), [(local_day(DAY_3), HAIKU, 10)])
+
+    def test_the_run_totals_keep_only_the_latest_snapshot(self):
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.main.at(DATE_AFTER).user("next morning")
+        self.main.cost_state({HAIKU: (300, 0, 0, 30, 0.03)})
+        self.scan()
+        self.assertEqual((self.count("cost_states"), self.count("cost_snapshots")), (1, 2))
+
+    def test_without_stored_snapshots_the_cost_state_counts(self):
+        # a store from before cost_snapshots whose transcript Claude Code has deleted keeps only the cost-state
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.scan()
+        self.store.connection.execute("DELETE FROM cost_snapshots")
+        scan.update_background(self.store, {"s1"})
+        self.assertEqual(self.parts(), [(local_day(DAY_3), HAIKU, 10)])
 
     def test_rescans_are_stable(self):
         self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
@@ -435,10 +496,17 @@ class BackgroundTest(StoreCase):
         self.assertAlmostEqual(by_model[HAIKU]["cost"], 1.0)
         self.assertEqual(by_model["claude-sonnet-5"]["turns"], 2)
 
+    def test_background_has_its_own_effort_level(self):
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.scan()
+        rows = queries.totals_by(self.store, "model_effort", None, PRICES)
+        self.assertEqual([(row["model"], row["effort"]) for row in rows if row["model"] == HAIKU],
+                         [(HAIKU, store.BACKGROUND_EFFORT)])
+
     def test_background_is_filed_under_the_snapshot_day(self):
         self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
         self.scan()
-        self.assertEqual(self.rows("SELECT day FROM background"), [(local_day(DAY_3 + timedelta(seconds=1)),)])
+        self.assertEqual(self.rows("SELECT day FROM background_parts"), [(local_day(DAY_3 + timedelta(seconds=1)),)])
 
     def test_session_detail_lists_background_last(self):
         self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
@@ -451,10 +519,19 @@ class BackgroundTest(StoreCase):
         self.assertEqual(detail["agents"][0]["new_input"], 10)
         self.assertEqual(detail["new_input"], 110)
 
+    def test_session_detail_background_spans_its_snapshots(self):
+        self.main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        self.main.at(DATE_AFTER).user("next morning")
+        self.main.cost_state({HAIKU: (300, 0, 0, 30, 0.03)})
+        self.scan()
+        background = queries.session_detail(self.store, "s1", PRICES)["agents"][-1]
+        self.assertEqual((background["first_ts"][:10], background["last_ts"][:10], background["output"]),
+                         ("2026-09-03", "2026-09-04", 30))
+
     def test_background_web_searches_are_counted_and_priced(self):
         self.main.cost_state({HAIKU: (0, 0, 0, 0, 0.09, 9)})
         self.scan()
-        self.assertEqual(self.rows("SELECT model, web_searches FROM background"), [(HAIKU, 9)])
+        self.assertEqual(self.rows("SELECT model, web_searches FROM background_parts"), [(HAIKU, 9)])
         by_model = {row["model"]: row for row in queries.totals_by(self.store, "model", None, PRICES)}
         self.assertEqual(by_model[HAIKU]["web_searches"], 9)
         self.assertAlmostEqual(by_model[HAIKU]["cost"], 0.09)
@@ -464,7 +541,7 @@ class BackgroundTest(StoreCase):
         self.main.assistant("m9", [text_block("w")], dict(usage(output=0), server_tool_use={"web_search_requests": 2}))
         self.main.cost_state({"claude-sonnet-5": (10, 100, 1000, 80, 1.0, 5)})
         self.scan()
-        self.assertEqual(self.rows("SELECT web_searches FROM background"), [(3,)])
+        self.assertEqual(self.rows("SELECT web_searches FROM background_parts"), [(3,)])
 
     def test_an_unpriced_background_model_has_no_cost(self):
         self.main.cost_state({"claude-mystery-1": (100, 0, 0, 10, 0.01)})
@@ -506,8 +583,8 @@ class RetentionTest(StoreCase):
     def test_an_old_session_goes_from_every_table(self):
         result = self.scan_keeping(7)
         self.assertEqual(result.sessions_pruned, 1)
-        for table in ("messages", "tool_calls", "api_errors", "compactions", "ultracode_states", "background",
-                      "cost_states"):
+        for table in ("messages", "tool_calls", "api_errors", "compactions", "ultracode_states", "background_parts",
+                      "cost_states", "cost_snapshots"):
             with self.subTest(table=table):
                 self.assertNotIn("old", self.sessions(table))
         self.assertEqual(self.sessions("messages"), ["mixed", "new"])
@@ -598,7 +675,7 @@ class EffortTest(StoreCase):
     def test_by_model_and_effort(self):
         rows = queries.totals_by(self.store, "model_effort", None, PRICES)
         self.assertEqual([(row["model"], row["effort"], row["turns"], row["cost"]) for row in rows],
-                         [(HAIKU, None, 0, 1.0), ("claude-opus-5", "max", 1, 25.0),
+                         [(HAIKU, store.BACKGROUND_EFFORT, 0, 1.0), ("claude-opus-5", "max", 1, 25.0),
                           ("claude-sonnet-5", "high", 2, 20.0), ("claude-sonnet-5", "medium", 1, 10.0)])
 
     def test_by_day_model_and_effort(self):
@@ -613,7 +690,7 @@ class EffortTest(StoreCase):
 
     def test_by_effort(self):
         rows = {row["effort"]: row["turns"] for row in queries.totals_by(self.store, "effort", None, PRICES)}
-        self.assertEqual(rows, {None: 0, "high": 2, "max": 1, "medium": 1})
+        self.assertEqual(rows, {store.BACKGROUND_EFFORT: 0, "high": 2, "max": 1, "medium": 1})
 
 
 

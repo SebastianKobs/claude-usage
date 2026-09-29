@@ -80,6 +80,22 @@ class ScriptTest(unittest.TestCase):
         self.assertLessEqual(object_keys("util.js", "HATCH_SHADES"), object_keys("util.js", "EFFORT_SHADES"))
         self.assertIn(store.ULTRACODE, object_keys("util.js", "HATCH_SHADES"))
 
+    def test_every_hatched_effort_level_has_an_angle_of_its_own(self):
+        body = re.search(r"const HATCH_TURNS = \{(.*?)\};", read(STATIC / "js" / "util.js")).group(1)
+        turns_by_level = dict(re.findall(r"(\w+): (-?\d+)", body))
+        self.assertEqual(set(turns_by_level), object_keys("util.js", "HATCH_SHADES"))
+        self.assertEqual(len(set(turns_by_level.values())), len(turns_by_level))
+
+    def test_the_page_knows_the_background_effort_level(self):
+        self.assertIn(f'const BACKGROUND_EFFORT = "{store.BACKGROUND_EFFORT}";', read(STATIC / "js" / "util.js"))
+        self.assertIn(store.BACKGROUND_EFFORT, object_keys("util.js", "HATCH_SHADES"))
+
+    def test_a_swatch_hatch_runs_like_the_columns(self):
+        # the columns' pattern turns vertical lines by the angle; the swatch's gradient runs across them
+        self.assertIn("135deg", run_function("util.js", "swatchFill", "red", "blue", 45))
+        self.assertIn("45deg", run_function("util.js", "swatchFill", "red", "blue", -45))
+        self.assertEqual(run_function("util.js", "swatchFill", "red", None, None), "red")
+
     def test_html_is_inserted_only_by_the_two_sanitized_paths_in_chat_js(self):
         uses = {path.name: len(re.findall(r"\binnerHTML\b", read(path))) for path in OWN_SCRIPTS}
         self.assertEqual({name: count for name, count in uses.items() if count}, {"chat.js": 2})

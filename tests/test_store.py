@@ -36,13 +36,13 @@ class SchemaTest(TempDirTestCase):
             scan.scan(first, self.projects.root)
             # what a version-1 store looks like: no cost states, and every file read to its end
             first.connection.execute("DELETE FROM cost_states")
-            first.connection.execute("DELETE FROM background")
+            first.connection.execute("DELETE FROM background_parts")
             first.connection.execute("UPDATE meta SET value = '1' WHERE key = 'schema_version'")
         with store.Store(self.store_path) as second:
             result = scan.scan(second, self.projects.root)
             self.assertEqual(result.files_scanned, 1)
             self.assertEqual(second.connection.execute("SELECT COUNT(*) FROM messages").fetchone()[0], 1)
-            self.assertEqual(second.connection.execute("SELECT model FROM background").fetchall()[0][0], HAIKU)
+            self.assertEqual(second.connection.execute("SELECT model FROM background_parts").fetchall()[0][0], HAIKU)
             version = second.connection.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()[0]
             self.assertEqual(int(version), store.SCHEMA_VERSION)
 
@@ -58,11 +58,11 @@ class SchemaTest(TempDirTestCase):
             first.connection.execute("ALTER TABLE messages DROP COLUMN web_searches")
             first.connection.execute("ALTER TABLE background DROP COLUMN web_searches")
             first.connection.execute("DELETE FROM cost_states")
-            first.connection.execute("DELETE FROM background")
+            first.connection.execute("DELETE FROM background_parts")
             first.connection.execute("UPDATE meta SET value = '2' WHERE key = 'schema_version'")
         with store.Store(self.store_path) as second:
             self.assertEqual(scan.scan(second, self.projects.root).files_scanned, 1)
-            self.assertEqual(second.connection.execute("SELECT web_searches FROM background").fetchall()[0][0], 1)
+            self.assertEqual(second.connection.execute("SELECT web_searches FROM background_parts").fetchall()[0][0], 1)
             self.assertEqual(second.connection.execute("SELECT web_searches FROM messages").fetchall()[0][0], 0)
 
     def test_a_version_4_store_gets_run_total_columns_and_reads_its_files_again(self):
@@ -193,6 +193,24 @@ class SchemaTest(TempDirTestCase):
         with store.Store(self.store_path) as second:
             self.assertEqual(scan.scan(second, self.projects.root).files_scanned, 1)
             self.assertEqual(second.connection.execute("SELECT effort FROM usage_rows").fetchone()[0], "ultracode")
+
+    def test_a_version_13_store_gets_every_snapshot_by_reading_its_files_again(self):
+        main = self.projects.session("s1")
+        main.at(DAY_1).user("hi")
+        main.cost_state({HAIKU: (100, 0, 0, 10, 0.01)})
+        main.at(DAY_1 + timedelta(days=1)).user("next day")
+        main.cost_state({HAIKU: (300, 0, 0, 30, 0.03)})
+        with store.Store(self.store_path) as first:
+            scan.scan(first, self.projects.root)
+            # what a version-13 store looks like: only the latest snapshot, its background in one row
+            first.connection.execute("DROP VIEW usage_rows")
+            first.connection.execute("DROP TABLE cost_snapshots")
+            first.connection.execute("DROP TABLE background_parts")
+            first.connection.execute("UPDATE meta SET value = '13' WHERE key = 'schema_version'")
+        with store.Store(self.store_path) as second:
+            self.assertEqual(scan.scan(second, self.projects.root).files_scanned, 1)
+            self.assertEqual([row[0] for row in second.connection.execute(
+                "SELECT output FROM background_parts ORDER BY ts")], [10, 20])
 
     def test_reopening_leaves_the_schema_alone(self):
         with store.Store(self.store_path) as first:

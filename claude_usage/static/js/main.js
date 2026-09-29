@@ -58,8 +58,9 @@ function renderSummary() {
   document.getElementById("scope").textContent = `· ${scope}`;
   document.getElementById("footer").textContent = "Estimated cost at Claude API list prices" +
     (summary.prices_checked ? ` (checked ${summary.prices_checked})` : "") +
-    ". “(background)” is usage Claude Code counted but no transcript shows (e.g. Haiku for titles), taken from its " +
-    "cost records when a session ends: it has no turns and is filed under the day the session ended." +
+    ". “(background)” is usage Claude Code counted but no transcript shows (e.g. Haiku for titles), taken from the " +
+    "cost records it writes during and at the end of a session: it has no turns, is filed under the time of the " +
+    "record that first counted it, and is hatched in the chart." +
     (themeCopy().footer || "");
 }
 

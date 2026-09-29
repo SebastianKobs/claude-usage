@@ -141,14 +141,14 @@ function chartData(summary) {
     const key = `${model} · ${effortName(row.effort)}`;
     if (!bySeries.has(key)) {
       bySeries.set(key, {key, model, effort: row.effort, slot, color: effortShade(slot, row.effort),
-                         hatch: effortHatch(slot, row.effort), values: new Map()});
+                         hatch: effortHatch(slot, row.effort), turn: hatchTurn(row.effort), values: new Map()});
     }
     const entry = bySeries.get(key);
     const bucket = buckets.keyOf(row);
     entry.values.set(bucket, (entry.values.get(bucket) || 0) + metric.value(row));
   }
-  // an unknown effort (background calls) first, as it wears the model's own color
-  const effortOrder = effort => (effort === null ? -1 : effortRank(effort));
+  // background calls and calls without an effort level first, as they wear the model's own color
+  const effortOrder = effort => (effort === BACKGROUND_EFFORT ? -2 : effort === null ? -1 : effortRank(effort));
   const series = [...bySeries.values()].sort((left, right) =>
     (left.slot ?? SLOT_COUNT) - (right.slot ?? SLOT_COUNT) || left.model.localeCompare(right.model) ||
     effortOrder(left.effort) - effortOrder(right.effort) || String(left.effort).localeCompare(String(right.effort)));
@@ -171,18 +171,18 @@ function modelGroups(series) {
 function renderLegend(series) {
   document.getElementById("legend").replaceChildren(...modelGroups(series).map(group =>
     el("span", {class: "legend-group"}, el("strong", {text: group.model}),
-       ...group.entries.map(entry => el("span", {}, seriesSwatch(entry), entry.effort ?? "no effort level")))));
+       ...group.entries.map(entry => el("span", {}, seriesSwatch(entry), effortLabel(entry.effort))))));
 }
 
 // a series' key in the legend and the tooltip
 function seriesSwatch(entry) {
-  return el("span", {class: "swatch", style: `background:${swatchFill(entry.color, entry.hatch)}`});
+  return el("span", {class: "swatch", style: `background:${swatchFill(entry.color, entry.hatch, entry.turn)}`});
 }
 
-// A hatched series' fill: its color with lines of its hatch at 45°, 2px on a 6px period
+// A hatched series' fill: its color with lines of its hatch at its angle, 2px on a 6px period
 function hatchPattern(id, entry) {
   const pattern = svg("pattern", {id, width: 6, height: 6, patternUnits: "userSpaceOnUse",
-                                  patternTransform: "rotate(45)"});
+                                  patternTransform: `rotate(${entry.turn})`});
   pattern.append(svg("rect", {width: 6, height: 6, fill: entry.color}),
                  svg("rect", {width: 2, height: 6, fill: entry.hatch}));
   return pattern;
@@ -275,7 +275,7 @@ function modelTooltip(tooltip, heading, day, series, metric, total) {
     line("tip-model", el("span", {text: group.model}),
          group.entries.reduce((sum, entry) => sum + entry.values.get(day), 0)),
     ...group.entries.slice().reverse().map(entry => line("tip-effort",
-      el("span", {}, seriesSwatch(entry), entry.effort ?? "no effort level"), entry.values.get(day)))]);
+      el("span", {}, seriesSwatch(entry), effortLabel(entry.effort)), entry.values.get(day)))]);
   fill(tooltip, el("div", {class: "when", text: heading}),
        ...(lines.length ? lines : [el("div", {class: "name", text: "No usage"})]),
        groups.length > 1 ? line("tip-total", el("span", {text: "Total"}), total) : null);

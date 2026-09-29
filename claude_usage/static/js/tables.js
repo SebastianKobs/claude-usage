@@ -150,8 +150,8 @@ function usageTable(rows, nameHeader, nameCell, emptyText = "No usage in this ra
   return el("table", {}, el("thead", {}, usageHead(nameHeader)), el("tbody", {}, ...body));
 }
 
-// Each model's totals, then its usage per effort level as indented rows; background calls have no effort level
-// and show no row of their own
+// Each model's totals, then its usage per effort level as indented rows, background calls as one of them; calls
+// without an effort level show no row of their own
 function modelEffortTable(models, modelEfforts, nameCell) {
   if (!models.length) return el("div", {class: "empty", text: "No usage in this range."});
   const body = [];
@@ -161,7 +161,7 @@ function modelEffortTable(models, modelEfforts, nameCell) {
       .sort((left, right) => effortRank(left.effort) - effortRank(right.effort) ||
                              left.effort.localeCompare(right.effort));
     for (const row of efforts) {
-      body.push(usageRow(row, el("span", {class: "effort", text: `effort ${row.effort}`}), "sub-row"));
+      body.push(usageRow(row, el("span", {class: "effort", text: effortName(row.effort)}), "sub-row"));
     }
   }
   return el("table", {}, el("thead", {}, usageHead("Model")), el("tbody", {}, ...body));

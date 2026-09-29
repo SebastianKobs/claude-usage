@@ -684,15 +684,19 @@ def runtime_totals(store: Store, since: date | None, prices: pricing.Prices, pro
 
 
 def background_detail(store: Store, session_id: str, prices: pricing.Prices) -> list[Row]:
-    """The session's background usage as one pseudo agent, or [] if there is none."""
-    rows = store.connection.execute("SELECT * FROM background WHERE session_id = ? ORDER BY model",
-                                    (session_id,)).fetchall()
-    if not rows:
+    """The session's background usage as one pseudo agent, from its first snapshot with any to its last, or [] if
+    there is none."""
+    span = store.connection.execute(
+        "SELECT MIN(ts) AS first_ts, MAX(ts) AS last_ts, COUNT(*) AS parts FROM background_parts WHERE session_id = ?",
+        (session_id,)).fetchone()
+    if not span["parts"]:
         return []
+    models = [row["model"] for row in store.connection.execute(
+        "SELECT DISTINCT model FROM background_parts WHERE session_id = ? ORDER BY model", (session_id,))]
     usage = usage_where(store, "u.session_id = ? AND u.turn = 0", (session_id,), prices).as_dict()
     return [{"agent_id": None, "agent_type": BACKGROUND, "description": BACKGROUND_DESCRIPTION,
              "workflow_run": None, "workflow_phase": None, "workflow_name": None,
-             "first_ts": rows[0]["ts"], "last_ts": rows[0]["ts"], "models": [row["model"] for row in rows],
+             "first_ts": span["first_ts"], "last_ts": span["last_ts"], "models": models,
              **usage, "context_first": None, "context_last": None,
              "input_total": input_total(usage), "model_efforts": [],
              "context_per_turn": [], "tools": [], "compactions": [], "overhead": None,

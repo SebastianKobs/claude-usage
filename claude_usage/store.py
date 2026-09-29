@@ -12,15 +12,15 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 13                     # 2: cost_states and background; 3: web_searches; 4: start_ts;
+SCHEMA_VERSION = 14                     # 2: cost_states and background; 3: web_searches; 4: start_ts;
                                         # 5: the run totals of cost_states; 6: skill and mcp_server;
                                         # 7: api_errors; 8: the times and lines the run totals
                                         # are estimated from without a cost record; 9: effort;
                                         # 10: meta_mtime_ns; 11: compactions and tool_use_id;
                                         # 12: workflow_run, workflow_phase and workflow_name (the files
                                         # were never read, so no re-read); 13: ultracode_states and
-                                        # messages.ultracode
-REREAD_BELOW = 13                       # stores older than this lack data only a new read of every file gives
+                                        # messages.ultracode; 14: cost_snapshots and background_parts
+REREAD_BELOW = 14                       # stores older than this lack data only a new read of every file gives
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS cost_states (
     lines_added INTEGER NOT NULL DEFAULT 0,
     lines_removed INTEGER NOT NULL DEFAULT 0
 );
+-- replaced by background_parts in version 14 and no longer written; migrations only add, so it stays
 CREATE TABLE IF NOT EXISTS background (
     session_id TEXT NOT NULL,
     model TEXT NOT NULL,
@@ -108,6 +109,26 @@ CREATE TABLE IF NOT EXISTS background (
     output INTEGER NOT NULL,
     web_searches INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (session_id, model)
+);
+CREATE TABLE IF NOT EXISTS cost_snapshots (
+    session_id TEXT NOT NULL,
+    path TEXT NOT NULL,             -- the main transcript it was read from
+    snapshot_ts TEXT NOT NULL,      -- of the record before it; a snapshot without one counts only as cost_states
+    start_ts TEXT,                  -- when the process that wrote it started
+    models TEXT NOT NULL,           -- JSON, as in cost_states
+    PRIMARY KEY (session_id, snapshot_ts)
+);
+CREATE TABLE IF NOT EXISTS background_parts (
+    session_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    path TEXT NOT NULL,
+    ts TEXT,                        -- the snapshot's time: what it counts beyond the one before, filed then
+    day TEXT,
+    new_input INTEGER NOT NULL,
+    cache_write INTEGER NOT NULL,   -- no 5m/1h split in cost-state records; priced as 5m
+    cache_read INTEGER NOT NULL,
+    output INTEGER NOT NULL,
+    web_searches INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS api_errors (
     record_id TEXT PRIMARY KEY,     -- the record's uuid
@@ -148,10 +169,13 @@ CREATE INDEX IF NOT EXISTS tool_calls_path ON tool_calls (path);
 CREATE INDEX IF NOT EXISTS api_errors_day ON api_errors (day);
 CREATE INDEX IF NOT EXISTS compactions_path ON compactions (path);
 CREATE INDEX IF NOT EXISTS ultracode_states_path ON ultracode_states (path);
+CREATE INDEX IF NOT EXISTS background_parts_session ON background_parts (session_id);
 """
 ULTRACODE = "ultracode"                 # the effort level of the calls made while ultracode was on
 # a message's effort level: ultracode runs at xhigh, and its calls count as a level of their own
 EFFORT = f"CASE WHEN m.ultracode = 1 THEN '{ULTRACODE}' ELSE m.effort END"
+# the effort level of background rows: no transcript says it, and they are no calls without one
+BACKGROUND_EFFORT = "background"
 # A view holds no data, so it is replaced whenever its definition here changes.
 VIEW = f"""CREATE VIEW usage_rows AS
 SELECT m.path AS path, t.session_id AS session_id, t.agent_id AS agent_id, t.agent_type AS agent_type,
@@ -162,8 +186,8 @@ SELECT m.path AS path, t.session_id AS session_id, t.agent_id AS agent_id, t.age
 FROM messages m JOIN transcripts t ON t.path = m.path
 UNION ALL
 SELECT b.path, b.session_id, NULL, '(background)', t.project, t.slug, b.model, 'standard', b.ts, b.day,
-       b.new_input, b.cache_write, 0, b.cache_read, b.output, b.web_searches, 0, NULL, NULL, NULL
-FROM background b JOIN transcripts t ON t.path = b.path"""
+       b.new_input, b.cache_write, 0, b.cache_read, b.output, b.web_searches, 0, NULL, NULL, '{BACKGROUND_EFFORT}'
+FROM background_parts b JOIN transcripts t ON t.path = b.path"""
 BACKGROUND = "(background)"               # the agent type of background rows, as in VIEW
 # the run totals of a cost-state record, as cost_states columns and CostState fields
 RUN_FIELDS = ("duration_ms", "api_ms", "api_ms_without_retries", "tool_ms", "lines_added", "lines_removed")

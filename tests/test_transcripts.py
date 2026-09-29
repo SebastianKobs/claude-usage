@@ -324,6 +324,14 @@ class CostStateTest(ParseCase):
                            model.cost_usd) for model in state.models],
                          [("claude-sonnet-5", 10, 20, 30, 40, 5.0)])
 
+    def test_every_cost_state_in_order_with_its_snapshot_time(self):
+        self.main.at(datetime(2026, 9, 2, 10, 0, tzinfo=UTC)).user("hi")
+        self.main.cost_state({"claude-sonnet-5": (1, 2, 3, 4, 0.5)})
+        self.main.at(datetime(2026, 9, 2, 11, 0, tzinfo=UTC)).user("resumed")
+        self.main.cost_state({"claude-sonnet-5": (10, 20, 30, 40, 5.0)})
+        states = self.parse().cost_states
+        self.assertEqual([(state.snapshot_ts.hour, state.models[0].output) for state in states], [(10, 4), (11, 40)])
+
     def test_web_searches_of_the_snapshot(self):
         self.main.user("hi")
         record = self.main.cost_state({"claude-haiku-4-5": (1, 0, 0, 1, 0.1)})
