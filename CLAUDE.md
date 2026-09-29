@@ -97,6 +97,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     `workflowName` in `<session-id>/workflows/<run>.json`: only that key is read, since the file also holds the
     script and the agents' results. `journal.jsonl` and `workflows/scripts/` carry no usage and are not read. The
     session view groups a run's agents under one row.
+    - How agents end (checked 2026-09-29, counts only): a workflow agent hands its result back by calling
+      `StructuredOutput`, and no reply follows its result (65 of 75); a subagent ends with a text reply (116 of
+      122). The journal marks each agent `started` and `result` (75 and 68: one run of five was stopped midway).
   - `tool-results/`, `memory/` and anything else: ignore.
   - Paths sort a session's `subagents/` before its main file.
 - **Records:** one JSON object per line. Skip unreadable lines (also nested too deeply to decode) and non-objects.
@@ -151,6 +154,13 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
 - **Tools:** `tool_use` blocks (`id`, `name`) and `tool_result` blocks in user records (`tool_use_id`, `content` as
   a string or blocks: count only `text` blocks). A result can come in a later read than its call. Show
   `mcp__<server>__<tool>` as `<server>.<tool>`.
+  - A question (`AskUserQuestion`) or a plan to approve (`ExitPlanMode`) waits for the user until its result comes,
+    and the transcript doesn't change for it meanwhile. Checked 2026-09-29 (counts only): 75 and 64 calls, all in
+    main threads, each with a result (an error where declined: 2 and 19), after a median 46 and 72 s, at most
+    40 min; 3 of the 39 with a stored call time waited longer than the 5-minute live window. No API call came
+    between a call and its answer (0 of 141); what did were records without a timestamp (title, last prompt,
+    mode), the results of the calls beside it in its message (25), hook results (19) and queued prompts (3), and in
+    4 waits a background subagent's records.
 - **Prompt:** the first line of the first user record that isn't `isMeta`, `isCompactSummary` or a tool result.
   **Project:** the first `cwd`, else the slug. Many main transcripts start with a record without `cwd`.
 - **Background calls** (Haiku for titles and classifiers, WebSearch) are in no transcript. They appear only in
@@ -498,6 +508,19 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     live sessions active in the range (`queries.live_sessions` with since and until): with usage in it, as the
     sessions list counts them, else by their last activity (a session without a reply yet). So a past day shows
     only the running sessions that were active on it, and says so; without a range `/api/live` lists every one.
+  - A session waiting for the user's answer (`queries.waiting_calls`: a call of `WAITING_TOOLS` without a result,
+    from the store) stays on the live list past the window until it is answered, however long ago it asked,
+    unless its transcript made an API call after it (the session moved on; the user's choice over a time limit).
+    `/api/live` gives it as `waiting` (the tool and since when), the card shows a
+    speech bubble with a question mark first by the title (`liveWaitBadge`, in `--series-1`: nothing is wrong),
+    described on hover, and the heading adds "or waiting for you". A permission prompt looks like a command still
+    running (a call without a result), so it isn't shown.
+  - A session also stays live for `[serve] agent_live_minutes` (180) after its last change while one of its agents
+    is at work (`queries.busy_agents`: a subagent or workflow agent in a call without a result, or with a result
+    after its last reply unless it was `StructuredOutput`'s), since an agent in a long command or reply leaves every
+    transcript quiet (3 gaps of 7 to 15 minutes in real data, each with an agent busy so), and a run stopped
+    midway leaves its agents busy for good. The card lists those agents, the heading names the minutes. The main
+    thread's own calls don't count (the user's choice: 7 of 55 main threads ended in a call).
   - Each live card's state comes from `/api/session/<id>/state`, asked for after every live answer and not awaited
     (`loadLiveStates`: one request per session at a time, a failed one keeps what is shown), and is kept by session
     (`liveStates`), so a redrawn list shows it at once. It shows as small icons right of the title (`LIVE_ICONS`,

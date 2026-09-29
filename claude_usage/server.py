@@ -229,13 +229,14 @@ class UsageApp:
                  clock: Callable[[], float] = time.monotonic,
                  compact: compact.CompactSettings = compact.DEFAULT_COMPACT,
                  secret_settings: secret_paths.SecretSettings | None = None, home: str | None = None,
-                 token: str | None = None, read_processes: int = 0) -> None:
+                 token: str | None = None, read_processes: int = 0, agent_live_minutes: float = 0) -> None:
         self.store = usage_store
         # the API answers only requests with this start's token (a new one unless given)
         self.token = token or secrets.token_urlsafe(TOKEN_BYTES)
         self.projects_dir = projects_dir
         self.prices = prices
         self.live_minutes = live_minutes
+        self.agent_live_minutes = agent_live_minutes     # while an agent is at work; 0 adds nothing
         self.project = project
         self.prices_checked = prices_checked
         self.clock = clock
@@ -281,17 +282,18 @@ class UsageApp:
         return days, queries.first_day(days, until), until
 
     def live(self, days: int | None = None, until: date | None = None) -> Payload:
-        """/api/live: the live sessions, with days or until only those active in that range (date_range), which the
-        dashboard asks for so they follow the range it shows."""
+        """/api/live: the live sessions (changed within live_minutes, within agent_live_minutes while an agent is at
+        work, or waiting for the user's answer: queries.live_sessions), with days or until only those active in that
+        range (date_range), which the dashboard asks for so they follow the range it shows."""
         since = None
         if days is not None or until is not None:
             days, since, until = self.date_range(queries.DEFAULT_DAYS if days is None else days, until)
         with self.lock:
             self.refresh()
             sessions = queries.live_sessions(self.store, self.live_minutes, self.prices, project=self.project,
-                                             since=since, until=until)
+                                             since=since, until=until, agent_minutes=self.agent_live_minutes)
             scan_errors = list(self.scan_errors)
-        return {"minutes": self.live_minutes, "days": days,
+        return {"minutes": self.live_minutes, "agent_minutes": self.agent_live_minutes, "days": days,
                 "since": None if since is None else since.isoformat(),
                 "until": None if until is None else until.isoformat(), "sessions": sessions,
                 "scan_errors": scan_errors}

@@ -19,6 +19,7 @@ retention_days = 30
 [serve]
 port = 8765
 live_minutes = 5
+agent_live_minutes = 180
 
 [prices."claude-sonnet"]
 input = 3.0
@@ -51,7 +52,7 @@ class ConfigCase(TempDirTestCase):
 class DefaultsTest(ConfigCase):
     def test_defaults_without_overrides(self):
         loaded = self.load()
-        self.assertEqual(loaded.values["serve"], {"port": 8765, "live_minutes": 5})
+        self.assertEqual(loaded.values["serve"], {"port": 8765, "live_minutes": 5, "agent_live_minutes": 180})
         self.assertEqual(loaded.values["prices"], {"claude-sonnet": {"input": 3.0, "output": 15.0}})
         self.assertEqual(loaded.sources, (self.defaults,))
 
@@ -65,7 +66,7 @@ class DefaultsTest(ConfigCase):
 class OverrideTest(ConfigCase):
     def test_tables_are_merged_key_by_key(self):
         self.write(self.user, "[serve]\nport = 9000\n")
-        self.assertEqual(self.load().values["serve"], {"port": 9000, "live_minutes": 5})
+        self.assertEqual(self.load().values["serve"], {"port": 9000, "live_minutes": 5, "agent_live_minutes": 180})
 
     def test_nested_tables_are_merged_too(self):
         self.write(self.user, '[prices."claude-sonnet"]\noutput = 20.0\n[prices."claude-opus"]\ninput = 5.0\n')
@@ -82,7 +83,7 @@ class OverrideTest(ConfigCase):
         self.write(self.user, "[serve]\nport = 9000\nlive_minutes = 3\n")
         self.write(self.local, "[serve]\nport = 9100\n")
         loaded = self.load()
-        self.assertEqual(loaded.values["serve"], {"port": 9100, "live_minutes": 3})
+        self.assertEqual(loaded.values["serve"], {"port": 9100, "live_minutes": 3, "agent_live_minutes": 180})
         self.assertEqual(loaded.sources, (self.defaults, self.user, self.local))
 
     def test_loading_does_not_change_the_defaults(self):
@@ -198,6 +199,9 @@ class SettingsTest(ConfigCase):
         self.assertEqual((settings.store, settings.port, settings.live_minutes, settings.prices_checked),
                          (self.data / "usage.sqlite", 8765, 5.0, None))
 
+    def test_agents_at_work_keep_a_session_live_for_180_minutes_by_default(self):
+        self.assertEqual(self.settings().agent_live_minutes, 180.0)
+
     def test_the_retention_of_the_defaults(self):
         self.assertEqual(self.settings().retention_days, 30)
 
@@ -235,6 +239,12 @@ class SettingsTest(ConfigCase):
             with self.subTest(override=override):
                 self.assert_refused(override, "serve.")
 
+    def test_bad_agent_live_minutes_are_refused(self):
+        for override in ("[serve]\nagent_live_minutes = nan\n", "[serve]\nagent_live_minutes = 0\n",
+                         '[serve]\nagent_live_minutes = "3"\n', "[serve]\nagent_live_minutes = true\n"):
+            with self.subTest(override=override):
+                self.assert_refused(override, "serve.agent_live_minutes")
+
 
 class ShippedConfigTest(unittest.TestCase):
     def test_the_defaults_ship_inside_the_package(self):
@@ -248,6 +258,7 @@ class ShippedConfigTest(unittest.TestCase):
         self.assertIsInstance(values["projects_dir"], str)
         self.assertIsInstance(values["serve"]["port"], int)
         self.assertIsInstance(values["serve"]["live_minutes"], int)
+        self.assertIsInstance(values["serve"]["agent_live_minutes"], int)
         self.assertEqual(values["retention_days"], 30)
         self.assertIsInstance(values["prices"], dict)
 

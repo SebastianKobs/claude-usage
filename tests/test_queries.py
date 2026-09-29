@@ -555,6 +555,149 @@ class LiveSessionsTest(StoreCase):
         self.assertEqual(len(self.live(minutes=15)), 2)
 
 
+class LiveWaitingTest(StoreCase):
+    def setUp(self):
+        super().setUp()
+        self.now = time.time()
+        self.asked = datetime.fromtimestamp(int(self.now), UTC) - timedelta(minutes=20)
+        self.session = self.projects.session("s-ask").at(self.asked - timedelta(minutes=1))
+        self.session.user("plan it")
+
+    def ask(self, tool="AskUserQuestion", tool_use_id="q1", at=None, beside=()):
+        """The main thread's call of this tool, asked at the given time (by default asked), with the calls beside it
+        in the same message."""
+        self.session.at(at or self.asked).assistant(
+            f"m-{tool_use_id}", [*beside, tool_use_block(tool_use_id, tool, {"questions": []})], usage(output=5))
+
+    def live(self, changed_ago):
+        """live_sessions after a scan, the transcript last changed changed_ago seconds before now."""
+        os.utime(self.session.path, (self.now - changed_ago, self.now - changed_ago))
+        self.scan()
+        return queries.live_sessions(self.store, 5, PRICES, now=self.now)
+
+    def test_a_question_without_an_answer_waits_since_it_was_asked(self):
+        self.ask()
+        [session] = self.live(10)
+        self.assertEqual(session["waiting"], {"tool": "AskUserQuestion", "since": scan.iso(self.asked)})
+
+    def test_a_plan_to_approve_waits_too(self):
+        self.ask("ExitPlanMode")
+        self.assertEqual(self.live(10)[0]["waiting"]["tool"], "ExitPlanMode")
+
+    def test_an_answered_question_waits_no_more(self):
+        self.ask()
+        self.session.tool_result("q1", "User has answered your questions")
+        self.assertIsNone(self.live(10)[0]["waiting"])
+
+    def test_other_calls_without_a_result_are_not_waiting_for_the_user(self):
+        # a command still running, or one waiting for permission: the transcript can't tell them apart
+        self.ask("Bash")
+        self.assertIsNone(self.live(10)[0]["waiting"])
+
+    def test_a_waiting_session_stays_live_past_the_window(self):
+        # Claude Code writes nothing while it waits: 3 of 39 real waits took longer than 5 minutes
+        self.ask()
+        self.assertEqual([session["session_id"] for session in self.live(20 * 60)], ["s-ask"])
+        self.assertEqual(self.live(20 * 60)[0]["subagents"], [])
+
+    def test_a_question_waits_until_it_is_answered_however_long_ago_it_was_asked(self):
+        self.ask(at=datetime.fromtimestamp(int(self.now), UTC) - timedelta(days=3))
+        [session] = self.live(3 * 86400)
+        self.assertEqual(session["waiting"]["tool"], "AskUserQuestion")
+
+    def test_a_question_the_session_moved_past_waits_no_more(self):
+        # a later API call in its transcript: no real question had one before its answer (0 of 141)
+        self.ask()
+        self.session.at(self.asked + timedelta(minutes=5)).assistant("m-later", [text_block("going on")],
+                                                                   usage(output=5))
+        self.assertIsNone(self.live(10)[0]["waiting"])
+        self.assertEqual(self.live(20 * 60), [])
+
+    def test_what_claude_code_writes_while_it_waits_keeps_it_waiting(self):
+        # real waits had the results of the calls beside the question, hook results and queued prompts meanwhile
+        self.ask(beside=[tool_use_block("r1", "Read", {"file_path": "a.go"})])
+        self.session.tool_result("r1", "abc")
+        self.session.attachment("hook_success")
+        self.assertEqual(self.live(20 * 60)[0]["waiting"]["tool"], "AskUserQuestion")
+
+    def test_a_subagent_working_meanwhile_keeps_it_waiting(self):
+        self.ask()
+        agent = self.projects.subagent("s-ask", "a1").at(self.asked + timedelta(minutes=5))
+        agent.assistant("m-agent", [text_block("still exploring")], usage(output=5))
+        self.assertEqual(self.live(10)[0]["waiting"]["tool"], "AskUserQuestion")
+
+
+class LiveAgentsTest(StoreCase):
+    def setUp(self):
+        super().setUp()
+        self.now = time.time()
+        self.start = datetime.fromtimestamp(int(self.now), UTC) - timedelta(minutes=40)
+        self.main = self.projects.session("s-run").at(self.start)
+        self.main.user("run it")
+        self.main.assistant("m-main", [text_block("on it")], usage(output=5))
+        self.agent = self.projects.subagent("s-run", "a1").at(self.start + timedelta(minutes=1))
+        self.agent.user("explore")
+        self.files = [self.main, self.agent]
+
+    def call(self, transcript, tool="Bash", tool_use_id="b1", result=False, reply=False):
+        """A call of this tool in the transcript, with its result and a reply after it if asked."""
+        transcript.assistant(f"m-{tool_use_id}", [tool_use_block(tool_use_id, tool, {})], usage(output=5))
+        if result:
+            transcript.tool_result(tool_use_id, "done")
+        if reply:
+            transcript.assistant(f"m-{tool_use_id}-reply", [text_block("finished")], usage(output=5))
+
+    def live(self, quiet_for=20 * 60, agent_minutes=180):
+        """The ids of live_sessions after a scan, every transcript last changed quiet_for seconds before now."""
+        for transcript in self.files:
+            os.utime(transcript.path, (self.now - quiet_for, self.now - quiet_for))
+        self.scan()
+        return [session["session_id"] for session in queries.live_sessions(self.store, 5, PRICES, now=self.now,
+                                                                            agent_minutes=agent_minutes)]
+
+    def test_an_agent_in_a_call_keeps_its_session_live_past_the_window(self):
+        # all of a session's transcripts went quiet for 7 to 15 minutes while an agent was still at work
+        self.call(self.agent)
+        self.assertEqual(self.live(), ["s-run"])
+        session = queries.live_sessions(self.store, 5, PRICES, now=self.now, agent_minutes=180)[0]
+        self.assertEqual([agent["agent_id"] for agent in session["subagents"]], ["a1"])
+
+    def test_an_agent_waiting_for_its_next_reply_keeps_it_live(self):
+        self.call(self.agent, result=True)
+        self.assertEqual(self.live(), ["s-run"])
+
+    def test_an_agent_whose_reply_came_last_is_done(self):
+        self.call(self.agent, result=True, reply=True)
+        self.assertEqual(self.live(), [])
+
+    def test_a_workflow_agent_at_work_keeps_it_live(self):
+        worker = self.projects.workflow_agent("s-run", "wf_1", "w1").at(self.start + timedelta(minutes=2))
+        self.files.append(worker)
+        self.call(worker, "Read", "r1", result=True)
+        self.assertEqual(self.live(), ["s-run"])
+
+    def test_a_workflow_agent_that_handed_back_its_result_is_done(self):
+        # 65 of 75 real workflow agents ended so, with no reply after it
+        worker = self.projects.workflow_agent("s-run", "wf_1", "w1").at(self.start + timedelta(minutes=2))
+        self.files.append(worker)
+        self.call(worker, "StructuredOutput", "s1", result=True)
+        self.assertEqual(self.live(), [])
+
+    def test_past_agent_minutes_a_busy_agent_keeps_it_live_no_more(self):
+        # a run stopped midway leaves its agents busy for good
+        self.call(self.agent)
+        self.assertEqual(self.live(quiet_for=181 * 60), [])
+
+    def test_a_busy_main_thread_does_not_keep_it_live(self):
+        # agents only, the user's choice: 7 of 55 real main threads ended in a call
+        self.call(self.main, tool_use_id="b-main")
+        self.assertEqual(self.live(), [])
+
+    def test_without_agent_minutes_nothing_keeps_it_live(self):
+        self.call(self.agent)
+        self.assertEqual(self.live(agent_minutes=0), [])
+
+
 class LiveSessionsInRangeTest(StoreCase):
     def setUp(self):
         super().setUp()

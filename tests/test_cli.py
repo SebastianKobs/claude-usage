@@ -265,6 +265,12 @@ class ServeCommandTest(CliCase):
         self.assertEqual(len(app.tool_reader.workers), server.READ_PROCESSES)
         close.assert_called_once_with(app)
 
+    def test_serve_keeps_sessions_with_agents_at_work_live_for_the_configured_minutes(self):
+        with mock.patch.object(server, "make_server", wraps=server.make_server) as make_server:
+            with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
+                self.run_cli("serve", "--port", "0")
+        self.assertEqual(make_server.call_args.args[0].agent_live_minutes, 180.0)
+
     def test_serve_prints_the_link_with_its_token(self):
         with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
             _, out, _ = self.run_cli("serve", "--port", "0")

@@ -830,12 +830,52 @@ class LiveStateTest(unittest.TestCase):
 
     def test_each_kind_has_its_icon_described_on_hover(self):
         icons = definition("figures.js", "LIVE_ICONS")
-        self.assertIn("secret: [", icons)
-        self.assertIn("compact: [", icons)
-        body = function_body("figures.js", "showLiveState")
+        for kind in ("secret", "compact", "waiting"):
+            with self.subTest(kind=kind):
+                self.assertIn(f"{kind}: [", icons)
+        body = function_body("figures.js", "liveBadge")
         self.assertIn('"aria-label": badge.text, title: badge.text', body)
         self.assertIn('role: "img"', body)
+        self.assertIn("badges.map(liveBadge)", function_body("figures.js", "showLiveState"))
         self.assertIn('"aria-hidden": "true"', function_body("figures.js", "liveIcon"))
+
+    def wait_badge(self, waiting):
+        """liveWaitBadge of a live session's waiting."""
+        return run_function("figures.js", "liveWaitBadge", waiting, uses=("util.js:when",))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_question_without_an_answer_waits_for_the_user(self):
+        badge = self.wait_badge({"tool": "AskUserQuestion", "since": self.NOW})
+        self.assertEqual((badge["kind"], badge["tone"]), ("waiting", "waiting"))
+        self.assertTrue(badge["text"].startswith("Waiting for your answer since "))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_plan_waits_for_its_approval(self):
+        badge = self.wait_badge({"tool": "ExitPlanMode", "since": self.NOW})
+        self.assertTrue(badge["text"].startswith("Waiting for you to approve the plan since "))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_session_waiting_for_nothing_has_no_wait_badge(self):
+        self.assertIsNone(self.wait_badge(None))
+
+    def test_waiting_is_blue_and_comes_first_by_the_title(self):
+        # blue, not a warning's or an alarm's hue: nothing is wrong, the session only waits (≥ 3:1 on every card)
+        css = read(STATIC / "css" / "common.css")
+        self.assertIn("var(--series-1)", re.search(r"\.live-icon-waiting \{([^}]*)\}", css).group(1))
+        body = function_body("figures.js", "renderLive")
+        self.assertLess(body.index('class: "title"'), body.index("liveWaitBadge(session.waiting)"))
+        self.assertLess(body.index("liveWaitBadge(session.waiting)"), body.index("showLiveState("))
+
+    def test_the_live_window_names_the_minutes_agents_at_work_keep_a_session(self):
+        body = function_body("figures.js", "renderLive")
+        self.assertIn("live.agent_minutes > live.minutes", body)
+        self.assertIn("min while agents work", body)
+
+    def test_the_live_window_names_the_waiting_sessions(self):
+        # a waiting session stays on the list past the window, as Claude Code writes nothing while it waits
+        body = function_body("figures.js", "renderLive")
+        self.assertIn("live.sessions.some(session => session.waiting)", body)
+        self.assertIn(" or waiting for you", body)
 
     def test_each_card_has_a_slot_by_its_title_filled_from_the_last_state(self):
         body = function_body("figures.js", "renderLive")

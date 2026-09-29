@@ -70,6 +70,10 @@ ID_BATCH = 500                            # ids per IN list: SQLite before 3.32 
 # the dashboard
 EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max", ULTRACODE)
 TOP_GROWTH = 5                            # the biggest growth steps a transcript's detail lists
+# calls whose result is the user's answer (a question, a plan to approve): while it hasn't come, the session waits
+WAITING_TOOLS = ("AskUserQuestion", "ExitPlanMode")
+# the tool a workflow's agent hands its result back with, which ends it: no reply follows its result
+RESULT_TOOL = "StructuredOutput"
 
 
 class UsageSum:
@@ -596,16 +600,22 @@ def sessions_used_in(store: Store, session_ids: list[str], since: date | None, u
 
 
 def live_sessions(store: Store, minutes: float, prices: pricing.Prices, now: float | None = None,
-                  project: str | None = None, since: date | None = None, until: date | None = None) -> list[Row]:
-    """Sessions with a transcript changed within `minutes` (by the mtime seen at the last scan), most recent first,
-    with their totals so far, the main thread's last context and output, and the subagents active in the window.
+                  project: str | None = None, since: date | None = None, until: date | None = None,
+                  agent_minutes: float = 0) -> list[Row]:
+    """Sessions with a transcript changed within `minutes` (by the mtime seen at the last scan), within
+    agent_minutes while an agent of theirs is at work (busy_agents), or waiting for the user's answer (waiting_calls:
+    Claude Code writes nothing while it waits), most recent first, with their totals so far, the main thread's last
+    context and output, the subagents active in the window or at work, and what they wait for.
     Most recent by the last activity (activity_time), like the sessions list, then by the mtime.
     With since or until, only those active from the local day since up to the local day until: with usage then, as
     the sessions list counts them, or else with their last activity then (a session without a reply yet)."""
     cutoff_ns = live_cutoff_ns(minutes, now)
-    session_ids = [row["session_id"] for row in store.connection.execute(
+    waiting = waiting_calls(store, project)
+    working = busy_agents(store, live_cutoff_ns(agent_minutes, now), project) if agent_minutes > 0 else {}
+    changed = [row["session_id"] for row in store.connection.execute(
         "SELECT DISTINCT session_id FROM transcripts WHERE mtime_ns >= ? AND (? IS NULL OR slug = ?)",
         (cutoff_ns, project_slug(project), project_slug(project)))]
+    session_ids = list(dict.fromkeys([*changed, *working.values(), *waiting]))
     ranged = since is not None or until is not None
     used = sessions_used_in(store, session_ids, since, until) if ranged else set()
     sessions = []
@@ -620,7 +630,7 @@ def live_sessions(store: Store, minutes: float, prices: pricing.Prices, now: flo
         main_turns = turn_contexts(store, main["path"]) if main["agent_id"] is None else []
         subagents = []
         for row in rows:
-            if row["agent_id"] is None or row["mtime_ns"] < cutoff_ns:
+            if row["agent_id"] is None or (row["mtime_ns"] < cutoff_ns and row["path"] not in working):
                 continue
             turns = turn_contexts(store, row["path"])
             subagents.append({"agent_id": row["agent_id"], "agent_type": row["agent_type"],
@@ -634,12 +644,60 @@ def live_sessions(store: Store, minutes: float, prices: pricing.Prices, now: flo
                          **usage_where(store, "u.session_id = ?", (session_id,), prices).as_dict(),
                          "last_context": main_turns[-1]["context"] if main_turns else None,
                          "last_output": main_turns[-1]["output"] if main_turns else None,
-                         "subagents": subagents,
+                         "subagents": subagents, "waiting": waiting.get(session_id),
                          "_order": (last_activity, last_ns)})
     sessions.sort(key=lambda session: session["_order"], reverse=True)
     for session in sessions:
         del session["_order"]
     return sessions
+
+
+def busy_agents(store: Store, cutoff_ns: int, project: str | None = None) -> dict[str, str]:
+    """The agents (subagents and workflow agents, of one project if given) changed since cutoff_ns that are still at
+    work, path -> session id: in a call without a result and no API call after it, or with a result after their
+    last reply, unless it was the RESULT_TOOL's. A finished subagent ends with a reply. Checked 2026-09-29 (counts
+    only): 116 of 122 subagents ended with a text reply, 65 of 75 workflow agents with StructuredOutput's result;
+    every quiet gap over 5 minutes while an agent ran (3, of 7 to 15 minutes) had one busy so. The main thread's own
+    calls don't count (the user's choice: 7 of 55 main threads ended in a call)."""
+    return {row["path"]: row["session_id"] for row in store.connection.execute(
+        "SELECT path, session_id FROM transcripts WHERE agent_id IS NOT NULL AND mtime_ns >= ? "
+        "AND (? IS NULL OR slug = ?)", (cutoff_ns, project_slug(project), project_slug(project)))
+        if agent_at_work(store, row["path"])}
+
+
+def agent_at_work(store: Store, path: str) -> bool:
+    """Whether an agent's transcript is still at work (busy_agents): a call without a result that no API call
+    followed (its message is the last), or a result after its last reply that wasn't the RESULT_TOOL's."""
+    last_reply = store.connection.execute("SELECT MAX(ts) AS ts FROM messages WHERE path = ?",
+                                          (path,)).fetchone()["ts"] or ""
+    pending = store.connection.execute(
+        "SELECT 1 FROM tool_calls WHERE path = ? AND result_chars IS NULL AND call_ts >= ? LIMIT 1",
+        (path, last_reply)).fetchone()
+    if pending is not None:
+        return True
+    last = store.connection.execute(
+        "SELECT tool, result_ts FROM tool_calls WHERE path = ? AND result_ts IS NOT NULL ORDER BY result_ts DESC "
+        "LIMIT 1", (path,)).fetchone()
+    return last is not None and last["tool"] != RESULT_TOOL and last["result_ts"] > last_reply
+
+
+def waiting_calls(store: Store, project: str | None = None) -> dict[str, Row]:
+    """Per session (of one project, if given), its oldest call of WAITING_TOOLS without a result, however long ago
+    it was asked, unless its transcript made an API call after it (the session moved on): its tool and when it was
+    asked. Claude Code waits for the user's answer to it. Checked 2026-09-29 (counts only): every one of 141 such
+    calls got its result (an error where declined), all in main threads, and none had an API call before it; the
+    records meanwhile were the results of the calls beside it, hook results and queued prompts, and in 4 of them a
+    background subagent's calls, none of which ends the wait."""
+    marks = ", ".join("?" for _ in WAITING_TOOLS)
+    waiting: dict[str, Row] = {}
+    for row in store.connection.execute(
+            f"SELECT t.session_id AS session_id, c.tool AS tool, c.call_ts AS since FROM tool_calls c "
+            f"JOIN transcripts t ON t.path = c.path WHERE c.tool IN ({marks}) AND c.result_chars IS NULL "
+            f"AND c.call_ts IS NOT NULL AND (? IS NULL OR t.slug = ?) "
+            f"AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.path = c.path AND m.ts > c.call_ts) "
+            f"ORDER BY c.call_ts", (*WAITING_TOOLS, project_slug(project), project_slug(project))):
+        waiting.setdefault(row["session_id"], {"tool": row["tool"], "since": row["since"]})
+    return waiting
 
 
 def agent_detail(store: Store, row: sqlite3.Row, prices: pricing.Prices, settings: compact.CompactSettings,

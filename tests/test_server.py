@@ -218,6 +218,13 @@ class ApiTest(ServerCase):
         self.assertEqual(sorted(sessions), ["s1", "s2"])
         self.assertEqual((sessions["s1"]["title"], sessions["s1"]["turns"]), ("Parser fix", 2))
 
+    def test_live_keeps_the_sessions_with_agents_at_work_for_the_agent_minutes(self):
+        self.app.agent_live_minutes = 180
+        with mock.patch.object(server.queries, "live_sessions", wraps=server.queries.live_sessions) as live:
+            _, payload = self.get_json("/api/live")
+        self.assertEqual(live.call_args.kwargs["agent_minutes"], 180)
+        self.assertEqual(payload["agent_minutes"], 180)
+
     def test_live_without_a_range_lists_every_live_session(self):
         _, payload = self.get_json("/api/live")
         self.assertEqual((payload["days"], payload["since"], payload["until"]), (None, None, None))

@@ -37,7 +37,7 @@ CLAUDE_PROJECTS = "projects"
 MAX_PORT = 65535
 # the tables the tool reads with their keys; None for tables keyed by model-id prefix
 TABLES: dict[str, tuple[str, ...] | None] = {
-    "serve": ("port", "live_minutes"),
+    "serve": ("port", "live_minutes", "agent_live_minutes"),
     "fees": ("web_search_per_1000",),
     "chat": ("compact_hint_tokens", "auto_compact_warn_share", "compact_reminder_step", "auto_compact_reminder_step",
              "delegate_hint_tokens", "delegate_calls_ahead"),
@@ -82,6 +82,7 @@ class Settings:
     store: Path
     port: int                           # 0 for any free port
     live_minutes: float                 # a session is live if its transcript changed within this many minutes
+    agent_live_minutes: float           # ... or within this many while one of its agents is at work
     prices_checked: str | None          # when the prices were last checked, as the config gives it
     retention_days: int                 # the days of history the store keeps, 0 for everything
 
@@ -109,17 +110,24 @@ def settings(config: Config) -> Settings:
     port = serve.get("port")
     if isinstance(port, bool) or not isinstance(port, int) or not 0 <= port <= MAX_PORT:
         raise ConfigError(f"serve.port: expected a whole number from 0 to {MAX_PORT}, got {port!r}")
-    live_minutes = serve.get("live_minutes")
-    if (isinstance(live_minutes, bool) or not isinstance(live_minutes, (int, float))
-            or not math.isfinite(live_minutes) or live_minutes <= 0):
-        raise ConfigError(f"serve.live_minutes: expected a number above 0, got {live_minutes!r}")
+    live_minutes = minutes_setting(serve, "live_minutes")
+    agent_live_minutes = minutes_setting(serve, "agent_live_minutes")
     retention = config.values.get("retention_days")
     if isinstance(retention, bool) or retention not in RETENTION_CHOICES or not isinstance(retention, int):
         raise ConfigError(f"retention_days: expected 0, 7, 30, 90 or 365 (0 keeps everything), got {retention!r}")
     checked = config.values.get("prices_checked")
     return Settings(projects_dir=config.path("projects_dir"), store=config.path("store"), port=port,
-                    live_minutes=float(live_minutes), prices_checked=str(checked) if checked else None,
+                    live_minutes=live_minutes, agent_live_minutes=agent_live_minutes,
+                    prices_checked=str(checked) if checked else None,
                     retention_days=retention)
+
+
+def minutes_setting(serve: dict[str, Any], key: str) -> float:
+    """A [serve] number of minutes above 0; raises ConfigError naming the key otherwise."""
+    value = serve.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        raise ConfigError(f"serve.{key}: expected a number above 0, got {value!r}")
+    return float(value)
 
 
 def is_checkout(directory: Path = CHECKOUT_DIR) -> bool:

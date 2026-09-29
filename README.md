@@ -15,9 +15,14 @@ is remembered) and previous and next by their heading; a refresh stays on the pa
 holds every session of the range: pick a project, or type words from a title, a project path or a session id, to narrow
 it. It and Cost per session count what each session used in the range, so a session over several days splits across
 them; its own view shows all of it. The live sessions follow the range too: on an earlier day they are the running
-sessions that were active on it. By each live session's title, a trash compactor shows when compacting now would pay
-off, in its own view's colors, and an agent in a black hat a possible secret access where one returned a result or
-was sent out; hover them for the details.
+sessions that were active on it. By each live session's title, a blue speech bubble with a question mark shows that
+Claude asked you something (a question or a plan to approve) and waits for your answer; such a session stays in the
+list until you answer, unless the session went on without it. A trash compactor shows when compacting now would
+pay off, in its own view's colors, and an agent in a black hat a possible secret access where one returned a result
+or was sent out; hover them for the details. A permission prompt can't be told from a command still running, so it
+shows nothing. While a subagent or a workflow's agent is still at work (in a call, or before its next reply), its
+session stays in the list for up to `agent_live_minutes` (180) after its last change, even when a long command
+leaves every transcript quiet.
 
 Rate limits show per day, and each 5-hour window that hit one shows what it used from its start (5 hours before
 its reset) up to the first hit, by model: a lower bound on what a window holds, since the limit also counts what
@@ -194,7 +199,7 @@ never silently leaves a default in place.
 |---|---|
 | `projects_dir`, `store` | Claude Code's transcripts, and the SQLite history |
 | `retention_days` | days of history kept: 7, 30 (default), 90 or 365, or 0 for everything |
-| `[serve]` `port`, `live_minutes` | the dashboard's port; how many minutes a session counts as live |
+| `[serve]` `port`, `live_minutes`, `agent_live_minutes` | the dashboard's port; how many minutes a session counts as live, and how many (180) while one of its agents or a workflow's is still at work |
 | `[prices."<model prefix>"]` | $ per million tokens, longest matching prefix wins; `prices_checked` dates them |
 | `[fees]` `web_search_per_1000` | the flat web-search fee |
 | `[chat]` | when a session's conversation view hints at compacting (a heuristic threshold, and reminder steps) |

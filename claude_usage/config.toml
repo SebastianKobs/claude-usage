@@ -24,6 +24,9 @@ web_search_per_1000 = 10.0      # $ per 1,000 web searches, e.g. Claude Code's W
 [serve]
 port = 8765
 live_minutes = 5        # a session counts as live if its transcript changed within this many minutes
+# ... or within this many while one of its agents (a subagent or a workflow's) is still at work: an agent in a
+# long command or reply leaves every transcript quiet, and a run stopped midway leaves its agents so for good
+agent_live_minutes = 180
 
 # When the conversation in a session's view hints at compacting. Anthropic publishes no "normal" context size, only
 # that quality degrades as the context fills (code.claude.com/docs/en/best-practices), so the soft hint is a

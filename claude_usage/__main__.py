@@ -123,7 +123,8 @@ def run_serve(context: Context) -> int:
         app = server.UsageApp(usage_store, context.projects_dir, context.prices, live_minutes, project=args.project,
                               prices_checked=context.settings.prices_checked, compact=compact_settings,
                               retention_days=context.settings.retention_days, secret_settings=secret_settings,
-                              read_processes=server.READ_PROCESSES)
+                              read_processes=server.READ_PROCESSES,
+                              agent_live_minutes=context.settings.agent_live_minutes)
         httpd = server.make_server(app, HOST, port)
         previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
         try:

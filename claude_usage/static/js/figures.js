@@ -154,8 +154,10 @@ function livePastDay(live, today) {
 
 function renderLive(live) {
   const pastDay = livePastDay(live, dayText(new Date()));
-  document.getElementById("live-window").textContent =
-    `· changed in the last ${live.minutes} min${pastDay ? `, active on ${longDay(pastDay)}` : ""}`;
+  const waits = live.sessions.some(session => session.waiting);
+  const agents = live.agent_minutes > live.minutes ? ` (${live.agent_minutes} min while agents work)` : "";
+  document.getElementById("live-window").textContent = `· changed in the last ${live.minutes} min${agents}` +
+    `${waits ? " or waiting for you" : ""}${pastDay ? `, active on ${longDay(pastDay)}` : ""}`;
   const container = document.getElementById("live");
   const cards = live.sessions.map(session => {
     const number = (label, value) => el("div", {}, el("span", {class: "label", text: label}),
@@ -171,6 +173,7 @@ function renderLive(live) {
     return el("div", {class: "live-card"},
       el("div", {class: "live-head"},
          el("div", {class: "title"}, el("span", {class: "dot", "aria-hidden": "true"}), sessionLink(session)),
+         session.waiting ? liveBadge(liveWaitBadge(session.waiting)) : null,
          showLiveState(el("div", {class: "live-states", "data-live-state": session.session_id}),
                        liveStates.get(session.session_id))),
       el("div", {class: "muted"}, `${session.project}${session.git_branch ? " · " + session.git_branch : ""} · `,
@@ -195,15 +198,27 @@ function showLiveState(slot, sessionState) {
   const key = JSON.stringify(badges);
   if (slot.dataset.shown === key) return slot;
   slot.dataset.shown = key;
-  slot.replaceChildren(...badges.map(badge => el("span", {
-    class: `live-icon live-icon-${badge.kind}${badge.tone ? ` live-icon-${badge.tone}` : ""}`, role: "img",
-    "aria-label": badge.text, title: badge.text}, liveIcon(badge.kind))));
+  slot.replaceChildren(...badges.map(liveBadge));
   return slot;
 }
 
+// a badge as its icon, colored by its tone and described on hover and to screen readers
+function liveBadge(badge) {
+  return el("span", {class: `live-icon live-icon-${badge.kind}${badge.tone ? ` live-icon-${badge.tone}` : ""}`,
+                     role: "img", "aria-label": badge.text, title: badge.text}, liveIcon(badge.kind));
+}
+
 // The icons, drawn in currentColor on a 24-unit grid: an agent in a black hat and dark glasses for a possible secret
-// access, a trash compactor pressing down on its bin for compacting
+// access, a trash compactor pressing down on its bin for compacting, a speech bubble with a question mark for a
+// session waiting for the user's answer
 const LIVE_ICONS = {
+  waiting: [
+    ["path", {d: "M5 3.5h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8.2L6 20.5v-4H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z",
+              fill: "none", stroke: "currentColor", "stroke-width": "1.6", "stroke-linejoin": "round"}],
+    ["path", {d: "M9.7 8.2a2.3 2.3 0 1 1 3.3 2.1c-.6.3-1 .8-1 1.5v.3", fill: "none", stroke: "currentColor",
+              "stroke-width": "1.6", "stroke-linecap": "round"}],
+    ["circle", {cx: "12", cy: "14.4", r: "1", fill: "currentColor"}],
+  ],
   secret: [
     ["path", {d: "M7.2 9.6 8.6 4.4c.2-.8 1-1.2 1.8-1l1.6.4 1.6-.4c.8-.2 1.6.2 1.8 1l1.4 5.2z", fill: "currentColor"}],
     ["path", {d: "M2.8 10.4c0-.7 4.1-1.2 9.2-1.2s9.2.5 9.2 1.2-4.1 1.4-9.2 1.4-9.2-.7-9.2-1.4z",
@@ -231,6 +246,14 @@ function liveIcon(kind) {
   const icon = svg("svg", {viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false"});
   for (const [tag, attributes] of LIVE_ICONS[kind]) icon.append(svg(tag, attributes));
   return icon;
+}
+
+// a session waiting for the user's answer (waiting in /api/live: a question, or a plan to approve, without its
+// result yet) as a badge in the waiting tone, which the card shows first; null while it waits for nothing
+function liveWaitBadge(waiting) {
+  if (!waiting) return null;
+  const what = waiting.tool === "ExitPlanMode" ? "you to approve the plan" : "your answer";
+  return {kind: "waiting", tone: "waiting", text: `Waiting for ${what} since ${when(waiting.since)}`};
 }
 
 // A live card's state as badges of a kind (secret, compact), a tone (a class suffix, or null) and the words its
