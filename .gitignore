@@ -5,9 +5,11 @@ config.local.toml
 # test scratch directories (the guard hook has its own .gitignore)
 tests/.tmp/
 
-# per-developer Claude Code and guard settings
+# per-developer Claude Code and guard settings, and MCP servers (with local paths) and their output
 .claude/settings.local.json
 .claude/guard.local.yml
+.mcp.json
+.playwright-mcp/
 
 __pycache__/
 *.egg-info/
