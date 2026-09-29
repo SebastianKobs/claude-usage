@@ -3,6 +3,11 @@
 /* Gimmick themes ("Just for fun" in the theme picker). Each restyles the chrome around the data in its own file; the
    series and the other data colors are dark.css's. */
 
+/* the live cards' icons glow faintly in their own color, like the live dot, without drawing more eye than it */
+[data-theme="hacker"] .live-icon svg, [data-theme="startup"] .live-icon svg, [data-theme="rgb"] .live-icon svg {
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-theme="hacker"] *, [data-theme="hacker"] *::after, [data-theme="rgb"] *, [data-theme="startup"] * {
     animation: none !important;

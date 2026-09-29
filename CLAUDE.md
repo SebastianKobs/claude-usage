@@ -404,6 +404,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     - A pattern is a name matching any part of a path (`.env`, `*.pem`), a path from `~` or `/` matching it and
       everything below it (wildcards per part), or either negated with `!`; the last match decides, as in a
       .gitignore. `~`, `$HOME` and `${HOME}` are the server's home, a relative path counts from the record's `cwd`.
+      The patterns are compiled once (`compiled_patterns`, fnmatch's expressions), and one expression of all names
+      rules out a part that none matches: a transcript names thousands of paths, and matching each part with
+      `fnmatchcase` took 1.0 of 1.1 s for 17 MB with 6,000 calls (now 0.13 of 0.23 s, the read 0.1 s).
     - The paths a call names (`call_paths`): a file tool's path inputs by name (`PATH_KEY`: `file_path`, `path`,
       `glob`, …; Glob's `pattern` too, never Grep's regular expression or text a call writes); a command's words
       and option values (`--env-file=.env`), quoted text only where it holds a slash (a commit message naming
@@ -432,6 +435,12 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       critical wash with a `!` mark; else it is folded to a one-line summary with a Show button (`data-fold`, kept
       across redraws), edged in `--hint-warning-edge` with a medium row (`warning`), a plain card with only low and
       low-medium rows (`quiet`); nothing without one.
+  - `/api/session/<id>/state` (`UsageApp.session_state`) is what a live card shows besides its totals: the main
+    thread's gauge (`current`, as in `/api/session`) and how many calls of the transcripts still there named a
+    possible secret location, by severity (counts only, never the paths). It reads through the same memo, but takes
+    a changed transcript from a read up to `STATE_READ_AGE` (15 s) old: a live transcript changes every few seconds,
+    and each card asks every 5 s. The session view still reads every change. Without `[secrets]` patterns it reads no
+    transcript.
   - `/api/session/<id>/chat[?agent=<id>]` reads the conversation from the transcript per request, with tool inputs
     and results cut to `CHAT_TOOL_LIMIT`. Each reply carries its effort level, and the last entry of each API call
     its final usage with the cost at the configured prices, both computed per request. Nothing of it is stored,
@@ -473,6 +482,17 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     live sessions active in the range (`queries.live_sessions` with since and until): with usage in it, as the
     sessions list counts them, else by their last activity (a session without a reply yet). So a past day shows
     only the running sessions that were active on it, and says so; without a range `/api/live` lists every one.
+  - Each live card's state comes from `/api/session/<id>/state`, asked for after every live answer and not awaited
+    (`loadLiveStates`: one request per session at a time, a failed one keeps what is shown), and is kept by session
+    (`liveStates`), so a redrawn list shows it at once. It shows as small icons right of the title (`LIVE_ICONS`,
+    in currentColor, faintly glowing in the gimmick themes), each described on hover and to screen readers
+    (`title`, `aria-label`) and colored as the session view's marks (`--gain-text`, `--hint-warning-edge`,
+    `--hint-critical-edge`, else `--text-secondary`; each ≥ 3:1 on the card in every theme). `liveStateBadges`
+    picks them: an agent in a black hat for a possible secret access, first and only from medium up (`secretTone`'s
+    warning and alert: high where one was sent out), then a trash compactor for compacting now, in `payoffTone`'s
+    tone with `PAYOFF_WORDS` where it has a break-even, what it saves at once where `compactCallKind` is cold, and
+    past the compact hint. None where compacting would never pay off. A card's icons are drawn again only where they
+    changed, which a cache expiring does too.
   - An open session polls too: every 5 s while it is `live` (a transcript changed within `live_minutes`), else
     every 60 s, which notices a resumed session. A changed one is drawn in place (`renderDrilldown(detail, true)`):
     the conversation's nodes move into the new view, and the table view, the folds open (a workflow run's agents,

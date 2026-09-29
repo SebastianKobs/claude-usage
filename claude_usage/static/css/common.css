@@ -81,6 +81,16 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
 .live-card .numbers { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
 .live-card .numbers div span { display: block; }
 .live-card ul { margin: 8px 0 0; padding-left: 18px; }
+/* the security and compact state (liveStateBadges) as small icons by the title, in the session view's mark colors;
+   a badge without a tone stays secondary */
+.live-head { display: flex; align-items: flex-start; gap: 8px; }
+.live-head .title { flex: 1; min-width: 0; }
+.live-states { display: flex; gap: 6px; flex: none; }
+.live-icon { display: inline-flex; width: 20px; height: 20px; color: var(--text-secondary); cursor: help; }
+.live-icon svg { width: 100%; height: 100%; }
+.live-icon-soon { color: var(--gain-text); }
+.live-icon-close, .live-icon-medium { color: var(--hint-warning-edge); }
+.live-icon-unlikely, .live-icon-high { color: var(--hint-critical-edge); }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--status-good);
   margin-right: 6px; vertical-align: middle; }
 

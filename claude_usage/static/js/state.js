@@ -22,3 +22,7 @@ const METRICS = {
 
 // day: the day the Daily range shows, as "YYYY-MM-DD"; null follows today, also past midnight
 const state = {days: 30, day: null, metric: "cost", summary: null, session: null};
+// each live card's last state by session id (/api/session/<id>/state), so a redrawn list shows it at once, and the
+// sessions whose state is on its way
+const liveStates = new Map();
+const liveStateRequests = new Set();

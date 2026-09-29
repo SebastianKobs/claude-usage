@@ -42,10 +42,19 @@ def declarations(block):
     return dict(re.findall(r"(--[\w-]+):\s*([^;]+);", block))
 
 
-def run_function(script, name, *arguments):
-    """Calls a script's top-level function, which must use nothing else of the page, in node; its result."""
-    source = re.search(rf"^function {name}\(.*?^\}}$", read(STATIC / "js" / script), re.DOTALL | re.MULTILINE)
-    program = f"{source.group(0)}\nprocess.stdout.write(JSON.stringify({name}(...{json.dumps(arguments)})));"
+def definition(script, name):
+    """A script's top-level function or constant, as written."""
+    source = re.search(rf"^(?:function {name}\(.*?^\}}|const {name} = .*?;)$", read(STATIC / "js" / script),
+                       re.DOTALL | re.MULTILINE)
+    return source.group(0)
+
+
+def run_function(script, name, *arguments, uses=()):
+    """Calls a script's top-level function in node, with the page's functions and constants it uses named in uses
+    ("script.js:name"), which must use nothing else of the page; its result."""
+    helpers = [definition(*use.split(":")) for use in uses]
+    program = "\n".join([*helpers, definition(script, name),
+                         f"process.stdout.write(JSON.stringify({name}(...{json.dumps(arguments)})));"])
     result = subprocess.run(["node", "-e", program], capture_output=True, text=True, check=True, timeout=30)
     return json.loads(result.stdout)
 
@@ -678,6 +687,130 @@ class LiveRangeTest(unittest.TestCase):
         self.assertIn("livePastDay(live, dayText(new Date()))", body)
         self.assertIn("active on ${longDay(pastDay)}", body)
         self.assertIn("No live session was active on ${longDay(pastDay)}.", body)
+
+
+class LiveStateTest(unittest.TestCase):
+    NOW = "2026-09-28T12:00:00.000+00:00"
+    EXPIRED = "2026-09-28T11:00:00.000+00:00"
+    USES = ("util.js:compactFormat", "util.js:wholeFormat", "util.js:compact", "util.js:whole", "util.js:money",
+            "drilldown.js:compactCallKind", "drilldown.js:payoffTone", "drilldown.js:PAYOFF_WORDS",
+            "figures.js:liveSecretBadge", "figures.js:liveCompactBadge")
+
+    def badges(self, secrets=None, context=150_000, warm_until="2026-09-28T12:30:00.000+00:00", estimate=True,
+               current=True, **fields):
+        """liveStateBadges at NOW of a state with a 200K hint and an estimate with 40 calls ahead on average,
+        updated by the given fields, and the secret accesses by severity."""
+        values = {"breakeven_calls": 10, "breakeven_low": 5, "calls_ahead": 40.0, "cold_saving": -0.5,
+                  "breakeven_cold": 10}
+        values.update(fields)
+        gauge = {"context": context, "hint_tokens": 200_000,
+                 "compact_now": {"cache_warm_until": warm_until, "estimate": values if estimate else None}}
+        state = {"current": gauge if current else None,
+                 "secrets": {"high": 0, "medium": 0, "low-medium": 0, "low": 0, **(secrets or {})}}
+        return run_function("figures.js", "liveStateBadges", state, self.NOW, uses=self.USES)
+
+    def badge(self, **arguments):
+        """The only badge of badges(**arguments) as (kind, tone, text)."""
+        [badge] = self.badges(**arguments)
+        return badge["kind"], badge["tone"], badge["text"]
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_compacting_that_pays_off_soon_has_the_session_views_tone_and_words(self):
+        self.assertEqual(self.badge(), ("compact", "soon",
+                                        "Soon: compacting now pays off after ~10 replies, ~40 ahead on average."))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_close_and_late_pay_offs_have_their_tones(self):
+        self.assertEqual(self.badge(breakeven_calls=30)[1:], ("close", "Close: compacting now pays off after ~30 "
+                                                                       "replies, ~40 ahead on average."))
+        self.assertEqual(self.badge(breakeven_calls=50)[1], "unlikely")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_where_compacting_would_never_pay_off_there_is_no_compact_badge(self):
+        self.assertEqual(self.badges(breakeven_calls=None, breakeven_low=None), [])
+        self.assertEqual(self.badges(warm_until=self.EXPIRED, breakeven_cold=None), [])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_where_it_likely_would_not_the_badge_says_so_in_the_late_tone(self):
+        self.assertEqual(self.badge(breakeven_calls=None, breakeven_low=60),
+                         ("compact", "unlikely", "Compacting now would likely not pay off."))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_without_calls_ahead_there_is_no_tone(self):
+        self.assertEqual(self.badge(calls_ahead=None), ("compact", None, "Compacting now pays off after ~10 replies."))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_an_expired_cache_goes_by_the_cold_estimate(self):
+        self.assertEqual(self.badge(warm_until=self.EXPIRED, cold_saving=1.2),
+                         ("compact", "soon", "Compacting now saves ~$1.20 at once: the cache has expired."))
+        self.assertEqual(self.badge(warm_until=self.EXPIRED, breakeven_cold=30)[1], "close")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_past_the_hint_it_says_so(self):
+        self.assertTrue(self.badge(context=250_000)[2].endswith(" Past your 200K compact hint."))
+        self.assertEqual(self.badge(context=250_000, estimate=False), ("compact", None, "Past your 200K compact hint."))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_without_a_gauge_or_an_estimate_below_the_hint_there_is_no_compact_badge(self):
+        self.assertEqual(self.badges(current=False), [])
+        self.assertEqual(self.badges(estimate=False), [])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_secret_access_sent_out_is_high(self):
+        self.assertEqual(self.badge(secrets={"high": 1, "medium": 2}, current=False),
+                         ("secret", "high", "Possible secret access: 1 call sent out, 2 more returned a result or may "
+                                            "still"))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_secret_access_that_returned_is_medium(self):
+        self.assertEqual(self.badge(secrets={"medium": 2}, current=False),
+                         ("secret", "medium", "Possible secret access: 2 calls returned a result or may still"))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_below_medium_a_secret_access_shows_nothing(self):
+        self.assertEqual(self.badges(secrets={"low-medium": 3, "low": 1}, current=False), [])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_secret_access_comes_first_as_in_the_session_view(self):
+        self.assertEqual([badge["kind"] for badge in self.badges(secrets={"medium": 1})], ["secret", "compact"])
+
+    def test_each_tone_has_the_session_views_mark_color(self):
+        css = read(STATIC / "css" / "common.css")
+        for tone, color in (("soon", "--gain-text"), ("close", "--hint-warning-edge"),
+                            ("medium", "--hint-warning-edge"), ("unlikely", "--hint-critical-edge"),
+                            ("high", "--hint-critical-edge")):
+            with self.subTest(tone=tone):
+                self.assertIn(f".live-icon-{tone}", css)
+                rule = re.search(rf"[^}}]*\.live-icon-{tone}\b[^{{]*\{{([^}}]*)\}}", css).group(1)
+                self.assertIn(f"var({color})", rule)
+
+    def test_each_kind_has_its_icon_described_on_hover(self):
+        icons = definition("figures.js", "LIVE_ICONS")
+        self.assertIn("secret: [", icons)
+        self.assertIn("compact: [", icons)
+        body = function_body("figures.js", "showLiveState")
+        self.assertIn('"aria-label": badge.text, title: badge.text', body)
+        self.assertIn('role: "img"', body)
+        self.assertIn('"aria-hidden": "true"', function_body("figures.js", "liveIcon"))
+
+    def test_each_card_has_a_slot_by_its_title_filled_from_the_last_state(self):
+        body = function_body("figures.js", "renderLive")
+        self.assertIn('"data-live-state": session.session_id', body)
+        self.assertLess(body.index('class: "live-head"'), body.index("showLiveState("))
+        self.assertLess(body.index("showLiveState("), body.index('class: "muted"'))
+
+    def test_the_states_are_asked_for_after_the_list_is_drawn_without_holding_up_the_poll(self):
+        body = function_body("main.js", "loadLive")
+        self.assertIn("loadLiveStates(live.sessions);", body)
+        self.assertNotIn("await loadLiveStates", body)
+        self.assertLess(body.index("renderLive(live)"), body.index("loadLiveStates(live.sessions)"))
+        self.assertIn("fetchJson(`/api/session/${encodeURIComponent(id)}/state`)",
+                      function_body("main.js", "loadLiveState"))
+
+    def test_a_state_still_on_its_way_is_not_asked_for_again(self):
+        body = function_body("main.js", "loadLiveState")
+        self.assertIn("if (liveStateRequests.has(id)) return;", body)
+        self.assertIn("liveStateRequests.delete(id)", body)
 
 
 class SessionListTest(unittest.TestCase):

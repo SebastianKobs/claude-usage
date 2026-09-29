@@ -15,7 +15,9 @@ is remembered) and previous and next by their heading; a refresh stays on the pa
 holds every session of the range: pick a project, or type words from a title, a project path or a session id, to narrow
 it. It and Cost per session count what each session used in the range, so a session over several days splits across
 them; its own view shows all of it. The live sessions follow the range too: on an earlier day they are the running
-sessions that were active on it.
+sessions that were active on it. By each live session's title, a trash compactor shows when compacting now would pay
+off, in its own view's colors, and an agent in a black hat a possible secret access where one returned a result or
+was sent out; hover them for the details.
 
 Rate limits show per day, and each 5-hour window that hit one shows what it used from its start (5 hours before
 its reset) up to the first hit, by model: a lower bound on what a window holds, since the limit also counts what

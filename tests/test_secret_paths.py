@@ -24,6 +24,17 @@ class MatchingPatternTest(unittest.TestCase):
     def test_a_name_matches_a_folder_too(self):
         self.assertEqual(matching("/srv/.env/values"), ".env")
 
+    def test_names_with_several_wildcards_or_a_set_match_next_to_the_others(self):
+        patterns = ("*sec*ret*", "[!a]*.key", ".env")
+        self.assertEqual(matching("/srv/my-secret-file", patterns=patterns), "*sec*ret*")
+        self.assertEqual(matching("certs/server.key", patterns=patterns), "[!a]*.key")
+        self.assertIsNone(matching("certs/api.key", patterns=patterns))
+        self.assertEqual(matching("/srv/.env", patterns=patterns), ".env")
+
+    def test_a_relative_pattern_of_several_parts_matches_at_any_depth(self):
+        self.assertEqual(matching("/srv/app/config/prod.yml", patterns=("config/*.yml",)), "config/*.yml")
+        self.assertIsNone(matching("/srv/app/prod.yml", patterns=("config/*.yml",)))
+
     def test_a_negated_pattern_exempts_what_it_matches(self):
         self.assertIsNone(matching("/srv/app/.env.example"))
 

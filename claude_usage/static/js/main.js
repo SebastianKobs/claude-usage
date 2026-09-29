@@ -91,6 +91,7 @@ async function loadLive() {
     } else {
       refreshAgo();
     }
+    loadLiveStates(live.sessions);
     document.getElementById("updated").textContent = `updated ${new Date().toLocaleTimeString()}`;
     return true;
   } catch (error) {
@@ -98,6 +99,33 @@ async function loadLive() {
     showError("live", error.message);
     if (liveKey === null) placeholder("live", "Could not load the live sessions.");
     return false;
+  }
+}
+
+// Each live card's compact and security state, asked for once the list is drawn and not awaited: the server reads
+// the transcripts for it, so neither the list nor its poll waits. The states of sessions no longer live go.
+function loadLiveStates(sessions) {
+  const ids = new Set(sessions.map(session => session.session_id));
+  for (const id of liveStates.keys()) {
+    if (!ids.has(id)) liveStates.delete(id);
+  }
+  for (const id of ids) loadLiveState(id);
+}
+
+// One session's state into its card; one request per session at a time. A failed one keeps the state shown: the
+// live list's own request shows what failed, and the next poll asks again.
+async function loadLiveState(id) {
+  if (liveStateRequests.has(id)) return;
+  liveStateRequests.add(id);
+  try {
+    liveStates.set(id, await fetchJson(`/api/session/${encodeURIComponent(id)}/state`));
+  } catch (error) {
+    return;
+  } finally {
+    liveStateRequests.delete(id);
+  }
+  for (const slot of document.querySelectorAll("[data-live-state]")) {
+    if (slot.dataset.liveState === id) showLiveState(slot, liveStates.get(id));
   }
 }
 

@@ -13,6 +13,7 @@ input to something outside Claude Code (sends_out): an MCP server, or a command 
 and whether it looks like a test (looks_like_test): a word of the call, the script it ran or the path matching
 `test_patterns`."""
 import fnmatch
+import functools
 import posixpath
 import re
 from dataclasses import dataclass
@@ -72,16 +73,54 @@ def normalized_parts(path: str, home: str, cwd: str | None) -> list[str]:
     return posixpath.normpath(path).split("/")
 
 
-def pattern_matches(parts: list[str], pattern: str, home: str) -> bool:
-    """Whether a path's parts match a pattern (without its !): one anchored at the home folder or the root from the
-    start, a name or a relative pattern at any depth."""
-    if pattern.startswith(("~/", "/")) or pattern == "~":
-        wanted = normalized_parts(pattern, home, None)
-        return len(wanted) <= len(parts) and all(fnmatch.fnmatchcase(part, want)
-                                                 for part, want in zip(parts, wanted))
-    wanted = pattern.split("/")
-    return any(all(fnmatch.fnmatchcase(part, want) for part, want in zip(parts[start:], wanted))
-               for start in range(len(parts) - len(wanted) + 1))
+@dataclass(frozen=True)
+class CompiledPattern:
+    """A pattern ready to match: as written (with its !), whether it is negated, whether it is anchored at the home
+    folder or the root, whether it is a name (one part, which matches any part of a path), and each of its parts as
+    fnmatch's regular expression."""
+    text: str
+    negated: bool
+    anchored: bool
+    is_name: bool
+    parts: tuple[re.Pattern[str], ...]
+
+
+@dataclass(frozen=True)
+class CompiledPatterns:
+    """Patterns ready to match, in their order, those that aren't names in their order, and one expression that
+    matches a part wherever any name does (None without a name): a path none of whose parts it matches, most of
+    them, is tested against the other patterns only."""
+    patterns: tuple[CompiledPattern, ...]
+    unnamed: tuple[CompiledPattern, ...]
+    any_name: re.Pattern[str] | None
+
+
+@functools.lru_cache(maxsize=64)
+def compiled_patterns(patterns: tuple[str, ...], home: str) -> CompiledPatterns:
+    """Patterns compiled once, since a transcript's calls name thousands of paths; fnmatchcase would compile each
+    part again for every path (with fnmatch.translate, which gives the same matches)."""
+    compiled = []
+    for pattern in patterns:
+        negated = pattern.startswith("!")
+        text = pattern[1:] if negated else pattern
+        anchored = text.startswith(("~/", "/")) or text == "~"
+        wanted = normalized_parts(text, home, None) if anchored else text.split("/")
+        compiled.append(CompiledPattern(pattern, negated, anchored, not anchored and len(wanted) == 1,
+                                        tuple(re.compile(fnmatch.translate(part)) for part in wanted)))
+    names = [pattern.parts[0].pattern for pattern in compiled if pattern.is_name]
+    return CompiledPatterns(tuple(compiled), tuple(pattern for pattern in compiled if not pattern.is_name),
+                            re.compile("|".join(f"(?:{name})" for name in names)) if names else None)
+
+
+def pattern_matches(parts: list[str], pattern: CompiledPattern, named: list[str]) -> bool:
+    """Whether a path's parts match a pattern: one anchored at the home folder or the root from the start, a name
+    one of the parts some name matches (named), a relative pattern at any depth."""
+    if pattern.is_name:
+        return any(pattern.parts[0].match(part) for part in named)
+    if pattern.anchored:
+        return len(pattern.parts) <= len(parts) and all(want.match(part) for part, want in zip(parts, pattern.parts))
+    return any(all(want.match(part) for part, want in zip(parts[start:], pattern.parts))
+               for start in range(len(parts) - len(pattern.parts) + 1))
 
 
 def matching_pattern(path: str, patterns: tuple[str, ...], home: str, cwd: str | None = None) -> str | None:
@@ -92,11 +131,12 @@ def matching_pattern(path: str, patterns: tuple[str, ...], home: str, cwd: str |
 
 def deciding_pattern(parts: list[str], patterns: tuple[str, ...], home: str) -> str | None:
     """The last pattern that matches a path's parts, unless that is a negation; None for none."""
+    compiled = compiled_patterns(patterns, home)
+    named = [part for part in parts if compiled.any_name is not None and compiled.any_name.match(part)]
     found = None
-    for pattern in patterns:
-        negated = pattern.startswith("!")
-        if pattern_matches(parts, pattern[1:] if negated else pattern, home):
-            found = None if negated else pattern
+    for pattern in compiled.patterns if named else compiled.unnamed:
+        if pattern_matches(parts, pattern, named):
+            found = None if pattern.negated else pattern.text
     return found
 
 

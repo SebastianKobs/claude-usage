@@ -9,6 +9,7 @@ Loopback is open to every user of the machine, though, so the API also answers o
 this start: the link printed at start (/?token=…) puts it into a cookie. The page and its scripts hold no data and
 are served without it.
 """
+import collections
 import dataclasses
 import hmac
 import ipaddress
@@ -51,12 +52,16 @@ ASSETS = {f"/static/{path.relative_to(STATIC).as_posix()}": path
 SCAN_INTERVAL = 5.0                     # seconds between scans triggered by requests
 CONNECTION_TIMEOUT = 30                 # seconds an idle connection may keep its handler thread
 TOOLS_MEMO_LIMIT = 256                  # transcripts whose tool rows stay in memory until the file changes
+# a live card's state takes a changed transcript's secret accesses from a read at most this many seconds old: a live
+# transcript changes every few seconds, and each live card asks every 5 s (17 MB with 6,000 calls read in 0.23 s)
+STATE_READ_AGE = 15.0
 MAX_DAYS = 3650
 # what the sessions list shows of each session: it holds every session of the range, so only that goes to the page
 SESSION_LIST_FIELDS = ("session_id", "title", "project", "last_ts", "subagents", "turns", "context_avg",
                        "context_peak", "output", "cost")
 SESSION_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})")
 CHAT_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})/chat")
+STATE_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})/state")
 AGENT_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
 SECRET_SEVERITIES = ("high", "medium", "low-medium", "low")
 HOST_WITH_PORT = re.compile(r"^\[?(?P<host>[^\]]*?)\]?(?::\d+)?$")
@@ -250,9 +255,9 @@ class UsageApp:
         self.last_scan: float | None = None
         self.scan_errors: tuple[str, ...] = ()
         # each transcript's tool rows and exploration (counts only) and the paths of its secret accesses by its path,
-        # with the (size, mtime) they were read at, so an open session's poll reads only the files that changed; its
-        # own lock, as it is read outside self.lock
-        self.tools_memo: dict[str, tuple[tuple[int, int], Payload]] = {}
+        # with the (size, mtime) and the clock they were read at, so an open session's poll reads only the files that
+        # changed; its own lock, as it is read outside self.lock
+        self.tools_memo: dict[str, tuple[tuple[int, int], float, Payload]] = {}
         self.tools_lock = threading.Lock()
 
     def refresh(self) -> None:
@@ -424,23 +429,46 @@ class UsageApp:
                 "live": live, "compaction_savings": savings, "transcript": path is not None and path.exists(),
                 "secret_accesses": sorted(secrets, key=secret_order)}
 
-    def transcript_tools(self, path: Path) -> Payload | None:
+    def session_state(self, session_id: str) -> Payload | None:
+        """/api/session/<id>/state: what a live card shows of a session besides its totals: the main thread's gauge
+        with what compacting now would cost and when it would pay off (current, as in /api/session), and how many
+        calls of its transcripts still there named a possible secret location, by severity (counts only, no paths);
+        None for an unknown id. The page asks for it per card after drawing the live sessions, so their list needn't
+        wait for the transcripts to be read."""
+        with self.lock:
+            self.refresh()
+            paths = [Path(row["path"]) for row in queries.session_rows(self.store, session_id)]
+            current = queries.current_context(self.store, session_id, self.compact, self.prices,
+                                              self.stored_comparisons()) if paths else None
+        if not paths:
+            return None
+        severities: collections.Counter[str] = collections.Counter()
+        if self.find_secrets is not None:          # without patterns there is nothing to look for
+            for path in paths:
+                tools = self.transcript_tools(path, STATE_READ_AGE)
+                if tools is not None:
+                    severities.update(access["severity"] for access in tools["secret_accesses"])
+        return {"session_id": session_id, "current": current,
+                "secrets": {severity: severities[severity] for severity in SECRET_SEVERITIES}}
+
+    def transcript_tools(self, path: Path, max_age: float = 0.0) -> Payload | None:
         """A transcript's tool rows, exploration and secret accesses (tool_kinds.transcript_tools), read again only
-        once the file changed; None once it is gone. Only the counts and those paths stay in memory, for at most
-        TOOLS_MEMO_LIMIT files."""
+        once the file changed, and with max_age only once the last read is that many seconds old; None once it is
+        gone. Only the counts and those paths stay in memory, for at most TOOLS_MEMO_LIMIT files."""
         try:
             stat = path.stat()
             version = (stat.st_size, stat.st_mtime_ns)
             with self.tools_lock:
                 cached = self.tools_memo.get(str(path))
-            if cached is not None and cached[0] == version:
-                return cached[1]
+            if cached is not None and (cached[0] == version or self.clock() - cached[1] < max_age):
+                return cached[2]
+            read_at = self.clock()
             tools = dataclasses.asdict(tool_kinds.transcript_tools(path, self.prices, self.find_secrets))
         except OSError:
             return None
         with self.tools_lock:
             self.tools_memo.pop(str(path), None)
-            self.tools_memo[str(path)] = (version, tools)
+            self.tools_memo[str(path)] = (version, read_at, tools)
             while len(self.tools_memo) > TOOLS_MEMO_LIMIT:
                 del self.tools_memo[next(iter(self.tools_memo))]
         return tools
@@ -467,6 +495,14 @@ def route_chat(app: UsageApp, match: re.Match[str], query: str) -> Payload:
     return chat
 
 
+def route_state(app: UsageApp, match: re.Match[str], query: str) -> Payload:
+    """/api/session/<id>/state"""
+    state = app.session_state(match.group(1))
+    if state is None:
+        raise NotFound(f"unknown session {match.group(1)}")
+    return state
+
+
 def route_session(app: UsageApp, match: re.Match[str], query: str) -> Payload:
     """/api/session/<id>"""
     detail = app.session(match.group(1))
@@ -480,6 +516,7 @@ API_ROUTES: tuple[tuple[re.Pattern[str], Callable[[UsageApp, re.Match[str], str]
     (re.compile(r"/api/live"), route_live),
     (re.compile(r"/api/summary"), route_summary),
     (CHAT_PATH, route_chat),
+    (STATE_PATH, route_state),
     (SESSION_PATH, route_session),
 )
 

