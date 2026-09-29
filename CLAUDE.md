@@ -15,6 +15,12 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
 - **Never read real transcripts in tests.** Tests build their own under `tests/.tmp/` (see `tests/helpers.py`) and
   pass temp paths via `--projects-dir` and `--store`. Real `~/.claude/projects` is only read to verify a change
   against real data, and only when the user asks. Print counts and totals then, never prompt or message text.
+  Screenshots for `docs/images/` show only the demo, never real sessions: their titles and paths would be published.
+  `make demo` (`tests/demo.py`) writes made-up transcripts with the builders in `tests/helpers.py` to
+  `tests/.tmp/demo`, relative to now, and serves them on port 8799 with a permission prompt posted. Take the shots
+  1280 px wide in the light theme: the overview's top at 870 px high (again in dark), the by-model chart's and the
+  live sessions' cards, and in "Checkout: split payment step" the view from the call to compact at 740 px high and
+  the secret warning.
 - **Never store prompt text:** only token counts, tool names and sizes, titles and metadata. The drilldown reads the
   first prompt, and the conversation (`conversation.conversation`), from the transcript on demand.
   `last-prompt.lastPrompt` and `queue-operation.content` hold prompt text too; never store them either.
@@ -44,6 +50,9 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
 
 ## Layout
 ```
+README.md                    the overview: highlights, quick start, what to know first; the details are in docs/
+docs/                        the user guide by topic (dashboard, session view, compaction, notifications,
+                             configuration, privacy); images/ holds screenshots of demo data only
 Makefile                     start/stop/status of the dashboard, scan, report, session, backup, test, clean,
                              hook-line, notify-test, cron-line, demo
 claude_usage/

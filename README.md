@@ -1,283 +1,211 @@
+<div align="center">
+
 # claude-usage
 
-Token usage of Claude Code across all projects on this machine: a SQLite history of what the transcripts held,
-and a local dashboard (127.0.0.1 only) with live sessions, totals by day, model, agent type and project, a
-per-session drilldown and estimated cost. The history keeps 30 days by default, as Claude Code keeps its
-transcripts; set `retention_days` to 90 or 365 (or 0 for everything) to keep usage past their cleanup.
+**See where your Claude Code tokens go, and keep the history after Claude Code deletes the transcripts.**
 
-Usage is split by model and effort level. Calls made while ultracode was on count as a level of their own,
-`ultracode`, hatched in the chart: Claude Code notes ultracode only on your prompts, so a call counts if it ran at
-xhigh between switching ultracode on and switching it off or picking another effort level. Subagents and Workflow
-agents count by that time too.
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776ab)](pyproject.toml)
+[![Dependencies: none](https://img.shields.io/badge/dependencies-none-2ea44f)](#requirements)
+[![Serves 127.0.0.1 only](https://img.shields.io/badge/serves-127.0.0.1%20only-6e7781)](docs/privacy.md)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
-Tables longer than 10 rows, and more than 10 live sessions, come in pages, with 10, 25 or 50 rows per page (the choice
-is remembered) and previous and next by their heading; a refresh stays on the page you are reading. The sessions list
-holds every session of the range: pick a project, or type words from a title, a project path or a session id, to narrow
-it. It and Cost per session count what each session used in the range, so a session over several days splits across
-them; its own view shows all of it. The live sessions follow the range too: on an earlier day they are the running
-sessions that were active on it. By each live session's title, a blue speech bubble with a question mark shows that
-Claude asked you something (a question or a plan to approve) and waits for your answer; such a session stays in the list
-until you answer, unless the session went on without it. A trash compactor shows when compacting now would pay off, in
-its own view's colors, and an agent in a black hat a possible secret access where one returned a result or was sent out;
-hover them for the details. With the permission hook set up (see Usage), a padlock shows a call that waits for your
-permission; without it, a permission prompt can't be told from a command still running, so it shows nothing. A session
-you have open says the same under its heading, with what the other live sessions wait for. While a subagent or a
-workflow's agent is still at work (in a call, or before its next reply), its session stays in the list for up to
-`agent_live_minutes` (180) after its last change, even when a long command leaves every transcript quiet.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.png">
+  <img src="docs/images/overview-light.png" width="880"
+       alt="The dashboard: cost and time tiles, three live sessions with their status icons, and the cost over time">
+</picture>
 
-Rate limits show per day, and each 5-hour window that hit one shows what it used from its start (5 hours before
-its reset) up to the first hit, by model: a lower bound on what a window holds, since the limit also counts what
-you use elsewhere.
+<sub>All screenshots show made-up demo data.</sub>
 
-Python ≥ 3.12, standard library only. Run it from the checkout as it is, or install it with `pip install .` to get
-a `claude-usage` command.
+</div>
 
-## Usage
-```
-make start                     # dashboard in the background; prints its link (PORT=, LIVE_MINUTES=)
-make status | stop | restart | logs   # status prints the link again
-make scan                      # read new transcript data into the store
-make report ARGS="--days 7 --by project"
-make session ID=<session-id>   # one session: main thread, subagents, background, tools
-make backup FILE=<new file>    # a copy of the history
-make notify-test               # one desktop notification, and how it was shown
-make test                      # the tests
-make help                      # everything else
-```
+## Highlights
 
-The same without make (or with `claude-usage` instead of `python3 -m claude_usage` once installed):
-```
-python3 -m claude_usage scan [--project PATH]
-python3 -m claude_usage report --days 7       # totals as text (--json for JSON, --no-scan for the stored history)
-python3 -m claude_usage report --session ID   # one session
-python3 -m claude_usage serve                 # dashboard in the foreground, prints its link (--project PATH)
-python3 -m claude_usage backup FILE           # a copy of the store; never overwrites
-python3 -m claude_usage --version
+- 📚 **A history that outlives the transcripts.** Claude Code deletes its transcripts after 30 days. claude-usage
+  keeps their token counts in a local SQLite store for 7, 30, 90 or 365 days, or for good, and each scan reads only
+  what is new. → [Configuration and storage](docs/configuration.md)
+- 💸 **Where every token and dollar went.** Cost and tokens by day or hour, by model and effort level (ultracode
+  included), by agent type and by project, plus the background calls that no transcript shows. Each rate-limit window
+  shows what it used before the limit hit. Open any session to see its subagents, its tools and its conversation.
+  → [The dashboard](docs/dashboard.md)
+- 🟢 **Live sessions that tell you when they need you.** A speech bubble when Claude asks you something, a padlock at
+  a permission prompt, the agents still at work, and a desktop notification on Windows, WSL, macOS or Linux.
+  → [Permission prompts and notifications](docs/notifications.md)
+- 🗜️ **Knows when `/compact` pays off.** The context against the auto-compact point, the break-even learnt from your
+  own past compactions, and a "Copy /compact" button when it is time. Afterwards it shows whether each compaction
+  saved money or cost more. → [When compacting pays off](docs/compaction.md)
+- 🕵️ **Flags possible secret access.** It lists every tool call that named `.env`, a key file, `~/.ssh` or a similar
+  path, and how far each got: sent to a network program or an MCP server, returned into the conversation, or
+  blocked. → [The session view](docs/session-view.md#possible-secret-access)
+
+Standard library only · serves 127.0.0.1 only · never stores your prompts.
+
+## TL;DR
+
+Run it from a checkout, with nothing to install:
+
+```bash
+git clone https://github.com/SebastianKobs/claude-usage.git
+cd claude-usage
+make start        # prints the link: http://127.0.0.1:8765/?token=…
 ```
 
-The dashboard's link carries a token, new at every start (`http://127.0.0.1:8765/?token=…`): opening it puts the
-token into a cookie, and only a browser holding it gets any data. After a restart, open the new link.
+Open the link it prints. The first start reads every transcript, so it takes a moment. `make stop` stops the
+dashboard.
 
-To keep the history without the dashboard running, scan from cron. `make cron-line` prints the line for your
-checkout, with the absolute interpreter path (cron's `python3` may be older than 3.12):
+Or install the `claude-usage` command:
+
+```bash
+pipx install .    # in the checkout; or pip install . inside a virtual environment
+claude-usage serve
 ```
-*/30 * * * * cd '/path/to/usage-inspector' && /usr/bin/python3 -m claude_usage scan >/dev/null
+
+## Contents
+
+- [Highlights](#highlights)
+- [TL;DR](#tldr)
+- [Good to know](#good-to-know)
+  - [Requirements](#requirements)
+  - [Everyday commands](#everyday-commands)
+  - [The link carries a token](#the-link-carries-a-token)
+  - [Your history is one file: back it up](#your-history-is-one-file-back-it-up)
+  - [Keep more than 30 days](#keep-more-than-30-days)
+  - [Scan without the dashboard](#scan-without-the-dashboard)
+  - [See permission prompts](#see-permission-prompts)
+  - [Costs are at API list prices](#costs-are-at-api-list-prices)
+  - [Updating](#updating)
+- [Further reading](#further-reading)
+- [Development](#development)
+- [License](#license)
+
+## Good to know
+
+### Requirements
+
+- **Python 3.12 or newer.** Nothing else: no packages, no build step, no network access.
+- **Linux, macOS or WSL.** On Windows itself the dashboard can't show permission prompts, which need a Unix socket.
+- **`curl`**, only for the optional [permission hook](#see-permission-prompts).
+
+The transcripts are read from `~/.claude/projects`, or from `$CLAUDE_CONFIG_DIR/projects` when that is set, as
+Claude Code does.
+
+### Everyday commands
+
+| `make` target | Without make | What it does |
+|---|---|---|
+| `make start` | `claude-usage serve` | Starts the dashboard and prints its link. `make` runs it in the background (`PORT=`, `LIVE_MINUTES=`) |
+| `make status`, `stop`, `restart`, `logs` | | Say whether it runs and where (`status` prints the link again), stop it, restart it, show its log |
+| `make scan` | `claude-usage scan` | Reads new transcript data into the store (`--project PATH` for one project) |
+| `make report ARGS="--days 7 --by project"` | `claude-usage report --days 7 --by project` | Prints totals as text. `--by` takes day, model, agent_type, project, skill, mcp_server or effort. `--json` prints JSON, `--no-scan` skips the scan |
+| `make session ID=<session-id>` | `claude-usage report --session <id>` | Shows one session: main thread, subagents, background calls, tools |
+| `make backup FILE=<new file>` | `claude-usage backup <new file>` | Writes a compacted copy of the store, and never overwrites a file |
+| `make notify-test` | `claude-usage notify-test` | Shows one desktop notification and names the method |
+| `make hook-line` | `claude-usage hook-settings` | Prints the permission hook's settings block |
+| `make cron-line` | | Prints a crontab line that scans every 30 minutes |
+| `make test`, `make help` | | Runs the tests; lists every target |
+
+Without make, use `claude-usage` once it is installed, or `python3 -m claude_usage` in the checkout. `serve` runs in
+the foreground and takes `--project PATH`. Every command takes `--store` and `--projects-dir`, and `--version`
+prints the version.
+
+### The link carries a token
+
+The dashboard answers only a browser that holds the token of this start. The link it prints carries the token
+(`http://127.0.0.1:8765/?token=…`). Opening it once puts the token into a cookie and removes it from the address bar.
+Each start makes a new token, so **after a restart, open the new link**. `make status` prints it again.
+
+### Your history is one file: back it up
+
+| Running from | The store |
+|---|---|
+| a checkout | `data/usage.sqlite` |
+| an installed copy | `~/.local/share/claude-usage/usage.sqlite` (`$XDG_DATA_HOME` is respected) |
+
+> [!WARNING]
+> In a checkout the store sits inside the working tree. `git clean -fdx` deletes it, and with it every day that
+> Claude Code has already removed from its transcripts. Back it up outside the checkout now and then, or point
+> `store` at a folder outside it.
+
+```bash
+make backup FILE=~/backups/usage-$(date +%F).sqlite
 ```
-Errors go to stderr, so cron mails them.
 
-To see on the dashboard when a session waits for your permission (the "Do you want to allow …?" dialog), which no
-transcript records, let Claude Code tell it through a hook. `make hook-line` (or `claude-usage hook-settings`) prints
-the settings block. Put it into `~/.claude/settings.json` for every project, or into one project's
-`.claude/settings.local.json`, which git ignores, for that project only. Never into a project's `.claude/settings.json`:
-that file is committed, and everyone who works on the project would run the hook, whether they use claude-usage or not.
-Where the file has `"hooks"` already, add the `"PermissionRequest"` entry to them. Claude Code reads hooks when a
-session starts: in a running one, accept it in `/hooks`.
+### Keep more than 30 days
 
-The hook runs in the background whenever a permission dialog opens (also in auto mode, in the VS Code extension and for
-subagents): `curl` posts Claude Code's hook input to the dashboard over a Unix socket next to the store
-(`permission.sock`, yours alone), and the dashboard keeps only the session, the subagent, the tool, the permission mode
-and the time, in memory, never the command or any other input. While no dashboard runs, the hook gives up quietly after
-at most 2 s, and nothing is noted. Two calls of the same tool at once can't be told apart: the newer one shows as
-waiting. Windows has no Unix sockets, so there the dashboard notes that it can't show permission prompts; Claude Code's
-own dialogs work as ever.
+By default the store keeps 30 days, as long as Claude Code keeps its transcripts. To keep your usage past their
+cleanup, set `retention_days` to 90 or 365, or to 0 to keep everything:
 
-While the dashboard runs, it also shows desktop notifications, whether or not a page of it is open: when Claude asks
-you something (a question, a plan to approve, a permission prompt with the hook set up), when a possible secret access
-rises to a higher level, and when compacting now reaches a new state (past your compact hint, soon, close, likely too
-late, or the cache expired), each state once between two compactions. Only changes notify: a restart sends nothing for
-what was already so. It finds the system's own notifier: a toast from Windows PowerShell on Windows and in WSL,
-osascript on macOS, `notify-send` on Linux (from libnotify). `make notify-test` shows one and names the method; where
-none is found, the dashboard says why at start and under the live sessions. Elsewhere set `[notify] command` to a
-program of your own, with `{title}`, `{body}` and `{icon}` (the icon's file) in its words; `[notify] enabled = false`
-turns them off. Each kind has its icon in the live cards' colors: blue for a wait, amber or red for a secret access,
-and the compact state's tone. On Windows the toasts show as "claude-usage": each one registers that name for your user
-(`HKCU\Software\Classes\AppUserModelId\ClaudeUsage.Dashboard`, no admin), so Settings → Notifications lists it on
-its own, and copies its icon to `%LOCALAPPDATA%\claude-usage\icons`, since a toast shows only local images. To remove
-both, delete that key and that folder. macOS shows them under Script Editor, without icons. The notifications hold
-session titles, tool names and counts, never a prompt or a path.
-
-## Updating
+```toml
+# ~/.config/claude-usage/config.toml
+retention_days = 365
 ```
+
+After each scan, sessions whose last activity is older than that are deleted. Lowering the value deletes the older
+sessions at the next scan. For every other setting, see [Configuration and storage](docs/configuration.md).
+
+### Scan without the dashboard
+
+The dashboard scans while it runs. To keep the history while it doesn't, scan from cron. `make cron-line` prints the
+line for your checkout. It uses the interpreter's absolute path, because cron's `python3` may be older than 3.12:
+
+```
+*/30 * * * * cd '/path/to/claude-usage' && /usr/bin/python3 -m claude_usage scan >/dev/null
+```
+
+Errors go to stderr, so cron mails them. Give cron the same time zone as the dashboard: a scan files each call under
+its local day.
+
+### See permission prompts
+
+No transcript records a permission prompt (the "Do you want to allow …?" dialog). To show one, the dashboard needs a
+hook that Claude Code runs when the dialog opens. `make hook-line` prints the settings block:
+
+- Put it into `~/.claude/settings.json` for every project, or into one project's `.claude/settings.local.json`, which
+  git ignores, for that project only.
+- If the file already has `"hooks"`, add the `"PermissionRequest"` entry to them.
+- Claude Code reads hooks when a session starts. In a session that is already running, accept the hook in `/hooks`.
+
+> [!CAUTION]
+> Never put it into a project's `.claude/settings.json`. That file is committed, and everyone who works on the project
+> would run the hook, whether they use claude-usage or not.
+
+How the hook works and what it keeps: [Permission prompts and notifications](docs/notifications.md#the-permission-hook).
+
+### Costs are at API list prices
+
+Every amount is at the API's list prices, as if you paid per token. On a subscription they show where your limits go.
+The prices ship with the package and are dated by `prices_checked`. An override in your config can change a single
+price.
+
+### Updating
+
+```bash
 make backup FILE=~/backups/usage-$(date +%F).sqlite   # optional; the store may hold days Claude Code deleted
 git pull --recurse-submodules
-make restart                                          # the running dashboard picks up the new code; new link
+make restart                                          # runs the new code, with a new link
 ```
-Installed with pip, run `pip install .` again in the updated checkout and restart `claude-usage serve`. The store
-updates itself on the next start or scan: migrations only add tables and columns, so no history is lost. Some
-updates need data only a new read gives; then the next scan reads every transcript again, which takes a little
-longer once. The restarted dashboard has a new token: open the link it prints.
 
-## The session view
-Click a session to open it. While the session is running the view updates itself every few seconds, the
-conversation too, without closing what you opened. Besides its cost, time and tables, it shows what its context
-holds:
-- the main thread's latest context against the auto-compact point, with the compact hint marked, the turns since
-  the last compaction and an estimate of the turns left at the recent pace (right after a compaction, until the
-  next reply, the compaction and the context before it, with no call to compact). Below it, what compacting now would
-  cost: what each call re-reads, until when the cache stays warm and what keeping costs after that, and from your
-  stored compactions after how many replies compacting would pay off, marked green (soon: within half the replies
-  you usually still make), yellow (close), grey (not yet: the context is still too small, and at its recent pace
-  compacting would pay off in so many replies) or red (likely too late), with the words to say so. While the session
-  runs, a callout above it says in plain words when to compact, with a button that copies `/compact`: once the
-  cache has expired and compacting saves at once, and once the context has passed your compact hint (200K by
-  default), whatever the estimate says, since how many replies still follow can't be predicted. Replayed on stored
-  sessions, compacting past the hint saved by far the most; an earlier call where compacting likely pays added next
-  to nothing. A second callout suggests exploring in a subagent once the main thread has read and searched a lot since its last
-  compaction (20K tokens by default) and your past sessions went on for many more replies (60): every later reply
-  re-reads what the main thread read, a subagent hands back only its summary;
-- the context per turn as cache read, cache write and new input, with each `/compact` or auto-compact as a rule;
-  the picker switches between the main thread and its subagents;
-- for that transcript, the fixed overhead (the first call's context, which every later call reads again), the
-  cache rebuilds and what they cost extra, the compactions, and the turns that grew the context most with the
-  tools the call before ran;
-- per subagent, what it returned to the main thread; a Workflow run's agents under one row per run;
-- a warning under the tiles listing every tool call that named a possible secret location (`.env`, keys, `~/.ssh`,
-  `~/.aws`, … as set in `[secrets] patterns`): when, which agent and tool, the path, the pattern it matched and how
-  far it got, while the transcript exists. Sent to an MCP server or a network program (`curl`, `ssh`, … as set in
-  `[secrets] network_programs`) comes first, then a result that went into the conversation and so to the API. Only a
-  call that sent it out opens the warning with a red edge and a "!"; otherwise it stays folded to one line, edged in
-  yellow when a result came back, a plain card when every call was blocked or returned nothing. A
-  command's own variables are expanded, and a script the session wrote and then ran is checked by its text. A
-  result of a call that looks like a test (a word, the script or the path matching `[secrets] test_patterns`, such
-  as `tests`, `test_*`, `pytest`) counts less, marked with a blue dot;
-- the tools each transcript called, with Bash split by what a command does (search, view, edit in place, write a
-  file, inline script, git, run: by the programs, in any language; each kind by program, git by subcommand, and
-  each of those by the options it ran with, never its arguments or paths, behind a button; Read, Edit and Write
-  by file type and the options they gave, such as a line range; Grep by output mode, Glob by the file type it
-  matches; Agent by subagent type, Skill by skill; MCP tools by server, then tool), errors, result and input
-  sizes, and an estimate of what the later calls paid to carry each call's input and result in their context,
-  while the transcript exists;
-- each compaction against keeping the context: what it cost once, what each later call saved, the call at which it
-  paid off, and whether it saved (green) or cost more (red), at API list prices with the summary call estimated. The
-  table's heading adds them up. The conversation shows the same at each compaction marker, and the Estimated cost
-  tile, here and on the overview, what compacting saved so far;
-- the conversation, on request, in its own frame right after the agents while its transcript still exists (the tools
-  table then moves to the end), with Close to put it away again: newest first, or in the transcript's order with the
-  arrow (down: newest first, up: oldest first). It hints at compacting where the context passes 200K, warns more
-  sternly where compacting now would pay for itself within the replies that, going by your past compactions, you
-  make on average before the next one, and most sternly near the auto-compact point.
+The store updates itself, and no history is lost. For an installed copy, and for what a migration does, see
+[Updating](docs/configuration.md#updating).
 
-## How the compaction estimate works
-All amounts are at API list prices, as if you paid per token; on a subscription they show where your limits go.
+## Further reading
 
-**Every reply re-reads the whole conversation.** Claude has no memory between replies: each one sends everything
-said so far again. Most of it comes from the prompt cache, which is cheap, but you pay for it on every single reply.
-A long conversation costs a little more with each reply, forever.
-
-**Compacting costs once.** `/compact` has Claude write a summary and starts again from it. That costs once: the
-summary call reads the conversation one last time and writes the summary, and the next reply has to put the new,
-shorter start into the cache.
-
-**Then every reply is cheaper.** From then on each reply re-reads the short version instead of the long one. The
-break-even is the number of replies after which these small savings have covered the one-time cost.
-
-**A worked example** (Opus 5.5, cache reads at $0.20 per million tokens):
-- The conversation holds 300K tokens, so every reply re-reads it for about $0.06.
-- Compacting would shrink it to about 50K. Each reply then re-reads 250K less and saves about $0.05.
-- Compacting costs about $0.40 once (the summary plus caching the new start).
-- $0.40 ÷ $0.05 = 8: after about 8 replies compacting has paid for itself; every reply after that is profit.
-- After your past compactions you went on for 25 replies on average. 8 is less than 25, so compacting now would
-  likely save money, and the conversation says so at that reply.
-
-**Where the numbers come from.** The 300K and the $0.06 are exact: they are your last call. The rest is learnt from
-your stored compactions: how big the context was right after them (the summary plus what Claude Code sends every
-time: the system prompt, tools and CLAUDE.md), how long the summaries took, and how many replies followed until the
-next compaction. That is why each figure comes with a range, and why there is no estimate before your first
-compaction. Once the current stretch has run a while, it is compared only with the past stretches that lasted at
-least that long, if there are enough of them.
-
-**Breaks.** The cache forgets a conversation after 5 minutes without a reply (an hour, where Claude Code pays for
-the longer cache). The first reply after that writes the whole conversation into the cache again, at up to 40 times
-the read price: about $1.50 for the 300K above, against about $0.25 for the compacted 50K. So compacting right
-before a longer break pays off at once, and the page gives the time the cache runs out and what that saves. Once
-the cache has expired, compacting still saves at once if the summary costs less than rewriting everything.
-
-**What it can't know.**
-- How many replies you will make: the average of your past stretches is a guess, not a promise. Guessing too long
-  loses at most the one-time cost; guessing too short misses a saving on every reply.
-- Which files Claude has to read again after compacting, since they were in the old conversation. The transcripts
-  don't keep tool inputs, so this isn't counted; the compactions table gives how many re-read tokens would cancel a
-  saving.
-- The summary's exact size: it isn't in any transcript, so it is estimated from how long the compaction took.
-
-**Afterwards.** Each past compaction is checked against keeping the context: the same later replies, each carrying
-the longer conversation. It shows what compacting cost once, what each later reply saved and the reply at which it
-paid off: saved in green, cost more in red, and the latest one, while it is still behind, as its loss so far.
-
-**Where the page shows it.**
-- The gauge in the session view: what each reply re-reads, when the cache runs out, and what compacting now would
-  cost and after how many replies it would pay off.
-- The callout above it, with a button that copies `/compact`, once the cache has expired and compacting saves at
-  once, and whenever the context is past your compact hint.
-- The conversation: a warning at the reply where compacting started to pay, sterner than the 200K hint.
-- The compactions table and the marker at each compaction in the conversation: how each past one worked out,
-  and the table's heading the total.
-- The Estimated cost tile, in the session view and on the overview: what compacting saved so far, all added up.
-
-## Keeping the history safe
-After each scan, sessions whose last activity is older than `retention_days` are deleted from the store; the
-dashboard offers no range longer than that. Lowering it deletes the older sessions at the next scan. SQLite reuses
-the freed space rather than shrinking the file; `make backup` writes a compacted copy.
-
-In a checkout the store is `data/usage.sqlite`, inside the working tree: `git clean -fdx` deletes it, and with it
-every day Claude Code has already removed from its transcripts. Back it up outside the checkout now and then
-(`make backup FILE=~/backups/usage-$(date +%F).sqlite`), or point `store` at a folder outside it.
-
-## Configuration
-The defaults ship with the package in `claude_usage/config.toml`. To change any of them, put just those keys into
-`~/.config/claude-usage/config.toml`. In a source checkout, `config.local.toml` (gitignored) is read after that.
-Tables are merged key by key, so an override can change a single price. An unknown key is an error, so a typo
-never silently leaves a default in place.
-
-| Key | What it sets |
+| Page | What it covers |
 |---|---|
-| `projects_dir`, `store` | Claude Code's transcripts, and the SQLite history |
-| `retention_days` | days of history kept: 7, 30 (default), 90 or 365, or 0 for everything |
-| `[serve]` `port`, `live_minutes` | the dashboard's port; how many minutes a session counts as live |
-| `[serve]` `agent_live_minutes` | how many minutes (180) a session stays live while one of its agents is at work |
-| `[prices."<model prefix>"]` | $ per million tokens, longest matching prefix wins; `prices_checked` dates them |
-| `[fees]` `web_search_per_1000` | the flat web-search fee |
-| `[chat]` | when a session's conversation view hints at compacting (a heuristic threshold, and reminder steps) |
-| `[auto_compact]` | where Claude Code auto-compacts, by model prefix; `default` for your `autoCompactWindow` |
-| `[secrets]` `patterns` | where secrets may be, for the session view's warning; `!` exempts, an override replaces all |
-| `[secrets]` `network_programs` | the programs that send what they get elsewhere (MCP tools always do); replaces all |
-| `[secrets]` `test_patterns` | what marks a call as a test, whose returned result then counts less; replaces all |
-| `[notify]` `enabled`, `command` | desktop notifications on (default) or off; a program to show them instead |
-
-The store is `data/usage.sqlite` when running from a checkout, and `~/.local/share/claude-usage/usage.sqlite` when
-installed (`$XDG_DATA_HOME` and `$XDG_CONFIG_HOME` are respected). The transcripts are read from
-`~/.claude/projects`, or from `$CLAUDE_CONFIG_DIR/projects` when that is set, as Claude Code does; a `projects_dir`
-in a config file wins over both. `--store` and `--projects-dir` override the config.
-
-`CLAUDE_CONFIG_DIR` counts only where the dashboard's own process has it. Set only for Claude Code (in an alias, your
-editor's settings or Claude Code's `settings.json`), neither `make start` nor cron sees it: set `projects_dir`
-instead. One projects folder is read; for a second config folder, keep a second store with `--projects-dir` and
-`--store`.
-
-## Privacy
-The store keeps token counts, model names, tool names and result sizes, session titles and project paths. It never
-stores prompt text. While a transcript still exists, the drilldown reads its first prompt, and on request the whole
-conversation (prompts, replies, tool inputs and results, cut to a few thousand characters each), from the file for
-that one request. The paths of possible secret accesses are read the same way, and never their contents. The
-server answers only on loopback addresses and only to loopback host names.
-
-Loopback keeps other machines out, not other users of this one, so the API answers only a browser holding the
-token of this start: the link the dashboard prints carries it, and opening the link puts it into a cookie. The page
-and its scripts hold no data and load without it. The token lives only in the server's memory, your browser's
-cookie and `make start`'s log, which is yours alone (mode 600).
-
-The token keeps other users out of the dashboard, not out of the files it reads. So at start the dashboard warns (in
-the terminal, and in `make start`'s output) when other users can read files in the projects folder, or some of them
-belong to another user, and names the fix: `chmod 700` on the folder, or on a Windows drive under WSL, where chmod
-does nothing, the mount option. Claude Code keeps its own folder yours alone, so by default there is nothing to warn
-about.
-
-The store holds no prompts, but titles and project paths: it, its WAL files and its backups are yours alone (mode
-600, whatever your umask), and a store from an older version is closed to others the next time it is opened. A new
-folder for it is yours alone too (700); an existing one keeps its mode.
-
-The permission hook can't know the token, so it posts to the dashboard's Unix socket instead of the API: only you
-can connect to it, no browser reaches it, and it answers no data.
+| [The dashboard](docs/dashboard.md) | Charts by model and effort, ultracode and background calls, rate-limit windows, the sessions list, paging, the live sessions and their icons |
+| [The session view](docs/session-view.md) | The context gauge, the calls to compact or delegate, context per turn, possible secret access, tools, compactions, the conversation |
+| [When compacting pays off](docs/compaction.md) | How the estimate works, a worked example, and what it can't know |
+| [Permission prompts and notifications](docs/notifications.md) | The permission hook in detail, desktop notifications on each system, turning them off |
+| [Configuration and storage](docs/configuration.md) | Every setting, where the files live, `CLAUDE_CONFIG_DIR`, retention, backups, updating |
+| [Privacy and security](docs/privacy.md) | What is stored and what never is, the token, file modes, the warnings at start |
 
 ## Development
-See `CLAUDE.md` for the working rules, the style, the transcript format and the design rules.
+
+The project uses the standard library only and is developed test first. `make test` runs the tests (`python3 -m
+unittest discover -s tests`). `make demo` serves the made-up data the screenshots show, on port 8799. The guard hook in `.claude/hooks/project-guard/` is a git submodule: clone with
+`--recurse-submodules`, or run `git submodule update --init`. [CLAUDE.md](CLAUDE.md) holds the working rules, the
+style, the transcript format and the design rules.
+
+## License
+
+[GPL-3.0](LICENSE)
