@@ -338,9 +338,10 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       wrappers and quoted text, an edit in place anywhere (`sed -i`, `perl -i`), else by the first program: a file
       written (a heredoc or `echo`/`printf`/`cat` redirected, `tee`), an inline script (any interpreter fed code by a
       heredoc or `-c`/`-e`/`-r`), git's searches, search, view, list, git, else run.
-    - An inline script also names its interpreter (`command_class`, without path or version: `python3.12` is
-      `python`), with one row each under the kind's, folded until the button in its label ("inline script
-      (N interpreters)") opens them.
+    - Each call also names its kind's detail (`command_class`): the program that does it (the one that edits, an
+      interpreter without path or version: `python3.12` is `python`), for git its subcommand. One row each under
+      the kind's (`detail`), folded until the button in its label ("git (4 subcommands)") opens them; the
+      rows share the kind's `fold` (`tools:<agent>:<tool>:<kind>`).
     - Checked 2026-09-29 on real transcripts (counts only): moving between Read/Edit/Write and Bash saves nothing
       measurable (median results 3,066 for a whole-file Read against 6,600 for `cat` and 2,905 for `sed -n`; Edit
       input 707 characters against 674 for `sed -i`; heredocs fail 5.6 % against Write's 0.8 %). What costs is what

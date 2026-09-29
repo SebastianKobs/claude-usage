@@ -100,7 +100,7 @@ function toolsAndChat(transcript, tools, chat) {
 }
 
 // What a refresh keeps: the conversation's nodes as they are (moved into the new view, so a loaded conversation
-// and its picker stay), the table view and the folds open (workflow runs, interpreters), focus, and the element at
+// and its picker stay), the table view and the folds open (workflow runs, tool details), focus, and the element at
 // the top of the window
 function keptView(panel) {
   const active = panel.contains(document.activeElement) ? document.activeElement : null;
@@ -139,22 +139,21 @@ function restoreFocusAndScroll(panel, kept) {
 }
 
 // one row per transcript; a workflow run's agents under one row per run, whose button shows or hides them
-// what a Bash command does, by its programs (tool_kinds.command_kind), never by its language
+// what a Bash command does, by its programs (tool_kinds.command_class), never by its language; which programs is
+// the fold under it
 const TOOL_KINDS = {
-  search: "search (grep, find, …)", view: "view (cat, head, sed -n, …)", list: "list (ls, tree, …)",
-  edit_in_place: "edit in place (sed -i, …)", write_file: "write a file (heredoc, >)",
+  search: "search", view: "view", list: "list", edit_in_place: "edit in place", write_file: "write a file",
   inline_script: "inline script", git: "git", run: "run a program",
 };
 
 // The Tools table's rows, agent by agent: from the transcript (tool_kinds) each tool with its sizes and costs, Bash
-// followed by a sub-row per command kind, the inline scripts by one per interpreter, which share the agent's fold;
+// followed by a sub-row per command kind, each kind by one per detail (its programs), which share the kind's fold;
 // once the transcript is gone the stored calls and characters, the rest unknown (null)
 function toolTableRows(agents) {
   return agents.flatMap(agent => agent.tool_kinds
-    ? agent.tool_kinds.map(row => ({
-      ...row, agent: agent.agent_type, sub: row.kind !== null,
-      fold: row.kind === "inline_script" ? `interpreters:${agent.agent_id ?? ""}` : null}))
-    : agent.tools.map(tool => ({agent: agent.agent_type, tool: tool.tool, kind: null, interpreter: null, fold: null,
+    ? agent.tool_kinds.map(row => ({...row, agent: agent.agent_type, sub: row.kind !== null || row.detail !== null,
+                                    fold: `tools:${agent.agent_id ?? ""}:${row.tool}:${row.kind ?? ""}`}))
+    : agent.tools.map(tool => ({agent: agent.agent_type, tool: tool.tool, kind: null, detail: null, fold: null,
                                 sub: false, calls: tool.calls, errors: null, result_chars: tool.result_chars,
                                 result_median: null, result_p90: null, input_median: null, calls_after_median: null,
                                 carried: null, input_cost: null})));
@@ -172,10 +171,11 @@ function toolsTable(agents) {
                            "compaction"),
     heading("~Carried", "what the later calls paid to have its input and result in their context"),
     heading("~Input cost", "its input at the output price"));
-  const folds = new Map();                                // an inline script's name and its interpreters' rows
+  const folds = new Map();                                // a row's name and its details' rows
   const body = rows.map((row, index) => {
-    const name = row.interpreter ? el("span", {class: "tool-interpreter", text: row.interpreter})
-      : row.sub ? el("span", {class: "tool-kind", text: TOOL_KINDS[row.kind] || row.kind}) : row.tool;
+    const name = row.detail !== null ? el("span", {class: "tool-detail", text: row.detail || "(none)"})
+      : row.sub ? el("span", {class: "tool-kind", text: TOOL_KINDS[row.kind] || row.kind})
+        : el("span", {text: row.tool});
     const tr = el("tr", {class: row.sub ? "sub-row" : rows[index + 1]?.sub ? "group-row" : null},
       el("td", {text: row.sub ? "" : row.agent}), el("td", {}, name),
       el("td", {class: "num", text: whole(row.calls)}), el("td", {class: "num", text: whole(row.errors)}),
@@ -185,16 +185,23 @@ function toolsTable(agents) {
       el("td", {class: "num", text: compact(row.input_median)}),
       el("td", {class: "num", text: whole(row.calls_after_median)}),
       el("td", {class: "num", text: money(row.carried)}), el("td", {class: "num", text: money(row.input_cost)}));
-    if (row.interpreter) folds.get(row.fold).members.push(tr);
-    else if (row.fold) folds.set(row.fold, {name, members: []});
+    if (row.detail !== null) folds.get(row.fold).members.push(tr);
+    else if (row.fold) folds.set(row.fold, {row, name, members: []});
     return tr;
   });
-  for (const [fold, {name, members}] of folds) {
+  for (const [fold, {row, name, members}] of folds) {
     if (!members.length) continue;
-    const count = `${whole(members.length)} interpreter${members.length === 1 ? "" : "s"}`;
+    const count = `${whole(members.length)} ${detailNoun(row, members.length)}`;
     name.append(" (", foldToggle(fold, members, count), ")");
   }
   return el("table", {}, el("thead", {}, head), el("tbody", {}, ...body));
+}
+
+// what a row's details are, for the count on its fold
+function detailNoun(row, count) {
+  const nouns = {inline_script: ["interpreter", "interpreters"], git: ["subcommand", "subcommands"]};
+  const [one, many] = nouns[row.kind] || ["program", "programs"];
+  return count === 1 ? one : many;
 }
 
 // A button that shows or hides these rows, hidden until then; a refresh opens it again by its data-fold

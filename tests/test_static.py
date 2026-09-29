@@ -161,9 +161,9 @@ class VerdictToneTest(unittest.TestCase):
 class ToolTableTest(unittest.TestCase):
     STORED = [{"tool": "Bash", "calls": 3, "result_chars": 450}]
 
-    def kind_row(self, tool, kind, calls, interpreter=None):
+    def kind_row(self, tool, kind, calls, detail=None):
         """A tool_kinds row as /api/session sends it."""
-        return {"tool": tool, "kind": kind, "interpreter": interpreter, "calls": calls, "errors": 1,
+        return {"tool": tool, "kind": kind, "detail": detail, "calls": calls, "errors": 1,
                 "result_chars": 90, "result_median": 30, "result_p90": 50, "input_median": 12,
                 "calls_after_median": 4.5, "carried": 0.01, "input_cost": 0.002}
 
@@ -186,25 +186,34 @@ class ToolTableTest(unittest.TestCase):
         self.assertEqual((rows[1]["agent"], rows[1]["carried"], rows[1]["calls_after_median"]), ("main", 0.01, 4.5))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_interpreters_fold_under_their_agents_inline_scripts(self):
+    def test_details_share_their_rows_fold_per_agent(self):
         def agent(agent_id):
             return {"agent_id": agent_id, "agent_type": "main", "tools": [],
-                    "tool_kinds": [self.kind_row("Bash", None, 3), self.kind_row("Bash", "inline_script", 3),
+                    "tool_kinds": [self.kind_row("Bash", None, 3), self.kind_row("Bash", "inline_script", 2),
                                    self.kind_row("Bash", "inline_script", 2, "python"),
-                                   self.kind_row("Bash", "inline_script", 1, "node"),
-                                   self.kind_row("Bash", "list", 1)]}
+                                   self.kind_row("Bash", "list", 1), self.kind_row("Bash", "list", 1, "ls")]}
         rows = self.rows([agent(None), agent("a1")])
-        self.assertEqual([(row["interpreter"], row["sub"], row["fold"]) for row in rows[:5]],
-                         [(None, False, None), (None, True, "interpreters:"), ("python", True, "interpreters:"),
-                          ("node", True, "interpreters:"), (None, True, None)])
-        self.assertEqual(rows[6]["fold"], "interpreters:a1")
+        self.assertEqual([(row["detail"], row["sub"], row["fold"]) for row in rows[:5]],
+                         [(None, False, "tools::Bash:"), (None, True, "tools::Bash:inline_script"),
+                          ("python", True, "tools::Bash:inline_script"), (None, True, "tools::Bash:list"),
+                          ("ls", True, "tools::Bash:list")])
+        self.assertEqual(rows[6]["fold"], "tools:a1:Bash:inline_script")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_fold_names_what_a_row_splits_by(self):
+        cases = [({"tool": "Bash", "kind": "inline_script"}, 2, "interpreters"),
+                 ({"tool": "Bash", "kind": "git"}, 1, "subcommand"),
+                 ({"tool": "Bash", "kind": "search"}, 3, "programs")]
+        for row, count, noun in cases:
+            with self.subTest(kind=row["kind"]):
+                self.assertEqual(run_function("drilldown.js", "detailNoun", row, count), noun)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_without_the_transcript_the_stored_tools_show_without_what_only_it_tells(self):
         [row] = self.rows([{"agent_type": "Explore", "tools": self.STORED, "tool_kinds": None}])
         self.assertEqual((row["agent"], row["tool"], row["kind"], row["sub"], row["calls"], row["result_chars"]),
                          ("Explore", "Bash", None, False, 3, 450))
-        for field in ("interpreter", "fold", "errors", "result_median", "result_p90", "input_median",
+        for field in ("detail", "fold", "errors", "result_median", "result_p90", "input_median",
                       "calls_after_median", "carried", "input_cost"):
             with self.subTest(field=field):
                 self.assertIsNone(row[field])

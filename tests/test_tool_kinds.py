@@ -54,11 +54,31 @@ class CommandKindTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertEqual(tool_kinds.command_class(command), ("inline_script", interpreter))
 
-    def test_other_kinds_name_no_interpreter(self):
-        for command, kind in {"python3 manage.py migrate": "run", "grep -rn x .": "search",
-                              "cat > a.py <<'EOF'\nx\nEOF": "write_file"}.items():
+    def assertClasses(self, cases):
+        """Each command is of this kind with this detail."""
+        for command, expected in cases.items():
             with self.subTest(command=command):
-                self.assertEqual(tool_kinds.command_class(command), (kind, None))
+                self.assertEqual(tool_kinds.command_class(command), expected)
+
+    def test_other_kinds_name_their_program(self):
+        self.assertClasses({"grep -rn x .": ("search", "grep"), "cd src && rg x": ("search", "rg"),
+                            "/usr/bin/find . -name x": ("search", "find"), "sed -n 1,9p a.go": ("view", "sed"),
+                            "ls -la": ("list", "ls"), "cat > a.ts <<'EOF'\nx\nEOF": ("write_file", "cat"),
+                            "make test": ("run", "make"), "./vendor/bin/pest": ("run", "pest")})
+
+    def test_an_edit_in_place_names_the_program_that_edits(self):
+        self.assertClasses({"find . -name '*.ts' | xargs sed -i 's/a/b/'": ("edit_in_place", "sed"),
+                            "perl -pi -e 's/a/b/' x.pm": ("edit_in_place", "perl")})
+
+    def test_git_names_its_subcommand(self):
+        self.assertClasses({"git status": ("git", "status"), "git -C sub log --oneline": ("git", "log"),
+                            "git grep -n x": ("search", "git grep"), "git": ("git", "")})
+
+    def test_an_interpreter_run_from_a_file_is_named_without_its_version_too(self):
+        self.assertClasses({"python3 manage.py migrate": ("run", "python"), "pip3 install x": ("run", "pip3")})
+
+    def test_an_empty_command_has_an_empty_program(self):
+        self.assertClasses({"": ("run", ""), "cd src": ("run", "")})
 
     def test_scripts_run_from_a_file_are_runs(self):
         self.assertKinds("run", ["python3 manage.py migrate", "node server.js", "php artisan test", "bash build.sh"])
@@ -94,7 +114,7 @@ class TranscriptToolsTest(TempDirTestCase):
     def rows(self):
         """The rows by (tool, kind)."""
         return {(row.tool, row.kind): row for row in tool_kinds.transcript_tools(self.main.path, PRICES).rows
-                if row.interpreter is None}
+                if row.detail is None}
 
     def test_bash_calls_are_split_by_kind_under_their_total(self):
         self.call("m1", "t1", "Bash", {"command": "grep -rn x ."}, "a" * 100)
@@ -117,19 +137,21 @@ class TranscriptToolsTest(TempDirTestCase):
         self.call("m4", "t4", "Bash", {"command": "git status"}, "x")
         self.call("m5", "t5", "Bash", {"command": "git log"}, "x")
         self.call("m6", "t6", "Bash", {"command": "git diff"}, "x")
-        order = [(row.tool, row.kind) for row in tool_kinds.transcript_tools(self.main.path, PRICES).rows]
-        self.assertEqual(order, [("Bash", None), ("Bash", "git"), ("Bash", "list"), ("Read", None)])
+        order = [(row.tool, row.kind, row.detail) for row in tool_kinds.transcript_tools(self.main.path, PRICES).rows]
+        self.assertEqual(order, [("Bash", None, None), ("Bash", "git", None), ("Bash", "git", "diff"),
+                                 ("Bash", "git", "log"), ("Bash", "git", "status"), ("Bash", "list", None),
+                                 ("Bash", "list", "ls"), ("Read", None, None)])
 
-    def test_inline_scripts_split_by_interpreter_under_their_kind(self):
+    def test_each_kind_splits_by_its_detail_under_it(self):
         self.call("m1", "t1", "Bash", {"command": "node -e 'console.log(1)'"}, "x" * 10)
         self.call("m2", "t2", "Bash", {"command": "python3 -c 'print(1)'"}, "x" * 20)
         self.call("m3", "t3", "Bash", {"command": "python - <<'EOF'\nprint(1)\nEOF"}, "x" * 30)
         self.call("m4", "t4", "Bash", {"command": "ls"}, "x")
         rows = tool_kinds.transcript_tools(self.main.path, PRICES).rows
-        self.assertEqual([(row.tool, row.kind, row.interpreter, row.calls) for row in rows],
+        self.assertEqual([(row.tool, row.kind, row.detail, row.calls) for row in rows],
                          [("Bash", None, None, 4), ("Bash", "inline_script", None, 3),
                           ("Bash", "inline_script", "python", 2), ("Bash", "inline_script", "node", 1),
-                          ("Bash", "list", None, 1)])
+                          ("Bash", "list", None, 1), ("Bash", "list", "ls", 1)])
         self.assertEqual(rows[2].result_chars, 50)
 
     def test_errors_sizes_and_inputs(self):

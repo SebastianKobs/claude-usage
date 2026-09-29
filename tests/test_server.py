@@ -620,15 +620,16 @@ class ToolKindsTest(ServerCase):
     """Each transcript's tools by kind in /api/session, read from the transcript on demand."""
 
     def kinds(self, agent_index=0):
-        """(tool, kind, calls) of one agent's tool_kinds, or None."""
+        """(tool, kind, detail, calls) of one agent's tool_kinds, or None."""
         _, payload = self.get_json("/api/session/s1")
         rows = payload["agents"][agent_index]["tool_kinds"]
-        return None if rows is None else [(row["tool"], row["kind"], row["calls"]) for row in rows]
+        return None if rows is None else [(row["tool"], row["kind"], row["detail"], row["calls"]) for row in rows]
 
     def test_each_transcript_has_its_tools_with_bash_by_kind(self):
         self.main.assistant("m8", [tool_use_block("t8", "Bash", {"command": "grep -rn x src"})], usage(output=1))
         self.main.tool_result("t8", "src/a.go:1:x")
-        self.assertEqual(self.kinds(), [("Bash", None, 1), ("Bash", "search", 1), ("Read", None, 1)])
+        self.assertEqual(self.kinds(), [("Bash", None, None, 1), ("Bash", "search", None, 1),
+                                        ("Bash", "search", "grep", 1), ("Read", None, None, 1)])
         self.assertEqual(self.kinds(1), [])
 
     def test_the_rows_carry_sizes_and_costs(self):
@@ -652,7 +653,7 @@ class ToolKindsTest(ServerCase):
             self.get_json("/api/session/s1")
             self.assertEqual(read_calls.call_count, 2)          # the main thread and the subagent, once each
             self.main.assistant("m8", [tool_use_block("t8", "Read")], usage(output=1))
-            self.assertEqual(self.kinds()[0], ("Read", None, 2))
+            self.assertEqual(self.kinds()[0], ("Read", None, None, 2))
             self.assertEqual(read_calls.call_count, 3)
 
     def test_the_main_threads_exploration_goes_with_the_gauge(self):
