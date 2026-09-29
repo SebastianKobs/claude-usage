@@ -193,7 +193,9 @@ never silently leaves a default in place.
 | `[secrets]` `test_patterns` | what marks a call as a test, whose returned result then counts less; replaces all |
 
 The store is `data/usage.sqlite` when running from a checkout, and `~/.local/share/claude-usage/usage.sqlite` when
-installed (`$XDG_DATA_HOME` and `$XDG_CONFIG_HOME` are respected). `--store` and `--projects-dir` override both.
+installed (`$XDG_DATA_HOME` and `$XDG_CONFIG_HOME` are respected). The transcripts are read from
+`~/.claude/projects`, or from `$CLAUDE_CONFIG_DIR/projects` when that is set, as Claude Code does; a `projects_dir`
+in a config file wins over both. `--store` and `--projects-dir` override the config.
 
 ## Privacy
 The store keeps token counts, model names, tool names and result sizes, session titles and project paths. It never

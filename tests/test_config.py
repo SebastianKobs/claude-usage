@@ -1,8 +1,10 @@
 """config.py: defaults shipped in the package, overrides merged over them in order, and where paths point to."""
+import os
 import tomllib
 import unittest
 from fnmatch import fnmatchcase
 from pathlib import Path
+from unittest import mock
 
 from claude_usage import config
 from helpers import TempDirTestCase
@@ -33,6 +35,7 @@ class ConfigCase(TempDirTestCase):
         self.user = self.tmp / "user" / "config.toml"
         self.local = self.tmp / "checkout" / "config.local.toml"
         self.data = self.tmp / "data"
+        self.environ = {}
         self.write(self.defaults, DEFAULTS)
 
     def write(self, path, text):
@@ -42,7 +45,7 @@ class ConfigCase(TempDirTestCase):
 
     def load(self):
         """The config from the defaults with the user and local overrides, if they exist."""
-        return config.load(self.defaults, [self.user, self.local], self.data)
+        return config.load(self.defaults, [self.user, self.local], self.data, self.environ)
 
 
 class DefaultsTest(ConfigCase):
@@ -124,6 +127,30 @@ class PathTest(ConfigCase):
                 with self.assertRaises(config.ConfigError) as caught:
                     loaded.path(key)
                 self.assertIn(key, str(caught.exception))
+
+
+class ClaudeConfigDirTest(ConfigCase):
+    def test_claude_config_dir_moves_the_default_projects_dir(self):
+        self.environ["CLAUDE_CONFIG_DIR"] = str(self.tmp / "claude-home")
+        self.assertEqual(self.load().path("projects_dir"), self.tmp / "claude-home" / "projects")
+
+    def test_a_projects_dir_in_an_override_wins_over_claude_config_dir(self):
+        self.environ["CLAUDE_CONFIG_DIR"] = str(self.tmp / "claude-home")
+        self.write(self.user, 'projects_dir = "/srv/transcripts"\n')
+        self.assertEqual(self.load().path("projects_dir"), Path("/srv/transcripts"))
+
+    def test_an_empty_claude_config_dir_counts_as_unset(self):
+        self.environ["CLAUDE_CONFIG_DIR"] = ""
+        self.assertEqual(self.load().path("projects_dir"), Path.home() / ".claude" / "projects")
+
+    def test_a_relative_claude_config_dir_counts_from_the_working_folder(self):
+        self.environ["CLAUDE_CONFIG_DIR"] = "claude-home"
+        self.assertEqual(self.load().path("projects_dir"), Path.cwd() / "claude-home" / "projects")
+
+    def test_loading_reads_the_process_environment_by_default(self):
+        with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(self.tmp / "claude-home")}):
+            loaded = config.load(self.defaults, [], self.data)
+        self.assertEqual(loaded.path("projects_dir"), self.tmp / "claude-home" / "projects")
 
 
 class LocationTest(TempDirTestCase):

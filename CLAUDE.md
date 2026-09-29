@@ -317,6 +317,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     `config.local.toml` in a checkout.
   - Relative default paths count from the data folder: `data/` in a checkout, else
     `~/.local/share/claude-usage`.
+  - `CLAUDE_CONFIG_DIR`, when set, makes the default `projects_dir` `$CLAUDE_CONFIG_DIR/projects`, as Claude Code
+    does (`config.claude_projects_dir`: the value as it is, no `~`, a relative one from the working folder); a
+    `projects_dir` in an override still wins, and `--projects-dir` over that.
   - `config.settings()` refuses unknown keys and checks `[serve]`; `[prices]`/`[fees]` are checked in
     `pricing.py`, `[chat]`/`[auto_compact]` in `compact.py`. Numbers must be finite.
   - The version lives in `claude_usage/__init__.py`; `pyproject.toml` reads it from there.

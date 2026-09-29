@@ -9,6 +9,9 @@ replaced. Relative paths in an override count from that file's folder; relative 
 data folder: data/ in a source checkout (so the history stays next to the code), else
 ~/.local/share/claude-usage ($XDG_DATA_HOME respected). A checkout is recognized by its pyproject.toml.
 
+Claude Code keeps its transcripts in $CLAUDE_CONFIG_DIR/projects when that is set, so that replaces the default
+projects_dir; a projects_dir in an override file still wins.
+
 settings() checks the merged values: an unknown key is refused rather than ignored, so a typo doesn't silently
 leave a default in place. The [prices], [fees], [chat]/[auto_compact] and [secrets] values are checked where they are
 parsed (pricing.py, compact.py, secret_paths.py).
@@ -29,6 +32,8 @@ USER_CONFIG_FILE = "config.toml"
 LOCAL_CONFIG_FILE = "config.local.toml"
 CHECKOUT_MARKER = "pyproject.toml"
 CHECKOUT_DATA_DIR = "data"
+CLAUDE_HOME_VARIABLE = "CLAUDE_CONFIG_DIR"
+CLAUDE_PROJECTS = "projects"
 MAX_PORT = 65535
 # the tables the tool reads with their keys; None for tables keyed by model-id prefix
 TABLES: dict[str, tuple[str, ...] | None] = {
@@ -136,6 +141,17 @@ def user_config_file(environ: Mapping[str, str] = os.environ) -> Path:
     return Path(base) / APP_NAME / USER_CONFIG_FILE
 
 
+def claude_projects_dir(environ: Mapping[str, str] = os.environ) -> Path | None:
+    """$CLAUDE_CONFIG_DIR/projects, where Claude Code keeps its transcripts, or None when the variable is unset.
+
+    Claude Code takes the value as it is: no ~, and a relative one from its working folder, as here.
+    """
+    claude_home = environ.get(CLAUDE_HOME_VARIABLE)
+    if not claude_home:
+        return None
+    return Path(claude_home).absolute() / CLAUDE_PROJECTS
+
+
 def override_files(environ: Mapping[str, str] = os.environ, checkout: Path = CHECKOUT_DIR) -> list[Path]:
     """The override files in the order they are merged (later wins); they need not exist."""
     files = [user_config_file(environ)]
@@ -167,11 +183,14 @@ def read_toml(path: Path) -> Values:
 
 
 def load(defaults: Path = DEFAULTS_FILE, overrides: list[Path] | None = None,
-         data_dir: Path | None = None) -> Config:
-    """The defaults with every existing override file merged over them, in order."""
-    files = override_files() if overrides is None else overrides
+         data_dir: Path | None = None, environ: Mapping[str, str] = os.environ) -> Config:
+    """The defaults, with $CLAUDE_CONFIG_DIR's projects folder, and every existing override file merged over them."""
+    files = override_files(environ) if overrides is None else overrides
     values = read_toml(defaults)
-    base = data_home() if data_dir is None else data_dir
+    claude_projects = claude_projects_dir(environ)
+    if claude_projects is not None:
+        values["projects_dir"] = str(claude_projects)
+    base = data_home(environ) if data_dir is None else data_dir
     bases = dict.fromkeys(values, base)
     sources = [defaults]
     for path in files:

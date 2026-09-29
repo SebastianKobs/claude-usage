@@ -2,7 +2,8 @@
 # (or config.local.toml in a source checkout): tables are merged key by key, everything else is replaced.
 # Relative paths here count from the data folder: data/ in a source checkout, else ~/.local/share/claude-usage.
 
-# Claude Code's transcripts, one folder per project.
+# Claude Code's transcripts, one folder per project. When CLAUDE_CONFIG_DIR is set, $CLAUDE_CONFIG_DIR/projects
+# replaces this default, as it does for Claude Code; a projects_dir in an override file still wins.
 projects_dir = "~/.claude/projects"
 
 # The SQLite usage history.

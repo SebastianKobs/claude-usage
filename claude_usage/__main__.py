@@ -187,7 +187,8 @@ def minutes_option(text: str) -> float:
 def add_path_options(parser: argparse.ArgumentParser, default: Any) -> None:
     """--projects-dir and --store; on the commands with default SUPPRESS, so they don't override the global ones."""
     parser.add_argument("--projects-dir", type=Path, default=default, metavar="DIR",
-                        help="Claude Code's transcripts (default: projects_dir in the config, ~/.claude/projects)")
+                        help="Claude Code's transcripts (default: projects_dir in the config, else "
+                             "$CLAUDE_CONFIG_DIR/projects, else ~/.claude/projects)")
     parser.add_argument("--store", type=Path, default=default, metavar="FILE",
                         help="the SQLite history (default: store in the config: data/usage.sqlite in a checkout, "
                              "else ~/.local/share/claude-usage/usage.sqlite)")
