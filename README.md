@@ -204,5 +204,11 @@ conversation (prompts, replies, tool inputs and results, cut to a few thousand c
 that one request. The paths of possible secret accesses are read the same way, and never their contents. The
 server answers only on loopback addresses and only to loopback host names.
 
+Loopback keeps other machines out, not other users of this one: anyone logged in to it can open the dashboard's
+port and read your sessions' titles, prompts and conversations through its API, with no password. Run the
+dashboard on single-user machines only. The store holds no prompts, but titles and project paths, and gets your
+umask's permissions (usually readable by anyone who can reach its folder), while Claude Code keeps `~/.claude` to
+you alone.
+
 ## Development
 See `CLAUDE.md` for the working rules, the style, the transcript format and the design rules.
