@@ -287,9 +287,16 @@ class SendsOutTest(unittest.TestCase):
 class ParseSecretsTest(unittest.TestCase):
     def test_the_defaults_list_the_usual_secret_locations(self):
         patterns = secret_paths.parse_secrets(config.load(overrides=[]).values).patterns
-        for pattern in (".env", "!.env.example", "*.pem", "id_ed25519", "~/.ssh", "~/.claude/.credentials.json"):
+        for pattern in (".env", "!.env.example", "*.pem", "id_ed25519", "~/.ssh", ".credentials.json"):
             with self.subTest(pattern=pattern):
                 self.assertIn(pattern, patterns)
+
+    def test_the_defaults_mark_claude_codes_credentials_in_any_config_folder(self):
+        # CLAUDE_CONFIG_DIR moves them, and the dashboard may not see the variable Claude Code runs with
+        patterns = secret_paths.parse_secrets(config.load(overrides=[]).values).patterns
+        for path in ("~/.claude/.credentials.json", "/opt/claude-work/.credentials.json"):
+            with self.subTest(path=path):
+                self.assertEqual(secret_paths.matching_pattern(path, patterns, HOME), ".credentials.json")
 
     def test_the_defaults_list_the_usual_network_programs(self):
         programs = secret_paths.parse_secrets(config.load(overrides=[]).values).network_programs
