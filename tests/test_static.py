@@ -223,7 +223,9 @@ class ToolTableTest(unittest.TestCase):
                  ({"tool": "Bash", "kind": "search", "detail": "grep"}, 2, "option sets"),
                  ({"tool": "Read", "kind": None, "detail": None}, 4, "file types"),
                  ({"tool": "NotebookEdit", "kind": None, "detail": None}, 1, "file type"),
-                 ({"tool": "Read", "kind": None, "detail": ".go"}, 2, "option sets")]
+                 ({"tool": "Read", "kind": None, "detail": ".go"}, 2, "option sets"),
+                 ({"tool": "Grep", "kind": None, "detail": None}, 2, "output modes"),
+                 ({"tool": "Glob", "kind": None, "detail": None}, 2, "file types")]
         for row, count, noun in cases:
             with self.subTest(row=row):
                 self.assertEqual(run_function("drilldown.js", "detailNoun", row, count), noun)

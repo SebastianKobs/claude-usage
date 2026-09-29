@@ -73,6 +73,11 @@ FILE_TOOLS = {"Read": ("file_path", frozenset({"file_path"})),
               "Write": ("file_path", frozenset({"file_path", "content"})),
               "NotebookRead": ("notebook_path", frozenset({"notebook_path"})),
               "NotebookEdit": ("notebook_path", frozenset({"notebook_path", "new_source"}))}
+# Grep's output modes (they decide how large its result is), files_with_matches when none is given
+GREP_MODES = frozenset({"content", "files_with_matches", "count"})
+GREP_DEFAULT_MODE = "files_with_matches"
+# the tools whose rows split by a detail: the file tools, Grep by output mode, Glob by the file type it matches
+DETAILED_TOOLS = frozenset(FILE_TOOLS) | {"Grep", "Glob"}
 # a file name's type: its last suffix, or a dotfile's name (.env); anything longer or odder is no type
 FILE_TYPE = re.compile(r"\.[A-Za-z0-9_+-]{1,10}")
 
@@ -258,16 +263,28 @@ def git_subcommand(words: list[str]) -> tuple[str, list[str]]:
 
 
 def call_class(name: str, tool_input: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
-    """A call's kind, detail and options: a Bash call's by command_class; a file tool's without a kind, its file's
-    type and the optional inputs it gave, by name (file_options); None for each for any other tool."""
+    """A call's kind, detail and options: a Bash call's by command_class. The other DETAILED_TOOLS have no kind,
+    and their optional inputs by name as options (input_options): a file tool's detail is its file's type, Grep's
+    its output mode, Glob's the file type its pattern matches. None for each for any other tool."""
     if name == BASH:
         command = tool_input.get("command")
         return command_class(command if isinstance(command, str) else "")
     if name in FILE_TOOLS:
-        path_key, _ = FILE_TOOLS[name]
-        file_path = tool_input.get(path_key)
-        return None, file_type(file_path if isinstance(file_path, str) else ""), file_options(name, tool_input)
+        path_key, required = FILE_TOOLS[name]
+        return None, file_type(text_input(tool_input, path_key)), input_options(tool_input, required)
+    if name == "Grep":
+        mode = tool_input.get("output_mode") or GREP_DEFAULT_MODE
+        return (None, mode if mode in GREP_MODES else "other",
+                input_options(tool_input, frozenset({"pattern", "output_mode"})))
+    if name == "Glob":
+        return None, file_type(text_input(tool_input, "pattern")), input_options(tool_input, frozenset({"pattern"}))
     return None, None, None
+
+
+def text_input(tool_input: dict[str, Any], key: str) -> str:
+    """A tool input's text; empty if it is missing or no text."""
+    value = tool_input.get(key)
+    return value if isinstance(value, str) else ""
 
 
 def file_type(file_path: str) -> str:
@@ -278,10 +295,9 @@ def file_type(file_path: str) -> str:
     return suffix.lower() if FILE_TYPE.fullmatch(suffix) else ""
 
 
-def file_options(name: str, tool_input: dict[str, Any]) -> str:
-    """The optional inputs a file tool's call gave (offset, limit, replace_all), sorted, by name: not their values.
-    One set to false or null counts as not given."""
-    _, required = FILE_TOOLS[name]
+def input_options(tool_input: dict[str, Any], required: frozenset[str]) -> str:
+    """The inputs a call gave beyond these (offset, limit, replace_all, -n, glob), sorted, by name: not their
+    values, which hold paths and text. One set to false or null counts as not given."""
     given = (key for key, value in tool_input.items()
              if key not in required and value is not None and value is not False)
     return " ".join(sorted(given))
@@ -406,8 +422,8 @@ def grouped(facts: list[CallFact], key: Callable[[CallFact], Any]) -> list[tuple
 
 
 def tool_rows(facts: list[CallFact]) -> list[ToolKindRow]:
-    """One row per tool, the most called first; Bash's is followed by one per command kind, each kind's and a file
-    tool's by one per detail, each detail's by one per set of options."""
+    """One row per tool, the most called first; Bash's is followed by one per command kind, each kind's and each of
+    the other DETAILED_TOOLS' by one per detail, each detail's by one per set of options."""
     rows = []
     for tool, tool_facts in grouped(facts, lambda fact: fact.tool):
         rows.append(tool_row(tool, None, tool_facts))
@@ -415,7 +431,7 @@ def tool_rows(facts: list[CallFact]) -> list[ToolKindRow]:
             for kind, kind_facts in grouped(tool_facts, lambda fact: fact.kind):
                 rows.append(tool_row(tool, kind, kind_facts))
                 rows += detail_rows(tool, kind, kind_facts)
-        elif tool in FILE_TOOLS:
+        elif tool in DETAILED_TOOLS:
             rows += detail_rows(tool, None, tool_facts)
     return rows
 

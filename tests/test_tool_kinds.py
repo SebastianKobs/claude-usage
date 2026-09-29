@@ -165,6 +165,30 @@ class FileToolTest(unittest.TestCase):
         self.assertEqual(tool_kinds.call_class("Agent", {"prompt": "x"}), (None, None, None))
 
 
+class SearchToolTest(unittest.TestCase):
+    def test_a_grep_splits_by_its_output_mode(self):
+        cases = {"content": "content", "count": "count", "files_with_matches": "files_with_matches",
+                 None: "files_with_matches", "odd": "other"}
+        for mode, detail in cases.items():
+            with self.subTest(mode=mode):
+                tool_input = {"pattern": "x"} if mode is None else {"pattern": "x", "output_mode": mode}
+                self.assertEqual(tool_kinds.call_class("Grep", tool_input)[1], detail)
+
+    def test_a_greps_options_are_its_inputs_by_name(self):
+        tool_input = {"pattern": "secret", "output_mode": "content", "-n": True, "-C": 3, "glob": "*.go",
+                      "path": "/srv/app", "-i": False}
+        self.assertEqual(tool_kinds.call_class("Grep", tool_input)[2], "-C -n glob path")
+
+    def test_a_glob_splits_by_the_file_type_its_pattern_matches(self):
+        cases = {"**/*.ts": ".ts", "src/**/*.PHP": ".php", "src/**": "", "*.{ts,tsx}": ""}
+        for pattern, detail in cases.items():
+            with self.subTest(pattern=pattern):
+                self.assertEqual(tool_kinds.call_class("Glob", {"pattern": pattern})[1], detail)
+
+    def test_a_globs_options_are_its_inputs_by_name(self):
+        self.assertEqual(tool_kinds.call_class("Glob", {"pattern": "*.go", "path": "/srv"}), (None, ".go", "path"))
+
+
 class TranscriptToolsTest(TempDirTestCase):
     def setUp(self):
         super().setUp()
@@ -232,6 +256,14 @@ class TranscriptToolsTest(TempDirTestCase):
                          [(None, None, None, 3), (None, ".go", None, 2), (None, ".go", "", 1),
                           (None, ".go", "limit offset", 1), (None, ".php", None, 1), (None, ".php", "", 1)])
         self.assertEqual(rows[3].result_chars, 20)
+
+    def test_searches_split_by_their_detail_then_options(self):
+        self.call("m1", "t1", "Grep", {"pattern": "x", "output_mode": "content", "-n": True}, "x" * 10)
+        self.call("m2", "t2", "Glob", {"pattern": "**/*.go"}, "x" * 20)
+        rows = tool_kinds.transcript_tools(self.main.path, PRICES).rows
+        self.assertEqual([(row.tool, row.detail, row.options) for row in rows],
+                         [("Glob", None, None), ("Glob", ".go", None), ("Glob", ".go", ""), ("Grep", None, None),
+                          ("Grep", "content", None), ("Grep", "content", "-n")])
 
     def test_errors_sizes_and_inputs(self):
         self.call("m1", "t1", "Edit", {"file_path": "a", "old_string": "x", "new_string": "y"}, "ok")

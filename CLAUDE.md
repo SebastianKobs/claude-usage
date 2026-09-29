@@ -345,6 +345,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     - A file tool's call (`FILE_TOOLS`: Read, Edit, MultiEdit, Write, NotebookRead, NotebookEdit) has no kind; its
       detail is the file's type (`file_type`: the last suffix or a dotfile's name, lower-cased, else empty; never
       the path or the name), its options the optional inputs it gave, by name (`offset limit`, `replace_all`).
+      Grep's detail is its output mode (`files_with_matches` when none is given), since it sets the result's size;
+      Glob's the file type its pattern matches. Their options likewise (`-C -n glob`, `path`), never the values.
     - One row per detail under its kind (a file tool's under the tool), one per set of options under its detail. Each row that splits folds, until
       the button in its label ("git (4 subcommands)", "grep (3 option sets)") opens it; the kinds always show. A
       row's `fold` is its key per agent, the rows under it carry it as `parent`, and a row shows while every fold
