@@ -117,11 +117,11 @@ def run_serve(context: Context) -> int:
     port = args.port if args.port is not None else context.settings.port
     live_minutes = args.live_minutes if args.live_minutes is not None else context.settings.live_minutes
     compact_settings = compact.parse_compact_settings(context.config.values)   # fails before the store is opened
-    patterns = secret_paths.parse_patterns(context.config.values)
+    secret_settings = secret_paths.parse_secrets(context.config.values)
     with store.Store(context.store_path, check_same_thread=False) as usage_store:
         app = server.UsageApp(usage_store, context.projects_dir, context.prices, live_minutes, project=args.project,
                               prices_checked=context.settings.prices_checked, compact=compact_settings,
-                              retention_days=context.settings.retention_days, secret_patterns=patterns)
+                              retention_days=context.settings.retention_days, secret_settings=secret_settings)
         httpd = server.make_server(app, HOST, port)
         previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
         try:

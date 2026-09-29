@@ -8,10 +8,14 @@ negated with `!` (`!.env.example`), which exempts what it matches; the last patt
 only where it holds a slash (a commit message or a search pattern naming `.env` is no access), and a heredoc's text
 only for an inline script. A script the transcript wrote (Write, Edit) and a later command runs is scanned too, as
 far as the transcript shows its text: a shell script like a command, other code by its quoted paths. Neither a
-variable set in an earlier call nor a script from elsewhere is known."""
+variable set in an earlier call nor a script from elsewhere is known. Each match notes whether its call handed its
+input to something outside Claude Code (sends_out): an MCP server, or a command with a `network_programs` program;
+and whether it looks like a test (looks_like_test): a word of the call, the script it ran or the path matching
+`test_patterns`."""
 import fnmatch
 import posixpath
 import re
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -34,17 +38,29 @@ SHEBANG_SHELL = re.compile(r"#!\S*?(?:/|env\s+)(?:ba|z|k|da)?sh\b")
 DRIVE = re.compile(r"^[A-Za-z]:/")
 
 
-def parse_patterns(values: dict[str, Any]) -> tuple[str, ...]:
-    """The config's [secrets] patterns; none without the table. Raises ConfigError for anything but a list of
-    non-empty strings."""
+@dataclass(frozen=True)
+class SecretSettings:
+    """The [secrets] table: where secrets may be, the programs that send what they are given elsewhere, and what
+    marks a call as a test."""
+    patterns: tuple[str, ...]
+    network_programs: frozenset[str]
+    test_patterns: tuple[str, ...]
+
+
+def parse_secrets(values: dict[str, Any]) -> SecretSettings:
+    """The config's [secrets] patterns, network programs (lower-cased) and test patterns; none without the table.
+    Raises ConfigError for any of them but a list of non-empty strings."""
     secrets = values.get("secrets") or {}
     if not isinstance(secrets, dict):
         raise config.ConfigError(f"secrets: expected a table, got {secrets!r}")
-    patterns = secrets.get("patterns", [])
-    if not isinstance(patterns, list) or not all(isinstance(pattern, str) and pattern.strip("!")
-                                                 for pattern in patterns):
-        raise config.ConfigError(f"secrets.patterns: expected a list of non-empty strings, got {patterns!r}")
-    return tuple(patterns)
+    lists = {}
+    for key in ("patterns", "network_programs", "test_patterns"):
+        items = secrets.get(key, [])
+        if not isinstance(items, list) or not all(isinstance(item, str) and item.strip("!") for item in items):
+            raise config.ConfigError(f"secrets.{key}: expected a list of non-empty strings, got {items!r}")
+        lists[key] = items
+    return SecretSettings(tuple(lists["patterns"]), frozenset(item.lower() for item in lists["network_programs"]),
+                          tuple(lists["test_patterns"]))
 
 
 def normalized_parts(path: str, home: str, cwd: str | None) -> list[str]:
@@ -71,7 +87,11 @@ def pattern_matches(parts: list[str], pattern: str, home: str) -> bool:
 def matching_pattern(path: str, patterns: tuple[str, ...], home: str, cwd: str | None = None) -> str | None:
     """The pattern that marks a path as a possible secret, the last one that matches unless that is a negation;
     None for none."""
-    parts = normalized_parts(path, home, cwd)
+    return deciding_pattern(normalized_parts(path, home, cwd), patterns, home)
+
+
+def deciding_pattern(parts: list[str], patterns: tuple[str, ...], home: str) -> str | None:
+    """The last pattern that matches a path's parts, unless that is a negation; None for none."""
     found = None
     for pattern in patterns:
         negated = pattern.startswith("!")
@@ -109,14 +129,15 @@ def substituted(text: str, values: dict[str, str]) -> str:
 
 def shell_words(text: str) -> list[str]:
     """The words of shell text that may be paths: plain words and an option's value (--env-file=.env gives .env),
-    quoted text only where it holds a slash; no options, no URLs."""
+    a file given by @ without it (curl -d @.env), quoted text only where it holds a slash; no options, no URLs."""
     words = []
     for match in SHELL_WORD.finditer(text):
         plain = match.group(3)
         if plain is None:
             words += [part for part in match.groups()[:2] if part and "/" in part]
         elif "://" not in plain:
-            words += [part for part in plain.split("=") if part and not part.startswith("-")]
+            words += [part.removeprefix("@") for part in plain.split("=")
+                      if part.strip("@") and not part.startswith("-")]
     return words
 
 
@@ -161,34 +182,76 @@ def call_paths(name: str, tool_input: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(paths))
 
 
-def finder(patterns: tuple[str, ...], home: str) -> tool_kinds.SecretFinder:
-    """What starts a TranscriptScan with these patterns and home folder, one per transcript read."""
+def sends_out(name: str, tool_input: dict[str, Any], network_programs: frozenset[str]) -> bool:
+    """Whether a call hands its input to something outside Claude Code, which may then get the secret itself: an MCP
+    tool's server, or a command where any program is one of network_programs (past cd, assignments and wrappers)."""
+    if tool_kinds.mcp_tool(name) is not None:
+        return True
+    command = tool_input.get("command") if name == tool_kinds.BASH else None
+    if not isinstance(command, str):
+        return False
+    head = tool_kinds.command_head(command)
+    segments = (tool_kinds.program_words(part) for part in tool_kinds.SEPARATORS.split(head))
+    return any(words and tool_kinds.program_name(words[0]) in network_programs for words in segments)
+
+
+def looks_like_test(words: list[str], test_patterns: tuple[str, ...], home: str, cwd: str | None) -> bool:
+    """Whether any of these words (a call's, the script it ran, the path it named) matches a test pattern, as a path
+    from the working folder: the folder itself doesn't count, or a project under tests/ would be all tests."""
+    if not test_patterns:
+        return False
+    base = normalized_parts(cwd, home, None) if cwd else []
+    for word in words:
+        parts = normalized_parts(word, home, cwd)
+        if base and parts[:len(base)] == base:
+            parts = parts[len(base):]
+        if parts and deciding_pattern(parts, test_patterns, home) is not None:
+            return True
+    return False
+
+
+def finder(patterns: tuple[str, ...], home: str, network_programs: frozenset[str] = frozenset(),
+           test_patterns: tuple[str, ...] = ()) -> tool_kinds.SecretFinder:
+    """What starts a TranscriptScan with these patterns, home folder, network programs and test patterns, one per
+    transcript read."""
     def start() -> tool_kinds.SecretScan:
         """A new scan, knowing no file written yet."""
-        return TranscriptScan(patterns, home)
+        return TranscriptScan(patterns, home, network_programs, test_patterns)
     return start
 
 
 class TranscriptScan:
     """A transcript's calls in order, as tool_kinds.read_calls hands them: what each named that marks a possible
     secret (secret_matches), and for a command that runs a script the transcript wrote, what the script's text
-    names (script_words), with the word that ran it. It remembers the text each file got: a Write's content, an
-    Edit's new text added."""
+    names (script_words), with the word that ran it, whether the call sends out (sends_out) and whether it looks
+    like a test (looks_like_test). It remembers the text each file got: a Write's content, an Edit's new text
+    added."""
 
-    def __init__(self, patterns: tuple[str, ...], home: str) -> None:
+    def __init__(self, patterns: tuple[str, ...], home: str, network_programs: frozenset[str] = frozenset(),
+                 test_patterns: tuple[str, ...] = ()) -> None:
         self.patterns = patterns
         self.home = home
+        self.network_programs = network_programs
+        self.test_patterns = test_patterns
         self.written: dict[str, str] = {}               # a file's normalized path -> the text written to it
 
-    def __call__(self, name: str, tool_input: dict[str, Any], cwd: str | None) -> list[tuple[str, str, str | None]]:
-        """The call's matches as (path, pattern, the script's word or None), its own first."""
+    def __call__(self, name: str, tool_input: dict[str, Any],
+                 cwd: str | None) -> list[tuple[str, str, str | None, bool, bool]]:
+        """The call's matches as (path, pattern, the script's word or None, whether the call sends out, whether it
+        looks like a test), its own first."""
         found: list[tuple[str, str, str | None]] = [(path, pattern, None) for path, pattern
                                                     in secret_matches(name, tool_input, self.patterns, self.home, cwd)]
         if name == tool_kinds.BASH and isinstance(tool_input.get("command"), str):
             found += self.script_matches(tool_input["command"], cwd)
         else:
             self.remember(name, tool_input, cwd)
-        return found
+        if not found:
+            return []
+        sent = sends_out(name, tool_input, self.network_programs)
+        call_test = looks_like_test(call_paths(name, tool_input), self.test_patterns, self.home, cwd)
+        return [(path, pattern, via, sent,
+                 call_test or looks_like_test([path, *([via] if via else [])], self.test_patterns, self.home, cwd))
+                for path, pattern, via in found]
 
     def key(self, file_path: str, cwd: str | None) -> str:
         """A file's path as the scan knows it."""

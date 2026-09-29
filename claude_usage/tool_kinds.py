@@ -140,11 +140,16 @@ class SecretAccess:
     pattern: str                        # the [secrets] pattern it matched
     error: bool | None                  # whether its result was an error (blocked or failed); None while it hasn't come
     via: str | None = None              # the script it ran that named the path, as the command gave it
+    sent: bool = False                  # whether the call handed its input to an MCP server or a network program
+    test: bool = False                  # whether it looks like a test ([secrets] test_patterns)
+    reach: str | None = None            # how far it got (secret_reach): sent, returned, error, empty or pending
+    severity: str | None = None         # high, medium or low (secret_reach)
 
 
 # a transcript's calls in order, each by its name, input and working folder -> each path it named that marks a
-# possible secret, with the pattern and the script it ran that named it (or None)
-SecretScan = Callable[[str, dict[str, Any], str | None], list[tuple[str, str, str | None]]]
+# possible secret, with the pattern, the script it ran that named it (or None), whether the call sends out and whether
+# it looks like a test
+SecretScan = Callable[[str, dict[str, Any], str | None], list[tuple[str, str, str | None, bool, bool]]]
 # starts a scan for one transcript read: a scan remembers the scripts the transcript wrote
 SecretFinder = Callable[[], SecretScan]
 
@@ -410,9 +415,10 @@ def read_calls(path: Path, prices: pricing.Prices,
                 if scan is not None:
                     time = transcripts.text_or_none(record.get("timestamp"))
                     secrets += [(tool_use_id,
-                                 SecretAccess(time, transcripts.display_name(name), found, pattern, None, via))
-                                for found, pattern, via in scan(name, tool_input,
-                                                                transcripts.text_or_none(record.get("cwd")))]
+                                 SecretAccess(time, transcripts.display_name(name), found, pattern, None, via, sent,
+                                              test))
+                                for found, pattern, via, sent, test in scan(
+                                    name, tool_input, transcripts.text_or_none(record.get("cwd")))]
         elif kind == "user":
             for block in transcripts.content_blocks(record):
                 tool_use_id = transcripts.text_or_none(block.get("tool_use_id"))
@@ -439,9 +445,31 @@ def read_calls(path: Path, prices: pricing.Prices,
         facts.append(CallFact(call.tool, call.kind, call.input_chars, result_chars, error, calls_after, carried,
                               input_cost, message_stretch == current_stretch, reread, call.detail,
                               call.options))
-    accesses = [dataclasses.replace(access, error=results[tool_use_id][1]) if tool_use_id in results else access
-                for tool_use_id, access in secrets]
+    accesses = []
+    for tool_use_id, access in secrets:
+        result = results.get(tool_use_id)
+        reach, severity = secret_reach(access.sent, result, access.test)
+        accesses.append(dataclasses.replace(access, error=None if result is None else result[1], reach=reach,
+                                            severity=severity))
     return facts, accesses
+
+
+def secret_reach(sent: bool, result: tuple[int, bool] | None, test: bool = False) -> tuple[str, str]:
+    """How far a call that named a possible secret got, from whether it sent its input out and its result (chars,
+    error; None while it hasn't come), and how severe that is: high where it went to a service (an MCP server or a
+    network program); medium where its result went into the conversation, and so to the API with the next request,
+    where it may still (no result yet), or where it was sent and failed, since a service may have got it first;
+    low where it was blocked or failed, or returned nothing. A result of a call that looks like a test is
+    low-medium, since a test's output mostly only mentions the path; nothing else changes for a test."""
+    if result is not None and result[1]:
+        return "error", "medium" if sent else "low"
+    if sent:
+        return "sent", "high"
+    if result is None:
+        return "pending", "medium"
+    if not result[0]:
+        return "empty", "low"
+    return "returned", "low-medium" if test else "medium"
 
 
 def nearest_rank(values: list[int], share: float) -> int | None:

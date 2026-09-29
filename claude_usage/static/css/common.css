@@ -316,6 +316,20 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 .secret-alert p { margin: 4px 0; font-size: 14px; }
 .secret-path { font-family: var(--mono); overflow-wrap: anywhere; }
 .secret-via { display: block; color: var(--text-secondary); font-size: 13px; }
+/* the same calls folded when none was sent out: a plain card, edged in the warning color while one returned a
+   result */
+.secret-folded { margin: 16px 0 0; color: var(--text-primary); }
+.secret-folded-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.secret-folded-head { margin: 0; font-size: 15px; font-weight: 500; }
+.secret-folded p { margin: 4px 0; font-size: 14px; }
+.secret-folded .table-wrap { margin-top: 8px; }
+.secret-warning { border: 1px solid var(--hint-warning-edge); border-left-width: 5px; }
+/* how severe each call's reach is, before its words, which carry it */
+.secret-severity { display: inline-block; width: 0.7em; height: 0.7em; margin-right: 6px; border-radius: 50%; }
+.secret-severity-high { background: var(--hint-critical-edge); }
+.secret-severity-medium { background: var(--hint-warning-edge); }
+.secret-severity-low { background: var(--text-secondary); }
+.secret-severity-low-medium { background: var(--series-1); }        /* returned, but likely a test */
 /* the hint to delegate exploration: advice, so the warning's edge without its wash */
 .delegate-call { margin: 16px 0 0; border: 1px solid var(--hint-warning-edge); border-left-width: 5px;
   color: var(--text-primary); }

@@ -77,10 +77,15 @@ holds:
   cache rebuilds and what they cost extra, the compactions, and the turns that grew the context most with the
   tools the call before ran;
 - per subagent, what it returned to the main thread; a Workflow run's agents under one row per run;
-- a warning under the tiles, with a red edge and a "!", listing every tool call that named a possible secret
-  location (`.env`, keys, `~/.ssh`, `~/.aws`, … as set in `[secrets] patterns`): when, which agent and tool, the path,
-  the pattern it matched and whether it ran or was blocked, while the transcript exists. A command's own variables
-  are expanded, and a script the session wrote and then ran is checked by its text;
+- a warning under the tiles listing every tool call that named a possible secret location (`.env`, keys, `~/.ssh`,
+  `~/.aws`, … as set in `[secrets] patterns`): when, which agent and tool, the path, the pattern it matched and how
+  far it got, while the transcript exists. Sent to an MCP server or a network program (`curl`, `ssh`, … as set in
+  `[secrets] network_programs`) comes first, then a result that went into the conversation and so to the API. Only a
+  call that sent it out opens the warning with a red edge and a "!"; otherwise it stays folded to one line, edged in
+  yellow when a result came back, a plain card when every call was blocked or returned nothing. A
+  command's own variables are expanded, and a script the session wrote and then ran is checked by its text. A
+  result of a call that looks like a test (a word, the script or the path matching `[secrets] test_patterns`, such
+  as `tests`, `test_*`, `pytest`) counts less, marked with a blue dot;
 - the tools each transcript called, with Bash split by what a command does (search, view, edit in place, write a
   file, inline script, git, run: by the programs, in any language; each kind by program, git by subcommand, and
   each of those by the options it ran with, never its arguments or paths, behind a button; Read, Edit and Write
@@ -180,6 +185,8 @@ never silently leaves a default in place.
 | `[chat]` | when a session's conversation view hints at compacting (a heuristic threshold, and reminder steps) |
 | `[auto_compact]` | where Claude Code auto-compacts, by model prefix; `default` for your `autoCompactWindow` |
 | `[secrets]` `patterns` | where secrets may be, for the session view's warning; `!` exempts, an override replaces all |
+| `[secrets]` `network_programs` | the programs that send what they get elsewhere (MCP tools always do); replaces all |
+| `[secrets]` `test_patterns` | what marks a call as a test, whose returned result then counts less; replaces all |
 
 The store is `data/usage.sqlite` when running from a checkout, and `~/.local/share/claude-usage/usage.sqlite` when
 installed (`$XDG_DATA_HOME` and `$XDG_CONFIG_HOME` are respected). `--store` and `--projects-dir` override both.

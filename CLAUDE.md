@@ -364,8 +364,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       message's rates. The input costs once more at the output price, since the model wrote it.
   - `/api/session/<id>` also gives `secret_accesses`: every call of the transcripts still there that named a path
     matching `[secrets] patterns` (`secret_paths`, found in the same read, `tool_kinds.read_calls(find_secrets)`),
-    with its time, agent, tool, the path as given, the pattern and whether its result was an error, by time. The
-    paths stay in the memo with the counts, never in the store (a test checks the store files).
+    with its time, agent, tool, the path as given, the pattern, whether its result was an error, and how far it got,
+    the most severe first, then by time. The paths stay in the memo with the counts, never in the store (a test
+    checks the store files).
     - A pattern is a name matching any part of a path (`.env`, `*.pem`), a path from `~` or `/` matching it and
       everything below it (wildcards per part), or either negated with `!`; the last match decides, as in a
       .gitignore. `~`, `$HOME` and `${HOME}` are the server's home, a relative path counts from the record's `cwd`.
@@ -379,8 +380,24 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       a later command of kind `run` whose word is such a file has that text scanned, a shell script (by suffix or
       `#!`) like a command, other code by its quoted paths. The row's `via` is that word. Variables from earlier
       calls, scripts from elsewhere and a script written in another transcript are unknown.
-    - The page shows them under the tiles, before the call to compact (`secretAccesses`): a card edged in
-      `--status-critical`, its heading on the critical wash with a `!` mark, the table paged; nothing without one.
+    - How far it got (`tool_kinds.secret_reach`, from the call and its result): `sent` (high) where the call handed
+      its input out (`secret_paths.sends_out`: an MCP tool, whose server gets the input, or a command with one of
+      `[secrets] network_programs`, past cd and wrappers); `returned` (medium) where a result went into the
+      conversation, and so to the API with the next request; `pending` (medium) with no result yet; `error` (low,
+      but medium where it was sent: a service may have got it before failing, and a blocked call looks the same);
+      `empty` (low) for an empty result. A result counts whatever it held: a test run that only mentions a path
+      returns output too, and telling that apart would mean reading the file, which it never does.
+    - A `returned` call that looks like a test (`secret_paths.looks_like_test`: one of its words, the script it ran
+      or the path it named matches `[secrets] test_patterns`, as a path from the record's `cwd`, which itself
+      doesn't count) is `low-medium` instead, sorted after medium; every other reach stays as it is for a test. A
+      heuristic: `cat .env && pytest` counts as a test too.
+    - The page shows them under the tiles, before the call to compact (`secretAccesses`), each row's reach in words
+      after a mark in `--hint-critical-edge`, `--hint-warning-edge`, `--series-1` (blue, low-medium) or
+      `--text-secondary`, the table paged. By
+      `secretTone`: with a high row (`alert`) the card is open, edged in `--status-critical`, its heading on the
+      critical wash with a `!` mark; else it is folded to a one-line summary with a Show button (`data-fold`, kept
+      across redraws), edged in `--hint-warning-edge` with a medium row (`warning`), a plain card with only low and
+      low-medium rows (`quiet`); nothing without one.
   - `/api/session/<id>/chat[?agent=<id>]` reads the conversation from the transcript per request, with tool inputs
     and results cut to `CHAT_TOOL_LIMIT`. Each reply carries its effort level, and the last entry of each API call
     its final usage with the cost at the configured prices, both computed per request. Nothing of it is stored,

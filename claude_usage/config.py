@@ -37,7 +37,7 @@ TABLES: dict[str, tuple[str, ...] | None] = {
     "chat": ("compact_hint_tokens", "auto_compact_warn_share", "compact_reminder_step", "auto_compact_reminder_step",
              "delegate_hint_tokens", "delegate_calls_ahead"),
     "auto_compact": None,
-    "secrets": ("patterns",),
+    "secrets": ("patterns", "network_programs", "test_patterns"),
     "prices": None,
 }
 VALUES = ("projects_dir", "store", "prices_checked", "retention_days")

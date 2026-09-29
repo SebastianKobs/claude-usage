@@ -440,33 +440,70 @@ function compactCallKind(detail, now) {
   return fallback;
 }
 
-// Every call that named a possible secret location ([secrets] patterns, matched by the server), under a warning that
-// draws the eye: the path as the call gave it, the pattern, and whether it ran; nothing while none did.
+// Every call that named a possible secret location ([secrets] patterns, matched by the server), the most severe
+// first: the path as the call gave it, the pattern, and how far it got. Open as a warning that draws the eye while
+// one sent its input out (secretTone "alert"); else folded behind its heading, edged in the warning color while one
+// returned a result or may still, a plain card while each was blocked or returned nothing; nothing while none named
+// one.
 function secretAccesses(detail, pagerKey) {
   const accesses = detail.secret_accesses || [];
-  if (!accesses.length) return null;
+  const tone = secretTone(detail);
+  if (!tone) return null;
   const head = el("tr", {}, el("th", {text: "Time"}), el("th", {text: "Agent"}), el("th", {text: "Tool"}),
                   el("th", {text: "Path"}), el("th", {text: "Matched", title: "the [secrets] pattern it matched"}),
-                  el("th", {text: "Result"}));
+                  el("th", {text: "Reached"}));
   const rows = accesses.map(access => el("tr", {},
     el("td", {text: when(access.time)}), el("td", {text: access.agent_type}), el("td", {text: access.tool}),
     el("td", {}, el("span", {class: "secret-path", text: access.path}),
        secretVia(access) ? el("span", {class: "secret-via", text: secretVia(access)}) : null),
     el("td", {text: access.pattern}),
-    el("td", {text: secretAccessResult(access)})));
+    el("td", {}, el("span", {class: `secret-severity secret-severity-${access.severity || "medium"}`,
+                             "aria-hidden": "true"}),
+       secretReach(access))));
   const calls = accesses.length === 1 ? "1 call" : `${whole(accesses.length)} calls`;
-  return el("div", {class: "card secret-alert", id: "secret-alert", role: "region",
-                    "aria-labelledby": "secret-alert-title"},
-    el("h3", {class: "secret-alert-head", id: "secret-alert-title"},
-       el("span", {class: "secret-alert-icon", "aria-hidden": "true", text: "!"}),
-       `Possible secret access: ${calls}`),
-    el("p", {text: "These tool calls named a path that matches a possible secret location. Check that each was " +
-                   "meant; an error means it was blocked or failed."}),
+  const count = severity => accesses.filter(access => access.severity === severity).length;
+  const body = el("div", {},
+    el("p", {text: "These tool calls named a path that matches a possible secret location. Most severe first: sent " +
+                   "to an MCP server or a network program, then returned into the conversation (and so to the API), " +
+                   "then blocked, failed or empty. Check that each was meant."}),
     el("div", {class: "table-wrap"}, paged(pagerKey, el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows)))),
     el("p", {class: "muted", text: "Matched against [secrets] patterns in the config: file tools by their path, " +
       "commands by their words with the variables they set (quoted text only where it holds a path), and scripts " +
       "this transcript wrote and then ran by their text. Variables from earlier calls and other scripts are " +
-      "unknown."}));
+      "unknown. A result counts whatever it held: a test that only mentions a path returns output too."}));
+  const region = attributes => ({id: "secret-alert", role: "region", "aria-labelledby": "secret-alert-title",
+                                  ...attributes});
+  if (tone === "alert") {
+    return el("div", region({class: "card secret-alert"}),
+      el("h3", {class: "secret-alert-head", id: "secret-alert-title"},
+         el("span", {class: "secret-alert-icon", "aria-hidden": "true", text: "!"}),
+         `Possible secret access: ${calls} (${whole(count("high"))} sent out)`),
+      body);
+  }
+  body.hidden = true;
+  const toggle = foldToggle("secret-accesses", "Show them", open => {
+    body.hidden = !open;
+    toggle.textContent = open ? "Hide them" : "Show them";
+  });
+  const tests = count("low-medium");
+  const summary = tone === "warning"
+    ? `${calls} named a possible secret location, ${whole(count("medium"))} of them returned a result or may still`
+    : tests ? `${calls} named a possible secret location, ${whole(tests)} returned a result only in a likely test`
+      : `${calls} named a possible secret location, none reached anything`;
+  return el("div", region({class: `card secret-folded${tone === "warning" ? " secret-warning" : ""}`}),
+    el("div", {class: "secret-folded-line"},
+       el("h3", {class: "secret-folded-head", id: "secret-alert-title", text: summary}), toggle),
+    body);
+}
+
+// how the secret accesses show: "alert" (open, red) while one was sent out, "warning" (folded, yellow) while one
+// returned a result or may still, "quiet" (folded, plain) while each was blocked, returned nothing or returned only
+// in a likely test (low-medium); null for none
+function secretTone(detail) {
+  const severities = (detail.secret_accesses || []).map(access => access.severity);
+  if (!severities.length) return null;
+  if (severities.includes("high")) return "alert";
+  return severities.includes("medium") ? "warning" : "quiet";
 }
 
 // the script a path came from, where the call ran one the transcript wrote; null for a path the call named itself
@@ -474,10 +511,13 @@ function secretVia(access) {
   return access.via ? `in ${access.via}, which it ran` : null;
 }
 
-// whether a call that named a secret location ran
-function secretAccessResult(access) {
-  if (access.error === null || access.error === undefined) return "no result yet";
-  return access.error ? "error: blocked or failed" : "ran";
+// how far a call that named a secret location got (tool_kinds.secret_reach), in words
+function secretReach(access) {
+  const words = {sent: "sent to a service", returned: "into the conversation", empty: "nothing returned",
+                 pending: "no result yet"};
+  if (access.reach === "error") return access.sent ? "error, the service may have got it" : "error: blocked or failed";
+  if (access.reach === "returned" && access.test) return "into the conversation, likely a test";
+  return words[access.reach] || "no result yet";
 }
 
 // the call to compact above the gauge, in plain words, with a button that copies /compact

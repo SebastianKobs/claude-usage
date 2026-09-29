@@ -50,6 +50,7 @@ MAX_DAYS = 3650
 SESSION_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})")
 CHAT_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})/chat")
 AGENT_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
+SECRET_SEVERITIES = ("high", "medium", "low-medium", "low")
 HOST_WITH_PORT = re.compile(r"^\[?(?P<host>[^\]]*?)\]?(?::\d+)?$")
 # no inline scripts or stylesheets; style attributes stay allowed, as the charts set colors and sizes with them
 DASHBOARD_POLICY = ("default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; "
@@ -162,6 +163,13 @@ def reminder_totals(entries: list[Payload]) -> Payload:
     return {"calls": len(chars), "chars": sum(chars)}
 
 
+def secret_order(access: Payload) -> tuple[int, str]:
+    """A secret access's place in the list: the most severe first (tool_kinds.secret_reach), then by time."""
+    severity = access["severity"]
+    rank = SECRET_SEVERITIES.index(severity) if severity in SECRET_SEVERITIES else 0
+    return rank, access["time"] or ""
+
+
 def day_navigation(days: int, until: date, previous_day: date | None, next_day: date | None,
                    today: date) -> Payload:
     """The Daily range's arrows as ISO days: the nearest days with usage before and after until, None for no arrow.
@@ -182,8 +190,8 @@ class UsageApp:
     def __init__(self, usage_store: store.Store, projects_dir: Path, prices: pricing.Prices, live_minutes: float,
                  project: str | None = None, prices_checked: str | None = None, retention_days: int = 0,
                  clock: Callable[[], float] = time.monotonic,
-                 compact: compact.CompactSettings = compact.DEFAULT_COMPACT, secret_patterns: tuple[str, ...] = (),
-                 home: str | None = None) -> None:
+                 compact: compact.CompactSettings = compact.DEFAULT_COMPACT,
+                 secret_settings: secret_paths.SecretSettings | None = None, home: str | None = None) -> None:
         self.store = usage_store
         self.projects_dir = projects_dir
         self.prices = prices
@@ -194,8 +202,9 @@ class UsageApp:
         self.compact = compact
         self.retention_days = retention_days
         # the [secrets] patterns, matched against the paths the tool calls name; none looks for nothing
-        self.find_secrets = (secret_paths.finder(secret_patterns, home or str(Path.home()))
-                             if secret_patterns else None)
+        self.find_secrets = (secret_paths.finder(secret_settings.patterns, home or str(Path.home()),
+                                                 secret_settings.network_programs, secret_settings.test_patterns)
+                             if secret_settings is not None and secret_settings.patterns else None)
         self.lock = threading.Lock()
         # every stored compaction compared with keeping the context, for the gauge's preview, and the store's change
         # count it was computed at: rebuilt only once a scan changed the store
@@ -333,7 +342,7 @@ class UsageApp:
         transcript still exists (the page shows the conversation higher up then), each transcript's tools by
         kind (tool_kinds, None once its file is gone), with the gauge the main thread's exploration since its last
         compaction (for the hint to delegate it), and every call of the transcripts still there that named a possible
-        secret location (secret_accesses, by time); None for an unknown id."""
+        secret location (secret_accesses, the most severe first, then by time); None for an unknown id."""
         with self.lock:
             self.refresh()
             detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False,
@@ -361,7 +370,7 @@ class UsageApp:
                 "delegate_hint_tokens": self.compact.delegate_hint_tokens,
                 "delegate_calls_ahead": self.compact.delegate_calls_ahead,
                 "live": live, "compaction_savings": savings, "transcript": path is not None and path.exists(),
-                "secret_accesses": sorted(secrets, key=lambda access: access["time"] or "")}
+                "secret_accesses": sorted(secrets, key=secret_order)}
 
     def transcript_tools(self, path: Path) -> Payload | None:
         """A transcript's tool rows, exploration and secret accesses (tool_kinds.transcript_tools), read again only

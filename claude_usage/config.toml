@@ -45,7 +45,11 @@ delegate_calls_ahead = 60
 # Possible secret locations: the session view lists every tool call that named a matching path, under a warning,
 # while its transcript exists. A name matches any part of a path (.env, *.pem), a path from ~ or / matches it and
 # everything below it (wildcards per part), and ! exempts what it matches; the last matching pattern decides, as in
-# a .gitignore. An override replaces the whole list.
+# a .gitignore. Each call is graded by how far it got: highest where it sent its input out, to an MCP server (always)
+# or with one of network_programs in its command; then where its result went into the conversation. A result of a
+# call that looks like a test counts less (low-medium): one of its words, the script it ran or the path it named
+# matches test_patterns (as a path from the call's working folder, patterns as above). Each override replaces the
+# whole list.
 [secrets]
 patterns = [
     ".env", ".env.*", "!.env.example", "!.env.sample", "!.env.template", "!.env.dist",
@@ -55,6 +59,15 @@ patterns = [
     "~/.ssh", "~/.gnupg", "~/.aws", "~/.azure", "~/.kube", "~/.docker/config.json", "~/.config/gh",
     "~/.config/gcloud", "~/.claude/.credentials.json",
     "/mnt/?/Users/*/.ssh", "/mnt/?/Users/*/.aws",
+]
+network_programs = [
+    "curl", "wget", "http", "https", "xh", "nc", "ncat", "netcat", "socat", "telnet",
+    "ssh", "scp", "sftp", "rsync", "ftp", "lftp",
+]
+test_patterns = [
+    "test", "tests", "__tests__", "spec", "specs", "fixtures", "testdata",
+    "test_*", "*_test.*", "*.test.*", "*.spec.*", "*_spec.*", "conftest.py",
+    "pytest", "unittest", "jest", "vitest", "mocha", "phpunit", "rspec",
 ]
 
 # Where Claude Code auto-compacts, by model id prefix (the longest match wins, a [1m] suffix is ignored): about 967K

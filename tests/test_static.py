@@ -269,11 +269,39 @@ class ToolTableTest(unittest.TestCase):
 
 class SecretAccessTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_the_result_says_whether_the_call_ran(self):
-        cases = [(True, "error: blocked or failed"), (False, "ran"), (None, "no result yet")]
-        for error, text in cases:
-            with self.subTest(error=error):
-                self.assertEqual(run_function("drilldown.js", "secretAccessResult", {"error": error}), text)
+    def test_each_access_says_how_far_it_reached(self):
+        cases = [(("sent", True), "sent to a service"), (("returned", False), "into the conversation"),
+                 (("error", False), "error: blocked or failed"),
+                 (("error", True), "error, the service may have got it"),
+                 (("empty", False), "nothing returned"), (("pending", False), "no result yet")]
+        for (reach, sent), text in cases:
+            with self.subTest(reach=reach, sent=sent):
+                self.assertEqual(run_function("drilldown.js", "secretReach", {"reach": reach, "sent": sent}), text)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_returned_test_says_so(self):
+        access = {"reach": "returned", "sent": False, "test": True}
+        self.assertEqual(run_function("drilldown.js", "secretReach", access), "into the conversation, likely a test")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_only_a_high_access_raises_the_alarm_a_medium_one_warns(self):
+        cases = [(["low", "high", "medium"], "alert"), (["low", "medium"], "warning"), (["low", "low"], "quiet"),
+                 (["low-medium", "low"], "quiet"),
+                 ([], None)]
+        for severities, tone in cases:
+            with self.subTest(severities=severities):
+                detail = {"secret_accesses": [{"severity": severity} for severity in severities]}
+                self.assertEqual(run_function("drilldown.js", "secretTone", detail), tone)
+
+    def test_the_warning_card_is_edged_in_the_warning_color(self):
+        self.assertIn("var(--hint-warning-edge)", css_block(read(STATIC / "css" / "common.css"), ".secret-warning"))
+
+    def test_each_severity_has_its_mark_color(self):
+        css = read(STATIC / "css" / "common.css")
+        for severity, color in (("high", "--hint-critical-edge"), ("medium", "--hint-warning-edge"),
+                                ("low-medium", "--series-1"), ("low", "--text-secondary")):
+            with self.subTest(severity=severity):
+                self.assertIn(f"var({color})", css_block(css, f".secret-severity-{severity}"))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_path_a_script_named_says_which_script(self):

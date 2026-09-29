@@ -312,6 +312,15 @@ class ServeCommandTest(CliCase):
         self.assertIn("secrets.patterns", err)
         self.assertNotIn("Traceback", err)
 
+    def test_bad_network_programs_exit_1_without_a_traceback(self):
+        settings = config.load(overrides=[])
+        settings.values["secrets"] = {"network_programs": "curl"}
+        with mock.patch.object(cli.config, "load", return_value=settings):
+            code, _, err = self.run_cli("serve", "--port", "8765")
+        self.assertEqual(code, 1)
+        self.assertIn("secrets.network_programs", err)
+        self.assertNotIn("Traceback", err)
+
 
 class ArgumentTest(CliCase):
     def test_help_exits_0(self):
