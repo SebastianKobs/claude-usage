@@ -44,7 +44,7 @@ Errors go to stderr, so cron mails them.
 
 ## Updating
 ```
-make backup FILE=~/backups/usage-$(date +%F).sqlite   # optional, but the store holds days Claude Code has deleted
+make backup FILE=~/backups/usage-$(date +%F).sqlite   # optional; the store may hold days Claude Code deleted
 git pull --recurse-submodules
 make restart                                          # the running dashboard picks up the new code
 ```
