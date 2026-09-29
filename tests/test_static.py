@@ -830,7 +830,7 @@ class LiveStateTest(unittest.TestCase):
 
     def test_each_kind_has_its_icon_described_on_hover(self):
         icons = definition("figures.js", "LIVE_ICONS")
-        for kind in ("secret", "compact", "waiting"):
+        for kind in ("secret", "compact", "waiting", "permission"):
             with self.subTest(kind=kind):
                 self.assertIn(f"{kind}: [", icons)
         body = function_body("figures.js", "liveBadge")
@@ -845,14 +845,27 @@ class LiveStateTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_question_without_an_answer_waits_for_the_user(self):
-        badge = self.wait_badge({"tool": "AskUserQuestion", "since": self.NOW})
+        badge = self.wait_badge({"kind": "question", "tool": "AskUserQuestion", "since": self.NOW, "agent_type": None})
         self.assertEqual((badge["kind"], badge["tone"]), ("waiting", "waiting"))
         self.assertTrue(badge["text"].startswith("Waiting for your answer since "))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_plan_waits_for_its_approval(self):
-        badge = self.wait_badge({"tool": "ExitPlanMode", "since": self.NOW})
+        badge = self.wait_badge({"kind": "question", "tool": "ExitPlanMode", "since": self.NOW, "agent_type": None})
         self.assertTrue(badge["text"].startswith("Waiting for you to approve the plan since "))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_permission_prompt_waits_with_its_own_icon_in_the_same_tone(self):
+        badge = self.wait_badge({"kind": "permission", "tool": "Bash", "since": self.NOW, "agent_type": None})
+        self.assertEqual((badge["kind"], badge["tone"]), ("permission", "waiting"))
+        self.assertTrue(badge["text"].startswith("Waiting for your permission to use Bash since "))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_subagents_permission_prompt_names_the_subagent(self):
+        badge = self.wait_badge({"kind": "permission", "tool": "Write", "since": self.NOW,
+                                 "agent_type": "general-purpose"})
+        self.assertTrue(badge["text"].startswith("Waiting for your permission to use Write (a general-purpose "
+                                                 "subagent) since "))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_session_waiting_for_nothing_has_no_wait_badge(self):
@@ -870,6 +883,12 @@ class LiveStateTest(unittest.TestCase):
         body = function_body("figures.js", "renderLive")
         self.assertIn("live.agent_minutes > live.minutes", body)
         self.assertIn("min while agents work", body)
+
+    def test_the_live_sessions_say_why_no_permission_prompt_shows(self):
+        # no Unix sockets (Windows), a folder that takes none, or another dashboard on the socket
+        body = function_body("figures.js", "renderLive")
+        self.assertIn("live.prompts_unavailable", body)
+        self.assertIn("Permission prompts can't show here: ${live.prompts_unavailable}.", body)
 
     def test_the_live_window_names_the_waiting_sessions(self):
         # a waiting session stays on the list past the window, as Claude Code writes nothing while it waits

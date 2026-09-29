@@ -5,6 +5,7 @@ import argparse
 import json
 import math
 import re
+import shlex
 import signal
 import sqlite3
 import sys
@@ -16,6 +17,7 @@ from typing import Any
 import claude_usage
 from claude_usage import compact
 from claude_usage import config
+from claude_usage import permissions
 from claude_usage import pricing
 from claude_usage import queries
 from claude_usage import readers
@@ -126,12 +128,20 @@ def run_serve(context: Context) -> int:
                               read_processes=server.READ_PROCESSES,
                               agent_live_minutes=context.settings.agent_live_minutes)
         httpd = server.make_server(app, HOST, port)
+        prompt_server = None
         previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
         try:
             try:
                 start_warnings = readers.warnings(context.projects_dir)
             except OSError as exc:         # the check only informs: the dashboard starts without it
                 start_warnings = [f"who else can read {context.projects_dir} is unknown: {exc}"]
+            # the permission hook's socket, opened before any other thread starts (it sets the umask for a moment)
+            try:
+                prompt_server = server.open_prompt_socket(app, permissions.socket_path(context.store_path.resolve()))
+                prompt_server.start()
+            except server.PromptSocketError as exc:
+                app.prompts_unavailable = str(exc)
+                start_warnings.append(f"the dashboard shows no permission prompts: {exc}")
             # before the link: `make start` shows the warnings printed before it
             for warning in start_warnings:
                 print(f"warning: {warning}", file=sys.stderr, flush=True)
@@ -146,6 +156,8 @@ def run_serve(context: Context) -> int:
             print("Stopped.")
         finally:
             signal.signal(signal.SIGTERM, previous)
+            if prompt_server is not None:
+                server.close_prompt_socket(prompt_server)
             httpd.server_close()
             app.close()
     return 0
@@ -165,8 +177,35 @@ def run_backup(context: Context) -> int:
     return 0
 
 
+def hook_notes(socket_path: Path) -> str:
+    """Where hook-settings' block belongs, and which dashboard it posts to."""
+    return f"""\
+# Paste this into ~/.claude/settings.json to see the permission prompts of every project, or into one project's
+# .claude/settings.local.json for that project only (git-ignored). Never into a project's .claude/settings.json:
+# it is committed, and everyone who works on the project would run the hook, whether they use claude-usage or
+# not. Where the file has "hooks" already, add the "PermissionRequest" entry to them. The hook posts each prompt
+# to the dashboard's socket {socket_path}; while no dashboard runs, it is ignored."""
+
+
+def run_hook_settings(context: Context) -> int:
+    """hook-settings: the settings block whose hook posts each permission prompt to the dashboard's socket next to the
+    store (server.PROMPT_PATH) in the background, at most 2 s and quietly when none runs, with where the block
+    belongs. Raises CliError without Unix sockets (Windows), where the dashboard can't take the prompts."""
+    if not server.HAS_UNIX_SOCKETS:
+        raise CliError("permission prompts reach the dashboard over Unix sockets, which this system has not: "
+                       "Claude Code's own dialogs work as ever, only the dashboard can't show them")
+    socket_path = permissions.socket_path(context.store_path.resolve())
+    command = shlex.join(["curl", "-s", "-m", "2", "-o", "/dev/null", "--unix-socket", str(socket_path), "-H",
+                          "Content-Type: application/json", "--data-binary", "@-",
+                          f"http://localhost{server.PROMPT_PATH}"]) + " || true"
+    print(hook_notes(socket_path))
+    print_json({"hooks": {permissions.HOOK_EVENT: [
+        {"matcher": "*", "hooks": [{"type": "command", "command": command, "async": True}]}]}})
+    return 0
+
+
 COMMANDS: dict[str, Callable[[Context], int]] = {"scan": run_scan, "report": run_report, "serve": run_serve,
-                                                 "backup": run_backup}
+                                                 "backup": run_backup, "hook-settings": run_hook_settings}
 
 
 # --- arguments ---------------------------------------------------------------------------------------------------
@@ -208,7 +247,7 @@ def add_path_options(parser: argparse.ArgumentParser, default: Any) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """The argument parser with the scan, report and serve commands."""
+    """The argument parser with the scan, report, serve, backup and hook-settings commands."""
     parser = argparse.ArgumentParser(prog="claude-usage",
                                      description="Persistent history and a local dashboard for Claude Code usage.")
     parser.add_argument("--version", action="version", version=f"claude-usage {claude_usage.__version__}")
@@ -240,6 +279,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     backup = commands.add_parser("backup", parents=[paths], help="copy the store into a new file")
     backup.add_argument("target", type=Path, metavar="FILE", help="the copy; must not exist yet")
+
+    commands.add_parser("hook-settings", parents=[paths],
+                        help="print the settings block of the hook that shows permission prompts on the dashboard, "
+                             "and where it belongs")
     return parser
 
 

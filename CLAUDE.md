@@ -45,9 +45,9 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
 ## Layout
 ```
 Makefile                     start/stop/status of the dashboard, scan, report, session, backup, test, clean,
-                             cron-line
+                             hook-line, cron-line
 claude_usage/
-  __main__.py                CLI: scan | report | serve | backup
+  __main__.py                CLI: scan | report | serve | backup | hook-settings
   report.py                  the report as text (report without --json)
   config.py                  defaults in the package, user and checkout overrides, data folder
   config.toml                the defaults, including prices (shipped with the package)
@@ -58,6 +58,7 @@ claude_usage/
   tool_reader.py             those readers kept by path, in serve's reader processes (ReaderPool) or in-process
   secret_paths.py            the paths a tool call names, matched against the [secrets] patterns
   store.py                   the SQLite history: schema, migrations, backup
+  permissions.py             the permission prompt a PermissionRequest hook posts to the dashboard's socket
   scan.py                    incremental scan and background usage: transcripts into the store
   queries.py                 what the report and the dashboard read from the store
   pricing.py                 prices by model prefix, cost per category, web-search fee
@@ -161,6 +162,15 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     between a call and its answer (0 of 141); what did were records without a timestamp (title, last prompt,
     mode), the results of the calls beside it in its message (25), hook results (19) and queued prompts (3), and in
     4 waits a background subagent's records.
+- **Permission prompts:** no record marks one, open or answered; a refused call's result says "The user doesn't want
+  to proceed" (14 tool calls, 2026-09-29, counts only), and a result's delay doesn't tell a prompt apart (even Edit and
+  Write take over 10 s in 11 to 12 %). Only hooks see them. Checked 2026-09-29 with a logging hook (Claude Code in
+  VS Code, auto mode): `PermissionRequest` fires as the dialog opens, 0.08 s after the call is written, for the main
+  thread and subagents, and for AskUserQuestion's dialog too; never for a call that goes through without asking. Its
+  input: `session_id`, `transcript_path` (the main transcript, even for a subagent), `cwd`, `permission_mode`,
+  `hook_event_name`, `tool_name`, `tool_input`, `prompt_id`, `effort`, `scratchpad_dir`, and for a subagent
+  `agent_id` (as in its file name) and `agent_type`. No `tool_use_id`, though the docs list one. `Notification` with
+  `notification_type` `permission_prompt` comes about 6 s later, only while the dialog is still open, without a tool.
 - **Prompt:** the first line of the first user record that isn't `isMeta`, `isCompactSummary` or a tool result.
   **Project:** the first `cwd`, else the slug. Many main transcripts start with a record without `cwd`.
 - **Background calls** (Haiku for titles and classifiers, WebSearch) are in no transcript. They appear only in
@@ -354,8 +364,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - It binds to loopback only, and refuses requests whose `Host` header isn't a loopback name. The API exposes
     titles and first prompts, so this blocks DNS rebinding.
   - Loopback is open to every local user, so the API (every path but the page and its files, which hold no data)
-    answers only a request carrying this start's token in the cookie `claude_usage_<port>` (cookies don't tell ports
-    apart), else a JSON 403 that the page's banner shows once (`bannerText`). The token (`UsageApp.token`,
+    answers only a request carrying this start's token in the cookie
+    `claude_usage_<port>` (cookies don't tell ports apart), else a JSON 403 that the page's banner shows once
+    (`bannerText`). The token (`UsageApp.token`,
     `secrets.token_urlsafe`, new per start, compared in constant time) comes with the link `serve` prints:
     `/?token=…` sets the cookie (HttpOnly, SameSite=Strict, Path=/, 400 days) if it is right, and redirects to `/`
     either way, so the token leaves the address bar. The Cookie header is split by hand (`cookie_value`), since
@@ -508,13 +519,33 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     live sessions active in the range (`queries.live_sessions` with since and until): with usage in it, as the
     sessions list counts them, else by their last activity (a session without a reply yet). So a past day shows
     only the running sessions that were active on it, and says so; without a range `/api/live` lists every one.
-  - A session waiting for the user's answer (`queries.waiting_calls`: a call of `WAITING_TOOLS` without a result,
-    from the store) stays on the live list past the window until it is answered, however long ago it asked,
-    unless its transcript made an API call after it (the session moved on; the user's choice over a time limit).
-    `/api/live` gives it as `waiting` (the tool and since when), the card shows a
-    speech bubble with a question mark first by the title (`liveWaitBadge`, in `--series-1`: nothing is wrong),
-    described on hover, and the heading adds "or waiting for you". A permission prompt looks like a command still
-    running (a call without a result), so it isn't shown.
+  - A session waiting for the user (`queries.waiting_calls`) stays on the live list past the window until it is
+    answered, however long ago it asked, unless its transcript made an API call after it (the session moved on; the
+    user's choice over a time limit): a call of `WAITING_TOOLS` without a result (kind `question`), or another call
+    without one that a permission prompt asks about (kind `permission`). `/api/live` gives it as `waiting` (kind,
+    tool, since when, the subagent's type), the card shows it first by the title (`liveWaitBadge`, in `--series-1`:
+    nothing is wrong): a speech bubble with a question mark, or a padlock, described on hover; the heading adds "or
+    waiting for you".
+  - Permission prompts come from a `PermissionRequest` hook that posts Claude Code's hook input to the running
+    dashboard over a Unix socket, `permission.sock` next to the store (`server.open_prompt_socket`, the user's choice
+    over a file next to the store and over a TCP route without the token), so it works the same for a checkout and an
+    installed copy, and a prompt while no dashboard runs, which nothing would show, is dropped. The socket is its
+    owner's alone (created 0600 under `PRIVATE_SOCKET_UMASK`, in the store's folder; Linux lets only who may write it
+    connect), no browser reaches it, and its handler (`PromptHandler`) takes only a POST to `PROMPT_PATH`, up to
+    `PROMPT_BODY_LIMIT` (16 MB: the input holds the whole call, a Write with its file's text), answering 204 without
+    data; the TCP port takes no POST. `serve` opens it before any other thread starts, takes over a socket file a
+    stopped dashboard left, leaves one another dashboard listens on, and removes its own at stop. Where it can't (no
+    Unix sockets on Windows, a folder that takes none, a path too long), it warns before the link and `/api/live`
+    gives `prompts_unavailable`, which the live sessions note; Claude Code's own dialogs are unaffected. The server
+    keeps session, agent id, tool (as the store names it), mode and time (`permissions.prompt_of`, at `utc_now`) of
+    the `PROMPT_LIMIT` (500) latest prompts, in memory only, never the call's input; a restart forgets them. A prompt
+    belongs to the latest call of its tool in its transcript (session and agent) from `PROMPT_SLACK` (1 s) before it
+    up to that transcript's next call of the tool (`queries.prompt_for`); two calls of one tool at once can't be told
+    apart. `claude-usage hook-settings` (`make hook-line`) prints the settings block: `curl --unix-socket` in the
+    background (`async`), at most 2 s, `|| true` so a stopped dashboard is quietly ignored, for
+    `~/.claude/settings.json` or a project's `.claude/settings.local.json`, and never into a project's committed
+    `.claude/settings.json`, which would run it for everyone working on the project. Without the hook a permission
+    prompt looks like a command still running (a call without a result) and isn't shown.
   - A session also stays live for `[serve] agent_live_minutes` (180) after its last change while one of its agents
     is at work (`queries.busy_agents`: a subagent or workflow agent in a call without a result, or with a result
     after its last reply unless it was `StructuredOutput`'s), since an agent in a long command or reply leaves every

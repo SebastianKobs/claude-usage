@@ -10,6 +10,7 @@ from datetime import timedelta
 from unittest import mock
 
 from claude_usage import compact
+from claude_usage import permissions
 from claude_usage import queries
 from claude_usage import scan
 from claude_usage import store
@@ -578,7 +579,8 @@ class LiveWaitingTest(StoreCase):
     def test_a_question_without_an_answer_waits_since_it_was_asked(self):
         self.ask()
         [session] = self.live(10)
-        self.assertEqual(session["waiting"], {"tool": "AskUserQuestion", "since": scan.iso(self.asked)})
+        self.assertEqual(session["waiting"], {"kind": "question", "tool": "AskUserQuestion",
+                                              "since": scan.iso(self.asked), "agent_type": None})
 
     def test_a_plan_to_approve_waits_too(self):
         self.ask("ExitPlanMode")
@@ -696,6 +698,77 @@ class LiveAgentsTest(StoreCase):
     def test_without_agent_minutes_nothing_keeps_it_live(self):
         self.call(self.agent)
         self.assertEqual(self.live(agent_minutes=0), [])
+
+
+class PermissionWaitTest(StoreCase):
+    def setUp(self):
+        super().setUp()
+        self.now = time.time()
+        self.asked = datetime.fromtimestamp(int(self.now), UTC) - timedelta(minutes=20)
+        self.session = self.projects.session("s-ask").at(self.asked - timedelta(minutes=1))
+        self.session.user("clean up")
+        self.files = [self.session]
+
+    def call(self, transcript, tool="Bash", tool_use_id="b1", at=None, result=False):
+        """A call of this tool at the given time (by default asked), with its result if asked."""
+        transcript.at(at or self.asked).assistant(f"m-{tool_use_id}", [tool_use_block(tool_use_id, tool, {})],
+                                                  usage(output=5))
+        if result:
+            transcript.tool_result(tool_use_id, "done")
+
+    def prompt(self, tool="Bash", agent_id=None, at=None):
+        """The permission prompt the hook notes 0.08 s after a call at the given time (by default asked)."""
+        return permissions.Prompt(scan.iso((at or self.asked) + timedelta(milliseconds=80)), "s-ask", agent_id, tool,
+                                  "auto")
+
+    def live(self, prompts):
+        """live_sessions after a scan, every transcript last changed 20 minutes ago, with these prompts noted."""
+        for transcript in self.files:
+            os.utime(transcript.path, (self.now - 1200, self.now - 1200))
+        self.scan()
+        return queries.live_sessions(self.store, 5, PRICES, now=self.now, prompts=prompts)
+
+    def test_a_call_a_permission_prompt_asks_about_waits_for_the_user(self):
+        self.call(self.session)
+        [session] = self.live([self.prompt()])
+        self.assertEqual(session["waiting"], {"kind": "permission", "tool": "Bash", "since": self.prompt().ts,
+                                              "agent_type": None})
+
+    def test_an_allowed_or_refused_call_waits_no_more(self):
+        # either way its result comes
+        self.call(self.session, result=True)
+        self.assertEqual(self.live([self.prompt()]), [])
+
+    def test_a_call_without_a_prompt_is_not_waiting_for_the_user(self):
+        # a command still running
+        self.call(self.session)
+        self.assertEqual(self.live([]), [])
+
+    def test_a_prompt_before_a_call_asked_about_an_earlier_one(self):
+        self.call(self.session, result=True)
+        self.call(self.session, tool_use_id="b2", at=self.asked + timedelta(minutes=1))
+        self.assertEqual(self.live([self.prompt()]), [])
+        self.assertEqual(self.live([self.prompt(at=self.asked + timedelta(minutes=1))])[0]["waiting"]["kind"],
+                         "permission")
+
+    def test_a_prompt_for_another_tool_asks_about_another_call(self):
+        self.call(self.session)
+        self.assertEqual(self.live([self.prompt("Write")]), [])
+
+    def test_a_subagents_prompt_matches_its_own_call(self):
+        agent = self.projects.subagent("s-ask", "a1")
+        self.files.append(agent)
+        self.call(agent)
+        [session] = self.live([self.prompt(agent_id="a1")])
+        self.assertEqual((session["waiting"]["kind"], session["waiting"]["agent_type"]),
+                         ("permission", "general-purpose"))
+        self.assertEqual(self.live([self.prompt()]), [])            # the main thread's prompt is another call's
+
+    def test_a_question_asked_through_the_dialog_stays_a_question(self):
+        # PermissionRequest fires for AskUserQuestion too
+        self.call(self.session, "AskUserQuestion", "q1")
+        [session] = self.live([self.prompt("AskUserQuestion")])
+        self.assertEqual(session["waiting"]["kind"], "question")
 
 
 class LiveSessionsInRangeTest(StoreCase):

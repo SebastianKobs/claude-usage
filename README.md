@@ -16,13 +16,13 @@ holds every session of the range: pick a project, or type words from a title, a 
 it. It and Cost per session count what each session used in the range, so a session over several days splits across
 them; its own view shows all of it. The live sessions follow the range too: on an earlier day they are the running
 sessions that were active on it. By each live session's title, a blue speech bubble with a question mark shows that
-Claude asked you something (a question or a plan to approve) and waits for your answer; such a session stays in the
-list until you answer, unless the session went on without it. A trash compactor shows when compacting now would
-pay off, in its own view's colors, and an agent in a black hat a possible secret access where one returned a result
-or was sent out; hover them for the details. A permission prompt can't be told from a command still running, so it
-shows nothing. While a subagent or a workflow's agent is still at work (in a call, or before its next reply), its
-session stays in the list for up to `agent_live_minutes` (180) after its last change, even when a long command
-leaves every transcript quiet.
+Claude asked you something (a question or a plan to approve) and waits for your answer; such a session stays in the list
+until you answer, unless the session went on without it. A trash compactor shows when compacting now would pay off, in
+its own view's colors, and an agent in a black hat a possible secret access where one returned a result or was sent out;
+hover them for the details. With the permission hook set up (see Usage), a padlock shows a call that waits for your
+permission; without it, a permission prompt can't be told from a command still running, so it shows nothing. While a
+subagent or a workflow's agent is still at work (in a call, or before its next reply), its session stays in the list for
+up to `agent_live_minutes` (180) after its last change, even when a long command leaves every transcript quiet.
 
 Rate limits show per day, and each 5-hour window that hit one shows what it used from its start (5 hours before
 its reset) up to the first hit, by model: a lower bound on what a window holds, since the limit also counts what
@@ -62,6 +62,22 @@ checkout, with the absolute interpreter path (cron's `python3` may be older than
 */30 * * * * cd '/path/to/usage-inspector' && /usr/bin/python3 -m claude_usage scan >/dev/null
 ```
 Errors go to stderr, so cron mails them.
+
+To see on the dashboard when a session waits for your permission (the "Do you want to allow …?" dialog), which no
+transcript records, let Claude Code tell it through a hook. `make hook-line` (or `claude-usage hook-settings`) prints
+the settings block. Put it into `~/.claude/settings.json` for every project, or into one project's
+`.claude/settings.local.json`, which git ignores, for that project only. Never into a project's `.claude/settings.json`:
+that file is committed, and everyone who works on the project would run the hook, whether they use claude-usage or not.
+Where the file has `"hooks"` already, add the `"PermissionRequest"` entry to them. Claude Code reads hooks when a
+session starts: in a running one, accept it in `/hooks`.
+
+The hook runs in the background whenever a permission dialog opens (also in auto mode, in the VS Code extension and for
+subagents): `curl` posts Claude Code's hook input to the dashboard over a Unix socket next to the store
+(`permission.sock`, yours alone), and the dashboard keeps only the session, the subagent, the tool, the permission mode
+and the time, in memory, never the command or any other input. While no dashboard runs, the hook gives up quietly after
+at most 2 s, and nothing is noted. Two calls of the same tool at once can't be told apart: the newer one shows as
+waiting. Windows has no Unix sockets, so there the dashboard notes that it can't show permission prompts; Claude Code's
+own dialogs work as ever.
 
 ## Updating
 ```
@@ -199,7 +215,8 @@ never silently leaves a default in place.
 |---|---|
 | `projects_dir`, `store` | Claude Code's transcripts, and the SQLite history |
 | `retention_days` | days of history kept: 7, 30 (default), 90 or 365, or 0 for everything |
-| `[serve]` `port`, `live_minutes`, `agent_live_minutes` | the dashboard's port; how many minutes a session counts as live, and how many (180) while one of its agents or a workflow's is still at work |
+| `[serve]` `port`, `live_minutes` | the dashboard's port; how many minutes a session counts as live |
+| `[serve]` `agent_live_minutes` | how many minutes (180) a session stays live while one of its agents is at work |
 | `[prices."<model prefix>"]` | $ per million tokens, longest matching prefix wins; `prices_checked` dates them |
 | `[fees]` `web_search_per_1000` | the flat web-search fee |
 | `[chat]` | when a session's conversation view hints at compacting (a heuristic threshold, and reminder steps) |
@@ -239,6 +256,9 @@ about.
 The store holds no prompts, but titles and project paths: it, its WAL files and its backups are yours alone (mode
 600, whatever your umask), and a store from an older version is closed to others the next time it is opened. A new
 folder for it is yours alone too (700); an existing one keeps its mode.
+
+The permission hook can't know the token, so it posts to the dashboard's Unix socket instead of the API: only you
+can connect to it, no browser reaches it, and it answers no data.
 
 ## Development
 See `CLAUDE.md` for the working rules, the style, the transcript format and the design rules.

@@ -182,8 +182,11 @@ function renderLive(live) {
          number("Last context", compact(session.last_context)), number("Cost", money(session.cost))),
       agents);
   });
+  // the hook's socket couldn't be opened: Claude Code still asks, only no padlock shows it
+  const prompts = live.prompts_unavailable
+    ? [el("div", {class: "note", text: `Permission prompts can't show here: ${live.prompts_unavailable}.`})] : [];
   // paged even when none is live, so a pager left from a longer list goes
-  container.replaceChildren(paged("live", live.sessions.length
+  container.replaceChildren(...prompts, paged("live", live.sessions.length
     ? el("div", {class: "live-grid paged-cards"}, ...cards)
     : el("div", {class: "empty", text: pastDay ? `No live session was active on ${longDay(pastDay)}.`
                                                : `No session active in the last ${live.minutes} minutes.`}),
@@ -210,8 +213,17 @@ function liveBadge(badge) {
 
 // The icons, drawn in currentColor on a 24-unit grid: an agent in a black hat and dark glasses for a possible secret
 // access, a trash compactor pressing down on its bin for compacting, a speech bubble with a question mark for a
-// session waiting for the user's answer
+// session waiting for the user's answer, a padlock for one waiting for a permission
 const LIVE_ICONS = {
+  permission: [
+    ["path", {d: "M8 10.5V7.8a4 4 0 0 1 8 0v2.7", fill: "none", stroke: "currentColor", "stroke-width": "1.6",
+              "stroke-linecap": "round"}],
+    ["rect", {x: "4.8", y: "10.5", width: "14.4", height: "10", rx: "2", fill: "none", stroke: "currentColor",
+              "stroke-width": "1.6"}],
+    ["circle", {cx: "12", cy: "14.6", r: "1.4", fill: "currentColor"}],
+    ["path", {d: "M12 15.4v2.4", fill: "none", stroke: "currentColor", "stroke-width": "1.6",
+              "stroke-linecap": "round"}],
+  ],
   waiting: [
     ["path", {d: "M5 3.5h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8.2L6 20.5v-4H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z",
               fill: "none", stroke: "currentColor", "stroke-width": "1.6", "stroke-linejoin": "round"}],
@@ -248,12 +260,19 @@ function liveIcon(kind) {
   return icon;
 }
 
-// a session waiting for the user's answer (waiting in /api/live: a question, or a plan to approve, without its
-// result yet) as a badge in the waiting tone, which the card shows first; null while it waits for nothing
+// a session waiting for the user (waiting in /api/live: a question or a plan to approve without its result yet, or a
+// call a permission prompt asks about) as a badge in the waiting tone, which the card shows first: a speech bubble
+// for a question, a padlock for a permission; null while it waits for nothing
 function liveWaitBadge(waiting) {
   if (!waiting) return null;
+  const since = ` since ${when(waiting.since)}`;
+  if (waiting.kind === "permission") {
+    const agent = waiting.agent_type ? ` (a ${waiting.agent_type} subagent)` : "";
+    return {kind: "permission", tone: "waiting", text: `Waiting for your permission to use ${waiting.tool}${agent}` +
+            since};
+  }
   const what = waiting.tool === "ExitPlanMode" ? "you to approve the plan" : "your answer";
-  return {kind: "waiting", tone: "waiting", text: `Waiting for ${what} since ${when(waiting.since)}`};
+  return {kind: "waiting", tone: "waiting", text: `Waiting for ${what}${since}`};
 }
 
 // A live card's state as badges of a kind (secret, compact), a tone (a class suffix, or null) and the words its

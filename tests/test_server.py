@@ -1,10 +1,14 @@
 """server.py: the JSON API and the dashboard page, on a real server bound to a free loopback port."""
+import collections
 import contextlib
+import http.client
 import io
 import json
 import os
 import re
 import shutil
+import socket
+import stat
 import threading
 import unittest
 import urllib.error
@@ -17,6 +21,7 @@ from pathlib import Path
 from unittest import mock
 
 from claude_usage import compact
+from claude_usage import permissions
 from claude_usage import pricing
 from claude_usage import scan
 from claude_usage import secret_paths
@@ -131,6 +136,142 @@ class ServerCase(TempDirTestCase):
         status, response_headers, body = self.get(path, headers, token)
         self.assertEqual(response_headers["Content-Type"], "application/json; charset=utf-8")
         return status, json.loads(body)
+
+
+class UnixConnection(http.client.HTTPConnection):
+    """An HTTP connection over a Unix socket, as curl --unix-socket makes it."""
+
+    def __init__(self, path):
+        super().__init__("localhost", timeout=10)
+        self.socket_path = path
+
+    def connect(self):
+        """Connect to the socket instead of a host and port."""
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(10)
+        self.sock.connect(str(self.socket_path))
+
+
+@unittest.skipUnless(server.HAS_UNIX_SOCKETS, "needs Unix sockets")
+class PromptSocketTest(ServerCase):
+    HOOK_INPUT = {"hook_event_name": "PermissionRequest", "session_id": "s1", "tool_name": "Bash",
+                  "tool_input": {"command": "rm -r build"}, "permission_mode": "default"}
+
+    def setUp(self):
+        super().setUp()
+        self.main.assistant("m9", [tool_use_block("b9", "Bash", {"command": "rm -r build"})], usage(output=5))
+        # the prompt comes after the call, whose time the test transcripts' clock sets ahead of the real one
+        patcher = mock.patch.object(server, "utc_now", return_value=datetime.now(UTC) + timedelta(minutes=1))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.socket_path = permissions.socket_path(self.store_path)
+        self.prompt_server = self.open_socket()
+
+    def open_socket(self):
+        """The hook's socket next to the store, serving until the test ends."""
+        prompt_server = server.open_prompt_socket(self.app, self.socket_path)
+        prompt_server.start()
+        self.addCleanup(server.close_prompt_socket, prompt_server)
+        return prompt_server
+
+    def post(self, body=None, path=server.PROMPT_PATH):
+        """(status, body) of a POST over the socket, as the hook's curl sends it."""
+        connection = UnixConnection(self.socket_path)
+        self.addCleanup(connection.close)
+        data = json.dumps(self.HOOK_INPUT if body is None else body).encode("utf-8")
+        connection.request("POST", path, body=data, headers={"Content-Type": "application/json"})
+        response = connection.getresponse()
+        return response.status, response.read()
+
+    def waiting(self, session_id="s1"):
+        """The waiting of one session in /api/live."""
+        _, payload = self.get_json("/api/live")
+        return next(session for session in payload["sessions"] if session["session_id"] == session_id)["waiting"]
+
+    def test_the_hook_notes_a_prompt_over_the_socket_and_gets_no_data_back(self):
+        self.assertIsNone(self.waiting())
+        self.assertEqual(self.post(), (204, b""))
+        self.assertEqual(self.waiting()["kind"], "permission")
+
+    def test_the_tcp_port_takes_no_post(self):
+        # every API route there asks for the token, which the hook can't know
+        request = urllib.request.Request(f"http://127.0.0.1:{self.port}{server.PROMPT_PATH}", method="POST",
+                                         data=json.dumps(self.HOOK_INPUT).encode("utf-8"),
+                                         headers={"Content-Type": "application/json"})
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            OPENER.open(request, timeout=10)
+        caught.exception.close()
+        self.assertEqual(list(self.app.prompts), [])
+
+    @unittest.skipUnless(os.name == "posix", "POSIX modes")
+    def test_the_socket_is_its_owners_alone(self):
+        # Linux lets only who may write the socket connect
+        self.assertEqual(stat.S_IMODE(self.socket_path.stat().st_mode), 0o600)
+
+    def test_the_socket_serves_nothing_else(self):
+        self.assertEqual(self.post(path="/api/live")[0], 404)
+        connection = UnixConnection(self.socket_path)
+        self.addCleanup(connection.close)
+        connection.request("GET", "/api/live")
+        self.assertEqual(connection.getresponse().status, 404)
+
+    def test_the_calls_input_is_not_kept(self):
+        self.post()
+        self.assertNotIn("rm -r", repr(list(self.app.prompts)))
+
+    def test_a_body_over_the_limit_is_refused(self):
+        with mock.patch.object(server, "PROMPT_BODY_LIMIT", 10):
+            self.assertEqual(self.post()[0], 413)
+
+    def test_an_input_that_is_no_permission_prompt_is_refused(self):
+        self.assertEqual(self.post({"hook_event_name": "Notification", "session_id": "s1"})[0], 400)
+
+    def test_the_server_keeps_only_the_latest_prompts(self):
+        self.app.prompts = collections.deque(maxlen=2)
+        for session_id in ("a", "b", "c"):
+            self.post({**self.HOOK_INPUT, "session_id": session_id})
+        self.assertEqual([prompt.session_id for prompt in self.app.prompts], ["b", "c"])
+
+    def test_another_dashboard_listening_is_left_alone(self):
+        with self.assertRaises(server.PromptSocketError) as caught:
+            server.open_prompt_socket(self.app, self.socket_path)
+        self.assertIn("another dashboard", str(caught.exception))
+        self.assertEqual(self.post()[0], 204)
+
+    def test_closing_removes_the_socket(self):
+        server.close_prompt_socket(self.prompt_server)
+        self.assertFalse(self.socket_path.exists())
+
+
+@unittest.skipUnless(server.HAS_UNIX_SOCKETS, "needs Unix sockets")
+class PromptSocketOpenTest(ServerCase):
+    def test_a_socket_a_stopped_dashboard_left_behind_is_taken_over(self):
+        path = permissions.socket_path(self.store_path)
+        left = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        left.bind(str(path))
+        left.close()                                # the file stays, nobody listens
+        prompt_server = server.open_prompt_socket(self.app, path)
+        self.addCleanup(server.close_prompt_socket, prompt_server)
+        self.assertTrue(stat.S_ISSOCK(path.stat().st_mode))
+
+    def test_a_file_in_the_way_is_left_as_it_is(self):
+        path = permissions.socket_path(self.store_path)
+        path.write_text("not a socket", encoding="utf-8")
+        with self.assertRaises(server.PromptSocketError):
+            server.open_prompt_socket(self.app, path)
+        self.assertEqual(path.read_text(encoding="utf-8"), "not a socket")
+
+    def test_without_unix_sockets_it_says_so(self):
+        # Windows: Claude Code's dialogs work as ever, only the dashboard can't show them
+        with mock.patch.object(server, "HAS_UNIX_SOCKETS", False):
+            with self.assertRaises(server.PromptSocketError) as caught:
+                server.open_prompt_socket(self.app, permissions.socket_path(self.store_path))
+        self.assertIn("no Unix sockets", str(caught.exception))
+
+    def test_live_says_why_the_dashboard_shows_no_permission_prompts(self):
+        self.assertIsNone(self.get_json("/api/live")[1]["prompts_unavailable"])
+        self.app.prompts_unavailable = "this system has no Unix sockets"
+        self.assertEqual(self.get_json("/api/live")[1]["prompts_unavailable"], "this system has no Unix sockets")
 
 
 class DashboardTest(ServerCase):

@@ -14,16 +14,21 @@ import dataclasses
 import hmac
 import ipaddress
 import json
+import os
 import re
 import secrets
 import socket
+import socketserver
+import stat
 import sqlite3
 import sys
 import threading
 import time
 import traceback
 from collections.abc import Callable
+from datetime import UTC
 from datetime import date
+from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
@@ -34,6 +39,7 @@ from urllib.parse import urlsplit
 
 from claude_usage import compact
 from claude_usage import conversation
+from claude_usage import permissions
 from claude_usage import pricing
 from claude_usage import queries
 from claude_usage import scan
@@ -59,6 +65,12 @@ SESSION_LIST_FIELDS = ("session_id", "title", "project", "last_ts", "subagents",
 SESSION_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})")
 CHAT_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})/chat")
 STATE_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})/state")
+# the permission hook's route, on its socket only (open_prompt_socket): the hook can't know the token
+PROMPT_PATH = "/api/permission-prompt"
+HAS_UNIX_SOCKETS = hasattr(socket, "AF_UNIX")     # not on Windows
+PRIVATE_SOCKET_UMASK = 0o177              # the socket is created its owner's alone (0600)
+PROMPT_BODY_LIMIT = 16 * 1024 * 1024     # the hook sends the whole call, a Write with its file's text
+PROMPT_LIMIT = 500                       # the latest prompts the server keeps
 AGENT_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
 SECRET_SEVERITIES = ("high", "medium", "low-medium", "low")
 HOST_WITH_PORT = re.compile(r"^\[?(?P<host>[^\]]*?)\]?(?::\d+)?$")
@@ -237,6 +249,9 @@ class UsageApp:
         self.prices = prices
         self.live_minutes = live_minutes
         self.agent_live_minutes = agent_live_minutes     # while an agent is at work; 0 adds nothing
+        # the permission prompts the hook posted, the latest only: a prompt matters while its call waits
+        self.prompts: collections.deque[permissions.Prompt] = collections.deque(maxlen=PROMPT_LIMIT)
+        self.prompts_unavailable: str | None = None      # why the hook's socket couldn't be opened
         self.project = project
         self.prices_checked = prices_checked
         self.clock = clock
@@ -256,6 +271,11 @@ class UsageApp:
         self.history_changes: int | None = None
         self.last_scan: float | None = None
         self.scan_errors: tuple[str, ...] = ()
+
+    def note_prompt(self, prompt: permissions.Prompt) -> None:
+        """Keep a permission prompt the hook posted (PROMPT_PATH), up to the PROMPT_LIMIT latest, in memory only."""
+        with self.lock:
+            self.prompts.append(prompt)
 
     def refresh(self) -> None:
         """Scan if the last scan is SCAN_INTERVAL or more ago. Call with the lock held. A failure keeps the stored
@@ -291,12 +311,13 @@ class UsageApp:
         with self.lock:
             self.refresh()
             sessions = queries.live_sessions(self.store, self.live_minutes, self.prices, project=self.project,
-                                             since=since, until=until, agent_minutes=self.agent_live_minutes)
+                                             since=since, until=until, agent_minutes=self.agent_live_minutes,
+                                             prompts=list(self.prompts))
             scan_errors = list(self.scan_errors)
         return {"minutes": self.live_minutes, "agent_minutes": self.agent_live_minutes, "days": days,
                 "since": None if since is None else since.isoformat(),
                 "until": None if until is None else until.isoformat(), "sessions": sessions,
-                "scan_errors": scan_errors}
+                "scan_errors": scan_errors, "prompts_unavailable": self.prompts_unavailable}
 
     def summary(self, days: int, until: date | None = None) -> Payload:
         """/api/summary: totals of the `days` local days up to until (default today, included), per hour too for a
@@ -597,6 +618,11 @@ class Handler(BaseHTTPRequestHandler):
         """Quiet: the dashboard polls every few seconds, so an access log would only be noise."""
 
 
+def utc_now() -> datetime:
+    """The time now in UTC, when a permission prompt is noted."""
+    return datetime.now(UTC)
+
+
 class UsageServer(ThreadingHTTPServer):
     """The HTTP server, carrying the app for its handlers."""
     daemon_threads = True
@@ -618,3 +644,111 @@ def make_server(app: UsageApp, host: str, port: int) -> UsageServer:
     if ":" in host:
         return UsageServer6((host, port), app)
     return UsageServer((host, port), app)
+
+
+class PromptSocketError(Exception):
+    """The permission hook's socket can't be opened; the message says why, for serve's warning and the dashboard."""
+
+
+class PromptHandler(Handler):
+    """The permission hook's socket (open_prompt_socket): a POST to PROMPT_PATH only, a PermissionRequest hook's input
+    noted as a permission prompt (UsageApp.note_prompt). No token, which the hook can't know: only its owner may
+    connect (the socket's mode, in the store's folder), and no browser reaches a Unix socket. It answers no data: 204,
+    or an error as JSON."""
+    server: "PromptServer"
+
+    def do_GET(self) -> None:
+        """Nothing to read here: the dashboard is on its port."""
+        self.send_json(HTTPStatus.NOT_FOUND, {"error": "this socket takes only the permission hook's POST"})
+
+    def do_POST(self) -> None:
+        """Note the hook's prompt, reading its input up to PROMPT_BODY_LIMIT: the call's input goes with the body."""
+        path = urlsplit(self.path).path
+        length = self.headers.get("Content-Length", "")
+        try:
+            if path != PROMPT_PATH:
+                self.send_json(HTTPStatus.NOT_FOUND, {"error": f"not found: {path}"})
+            elif not length.isdigit():
+                self.send_json(HTTPStatus.LENGTH_REQUIRED, {"error": "expected a Content-Length"})
+            elif int(length) > PROMPT_BODY_LIMIT:
+                self.send_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": f"at most {PROMPT_BODY_LIMIT} bytes"})
+            else:
+                body = self.rfile.read(int(length)).decode("utf-8", errors="replace")
+                prompt = permissions.prompt_of(body, utc_now())
+                if prompt is None:
+                    self.send_json(HTTPStatus.BAD_REQUEST, {"error": "expected a PermissionRequest hook's input"})
+                    return
+                self.server.app.note_prompt(prompt)
+                self.send_body(HTTPStatus.NO_CONTENT, "text/plain; charset=utf-8", b"", {})
+        except (BrokenPipeError, ConnectionResetError):
+            return                                      # the hook went away mid-answer; nobody to tell
+        except Exception as exc:                        # deliberately broad: answer as JSON, keep serving
+            traceback.print_exc()
+            self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"{type(exc).__name__}: {exc}"})
+
+
+if HAS_UNIX_SOCKETS:
+    class PromptServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+        """The permission hook's socket server, carrying the app for its handlers and the socket file it made."""
+        daemon_threads = True
+
+        def __init__(self, path: Path, app: UsageApp) -> None:
+            self.app = app
+            self.path = path
+            previous = os.umask(PRIVATE_SOCKET_UMASK)   # serve opens it before its threads start
+            try:
+                super().__init__(str(path), PromptHandler)
+            finally:
+                os.umask(previous)
+            self.inode = path.stat().st_ino
+            self.thread: threading.Thread | None = None
+
+        def start(self) -> None:
+            """Serve in a thread of its own until close_prompt_socket."""
+            self.thread = threading.Thread(target=self.serve_forever, kwargs={"poll_interval": 0.2}, daemon=True)
+            self.thread.start()
+
+
+def socket_answers(path: Path) -> bool:
+    """Whether a server listens on the Unix socket at path."""
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    probe.settimeout(1)
+    try:
+        probe.connect(str(path))
+    except OSError:
+        return False
+    finally:
+        probe.close()
+    return True
+
+
+def open_prompt_socket(app: UsageApp, path: Path) -> "PromptServer":
+    """The permission hook's socket at path, its owner's alone, taking over a socket file a stopped dashboard left;
+    raises PromptSocketError where there are no Unix sockets (Windows), another dashboard listens there, something
+    else is in the way, or the folder takes no socket (a Windows drive under WSL, a path too long)."""
+    if not HAS_UNIX_SOCKETS:
+        raise PromptSocketError("this system has no Unix sockets, which the permission hook posts to")
+    if path.is_symlink() or path.exists():
+        if not stat.S_ISSOCK(path.lstat().st_mode):
+            raise PromptSocketError(f"{path} is in the way and isn't a socket")
+        if socket_answers(path):
+            raise PromptSocketError(f"another dashboard listens on {path}")
+        path.unlink()
+    try:
+        return PromptServer(path, app)
+    except OSError as exc:
+        raise PromptSocketError(f"can't listen on {path}: {exc.strerror or exc}") from exc
+
+
+def close_prompt_socket(prompt_server: "PromptServer") -> None:
+    """Stop the hook's socket and remove its file, unless another dashboard's took its place; again is harmless."""
+    thread, prompt_server.thread = prompt_server.thread, None
+    if thread is not None:                      # shutdown waits for serve_forever, which must have started
+        prompt_server.shutdown()
+        thread.join()
+    prompt_server.server_close()
+    try:
+        if prompt_server.path.stat().st_ino == prompt_server.inode:
+            prompt_server.path.unlink()
+    except FileNotFoundError:
+        pass

@@ -6,6 +6,7 @@ import os
 import shutil
 import signal
 import sqlite3
+import stat
 import subprocess
 import sys
 import unittest
@@ -248,6 +249,48 @@ class BackupCommandTest(CliCase):
         self.assertEqual(target.read_text(encoding="utf-8"), "keep me")
 
 
+class HookSettingsTest(CliCase):
+    def settings_block(self, *options):
+        """hook-settings' output: its notes and the parsed JSON block after them."""
+        code, out, _ = self.run_cli("hook-settings", *options)
+        self.assertEqual(code, 0)
+        notes, _, block = out.partition("\n{")
+        return notes, json.loads("{" + block)
+
+    def hook(self, *options):
+        """The one hook of the printed block."""
+        _, block = self.settings_block(*options)
+        [entry] = block["hooks"]["PermissionRequest"]
+        self.assertEqual(entry["matcher"], "*")
+        [hook] = entry["hooks"]
+        return hook
+
+    def test_the_hook_posts_each_prompt_to_the_dashboards_socket_in_the_background(self):
+        hook = self.hook()
+        self.assertEqual((hook["type"], hook["async"]), ("command", True))
+        socket_path = self.store_path.resolve().with_name("permission.sock")
+        self.assertIn(f"curl -s -m 2 -o /dev/null --unix-socket {socket_path} ", hook["command"])
+        self.assertIn(f"http://localhost{server.PROMPT_PATH}", hook["command"])
+
+    def test_a_stopped_dashboard_is_ignored_quietly(self):
+        # nothing shows a prompt then, and a hook must not disturb Claude Code
+        self.assertTrue(self.hook()["command"].endswith("|| true"))
+
+    def test_without_unix_sockets_there_is_no_hook_to_set_up(self):
+        # Windows: Claude Code's dialogs work as ever, only the dashboard can't show them
+        with mock.patch.object(server, "HAS_UNIX_SOCKETS", False):
+            code, out, err = self.run_cli("hook-settings")
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("Unix sockets", err)
+
+    def test_the_settings_go_where_only_you_use_them_never_into_a_committed_file(self):
+        # a project's .claude/settings.json is shared: everyone who clones it would run the hook
+        notes, _ = self.settings_block()
+        self.assertIn("~/.claude/settings.json", notes)
+        self.assertIn(".claude/settings.local.json", notes)
+        self.assertIn("Never into a project's .claude/settings.json", notes)
+
+
 class ServeCommandTest(CliCase):
     def test_serve_prints_the_url_and_stops_on_ctrl_c(self):
         with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
@@ -270,6 +313,32 @@ class ServeCommandTest(CliCase):
             with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
                 self.run_cli("serve", "--port", "0")
         self.assertEqual(make_server.call_args.args[0].agent_live_minutes, 180.0)
+
+    @unittest.skipUnless(server.HAS_UNIX_SOCKETS, "needs Unix sockets")
+    def test_serve_takes_permission_prompts_on_a_socket_next_to_the_store_and_removes_it_at_stop(self):
+        socket_path = self.store_path.resolve().with_name("permission.sock")
+        seen = []
+
+        def serve_forever(httpd):
+            """Look for the socket while serving, then stop."""
+            seen.append(stat.S_ISSOCK(socket_path.stat().st_mode))
+            raise KeyboardInterrupt
+
+        with mock.patch.object(server.UsageServer, "serve_forever", autospec=True, side_effect=serve_forever):
+            self.run_cli("serve", "--port", "0")
+        self.assertEqual(seen, [True])
+        self.assertFalse(socket_path.exists())
+
+    def test_serve_says_before_the_link_why_it_takes_no_permission_prompts_and_serves_anyway(self):
+        failure = server.PromptSocketError("this system has no Unix sockets, which the permission hook posts to")
+        with mock.patch.object(server, "make_server", wraps=server.make_server) as make_server:
+            with mock.patch.object(server, "open_prompt_socket", side_effect=failure):
+                with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
+                    code, out, err = self.run_cli("serve", "--port", "0")
+        self.assertEqual(code, 0)
+        self.assertIn("warning: the dashboard shows no permission prompts: this system has no Unix sockets", err)
+        self.assertIn("http://127.0.0.1:", out)
+        self.assertIn("no Unix sockets", make_server.call_args.args[0].prompts_unavailable)
 
     def test_serve_prints_the_link_with_its_token(self):
         with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):

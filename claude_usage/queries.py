@@ -5,6 +5,7 @@ import dataclasses
 import sqlite3
 import statistics
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import date
@@ -14,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from claude_usage import compact
+from claude_usage import permissions
 from claude_usage import pricing
 from claude_usage import transcripts
 from claude_usage import turns
@@ -74,6 +76,8 @@ TOP_GROWTH = 5                            # the biggest growth steps a transcrip
 WAITING_TOOLS = ("AskUserQuestion", "ExitPlanMode")
 # the tool a workflow's agent hands its result back with, which ends it: no reply follows its result
 RESULT_TOOL = "StructuredOutput"
+# how long before a call its permission prompt may be noted: the hook runs after Claude Code writes the call
+PROMPT_SLACK = timedelta(seconds=1)
 
 
 class UsageSum:
@@ -601,16 +605,17 @@ def sessions_used_in(store: Store, session_ids: list[str], since: date | None, u
 
 def live_sessions(store: Store, minutes: float, prices: pricing.Prices, now: float | None = None,
                   project: str | None = None, since: date | None = None, until: date | None = None,
-                  agent_minutes: float = 0) -> list[Row]:
+                  agent_minutes: float = 0, prompts: Sequence[permissions.Prompt] = ()) -> list[Row]:
     """Sessions with a transcript changed within `minutes` (by the mtime seen at the last scan), within
-    agent_minutes while an agent of theirs is at work (busy_agents), or waiting for the user's answer (waiting_calls:
-    Claude Code writes nothing while it waits), most recent first, with their totals so far, the main thread's last
-    context and output, the subagents active in the window or at work, and what they wait for.
+    agent_minutes while an agent of theirs is at work (busy_agents), or waiting for the user (waiting_calls: a
+    question, a plan, or a call one of the permission prompts asks about; Claude Code writes nothing while it
+    waits), most recent first, with their totals so far, the main thread's last context and output, the subagents
+    active in the window or at work, and what they wait for.
     Most recent by the last activity (activity_time), like the sessions list, then by the mtime.
     With since or until, only those active from the local day since up to the local day until: with usage then, as
     the sessions list counts them, or else with their last activity then (a session without a reply yet)."""
     cutoff_ns = live_cutoff_ns(minutes, now)
-    waiting = waiting_calls(store, project)
+    waiting = waiting_calls(store, project, prompts)
     working = busy_agents(store, live_cutoff_ns(agent_minutes, now), project) if agent_minutes > 0 else {}
     changed = [row["session_id"] for row in store.connection.execute(
         "SELECT DISTINCT session_id FROM transcripts WHERE mtime_ns >= ? AND (? IS NULL OR slug = ?)",
@@ -681,23 +686,52 @@ def agent_at_work(store: Store, path: str) -> bool:
     return last is not None and last["tool"] != RESULT_TOOL and last["result_ts"] > last_reply
 
 
-def waiting_calls(store: Store, project: str | None = None) -> dict[str, Row]:
-    """Per session (of one project, if given), its oldest call of WAITING_TOOLS without a result, however long ago
-    it was asked, unless its transcript made an API call after it (the session moved on): its tool and when it was
-    asked. Claude Code waits for the user's answer to it. Checked 2026-09-29 (counts only): every one of 141 such
-    calls got its result (an error where declined), all in main threads, and none had an API call before it; the
-    records meanwhile were the results of the calls beside it, hook results and queued prompts, and in 4 of them a
-    background subagent's calls, none of which ends the wait."""
-    marks = ", ".join("?" for _ in WAITING_TOOLS)
+def waiting_calls(store: Store, project: str | None = None,
+                  prompts: Sequence[permissions.Prompt] = ()) -> dict[str, Row]:
+    """Per session (of one project, if given), the oldest of its calls that wait for the user, however long ago they
+    were asked, unless their transcript made an API call after them (the session moved on): a call of WAITING_TOOLS
+    without a result (kind question: a question or a plan to approve), or another call without one that a
+    permission prompt asks about (kind permission, prompt_for). Its tool, since when it waits, and the subagent's
+    type where it isn't the main thread's. Checked 2026-09-29 (counts only): every one of 141 questions and plans
+    got its result (an error where declined), all in main threads, and none had an API call before it; the records
+    meanwhile were the results of the calls beside it, hook results and queued prompts, and in 4 of them a background
+    subagent's calls, none of which ends the wait."""
+    asked: dict[tuple[str, str | None], list[permissions.Prompt]] = {}
+    for prompt in prompts:
+        if prompt.tool not in WAITING_TOOLS:                    # a question's dialog fires the hook too
+            asked.setdefault((prompt.session_id, prompt.agent_id), []).append(prompt)
     waiting: dict[str, Row] = {}
-    for row in store.connection.execute(
-            f"SELECT t.session_id AS session_id, c.tool AS tool, c.call_ts AS since FROM tool_calls c "
-            f"JOIN transcripts t ON t.path = c.path WHERE c.tool IN ({marks}) AND c.result_chars IS NULL "
-            f"AND c.call_ts IS NOT NULL AND (? IS NULL OR t.slug = ?) "
-            f"AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.path = c.path AND m.ts > c.call_ts) "
-            f"ORDER BY c.call_ts", (*WAITING_TOOLS, project_slug(project), project_slug(project))):
-        waiting.setdefault(row["session_id"], {"tool": row["tool"], "since": row["since"]})
+    for call in store.connection.execute(
+            "SELECT t.session_id AS session_id, t.agent_id AS agent_id, t.agent_type AS agent_type, c.path AS path, "
+            "c.tool AS tool, c.call_ts AS call_ts FROM tool_calls c JOIN transcripts t ON t.path = c.path "
+            "WHERE c.result_chars IS NULL AND c.call_ts IS NOT NULL AND (? IS NULL OR t.slug = ?) "
+            "AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.path = c.path AND m.ts > c.call_ts) "
+            "ORDER BY c.call_ts", (project_slug(project), project_slug(project))).fetchall():
+        if call["session_id"] in waiting:
+            continue
+        agent_type = call["agent_type"] if call["agent_id"] is not None else None
+        if call["tool"] in WAITING_TOOLS:
+            waiting[call["session_id"]] = {"kind": "question", "tool": call["tool"], "since": call["call_ts"],
+                                           "agent_type": agent_type}
+            continue
+        prompt = prompt_for(store, call, asked.get((call["session_id"], call["agent_id"]), []))
+        if prompt is not None:
+            waiting[call["session_id"]] = {"kind": "permission", "tool": call["tool"], "since": prompt.ts,
+                                           "agent_type": agent_type}
     return waiting
+
+
+def prompt_for(store: Store, call: sqlite3.Row, prompts: list[permissions.Prompt]) -> permissions.Prompt | None:
+    """The permission prompt of its transcript (session and agent) that asks about a call without a result: the
+    first for its tool from PROMPT_SLACK before the call (the hook runs after Claude Code writes it: 0.08 s in a
+    real one) up to the transcript's next call of that tool, which a later prompt asks about; None without one. Two
+    calls of one tool at once can't be told apart: the newer gets the prompt."""
+    later = store.connection.execute(
+        "SELECT MIN(call_ts) AS ts FROM tool_calls WHERE path = ? AND tool = ? AND call_ts > ?",
+        (call["path"], call["tool"], call["call_ts"])).fetchone()["ts"]
+    start = (datetime.fromisoformat(call["call_ts"]) - PROMPT_SLACK).isoformat(timespec="milliseconds")
+    return next((prompt for prompt in prompts
+                 if prompt.tool == call["tool"] and prompt.ts >= start and (later is None or prompt.ts < later)), None)
 
 
 def agent_detail(store: Store, row: sqlite3.Row, prices: pricing.Prices, settings: compact.CompactSettings,
