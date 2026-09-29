@@ -201,6 +201,11 @@ installed (`$XDG_DATA_HOME` and `$XDG_CONFIG_HOME` are respected). The transcrip
 `~/.claude/projects`, or from `$CLAUDE_CONFIG_DIR/projects` when that is set, as Claude Code does; a `projects_dir`
 in a config file wins over both. `--store` and `--projects-dir` override the config.
 
+`CLAUDE_CONFIG_DIR` counts only where the dashboard's own process has it. Set only for Claude Code (in an alias, your
+editor's settings or Claude Code's `settings.json`), neither `make start` nor cron sees it: set `projects_dir`
+instead. One projects folder is read; for a second config folder, keep a second store with `--projects-dir` and
+`--store`.
+
 ## Privacy
 The store keeps token counts, model names, tool names and result sizes, session titles and project paths. It never
 stores prompt text. While a transcript still exists, the drilldown reads its first prompt, and on request the whole
