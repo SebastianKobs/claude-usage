@@ -273,6 +273,28 @@ class ServeCommandTest(CliCase):
                 self.run_cli("serve", "--port", "0")
         self.assertEqual(printed_before_scan, [True])
 
+    def test_serve_warns_before_the_link_when_others_can_read_the_projects_folder(self):
+        printed_before_warning = []
+
+        def warnings(projects_dir):
+            """Note whether the link is out already: `make start` shows only what comes before it."""
+            printed_before_warning.append("Serving" in sys.stdout.getvalue())
+            return ["2 of 3 files below the projects folder can be read by other users"]
+
+        with mock.patch.object(cli.readers, "warnings", side_effect=warnings):
+            with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
+                _, _, err = self.run_cli("serve", "--port", "0")
+        self.assertEqual(printed_before_warning, [False])
+        self.assertIn("warning: 2 of 3 files below the projects folder can be read by other users\n", err)
+
+    def test_serve_starts_when_who_else_can_read_the_projects_folder_is_unknown(self):
+        with mock.patch.object(cli.readers, "warnings", side_effect=PermissionError("denied")):
+            with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
+                code, out, err = self.run_cli("serve", "--port", "0")
+        self.assertEqual(code, 0)
+        self.assertIn("Serving http://127.0.0.1:", out)
+        self.assertIn(f"warning: who else can read {self.projects.root} is unknown: denied\n", err)
+
     def test_serve_without_a_projects_folder_serves_the_history_and_says_why(self):
         self.run_cli("scan")
         shutil.rmtree(self.projects.root)

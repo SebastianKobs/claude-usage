@@ -18,6 +18,7 @@ from claude_usage import compact
 from claude_usage import config
 from claude_usage import pricing
 from claude_usage import queries
+from claude_usage import readers
 from claude_usage import report
 from claude_usage import scan
 from claude_usage import secret_paths
@@ -125,6 +126,13 @@ def run_serve(context: Context) -> int:
         httpd = server.make_server(app, HOST, port)
         previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
         try:
+            try:
+                start_warnings = readers.warnings(context.projects_dir)
+            except OSError as exc:         # the check only informs: the dashboard starts without it
+                start_warnings = [f"who else can read {context.projects_dir} is unknown: {exc}"]
+            # before the link: `make start` shows the warnings printed before it
+            for warning in start_warnings:
+                print(f"warning: {warning}", file=sys.stderr, flush=True)
             # before the first scan, which reads every file of a new store: `make start` waits for this line
             # the link carries this start's token, which the API asks for
             print(f"Serving http://{HOST}:{httpd.server_address[1]}/?{server.TOKEN_PARAMETER}={app.token}  "

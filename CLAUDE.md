@@ -64,6 +64,7 @@ claude_usage/
   turns.py                   growth per turn, cache rebuilds, the fixed overhead, the current-context gauge,
                              each compaction against keeping the context
   server.py                  loopback-only http.server + JSON API (a route table)
+  readers.py                 who besides you can read the projects folder: serve's warnings at start
   static/                    the page: vanilla JS, inline SVG, no external resources (three vendored libraries)
     dashboard.html           the markup only
     css/common.css           layout and components, for every theme
@@ -346,6 +347,17 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     either way, so the token leaves the address bar. The Cookie header is split by hand (`cookie_value`), since
     `http.cookies` stops at the first cookie it can't parse. `make start` writes its log, which shows the link,
     under umask 077.
+  - The token keeps other users out of the dashboard, not out of the files it reads. So before the link `serve`
+    warns on stderr (`readers.warnings`; `make start` shows what comes before its line) where files below the
+    projects folder can be read by other users, or some of it belongs to one (not you, not root), and names the fix.
+    - Readable goes by POSIX along the whole way from / down (`readers.can_read`): anyone else by the bits for
+      others, a member of a shared group by the group's wherever an entry has that group. A group is shared unless
+      nobody else is in it (`group_shared`: its members and the accounts whose primary group it is), so a private
+      group opens nothing. Checked 2026-09-29 (counts only): Claude Code keeps `~/.claude` 700, while its meta files
+      and tool results are 644, so the files' modes alone would warn about what nobody else can reach.
+    - On a Windows drive (WSL's drvfs without `metadata`, found in /proc/self/mounts: `permissionless_mount`) chmod
+      does nothing, so the fix is a mount option. A heuristic: ACLs, hard links elsewhere and the names in an open
+      folder aren't counted.
   - The page is served with a strict CSP: no inline scripts or stylesheets, only style attributes. JSON is
     `no-store`.
   - Only files under `static/css` and `static/js` are served, a list fixed at start: a new one needs a restart.

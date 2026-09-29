@@ -36,6 +36,7 @@ start: ## start the dashboard in the background (PORT=, LIVE_MINUTES=)
 	done
 	@if $(ALIVE) && grep -q "^Serving" $(LOG_FILE); then \
 		echo "$$(grep '^Serving' $(LOG_FILE) | sed 's/  (Ctrl+C to stop)//')  (pid $$(cat $(PID_FILE)), log $(LOG_FILE))"; \
+		sed -n '/^Serving/q; /^warning: /p' $(LOG_FILE); \
 	else \
 		if $(ALIVE); then kill $$(cat $(PID_FILE)); fi; \
 		echo "failed to start:"; cat $(LOG_FILE); rm -f $(PID_FILE); exit 1; \

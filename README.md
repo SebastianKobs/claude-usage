@@ -221,6 +221,12 @@ token of this start: the link the dashboard prints carries it, and opening the l
 and its scripts hold no data and load without it. The token lives only in the server's memory, your browser's
 cookie and `make start`'s log, which is yours alone (mode 600).
 
+The token keeps other users out of the dashboard, not out of the files it reads. So at start the dashboard warns (in
+the terminal, and in `make start`'s output) when other users can read files in the projects folder, or some of them
+belong to another user, and names the fix: `chmod 700` on the folder, or on a Windows drive under WSL, where chmod
+does nothing, the mount option. Claude Code keeps its own folder yours alone, so by default there is nothing to warn
+about.
+
 The store holds no prompts, but titles and project paths: it, its WAL files and its backups are yours alone (mode
 600, whatever your umask), and a store from an older version is closed to others the next time it is opened. A new
 folder for it is yours alone too (700); an existing one keeps its mode.
