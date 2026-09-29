@@ -78,6 +78,7 @@ class CallFact:
     input_cost: float | None            # its input at the output price; None unpriced
     current: bool = False               # in the transcript's last stretch, since its last compaction
     reread: float | None = None         # what each later call pays to read it again; None unpriced
+    interpreter: str | None = None      # an inline script's interpreter, else None
 
     @property
     def chars(self) -> int:
@@ -102,9 +103,11 @@ class Exploration:
 
 @dataclass(frozen=True)
 class ToolKindRow:
-    """A tool's calls, or a Bash kind's (kind set), in a transcript: counts, sizes and costs."""
+    """A tool's calls, a Bash kind's (kind set) or an inline script interpreter's (interpreter set too), in a
+    transcript: counts, sizes and costs."""
     tool: str
     kind: str | None
+    interpreter: str | None
     calls: int
     errors: int
     result_chars: int
@@ -155,33 +158,39 @@ def program_name(word: str) -> str:
 
 
 def command_kind(command: str) -> str:
+    """What a Bash command does (one of KINDS), as command_class tells it."""
+    return command_class(command)[0]
+
+
+def command_class(command: str) -> tuple[str, str | None]:
     """What a Bash command does (one of KINDS), by its first program past setup (cd, export) and wrappers: an edit
     in place anywhere (sed -i, perl -i), a file written (a heredoc or echo, printf or cat redirected into one, tee),
     an inline script (an interpreter fed code by a heredoc or -c/-e/-r), git's searches, then searching, viewing
-    and listing programs; everything else runs a program."""
+    and listing programs; everything else runs a program. With it an inline script's interpreter, named without
+    its path or version (python3.12 is python), else None."""
     head = command_head(command)
     commands = [words for words in (program_words(part) for part in SEPARATORS.split(head)) if words]
     if any(program_name(words[0]) in IN_PLACE_PROGRAMS and any(IN_PLACE_FLAG.fullmatch(word) for word in words[1:])
            for words in commands):
-        return "edit_in_place"
+        return "edit_in_place", None
     commands = [words for words in commands if program_name(words[0]) not in SETUP_PROGRAMS]
     if not commands:
-        return "run"
+        return "run", None
     words = commands[0]
     program = program_name(words[0])
     redirected = any(target != "/dev/null" for target in REDIRECT.findall(head))
     if program == "tee" or (program in WRITE_PROGRAMS
                             and (redirected or any(program_name(other[0]) == "tee" for other in commands[1:]))):
-        return "write_file"
-    if VERSION_SUFFIX.sub("", program) in INTERPRETERS and ("<<" in head or (len(words) > 1
-                                                                          and words[1].lower() in INLINE_FLAGS)):
-        return "inline_script"
+        return "write_file", None
+    interpreter = VERSION_SUFFIX.sub("", program)
+    if interpreter in INTERPRETERS and ("<<" in head or (len(words) > 1 and words[1].lower() in INLINE_FLAGS)):
+        return "inline_script", interpreter
     if program == "git":
-        return "search" if git_subcommand(words[1:]) in GIT_SEARCHES else "git"
+        return ("search" if git_subcommand(words[1:]) in GIT_SEARCHES else "git"), None
     for kind, programs in (("search", SEARCH_PROGRAMS), ("view", VIEW_PROGRAMS), ("list", LIST_PROGRAMS)):
         if program in programs:
-            return kind
-    return "run"
+            return kind, None
+    return "run", None
 
 
 def git_subcommand(words: list[str]) -> str | None:
@@ -198,12 +207,13 @@ def git_subcommand(words: list[str]) -> str | None:
     return None
 
 
-def call_kind(name: str, tool_input: dict[str, Any]) -> str | None:
-    """A Bash call's command kind; None for any other tool."""
+def call_class(name: str, tool_input: dict[str, Any]) -> tuple[str | None, str | None]:
+    """A Bash call's command kind and inline script interpreter (command_class); None and None for any other
+    tool."""
     if name != BASH:
-        return None
+        return None, None
     command = tool_input.get("command")
-    return command_kind(command if isinstance(command, str) else "")
+    return command_class(command if isinstance(command, str) else "")
 
 
 # --- one transcript ----------------------------------------------------------------------------------------------
@@ -215,6 +225,7 @@ class PendingCall:
     kind: str | None
     input_chars: int
     message_id: str
+    interpreter: str | None
 
 
 def read_calls(path: Path, prices: pricing.Prices) -> list[CallFact]:
@@ -246,8 +257,10 @@ def read_calls(path: Path, prices: pricing.Prices) -> list[CallFact]:
                 if block.get("type") != "tool_use" or tool_use_id is None or name is None or tool_use_id in calls:
                     continue
                 tool_input = block.get("input") if isinstance(block.get("input"), dict) else {}
-                calls[tool_use_id] = PendingCall(transcripts.display_name(name), call_kind(name, tool_input),
-                                                 len(json.dumps(tool_input, ensure_ascii=False)), message_id)
+                kind, interpreter = call_class(name, tool_input)
+                calls[tool_use_id] = PendingCall(transcripts.display_name(name), kind,
+                                                 len(json.dumps(tool_input, ensure_ascii=False)), message_id,
+                                                 interpreter)
         elif kind == "user":
             for block in transcripts.content_blocks(record):
                 tool_use_id = transcripts.text_or_none(block.get("tool_use_id"))
@@ -272,7 +285,7 @@ def read_calls(path: Path, prices: pricing.Prices) -> list[CallFact]:
             input_cost = call.input_chars / CHARS_PER_TOKEN * rates.output
             reread = tokens * rates.read
         facts.append(CallFact(call.tool, call.kind, call.input_chars, result_chars, error, calls_after, carried,
-                              input_cost, message_stretch == current_stretch, reread))
+                              input_cost, message_stretch == current_stretch, reread, call.interpreter))
     return facts
 
 
@@ -295,13 +308,14 @@ def priced_sum(values: Iterable[float | None]) -> float | None:
     return sum(priced) if priced else None
 
 
-def tool_row(tool: str, kind: str | None, facts: list[CallFact]) -> ToolKindRow:
-    """One row over the calls of a tool or a Bash kind."""
+def tool_row(tool: str, kind: str | None, facts: list[CallFact], interpreter: str | None = None) -> ToolKindRow:
+    """One row over the calls of a tool, a Bash kind or an inline script interpreter."""
     sizes = [fact.result_chars for fact in facts if fact.result_chars is not None]
     result_median = median_or_none(sizes)
     input_median = median_or_none([fact.input_chars for fact in facts])
-    return ToolKindRow(tool=tool, kind=kind, calls=len(facts), errors=sum(fact.error for fact in facts),
-                       result_chars=sum(sizes), result_median=None if result_median is None else round(result_median),
+    return ToolKindRow(tool=tool, kind=kind, interpreter=interpreter, calls=len(facts),
+                       errors=sum(fact.error for fact in facts), result_chars=sum(sizes),
+                       result_median=None if result_median is None else round(result_median),
                        result_p90=nearest_rank(sizes, 0.9),
                        input_median=None if input_median is None else round(input_median),
                        calls_after_median=median_or_none([fact.calls_after for fact in facts]),
@@ -318,13 +332,18 @@ def grouped(facts: list[CallFact], key: Callable[[CallFact], Any]) -> list[tuple
 
 
 def tool_rows(facts: list[CallFact]) -> list[ToolKindRow]:
-    """One row per tool, the most called first; Bash's is followed by one per command kind."""
+    """One row per tool, the most called first; Bash's is followed by one per command kind, the inline scripts'
+    by one per interpreter."""
     rows = []
     for tool, tool_facts in grouped(facts, lambda fact: fact.tool):
         rows.append(tool_row(tool, None, tool_facts))
-        if tool == BASH:
-            rows += [tool_row(tool, kind, kind_facts)
-                     for kind, kind_facts in grouped(tool_facts, lambda fact: fact.kind)]
+        if tool != BASH:
+            continue
+        for kind, kind_facts in grouped(tool_facts, lambda fact: fact.kind):
+            rows.append(tool_row(tool, kind, kind_facts))
+            if kind == "inline_script":
+                rows += [tool_row(tool, kind, interpreter_facts, interpreter)
+                         for interpreter, interpreter_facts in grouped(kind_facts, lambda fact: fact.interpreter)]
     return rows
 
 

@@ -338,6 +338,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       wrappers and quoted text, an edit in place anywhere (`sed -i`, `perl -i`), else by the first program: a file
       written (a heredoc or `echo`/`printf`/`cat` redirected, `tee`), an inline script (any interpreter fed code by a
       heredoc or `-c`/`-e`/`-r`), git's searches, search, view, list, git, else run.
+    - An inline script also names its interpreter (`command_class`, without path or version: `python3.12` is
+      `python`), with one row each under the kind's, folded until the button in its label ("inline script
+      (N interpreters)") opens them.
     - Checked 2026-09-29 on real transcripts (counts only): moving between Read/Edit/Write and Bash saves nothing
       measurable (median results 3,066 for a whole-file Read against 6,600 for `cat` and 2,905 for `sed -n`; Edit
       input 707 characters against 674 for `sed -i`; heredocs fail 5.6 % against Write's 0.8 %). What costs is what
@@ -382,8 +385,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     summary, session, scan), and a response only renders if it answers the newest request.
   - An open session polls too: every 5 s while it is `live` (a transcript changed within `live_minutes`), else
     every 60 s, which notices a resumed session. A changed one is drawn in place (`renderDrilldown(detail, true)`):
-    the conversation's nodes move into the new view, and the table view, the workflow runs shown, focus and the
-    element at the top of the window are kept. A conversation shown is read again and drawn only if it changed,
+    the conversation's nodes move into the new view, and the table view, the folds open (a workflow run's agents,
+    an inline script's interpreters: `data-fold`), focus and the element at the top of the window are kept. A conversation shown is read again and drawn only if it changed,
     keeping its open entries (by time, kind and position) and, once scrolled into, the entry at the top. It reads
     the transcript itself, so a reply the scan hasn't reached yet may show plain xhigh until the next change.
   - The range buttons stop at `retention_days`: the summary cuts a longer `days` to it and returns

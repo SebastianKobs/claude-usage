@@ -100,17 +100,18 @@ function toolsAndChat(transcript, tools, chat) {
 }
 
 // What a refresh keeps: the conversation's nodes as they are (moved into the new view, so a loaded conversation
-// and its picker stay), the table view and the workflow runs shown, focus, and the element at the top of the window
+// and its picker stay), the table view and the folds open (workflow runs, interpreters), focus, and the element at
+// the top of the window
 function keptView(panel) {
   const active = panel.contains(document.activeElement) ? document.activeElement : null;
   const anchor = scrollAnchor([...panel.children]);
   return {
     chat: [document.getElementById("chat-section")],
     table: !document.getElementById("context-table").hidden,
-    runs: new Set([...panel.querySelectorAll("[data-run][aria-expanded='true']")].map(node => node.dataset.run)),
+    folds: new Set([...panel.querySelectorAll("[data-fold][aria-expanded='true']")].map(node => node.dataset.fold)),
     active,
     activeId: active && active.id,
-    activeRun: active && active.dataset.run,
+    activeFold: active && active.dataset.fold,
     activeIndex: active ? [...panel.querySelectorAll(FOCUSABLE)].indexOf(active) : -1,
     anchor,
     anchorIndex: anchor ? [...panel.children].indexOf(anchor.node) : -1,
@@ -122,17 +123,17 @@ function restoreView(panel, kept) {
     document.getElementById("context-table").hidden = false;
     document.getElementById("context-table-toggle").setAttribute("aria-pressed", "true");
   }
-  for (const toggle of panel.querySelectorAll("[data-run]")) if (kept.runs.has(toggle.dataset.run)) toggle.click();
+  for (const toggle of panel.querySelectorAll("[data-fold]")) if (kept.folds.has(toggle.dataset.fold)) toggle.click();
 }
 
-// the same element where it still exists (in the conversation), else by id, by workflow run, or by position
+// the same element where it still exists (in the conversation), else by id, by fold, or by position
 function restoreFocusAndScroll(panel, kept) {
   const anchored = kept.anchor && kept.anchor.node.isConnected ? kept.anchor.node : panel.children[kept.anchorIndex];
   keepScroll(kept.anchor, anchored);
   if (!kept.active) return;
   const target = kept.active.isConnected ? kept.active
     : (kept.activeId && document.getElementById(kept.activeId))
-      || (kept.activeRun && panel.querySelector(`[data-run="${CSS.escape(kept.activeRun)}"]`))
+      || (kept.activeFold && panel.querySelector(`[data-fold="${CSS.escape(kept.activeFold)}"]`))
       || panel.querySelectorAll(FOCUSABLE)[kept.activeIndex] || document.getElementById("drilldown-title");
   target.focus({preventScroll: true});
 }
@@ -142,18 +143,21 @@ function restoreFocusAndScroll(panel, kept) {
 const TOOL_KINDS = {
   search: "search (grep, find, …)", view: "view (cat, head, sed -n, …)", list: "list (ls, tree, …)",
   edit_in_place: "edit in place (sed -i, …)", write_file: "write a file (heredoc, >)",
-  inline_script: "inline script (any interpreter)", git: "git", run: "run a program",
+  inline_script: "inline script", git: "git", run: "run a program",
 };
 
 // The Tools table's rows, agent by agent: from the transcript (tool_kinds) each tool with its sizes and costs, Bash
-// followed by a sub-row per command kind; once the transcript is gone the stored calls and characters, the rest
-// unknown (null)
+// followed by a sub-row per command kind, the inline scripts by one per interpreter, which share the agent's fold;
+// once the transcript is gone the stored calls and characters, the rest unknown (null)
 function toolTableRows(agents) {
   return agents.flatMap(agent => agent.tool_kinds
-    ? agent.tool_kinds.map(row => ({...row, agent: agent.agent_type, sub: row.kind !== null}))
-    : agent.tools.map(tool => ({agent: agent.agent_type, tool: tool.tool, kind: null, sub: false, calls: tool.calls,
-                                errors: null, result_chars: tool.result_chars, result_median: null, result_p90: null,
-                                input_median: null, calls_after_median: null, carried: null, input_cost: null})));
+    ? agent.tool_kinds.map(row => ({
+      ...row, agent: agent.agent_type, sub: row.kind !== null,
+      fold: row.kind === "inline_script" ? `interpreters:${agent.agent_id ?? ""}` : null}))
+    : agent.tools.map(tool => ({agent: agent.agent_type, tool: tool.tool, kind: null, interpreter: null, fold: null,
+                                sub: false, calls: tool.calls, errors: null, result_chars: tool.result_chars,
+                                result_median: null, result_p90: null, input_median: null, calls_after_median: null,
+                                carried: null, input_cost: null})));
 }
 
 function toolsTable(agents) {
@@ -168,17 +172,42 @@ function toolsTable(agents) {
                            "compaction"),
     heading("~Carried", "what the later calls paid to have its input and result in their context"),
     heading("~Input cost", "its input at the output price"));
-  const body = rows.map((row, index) => el("tr", {class: row.sub ? "sub-row"
-                                                         : rows[index + 1]?.sub ? "group-row" : null},
-    el("td", {text: row.sub ? "" : row.agent}),
-    el("td", {}, row.sub ? el("span", {class: "tool-kind", text: TOOL_KINDS[row.kind] || row.kind}) : row.tool),
-    el("td", {class: "num", text: whole(row.calls)}), el("td", {class: "num", text: whole(row.errors)}),
-    el("td", {class: "num", text: compact(row.result_chars)}),
-    el("td", {class: "num", text: compact(row.result_median)}),
-    el("td", {class: "num", text: compact(row.result_p90)}), el("td", {class: "num", text: compact(row.input_median)}),
-    el("td", {class: "num", text: whole(row.calls_after_median)}),
-    el("td", {class: "num", text: money(row.carried)}), el("td", {class: "num", text: money(row.input_cost)})));
+  const folds = new Map();                                // an inline script's name and its interpreters' rows
+  const body = rows.map((row, index) => {
+    const name = row.interpreter ? el("span", {class: "tool-interpreter", text: row.interpreter})
+      : row.sub ? el("span", {class: "tool-kind", text: TOOL_KINDS[row.kind] || row.kind}) : row.tool;
+    const tr = el("tr", {class: row.sub ? "sub-row" : rows[index + 1]?.sub ? "group-row" : null},
+      el("td", {text: row.sub ? "" : row.agent}), el("td", {}, name),
+      el("td", {class: "num", text: whole(row.calls)}), el("td", {class: "num", text: whole(row.errors)}),
+      el("td", {class: "num", text: compact(row.result_chars)}),
+      el("td", {class: "num", text: compact(row.result_median)}),
+      el("td", {class: "num", text: compact(row.result_p90)}),
+      el("td", {class: "num", text: compact(row.input_median)}),
+      el("td", {class: "num", text: whole(row.calls_after_median)}),
+      el("td", {class: "num", text: money(row.carried)}), el("td", {class: "num", text: money(row.input_cost)}));
+    if (row.interpreter) folds.get(row.fold).members.push(tr);
+    else if (row.fold) folds.set(row.fold, {name, members: []});
+    return tr;
+  });
+  for (const [fold, {name, members}] of folds) {
+    if (!members.length) continue;
+    const count = `${whole(members.length)} interpreter${members.length === 1 ? "" : "s"}`;
+    name.append(" (", foldToggle(fold, members, count), ")");
+  }
   return el("table", {}, el("thead", {}, head), el("tbody", {}, ...body));
+}
+
+// A button that shows or hides these rows, hidden until then; a refresh opens it again by its data-fold
+function foldToggle(fold, members, text) {
+  for (const row of members) row.hidden = true;
+  const toggle = el("button", {type: "button", class: "link-button", "aria-expanded": "false", "data-fold": fold,
+                               text});
+  toggle.addEventListener("click", () => {
+    const open = toggle.getAttribute("aria-expanded") !== "true";
+    toggle.setAttribute("aria-expanded", String(open));
+    for (const row of members) row.hidden = !open;
+  });
+  return toggle;
 }
 
 // how the costs are estimated, while a transcript tells them
@@ -227,14 +256,7 @@ function workflowRows(agents, searches) {
   const costs = agents.map(agent => agent.cost).filter(cost => cost !== null);
   const name = agents[0].workflow_name || agents[0].workflow_run;
   const members = agents.map(agent => agentRow(agent, searches, "sub-row workflow-member"));
-  for (const row of members) row.hidden = true;
-  const toggle = el("button", {type: "button", class: "link-button", "aria-expanded": "false",
-                               "data-run": agents[0].workflow_run, text: `${whole(agents.length)} agents`});
-  toggle.addEventListener("click", () => {
-    const open = toggle.getAttribute("aria-expanded") !== "true";
-    toggle.setAttribute("aria-expanded", String(open));
-    for (const row of members) row.hidden = !open;
-  });
+  const toggle = foldToggle(agents[0].workflow_run, members, `${whole(agents.length)} agents`);
   const models = [...new Set(agents.flatMap(agent => agent.models))];
   const head = el("tr", {class: "group-row"},
     el("td", {}, el("strong", {text: `workflow · ${name}`}), el("span", {class: "sub"}, toggle)),

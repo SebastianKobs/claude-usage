@@ -46,6 +46,20 @@ class CommandKindTest(unittest.TestCase):
                                            "bash -c 'echo hi'", "perl -e 'print 1'", "Rscript -e 'print(1)'",
                                            "cd app && node <<'EOF'\nconsole.log(1)\nEOF"])
 
+    def test_an_inline_scripts_interpreter_is_named_without_its_version_or_path(self):
+        cases = {"python3.12 - <<'EOF'\nprint(1)\nEOF": "python", "python -c 'import sys'": "python",
+                 "/usr/bin/php -r 'echo 1;'": "php", "cd app && node -e 'console.log(1)'": "node",
+                 "Rscript -e 'print(1)'": "rscript", "bash -c 'echo hi'": "bash"}
+        for command, interpreter in cases.items():
+            with self.subTest(command=command):
+                self.assertEqual(tool_kinds.command_class(command), ("inline_script", interpreter))
+
+    def test_other_kinds_name_no_interpreter(self):
+        for command, kind in {"python3 manage.py migrate": "run", "grep -rn x .": "search",
+                              "cat > a.py <<'EOF'\nx\nEOF": "write_file"}.items():
+            with self.subTest(command=command):
+                self.assertEqual(tool_kinds.command_class(command), (kind, None))
+
     def test_scripts_run_from_a_file_are_runs(self):
         self.assertKinds("run", ["python3 manage.py migrate", "node server.js", "php artisan test", "bash build.sh"])
 
@@ -79,7 +93,8 @@ class TranscriptToolsTest(TempDirTestCase):
 
     def rows(self):
         """The rows by (tool, kind)."""
-        return {(row.tool, row.kind): row for row in tool_kinds.transcript_tools(self.main.path, PRICES).rows}
+        return {(row.tool, row.kind): row for row in tool_kinds.transcript_tools(self.main.path, PRICES).rows
+                if row.interpreter is None}
 
     def test_bash_calls_are_split_by_kind_under_their_total(self):
         self.call("m1", "t1", "Bash", {"command": "grep -rn x ."}, "a" * 100)
@@ -104,6 +119,18 @@ class TranscriptToolsTest(TempDirTestCase):
         self.call("m6", "t6", "Bash", {"command": "git diff"}, "x")
         order = [(row.tool, row.kind) for row in tool_kinds.transcript_tools(self.main.path, PRICES).rows]
         self.assertEqual(order, [("Bash", None), ("Bash", "git"), ("Bash", "list"), ("Read", None)])
+
+    def test_inline_scripts_split_by_interpreter_under_their_kind(self):
+        self.call("m1", "t1", "Bash", {"command": "node -e 'console.log(1)'"}, "x" * 10)
+        self.call("m2", "t2", "Bash", {"command": "python3 -c 'print(1)'"}, "x" * 20)
+        self.call("m3", "t3", "Bash", {"command": "python - <<'EOF'\nprint(1)\nEOF"}, "x" * 30)
+        self.call("m4", "t4", "Bash", {"command": "ls"}, "x")
+        rows = tool_kinds.transcript_tools(self.main.path, PRICES).rows
+        self.assertEqual([(row.tool, row.kind, row.interpreter, row.calls) for row in rows],
+                         [("Bash", None, None, 4), ("Bash", "inline_script", None, 3),
+                          ("Bash", "inline_script", "python", 2), ("Bash", "inline_script", "node", 1),
+                          ("Bash", "list", None, 1)])
+        self.assertEqual(rows[2].result_chars, 50)
 
     def test_errors_sizes_and_inputs(self):
         self.call("m1", "t1", "Edit", {"file_path": "a", "old_string": "x", "new_string": "y"}, "ok")
