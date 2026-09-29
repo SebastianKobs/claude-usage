@@ -205,7 +205,7 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 /* a model's row and its usage per effort level below it */
 .group-row td:first-child { font-weight: 600; }
 .sub-row td { color: var(--text-secondary); }
-.sub-row .effort, .sub-row .tool-kind { padding-left: 20px; }
+.sub-row .effort, .sub-row .tool-kind, .sub-row .window-model { padding-left: 20px; }
 .sub-row .tool-detail { display: block; padding-left: 40px; }
 .sub-row .tool-options { display: block; padding-left: 60px; }
 .sub-row .tool-detail.under-tool { padding-left: 20px; }

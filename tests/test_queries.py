@@ -5,6 +5,7 @@ import unittest
 from datetime import UTC
 from datetime import date
 from datetime import datetime
+from datetime import time as clock_time
 from datetime import timedelta
 
 from claude_usage import compact
@@ -193,6 +194,77 @@ class ApiErrorTest(StoreCase):
         fork.at(DAY_1).api_error("e1", resets_at=self.resets)
         self.scan()
         self.assertEqual(self.rows("SELECT path FROM api_errors WHERE record_id = 'e1'"), [(str(self.main.path),)])
+
+
+class LimitWindowTest(StoreCase):
+    """The 5-hour windows that hit a rate limit, each with what it used from its start up to the first hit."""
+
+    def setUp(self):
+        super().setUp()
+        self.resets = DAY_1 + timedelta(hours=5)
+        main = self.projects.session("s1", project="/home/dev/app")
+        main.at(DAY_1 - timedelta(minutes=1)).assistant("m0", [text_block("before")], usage(output=1_000))
+        main.at(DAY_1 + timedelta(hours=1)).assistant("m1", [text_block("a")],
+                                                      usage(new=100, cache_read=1_000, output=2_000))
+        main.at(DAY_1 + timedelta(hours=2)).assistant("m2", [text_block("b")], usage(output=500),
+                                                      model="claude-opus-5-5")
+        main.at(DAY_1 + timedelta(hours=3)).api_error("e1", resets_at=self.resets)
+        main.assistant("m3", [text_block("after")], usage(output=7_000))
+        main.at(DAY_1 + timedelta(hours=3, minutes=1)).api_error("e2", resets_at=self.resets)
+        main.at(DAY_1 + timedelta(hours=4)).api_error("e3", limit_type="seven_day", resets_at=DAY_3)
+        main.api_error("e4", error="server_error", status=500, limit_type=None)
+        other = self.projects.session("s2", project="/home/dev/other")
+        other.at(DAY_1 + timedelta(minutes=90)).assistant("o1", [text_block("c")], usage(output=300))
+        self.later_resets = DAY_3 + timedelta(hours=2)
+        main.at(DAY_3 - timedelta(minutes=30)).assistant("m4", [text_block("d")], usage(output=10))
+        main.at(DAY_3 + timedelta(hours=1)).api_error("e5", resets_at=self.later_resets)
+        self.scan()
+
+    def windows(self, since=None, **options):
+        """limit_windows as (start, first hit, reset, hits) tuples."""
+        return [(window["start"], window["first_hit"], window["resets_at"], window["hits"])
+                for window in queries.limit_windows(self.store, since, PRICES, **options)]
+
+    def test_one_window_per_reset_newest_first(self):
+        self.assertEqual(self.windows(), [
+            (scan.iso(DAY_3 - timedelta(hours=3)), scan.iso(DAY_3 + timedelta(hours=1)), scan.iso(self.later_resets),
+             1),
+            (scan.iso(DAY_1), scan.iso(DAY_1 + timedelta(hours=3)), scan.iso(self.resets), 2)])
+
+    def test_only_five_hour_limits_with_a_reset_have_a_window(self):
+        self.assertEqual({window["limit_type"] for window in queries.limit_windows(self.store, None, PRICES)},
+                         {"five_hour"})
+
+    def test_the_usage_from_the_start_up_to_the_first_hit(self):
+        used = queries.limit_windows(self.store, None, PRICES)[1]["used"]
+        self.assertEqual((used["turns"], used["output"], used["new_input"], used["cache_read"]),
+                         (3, 2_000 + 500 + 300, 100, 1_000))
+        self.assertAlmostEqual(used["cost"], (100 * 2.0 + 1_000 * 0.2 + 2_300 * 10.0) / MILLION + 500 * 25.0 / MILLION)
+
+    def test_the_usage_by_model(self):
+        models = queries.limit_windows(self.store, None, PRICES)[1]["models"]
+        self.assertEqual([(row["model"], row["turns"], row["output"]) for row in models],
+                         [("claude-opus-5-5", 1, 500), ("claude-sonnet-5", 2, 2_300)])
+
+    def test_a_project_counts_only_its_hits_and_usage(self):
+        window = queries.limit_windows(self.store, None, PRICES, project="/home/dev/app")[1]
+        self.assertEqual(window["used"]["output"], 2_500)
+        self.assertEqual(queries.limit_windows(self.store, None, PRICES, project="/home/dev/other"), [])
+
+    def test_since_and_until_pick_the_windows_hit_in_the_range(self):
+        self.assertEqual([window[2] for window in self.windows(until=DAY_1.date())], [scan.iso(self.resets)])
+        self.assertEqual([window[2] for window in self.windows(DAY_3.date())], [scan.iso(self.later_resets)])
+
+    def test_a_window_across_midnight_keeps_its_first_hit_in_a_range_after_it(self):
+        start = datetime.combine(date(2026, 9, 5), clock_time(22, 0)).astimezone()
+        session = self.projects.session("s3", project="/home/dev/app")
+        session.at((start + timedelta(hours=1)).astimezone(UTC)).api_error("n1", resets_at=start + timedelta(hours=5))
+        session.at((start + timedelta(hours=2, minutes=30)).astimezone(UTC)).api_error(
+            "n2", resets_at=start + timedelta(hours=5))
+        self.scan()
+        self.assertEqual(self.windows(date(2026, 9, 6)),
+                         [(scan.iso(start), scan.iso(start + timedelta(hours=1)), scan.iso(start + timedelta(hours=5)),
+                           2)])
 
 
 class FirstStoredDayTest(StoreCase):

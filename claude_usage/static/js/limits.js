@@ -1,4 +1,4 @@
-// Rate limits: hits per day (or hour), and the latest failed API calls.
+// Rate limits: hits per day (or hour), the 5-hour windows that hit one, and the latest failed API calls.
 "use strict";
 
 // --- rate limits: one series of columns in the status color, with an icon and a label beside it --------------
@@ -48,6 +48,7 @@ function renderLimits(summary) {
     el("span", {}, el("span", {class: "swatch", style: `background:${LIMIT_COLOR}`}),
        `${LIMIT_ICON} Rate-limit hit`));
   renderLimitsTable(buckets, at);
+  renderLimitWindows(summary.api_errors.windows);
   renderLimitEvents(summary.api_errors.events);
   if (!limits.some(Boolean) && !others.some(Boolean)) {
     container.replaceChildren(el("div", {class: "empty", text: "No rate limits or API errors in this range."}));
@@ -109,6 +110,48 @@ function renderLimitsTable(buckets, at) {
     [headCell(buckets.heading), headCell("Rate-limit hits", true), headCell("Other API errors", true)],
     buckets.keys.slice().reverse().map(key => el("tr", {}, cell(buckets.short(key)),
       cell(whole(at(key).limits), true), cell(whole(at(key).other), true))));
+}
+
+// --- the 5-hour windows that hit a limit: what each used up to its first hit, its models under it ------------
+
+function windowHitAfter(window) { return Date.parse(window.first_hit) - Date.parse(window.start); }
+
+// "Sep 28, 10:00 – 15:00", the reset's day only where it isn't the start's
+function windowSpan(window) {
+  const start = new Date(window.start);
+  const end = new Date(window.resets_at);
+  const endText = start.toDateString() === end.toDateString()
+    ? end.toLocaleTimeString(undefined, {hour: "2-digit", minute: "2-digit"}) : when(window.resets_at);
+  return `${when(window.start)} – ${endText}`;
+}
+
+// a usage row with the window's own cells after its name
+function limitWindowRow(usage, name, windowCells, className) {
+  const row = usageRow(usage, name, className);
+  row.firstElementChild.after(...windowCells);
+  return row;
+}
+
+function limitWindowsTable(windows) {
+  if (!windows.length) return el("div", {class: "empty", text: "No 5-hour window hit its limit in this range."});
+  const head = el("tr", {}, headCell("Window"), headCell("Hit after", true), headCell("Hits", true),
+                  headCell("Turns", true), headCell("Input", true), headCell("Cache read %", true),
+                  headCell("Output", true), headCell("Cost", true));
+  const body = [];
+  for (const window of windows) {
+    body.push(limitWindowRow(window.used, windowSpan(window),
+      [cell(duration(windowHitAfter(window)), true), cell(whole(window.hits), true)],
+      window.models.length ? "group-row" : null));
+    for (const model of window.models.slice().sort(byCost)) {
+      body.push(limitWindowRow(model, el("span", {class: "window-model", text: model.model}),
+        [cell(""), cell("")], "sub-row"));
+    }
+  }
+  return el("table", {}, el("thead", {}, head), el("tbody", {}, ...body));
+}
+
+function renderLimitWindows(windows) {
+  document.getElementById("limit-windows").replaceChildren(paged("limit-windows", limitWindowsTable(windows)));
 }
 
 function renderLimitEvents(events) {

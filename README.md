@@ -16,6 +16,10 @@ sessions list holds every session of the range: pick a project, or type words fr
 session id, to narrow it. The live sessions follow the range too: on an earlier day they are the running sessions
 that were active on it.
 
+Rate limits show per day, and each 5-hour window that hit one shows what it used from its start (5 hours before
+its reset) up to the first hit, by model: a lower bound on what a window holds, since the limit also counts what
+you use elsewhere.
+
 Python ≥ 3.12, standard library only. Run it from the checkout as it is, or install it with `pip install .` to get
 a `claude-usage` command.
 

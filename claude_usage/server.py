@@ -288,6 +288,7 @@ class UsageApp:
                 "hour": (queries.api_errors_by(self.store, "hour", since, project=self.project, until=until)
                          if single_day else []),
                 "events": queries.api_error_events(self.store, since, project=self.project, until=until),
+                "windows": queries.limit_windows(self.store, since, self.prices, project=self.project, until=until),
             }
             context = queries.context_stats(self.store, since, project=self.project, until=until)
             runtime = queries.runtime_totals(self.store, since, self.prices, project=self.project, until=until)

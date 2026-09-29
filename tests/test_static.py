@@ -578,7 +578,7 @@ class PagingTest(unittest.TestCase):
         self.assertRegex(script, r"const PAGE_SIZES = \[10, 25, 50\];")
 
     def test_every_table_is_paged(self):
-        sites = {"tables.js": 7, "limits.js": 1, "drilldown.js": 9, "chartkit.js": 1, "figures.js": 1}
+        sites = {"tables.js": 7, "limits.js": 2, "drilldown.js": 9, "chartkit.js": 1, "figures.js": 1}
         for script, count in sites.items():
             with self.subTest(script=script):
                 self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)
@@ -776,6 +776,20 @@ class SessionPollTest(unittest.TestCase):
         body = self.function_body("refreshSession")
         self.assertIn("renderDrilldown(session, true)", body)
         self.assertIn("refreshChat(session.session_id)", body)
+
+
+class LimitWindowTest(unittest.TestCase):
+    WINDOW = {"start": "2026-09-01T12:00:00.000+00:00", "first_hit": "2026-09-01T15:12:00.000+00:00",
+              "resets_at": "2026-09-01T17:00:00.000+00:00"}
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_window_is_hit_after_the_time_from_its_start(self):
+        self.assertEqual(run_function("limits.js", "windowHitAfter", self.WINDOW), (3 * 60 + 12) * 60 * 1000)
+
+    def test_the_windows_come_between_the_chart_and_the_latest_errors(self):
+        page = dashboard()
+        self.assertLess(page.index('id="limits-table"'), page.index('id="limit-windows"'))
+        self.assertLess(page.index('id="limit-windows"'), page.index('id="limit-events"'))
 
 
 class StyleTest(unittest.TestCase):

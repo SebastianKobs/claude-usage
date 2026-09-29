@@ -425,6 +425,12 @@ class ApiTest(ServerCase):
         self.assertEqual(errors["hour"], [])
         self.assertEqual([(event["record_id"], event["session_id"]) for event in errors["events"]], [("e1", "s1")])
 
+    def test_summary_has_the_windows_that_hit_a_rate_limit_with_what_they_used(self):
+        self.main.api_error("e1", resets_at=datetime.now(UTC) + timedelta(hours=1))
+        _, payload = self.get_json("/api/summary?days=7")
+        self.assertEqual([(window["hits"], window["used"]["output"]) for window in payload["api_errors"]["windows"]],
+                         [(1, 50 + 5 + 7)])
+
     def test_summary_of_one_day_has_api_errors_per_hour(self):
         self.main.api_error("e1")
         _, payload = self.get_json("/api/summary?days=1")

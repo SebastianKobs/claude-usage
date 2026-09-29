@@ -58,6 +58,12 @@ ERROR_GROUPS = {
     # ts is UTC; SQLite's localtime uses the same zone as local_day, as in GROUPS
     "hour": ("strftime('%Y-%m-%dT%H', e.ts, 'localtime')", "hour"),
 }
+# a rate limit's quota -> how long its window runs up to its resets_at, which so fixes its start; only these quotas
+# get a window's usage
+LIMIT_WINDOWS = {"five_hour": timedelta(hours=5)}
+# a local day is at most this far from the UTC date of the same moment (zones run from -12 to +14 hours), so a UTC
+# time span widened by it covers the local days its usage is filed under
+ZONE_MARGIN = timedelta(days=1)
 NO_LIMIT = -1                             # SQLite's LIMIT for all rows
 ID_BATCH = 500                            # ids per IN list: SQLite before 3.32 allows 999 variables
 # effort levels from least to most, ultracode (xhigh with its workflows) last; others sort after them by name, as on
@@ -256,6 +262,53 @@ def api_error_events(store: Store, since: date | None, project: str | None = Non
         f"FROM api_errors e JOIN transcripts t ON t.path = e.path WHERE {condition} "
         "ORDER BY e.ts DESC, e.rowid DESC LIMIT :limit", {**parameters, "limit": limit})
     return [dict(row) for row in rows]
+
+
+def stored_text(moment: datetime) -> str:
+    """A datetime as the store writes timestamps: ISO UTC with milliseconds, so text order is time order."""
+    return moment.astimezone(UTC).isoformat(timespec="milliseconds")
+
+
+def usage_between(store: Store, start: datetime, end: datetime, prices: pricing.Prices,
+                  project: str | None = None) -> list[Row]:
+    """Per model, by name, the usage (messages and background calls, at the time Claude Code noted them) from start
+    up to end, end excluded, of one project path if given."""
+    condition, parameters = range_filter(USAGE_COLUMNS, (start - ZONE_MARGIN).date(), (end + ZONE_MARGIN).date(),
+                                         project)
+    rows = store.connection.execute(
+        f"SELECT u.model AS model, u.model AS price_model, u.speed AS speed, {USAGE_SUMS} FROM usage_rows u "
+        f"WHERE {condition} AND u.ts >= :start AND u.ts < :end GROUP BY u.model, u.speed",
+        {**parameters, "start": stored_text(start), "end": stored_text(end)})
+    sums: dict[str, UsageSum] = {}
+    for row in rows:
+        sums.setdefault(row["model"], UsageSum()).add(row, prices)
+    return [{"model": model, **total.as_dict()} for model, total in sorted(sums.items())]
+
+
+def limit_windows(store: Store, since: date | None, prices: pricing.Prices, project: str | None = None,
+                  until: date | None = None) -> list[Row]:
+    """The rate-limit windows hit in the range (from the local day since up to until, both inclusive), newest first:
+    one per quota of LIMIT_WINDOWS and reset, from its start (the reset less the window's length) with its first hit
+    and every hit, in the range or not, and the usage from its start up to the first hit, per model and in total.
+    Hits and usage are of one project path if given."""
+    in_range, range_parameters = range_filter(ERROR_COLUMNS, since, until)
+    of_project, project_parameters = range_filter(ERROR_COLUMNS, None, None, project)
+    rows = store.connection.execute(
+        "SELECT e.limit_type AS limit_type, e.resets_at AS resets_at, MIN(e.ts) AS first_hit, COUNT(*) AS hits "
+        f"FROM api_errors e JOIN transcripts t ON t.path = e.path WHERE e.resets_at IS NOT NULL AND {of_project} "
+        f"GROUP BY e.limit_type, e.resets_at HAVING MAX({in_range}) ORDER BY e.resets_at DESC",
+        {**range_parameters, **project_parameters})
+    windows = []
+    for row in rows:
+        length = LIMIT_WINDOWS.get(row["limit_type"])
+        if length is None or row["first_hit"] is None:
+            continue
+        start = stored_time(row["resets_at"]) - length
+        models = usage_between(store, start, stored_time(row["first_hit"]), prices, project)
+        windows.append({"limit_type": row["limit_type"], "start": stored_text(start), "first_hit": row["first_hit"],
+                        "resets_at": row["resets_at"], "hits": row["hits"], "used": combined(models),
+                        "models": models})
+    return windows
 
 
 def activity_time(row: sqlite3.Row) -> str:

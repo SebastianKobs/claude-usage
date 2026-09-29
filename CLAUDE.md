@@ -214,6 +214,12 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     since it includes waiting for permission, so the page says so. Retries are unknown.
 - **API errors:** one row per record uuid in `api_errors`, owned by the file that stored it first. The dashboard
   plots the rate limits in `--status-critical` with an icon and a label; other errors are only listed.
+  - The windows that hit a rate limit (`queries.limit_windows`, `api_errors.windows` in `/api/summary`): one per
+    quota of `LIMIT_WINDOWS` (only `five_hour`, 5 hours) and `resets_at`, which fixes the window's end and so its
+    start. A window is in the range where one of its hits is; its first hit and hit count take all its hits (of the
+    project, if one is set). It used what `usage_rows` holds from its start up to the first hit, per model and in
+    total (`queries.usage_between`; background calls at their snapshot time), a lower bound, since the limit also
+    counts use elsewhere. The Rate limits card lists them, newest first, each model as a sub-row.
 - **Compact hints** (`compact.compact_hints`, per chat request, nothing stored):
   - A call's context is new input + cache writes + cache reads, like `CONTEXT` and Claude Code's `used_percentage`.
   - Anthropic publishes no "normal" context size; it only says quality degrades as the context fills
