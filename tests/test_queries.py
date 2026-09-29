@@ -836,6 +836,49 @@ class RecentSessionsTest(StoreCase):
         self.assertLessEqual(len(statements), 3)
 
 
+class SessionsInRangeTest(StoreCase):
+    def setUp(self):
+        super().setUp()
+        main = self.projects.session("s1")
+        main.at(DAY_1).assistant("m1", [text_block("a")], usage(new=1000, output=10))
+        main.at(DAY_3).assistant("m2", [text_block("b")], usage(new=3000, output=20))
+        self.projects.subagent("s1", "a1").at(DAY_1).assistant("m3", [text_block("c")], usage(output=5))
+        self.scan()
+
+    def session(self, since=None, until=None):
+        """The one session of recent_sessions() from the local day of since up to that of until."""
+        first = None if since is None else date.fromisoformat(local_day(since))
+        last = None if until is None else date.fromisoformat(local_day(until))
+        [session] = queries.recent_sessions(self.store, first, PRICES, until=last)
+        return session
+
+    def test_a_session_over_several_days_counts_only_what_it_used_in_the_range(self):
+        self.assertEqual((self.session(until=DAY_1)["output"], self.session(since=DAY_3)["output"]), (15, 20))
+
+    def test_its_days_add_up_to_the_whole_session(self):
+        self.assertAlmostEqual(self.session(until=DAY_1)["cost"] + self.session(since=DAY_3)["cost"],
+                               self.session()["cost"])
+
+    def test_its_turns_are_the_ranges(self):
+        self.assertEqual(self.session(since=DAY_3)["turns"], 1)
+
+    def test_its_context_is_the_main_threads_in_the_range(self):
+        session = self.session(since=DAY_3)
+        self.assertEqual((session["context_avg"], session["context_peak"]), (3000, 3000))
+
+    def test_without_a_range_it_is_the_whole_session(self):
+        session = self.session()
+        self.assertEqual((session["output"], session["context_avg"], session["context_peak"]), (35, 2000, 3000))
+
+    def test_its_subagents_are_those_that_made_calls_in_the_range(self):
+        self.assertEqual((self.session(until=DAY_1)["subagents"], self.session(since=DAY_3)["subagents"]), (1, 0))
+
+    def test_a_subagent_that_made_no_call_is_not_counted(self):
+        self.projects.subagent("s1", "a2").at(DAY_3).user("Look around")
+        self.scan()
+        self.assertEqual(self.session()["subagents"], 1)
+
+
 class RangeFilterTest(StoreCase):
     def plan(self, sql, parameters):
         """The EXPLAIN QUERY PLAN details of a query, as one text."""

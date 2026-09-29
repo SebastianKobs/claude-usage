@@ -737,6 +737,10 @@ class SessionListTest(unittest.TestCase):
         self.assertRegex(markup, r'<select id="sessions-project" aria-label="[^"]+"')
         self.assertRegex(markup, r'<input type="search" id="sessions-search" aria-label="[^"]+"')
 
+    def test_the_heading_says_the_amounts_are_the_ranges_and_themes_keep_it(self):
+        self.assertRegex(dashboard(), r'<h2 id="sessions-title"><span data-label="Sessions">Sessions</span>\s+'
+                                      r'<span class="muted">[^<]*in the range</span></h2>')
+
     def test_the_pager_still_joins_the_heading_past_the_filters(self):
         body = re.search(r"^function placePager\(.*?^\}$", read(STATIC / "js" / "tables.js"),
                          re.DOTALL | re.MULTILINE).group(0)

@@ -10,11 +10,12 @@ Usage is split by model and effort level. Calls made while ultracode was on coun
 xhigh between switching ultracode on and switching it off or picking another effort level. Subagents and Workflow
 agents count by that time too.
 
-Tables longer than 10 rows, and more than 10 live sessions, come in pages, with 10, 25 or 50 rows per page (the
-choice is remembered) and previous and next by their heading; a refresh stays on the page you are reading. The
-sessions list holds every session of the range: pick a project, or type words from a title, a project path or a
-session id, to narrow it. The live sessions follow the range too: on an earlier day they are the running sessions
-that were active on it.
+Tables longer than 10 rows, and more than 10 live sessions, come in pages, with 10, 25 or 50 rows per page (the choice
+is remembered) and previous and next by their heading; a refresh stays on the page you are reading. The sessions list
+holds every session of the range: pick a project, or type words from a title, a project path or a session id, to narrow
+it. It and Cost per session count what each session used in the range, so a session over several days splits across
+them; its own view shows all of it. The live sessions follow the range too: on an earlier day they are the running
+sessions that were active on it.
 
 Rate limits show per day, and each 5-hour window that hit one shows what it used from its start (5 hours before
 its reset) up to the first hit, by model: a lower bound on what a window holds, since the limit also counts what

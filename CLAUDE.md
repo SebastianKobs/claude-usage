@@ -538,11 +538,13 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     5 s would keep each old draw.
   - The sessions list holds every session of the range, newest first (`sessions` in `/api/summary`, only
     `server.SESSION_LIST_FIELDS`, about 250 bytes each; the costliest keep their parts), so no older session is cut
-    without a word. A project picker (the range's projects by name, with their sessions; a picked one stays on offer
-    in a range without it) and a text filter (every word, in any case, in the title, project or id:
-    `sessionMatches`) narrow it, counted as "12 of 84 sessions". The controls are markup outside what a redraw
-    replaces, so a refresh keeps the filter and typing keeps its focus; a new filter starts at the first page, and the
-    pager joins the heading past them (`table-filters`).
+    without a word. Each carries what it used in the range (`queries.recent_sessions`: totals, turns, the subagents that
+    made calls in it and the main thread's context), so a session over several days splits across them, and the list and
+    the costliest add up to the range's total; the session view shows it whole. A project picker (the range's projects
+    by name, with their sessions; a picked one stays on offer in a range without it) and a text filter (every word, in
+    any case, in the title, project or id: `sessionMatches`) narrow it, counted as "12 of 84 sessions". The controls are
+    markup outside what a redraw replaces, so a refresh keeps the filter and typing keeps its focus; a new filter starts
+    at the first page, and the pager joins the heading past them (`table-filters`).
   - All data goes into the DOM via `textContent`. Two exceptions, both in `chat.js`:
     - `highlighted()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans
       with classes.

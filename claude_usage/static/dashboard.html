@@ -93,7 +93,7 @@
     <section class="card" aria-labelledby="costly-title">
       <div class="chart-head">
         <h2 id="costly-title" data-label="Cost per session">Cost per session</h2>
-        <span class="muted">the costliest sessions of the range, with their subagents</span>
+        <span class="muted">the costliest sessions by what they used in the range, with their subagents</span>
         <span class="spacer"></span>
         <button type="button" id="costly-table-toggle" aria-pressed="false">Table view</button>
       </div>
@@ -134,7 +134,8 @@
         <div id="by-mcp-server" class="table-wrap"></div></section>
     </div>
     <section class="card" aria-labelledby="sessions-title">
-      <h2 id="sessions-title" data-label="Sessions">Sessions</h2>
+      <h2 id="sessions-title"><span data-label="Sessions">Sessions</span>
+        <span class="muted">what each used in the range</span></h2>
       <div class="table-filters" role="search" aria-label="Filter the sessions">
         <select id="sessions-project" aria-label="Project"><option value="">All projects</option></select>
         <input type="search" id="sessions-search" aria-label="Filter by title, project or session id"

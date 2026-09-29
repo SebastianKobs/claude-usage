@@ -804,10 +804,13 @@ def recent_sessions(store: Store, since: date | None, prices: pricing.Prices,
                     limit: int | None = DEFAULT_SESSION_LIMIT, project: str | None = None,
                     until: date | None = None) -> list[Row]:
     """Sessions with messages from the local day since up to the local day until (either end open without it),
-    newest first, with their whole totals and the main thread's average and peak context per turn (None without
-    turns: every turn reads its whole context again, so these show how far a session grew before a /clear or a
-    compaction); limit None lists every one. One query, plus two per ID_BATCH sessions."""
-    days, parameters = range_filter(USAGE_COLUMNS, since, until)
+    newest first, with what they used in that range: their totals, the subagents that made calls in it, and the
+    main thread's average and peak context per turn (None without turns there: every turn reads its whole context
+    again, so these show how far a session grew before a /clear or a compaction). A session over several days splits
+    across them, as the range's totals do. limit None lists every one. One query, plus two per ID_BATCH sessions."""
+    days, day_parameters = range_filter(USAGE_COLUMNS, since, until)
+    message_days, _ = range_filter(MESSAGE_COLUMNS, since, until)
+    parameters = dict(day_parameters)
     conditions = []
     if project is not None:
         conditions.append("slug = :slug")
@@ -815,11 +818,13 @@ def recent_sessions(store: Store, since: date | None, prices: pricing.Prices,
     if since is not None or until is not None:
         conditions.append(f"session_id IN (SELECT u.session_id FROM usage_rows u WHERE {days})")
     parameters["limit"] = NO_LIMIT if limit is None else limit
-    # project and title from the main thread, else the first subagent, as in session_rows
+    # project and title from the main thread, else the first subagent, as in session_rows; a subagent's calls are
+    # all messages (background calls are the session's)
     rows = store.connection.execute(f"""
         WITH chosen AS (
             SELECT session_id, MIN(first_ts) AS first_ts, MAX(last_ts) AS last_ts,
-                   SUM(agent_id IS NOT NULL) AS subagents
+                   SUM(agent_id IS NOT NULL AND EXISTS (
+                       SELECT 1 FROM messages m WHERE m.path = transcripts.path AND {message_days})) AS subagents
             FROM transcripts WHERE {" AND ".join(conditions) or "1"}
             GROUP BY session_id ORDER BY MAX(last_ts) DESC LIMIT :limit),
         ranked AS (
@@ -836,17 +841,18 @@ def recent_sessions(store: Store, since: date | None, prices: pricing.Prices,
     # a list of values, unlike a subquery, reaches into the usage_rows view and its indexes; in batches, under
     # SQLite's limit on variables
     for start in range(0, len(ids), ID_BATCH):
-        batch = ids[start:start + ID_BATCH]
-        placeholders = ", ".join("?" for _ in batch)
+        batch = {f"id{index}": session_id for index, session_id in enumerate(ids[start:start + ID_BATCH])}
+        placeholders = ", ".join(f":{name}" for name in batch)
         for row in store.connection.execute(
                 f"SELECT u.session_id AS session_id, u.model AS price_model, u.speed AS speed, {USAGE_SUMS} "
-                f"FROM usage_rows u WHERE u.session_id IN ({placeholders}) GROUP BY u.session_id, u.model, u.speed",
-                batch):
+                f"FROM usage_rows u WHERE u.session_id IN ({placeholders}) AND {days} "
+                "GROUP BY u.session_id, u.model, u.speed", {**batch, **day_parameters}):
             sums[row["session_id"]].add(row, prices)
         contexts.update((row["session_id"], row) for row in store.connection.execute(
             f"SELECT t.session_id AS session_id, AVG({CONTEXT}) AS average, MAX({CONTEXT}) AS peak "
             "FROM messages m JOIN transcripts t ON t.path = m.path "
-            f"WHERE t.agent_id IS NULL AND t.session_id IN ({placeholders}) GROUP BY t.session_id", batch))
+            f"WHERE t.agent_id IS NULL AND t.session_id IN ({placeholders}) AND {message_days} "
+            "GROUP BY t.session_id", {**batch, **day_parameters}))
     sessions = []
     for row in rows:
         context = contexts.get(row["session_id"])
