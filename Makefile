@@ -4,6 +4,7 @@
 #   make report ARGS="--days 7 --by project"  any report options
 #   make session ID=<session-id>              one session's drilldown
 #   make backup FILE=<new file>               a copy of the history, e.g. outside the checkout
+#   make demo [DEMO_PORT=8799]                made-up transcripts and a dashboard on them, for screenshots
 
 PYTHON ?= python3
 CLI := $(PYTHON) -m claude_usage
@@ -14,12 +15,14 @@ LIVE_MINUTES ?=
 ARGS ?=
 ID ?=
 FILE ?=
+DEMO_PORT ?=
 SERVE_OPTIONS := $(if $(PORT),--port $(PORT)) $(if $(LIVE_MINUTES),--live-minutes $(LIVE_MINUTES))
 # the pid file names a running dashboard, not a process that reused the number after a crash
 ALIVE = [ -f $(PID_FILE) ] && ps -p "$$(cat $(PID_FILE))" -o args= 2>/dev/null | grep -q "claude_usage serve"
 
 .DEFAULT_GOAL := help
-.PHONY: help start stop restart status logs scan report session backup test clean hook-line notify-test cron-line
+.PHONY: help start stop restart status logs scan report session backup test clean hook-line notify-test cron-line \
+	demo
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
@@ -94,3 +97,6 @@ notify-test: ## show one desktop notification the way the dashboard shows them, 
 
 cron-line: ## print a crontab line that keeps the history without the dashboard (errors go to cron's mail)
 	@echo "*/30 * * * * cd '$(CURDIR)' && $$(command -v $(PYTHON)) -m claude_usage scan >/dev/null"
+
+demo: ## made-up transcripts in tests/.tmp/demo and a dashboard on them, for the docs' screenshots (DEMO_PORT=)
+	@PYTHONPATH=tests $(PYTHON) -m demo $(if $(DEMO_PORT),--port $(DEMO_PORT))

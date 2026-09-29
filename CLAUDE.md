@@ -45,7 +45,7 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
 ## Layout
 ```
 Makefile                     start/stop/status of the dashboard, scan, report, session, backup, test, clean,
-                             hook-line, notify-test, cron-line
+                             hook-line, notify-test, cron-line, demo
 claude_usage/
   __main__.py                CLI: scan | report | serve | backup | hook-settings | notify-test
   report.py                  the report as text (report without --json)
@@ -81,7 +81,8 @@ claude_usage/
       vendor/                highlight.js 11.11.2 (common build, BSD-3), marked 18.0.14 (UMD, MIT), DOMPurify
                              3.4.16 (MPL-2.0 or Apache-2.0), each with its license
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
-                             module; test_static.py checks static/ without a browser
+                             module; test_static.py checks static/ without a browser; demo.py builds the demo for
+                             the screenshots and serves it (make demo)
 .claude/hooks/project-guard/  the guard hook: a git submodule, see its README and CLAUDE.md
 ```
 
