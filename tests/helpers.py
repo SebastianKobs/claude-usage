@@ -281,6 +281,16 @@ class ProjectsDir:
         return path
 
 
+class FakeClock:
+    """A monotonic clock the test moves by hand."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+
 class TempDirTestCase(unittest.TestCase):
     """Gives each test self.tmp (a fresh folder under tests/.tmp/), self.projects in it and self.store_path."""
 

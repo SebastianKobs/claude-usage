@@ -29,6 +29,7 @@ from claude_usage import server
 from claude_usage import store
 from claude_usage import tool_kinds
 from claude_usage import turns
+from helpers import FakeClock
 from helpers import MILLION
 from helpers import TempDirTestCase
 from helpers import text_block
@@ -69,16 +70,6 @@ def counted_reads():
 # urllib must not route 127.0.0.1 through a proxy from the environment
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 NO_REDIRECT_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), KeepRedirect)
-
-
-class FakeClock:
-    """A monotonic clock the test moves by hand."""
-
-    def __init__(self):
-        self.now = 1000.0
-
-    def __call__(self):
-        return self.now
 
 
 class ServerCase(TempDirTestCase):
@@ -272,6 +263,11 @@ class PromptSocketOpenTest(ServerCase):
         self.assertIsNone(self.get_json("/api/live")[1]["prompts_unavailable"])
         self.app.prompts_unavailable = "this system has no Unix sockets"
         self.assertEqual(self.get_json("/api/live")[1]["prompts_unavailable"], "this system has no Unix sockets")
+
+    def test_live_says_why_the_dashboard_sends_no_desktop_notifications(self):
+        self.assertIsNone(self.get_json("/api/live")[1]["notifications_unavailable"])
+        self.app.notifications_unavailable = "notify-send not found"
+        self.assertEqual(self.get_json("/api/live")[1]["notifications_unavailable"], "notify-send not found")
 
 
 class DashboardTest(ServerCase):

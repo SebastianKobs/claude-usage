@@ -21,6 +21,16 @@ prices_checked = 2026-09-27
 [fees]
 web_search_per_1000 = 10.0      # $ per 1,000 web searches, e.g. Claude Code's WebSearch tool
 
+# Desktop notifications from the dashboard (serve), also while no page of it is open: when Claude asks something (a
+# question, a plan to approve, a permission prompt with the hook set up), a possible secret access rises to a higher
+# level, or compacting now reaches a new state (once each between compactions). It finds the system's notifier:
+# osascript on macOS, a toast from Windows PowerShell on Windows and in WSL, notify-send on Linux. Elsewhere, set
+# command: its words, with {title} and {body} replaced by the texts, e.g. ["terminal-notifier", "-message", "{body}"].
+# `make notify-test` shows one.
+[notify]
+enabled = true
+command = []
+
 [serve]
 port = 8765
 live_minutes = 5        # a session counts as live if its transcript changed within this many minutes

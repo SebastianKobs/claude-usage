@@ -1,6 +1,7 @@
-"""Command line: scan | report | serve | backup. Settings come from the package's config.toml with the user's overrides
-(see config.py); --projects-dir and --store override them, before or after the command. Only main() prints errors
-and picks the exit code: 0 on success, 1 on an error, 2 on bad arguments, 130 when interrupted."""
+"""Command line: scan | report | serve | backup | hook-settings | notify-test. Settings come from the package's
+config.toml with the user's overrides (see config.py); --projects-dir and --store override them, before or after the
+command. Only main() prints errors and picks the exit code: 0 on success, 1 on an error, 2 on bad arguments, 130
+when interrupted."""
 import argparse
 import json
 import math
@@ -17,6 +18,7 @@ from typing import Any
 import claude_usage
 from claude_usage import compact
 from claude_usage import config
+from claude_usage import notify
 from claude_usage import permissions
 from claude_usage import pricing
 from claude_usage import queries
@@ -121,6 +123,7 @@ def run_serve(context: Context) -> int:
     live_minutes = args.live_minutes if args.live_minutes is not None else context.settings.live_minutes
     compact_settings = compact.parse_compact_settings(context.config.values)   # fails before the store is opened
     secret_settings = secret_paths.parse_secrets(context.config.values)
+    notify_settings = notify.parse_notify(context.config.values)
     with store.Store(context.store_path, check_same_thread=False) as usage_store:
         app = server.UsageApp(usage_store, context.projects_dir, context.prices, live_minutes, project=args.project,
                               prices_checked=context.settings.prices_checked, compact=compact_settings,
@@ -129,6 +132,8 @@ def run_serve(context: Context) -> int:
                               agent_live_minutes=context.settings.agent_live_minutes)
         httpd = server.make_server(app, HOST, port)
         prompt_server = None
+        sender = None
+        watcher = None
         previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
         try:
             try:
@@ -142,6 +147,13 @@ def run_serve(context: Context) -> int:
             except server.PromptSocketError as exc:
                 app.prompts_unavailable = str(exc)
                 start_warnings.append(f"the dashboard shows no permission prompts: {exc}")
+            notifier = None
+            if notify_settings.enabled:
+                try:
+                    notifier = notify.detect(notify_settings, notify.Environment.current())
+                except notify.NotifyError as exc:
+                    app.notifications_unavailable = str(exc)
+                    start_warnings.append(f"no desktop notifications: {exc}")
             # before the link: `make start` shows the warnings printed before it
             for warning in start_warnings:
                 print(f"warning: {warning}", file=sys.stderr, flush=True)
@@ -151,16 +163,39 @@ def run_serve(context: Context) -> int:
                   "(Ctrl+C to stop)", flush=True)
             with app.lock:
                 app.refresh()              # so the first page load is quick; scan errors go to stderr
+            if notifier is not None:        # after the first scan: its first pass only notes the states
+                sender = notify.Sender(notifier, warn, on_failure=notifications_failed(app))
+                sender.start()
+                watcher = notify.Watcher(app, sender, warn)
+                watcher.start()
             httpd.serve_forever()
         except KeyboardInterrupt:
             print("Stopped.")
         finally:
+            # before the readers and the store close, which the watcher's pass uses
+            if watcher is not None:
+                watcher.stop()
+            if sender is not None:
+                sender.stop()
             signal.signal(signal.SIGTERM, previous)
             if prompt_server is not None:
                 server.close_prompt_socket(prompt_server)
             httpd.server_close()
             app.close()
     return 0
+
+
+def warn(message: str) -> None:
+    """A warning of serve's on stderr, as those before the link."""
+    print(f"warning: {message}", file=sys.stderr, flush=True)
+
+
+def notifications_failed(app: server.UsageApp) -> Callable[[str], None]:
+    """What the Sender calls at its first failure: the live sessions say why no notification shows."""
+    def failed(reason: str) -> None:
+        """Note the reason on the app."""
+        app.notifications_unavailable = reason
+    return failed
 
 
 def stop_on_sigterm(signum: int, frame: object) -> None:
@@ -204,8 +239,25 @@ def run_hook_settings(context: Context) -> int:
     return 0
 
 
+def run_notify_test(context: Context) -> int:
+    """notify-test: one desktop notification through the notifier serve would use, shown now, and which one it is.
+    Raises CliError where none is found or it fails."""
+    settings = notify.parse_notify(context.config.values)
+    test = notify.Notification("claude-usage", "A test notification: the dashboard's show like this.")
+    try:
+        notifier = notify.detect(settings, notify.Environment.current())
+        notify.Sender(notifier, warn).deliver([test])
+    except notify.NotifyError as exc:
+        raise CliError(f"no desktop notification: {exc}") from exc
+    off = "" if settings.enabled else " With [notify] enabled = false, serve sends none."
+    print(f"sent via {notifier.method}.{off}")
+    print("Nothing showed? The system may hold it back (Do Not Disturb, Focus Assist) or ask you to allow it first.")
+    return 0
+
+
 COMMANDS: dict[str, Callable[[Context], int]] = {"scan": run_scan, "report": run_report, "serve": run_serve,
-                                                 "backup": run_backup, "hook-settings": run_hook_settings}
+                                                 "backup": run_backup, "hook-settings": run_hook_settings,
+                                                 "notify-test": run_notify_test}
 
 
 # --- arguments ---------------------------------------------------------------------------------------------------
@@ -247,7 +299,7 @@ def add_path_options(parser: argparse.ArgumentParser, default: Any) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """The argument parser with the scan, report, serve, backup and hook-settings commands."""
+    """The argument parser with the scan, report, serve, backup, hook-settings and notify-test commands."""
     parser = argparse.ArgumentParser(prog="claude-usage",
                                      description="Persistent history and a local dashboard for Claude Code usage.")
     parser.add_argument("--version", action="version", version=f"claude-usage {claude_usage.__version__}")
@@ -283,6 +335,8 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("hook-settings", parents=[paths],
                         help="print the settings block of the hook that shows permission prompts on the dashboard, "
                              "and where it belongs")
+    commands.add_parser("notify-test", parents=[paths],
+                        help="show one desktop notification the way serve shows them, and say how")
     return parser
 
 

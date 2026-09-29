@@ -13,8 +13,8 @@ Claude Code keeps its transcripts in $CLAUDE_CONFIG_DIR/projects when that is se
 projects_dir; a projects_dir in an override file still wins.
 
 settings() checks the merged values: an unknown key is refused rather than ignored, so a typo doesn't silently
-leave a default in place. The [prices], [fees], [chat]/[auto_compact] and [secrets] values are checked where they are
-parsed (pricing.py, compact.py, secret_paths.py).
+leave a default in place. The [prices], [fees], [chat]/[auto_compact], [secrets] and [notify] values are checked where
+they are parsed (pricing.py, compact.py, secret_paths.py, notify.py).
 """
 import math
 import os
@@ -43,6 +43,7 @@ TABLES: dict[str, tuple[str, ...] | None] = {
              "delegate_hint_tokens", "delegate_calls_ahead"),
     "auto_compact": None,
     "secrets": ("patterns", "network_programs", "test_patterns"),
+    "notify": ("enabled", "command"),
     "prices": None,
 }
 VALUES = ("projects_dir", "store", "prices_checked", "retention_days")

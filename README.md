@@ -40,6 +40,7 @@ make scan                      # read new transcript data into the store
 make report ARGS="--days 7 --by project"
 make session ID=<session-id>   # one session: main thread, subagents, background, tools
 make backup FILE=<new file>    # a copy of the history
+make notify-test               # one desktop notification, and how it was shown
 make test                      # the tests
 make help                      # everything else
 ```
@@ -79,6 +80,17 @@ and the time, in memory, never the command or any other input. While no dashboar
 at most 2 s, and nothing is noted. Two calls of the same tool at once can't be told apart: the newer one shows as
 waiting. Windows has no Unix sockets, so there the dashboard notes that it can't show permission prompts; Claude Code's
 own dialogs work as ever.
+
+While the dashboard runs, it also shows desktop notifications, whether or not a page of it is open: when Claude asks
+you something (a question, a plan to approve, a permission prompt with the hook set up), when a possible secret access
+rises to a higher level, and when compacting now reaches a new state (past your compact hint, soon, close, likely too
+late, or the cache expired), each state once between two compactions. Only changes notify: a restart sends nothing for
+what was already so. It finds the system's own notifier: a toast from Windows PowerShell on Windows and in WSL,
+osascript on macOS, `notify-send` on Linux (from libnotify). `make notify-test` shows one and names the method; where
+none is found, the dashboard says why at start and under the live sessions. Elsewhere set `[notify] command` to a
+program of your own, with `{title}` and `{body}` in its words; `[notify] enabled = false` turns them off. On Windows the
+toasts show under "Windows PowerShell", and the notifications hold session titles, tool names and counts, never a
+prompt or a path.
 
 ## Updating
 ```
@@ -226,6 +238,7 @@ never silently leaves a default in place.
 | `[secrets]` `patterns` | where secrets may be, for the session view's warning; `!` exempts, an override replaces all |
 | `[secrets]` `network_programs` | the programs that send what they get elsewhere (MCP tools always do); replaces all |
 | `[secrets]` `test_patterns` | what marks a call as a test, whose returned result then counts less; replaces all |
+| `[notify]` `enabled`, `command` | desktop notifications on (default) or off; a program to show them instead |
 
 The store is `data/usage.sqlite` when running from a checkout, and `~/.local/share/claude-usage/usage.sqlite` when
 installed (`$XDG_DATA_HOME` and `$XDG_CONFIG_HOME` are respected). The transcripts are read from

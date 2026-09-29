@@ -252,6 +252,7 @@ class UsageApp:
         # the permission prompts the hook posted, the latest only: a prompt matters while its call waits
         self.prompts: collections.deque[permissions.Prompt] = collections.deque(maxlen=PROMPT_LIMIT)
         self.prompts_unavailable: str | None = None      # why the hook's socket couldn't be opened
+        self.notifications_unavailable: str | None = None    # why serve sends no desktop notifications (notify)
         self.project = project
         self.prices_checked = prices_checked
         self.clock = clock
@@ -317,7 +318,8 @@ class UsageApp:
         return {"minutes": self.live_minutes, "agent_minutes": self.agent_live_minutes, "days": days,
                 "since": None if since is None else since.isoformat(),
                 "until": None if until is None else until.isoformat(), "sessions": sessions,
-                "scan_errors": scan_errors, "prompts_unavailable": self.prompts_unavailable}
+                "scan_errors": scan_errors, "prompts_unavailable": self.prompts_unavailable,
+                "notifications_unavailable": self.notifications_unavailable}
 
     def summary(self, days: int, until: date | None = None) -> Payload:
         """/api/summary: totals of the `days` local days up to until (default today, included), per hour too for a

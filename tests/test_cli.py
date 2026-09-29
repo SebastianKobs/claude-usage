@@ -1,4 +1,4 @@
-"""__main__.py: the scan, report and serve commands, their exit codes and output."""
+"""__main__.py: the scan, report, serve, hook-settings and notify-test commands, their exit codes and output."""
 import contextlib
 import io
 import json
@@ -19,6 +19,7 @@ from unittest import mock
 import claude_usage
 from claude_usage import __main__ as cli
 from claude_usage import config
+from claude_usage import notify
 from claude_usage import server
 from helpers import TempDirTestCase
 from helpers import text_block
@@ -35,6 +36,10 @@ class CliCase(TempDirTestCase):
         super().setUp()
         # only the shipped defaults: the developer's own config.toml or config.local.toml must not change the output
         patcher = mock.patch.object(config, "override_files", return_value=[])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        # the shipped defaults turn desktop notifications on, and a test must never show one
+        patcher = mock.patch.object(notify, "run_command", side_effect=AssertionError("a test sent a notification"))
         patcher.start()
         self.addCleanup(patcher.stop)
         now = datetime.now(UTC)
@@ -291,7 +296,68 @@ class HookSettingsTest(CliCase):
         self.assertIn("Never into a project's .claude/settings.json", notes)
 
 
+NOTIFIER = notify.Notifier("notify-send", "notify-send", "/usr/bin/notify-send")
+
+
+class NotifyTestCommandTest(CliCase):
+    def test_it_shows_a_notification_and_says_how(self):
+        with mock.patch.object(notify, "detect", return_value=NOTIFIER):
+            with mock.patch.object(notify, "run_command") as run:
+                code, out, _ = self.run_cli("notify-test")
+        self.assertEqual(code, 0)
+        self.assertIn("sent via notify-send", out)
+        [command] = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(command.argv[:3], ("/usr/bin/notify-send", "--app-name=claude-usage", "--"))
+
+    def test_it_says_why_none_can_show(self):
+        with mock.patch.object(notify, "detect", side_effect=notify.NotifyError("notify-send not found")):
+            code, out, err = self.run_cli("notify-test")
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("no desktop notification: notify-send not found", err)
+
+    def test_a_notifier_that_fails_exits_1(self):
+        with mock.patch.object(notify, "detect", return_value=NOTIFIER):
+            with mock.patch.object(notify, "run_command", side_effect=notify.NotifyError("notify-send exited with 1")):
+                code, _, err = self.run_cli("notify-test")
+        self.assertEqual(code, 1)
+        self.assertIn("notify-send exited with 1", err)
+
+    def test_switched_off_it_still_shows_one_and_says_serve_sends_none(self):
+        with mock.patch.object(notify, "parse_notify", return_value=notify.NotifySettings(False, ())):
+            with mock.patch.object(notify, "detect", return_value=NOTIFIER):
+                with mock.patch.object(notify, "run_command"):
+                    _, out, _ = self.run_cli("notify-test")
+        self.assertIn("[notify] enabled = false", out)
+
+
 class ServeCommandTest(CliCase):
+    def test_serve_watches_the_live_sessions_for_notifications_and_stops_at_the_end(self):
+        with mock.patch.object(notify, "detect", return_value=NOTIFIER):
+            with mock.patch.object(notify, "Watcher") as watcher:
+                with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
+                    self.run_cli("serve", "--port", "0")
+        watcher.return_value.start.assert_called_once_with()
+        watcher.return_value.stop.assert_called_once_with()
+
+    def test_serve_says_before_the_link_why_it_sends_no_notifications_and_serves_anyway(self):
+        with mock.patch.object(server, "make_server", wraps=server.make_server) as make_server:
+            with mock.patch.object(notify, "detect", side_effect=notify.NotifyError("notify-send not found")):
+                with mock.patch.object(notify, "Watcher") as watcher:
+                    with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
+                        code, out, err = self.run_cli("serve", "--port", "0")
+        self.assertEqual(code, 0)
+        self.assertIn("warning: no desktop notifications: notify-send not found", err)
+        self.assertEqual(make_server.call_args.args[0].notifications_unavailable, "notify-send not found")
+        watcher.assert_not_called()
+
+    def test_serve_with_notifications_switched_off_looks_for_no_notifier(self):
+        with mock.patch.object(notify, "parse_notify", return_value=notify.NotifySettings(False, ())):
+            with mock.patch.object(notify, "detect") as detect:
+                with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
+                    _, _, err = self.run_cli("serve", "--port", "0")
+        detect.assert_not_called()
+        self.assertNotIn("notification", err)
+
     def test_serve_prints_the_url_and_stops_on_ctrl_c(self):
         with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
             code, out, _ = self.run_cli("serve", "--port", "0", "--live-minutes", "3")

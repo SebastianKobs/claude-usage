@@ -45,9 +45,9 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
 ## Layout
 ```
 Makefile                     start/stop/status of the dashboard, scan, report, session, backup, test, clean,
-                             hook-line, cron-line
+                             hook-line, notify-test, cron-line
 claude_usage/
-  __main__.py                CLI: scan | report | serve | backup | hook-settings
+  __main__.py                CLI: scan | report | serve | backup | hook-settings | notify-test
   report.py                  the report as text (report without --json)
   config.py                  defaults in the package, user and checkout overrides, data folder
   config.toml                the defaults, including prices (shipped with the package)
@@ -59,6 +59,8 @@ claude_usage/
   secret_paths.py            the paths a tool call names, matched against the [secrets] patterns
   store.py                   the SQLite history: schema, migrations, backup
   permissions.py             the permission prompt a PermissionRequest hook posts to the dashboard's socket
+  notify.py                  desktop notifications: the system's notifier, and what changed in the live sessions
+                             (serve's watcher)
   scan.py                    incremental scan and background usage: transcripts into the store
   queries.py                 what the report and the dashboard read from the store
   pricing.py                 prices by model prefix, cost per category, web-search fee
@@ -360,7 +362,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     does (`config.claude_projects_dir`: the value as it is, no `~`, a relative one from the working folder); a
     `projects_dir` in an override still wins, and `--projects-dir` over that.
   - `config.settings()` refuses unknown keys and checks `[serve]`; `[prices]`/`[fees]` are checked in
-    `pricing.py`, `[chat]`/`[auto_compact]` in `compact.py`. Numbers must be finite.
+    `pricing.py`, `[chat]`/`[auto_compact]` in `compact.py`, `[notify]` in `notify.py`. Numbers must be finite.
   - The version lives in `claude_usage/__init__.py`; `pyproject.toml` reads it from there.
   - `package-data` must cover every file under `static/` (a test checks it), or an installed copy misses it.
 - **Server:**
@@ -494,6 +496,35 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     output, sent again) and `rebuild` from `turns.steps` over every call of the file, shown or not; on real
     data they match the store's (14 rebuilds, same causes).
     The badge splits the context's change into both, so its parts add up: `(+6.3K: reply 414, added 5.9K)`.
+- **Desktop notifications** (`notify.py`, serve only; on unless `[notify] enabled = false`):
+  - A watcher thread (`notify.Watcher`) looks every `WATCH_INTERVAL` (the scan's 5 s throttle) also while no page is
+    open, since the page stops polling in a hidden tab: `app.live()` without a range, then `app.session_state` per
+    session. It never holds `app.lock` itself (both take it), starts after the first scan with its first pass one
+    interval later, and stops first at shutdown, before the readers and the store close. A failed session keeps its
+    marks, and each distinct error goes to stderr once.
+  - What notifies (`Memory`, the latest `MEMORY_LIMIT` sessions): a wait other than the last one notified (the live
+    card's speech bubble or padlock), a secret level above the highest notified (`secret_level`, the black hat's
+    medium and high), and each compact state once per stretch between compactions (`compact_states`: hint, cold,
+    soon, close, unlikely or pays, the trash compactor's; a new `last_compaction` starts again), the user's choice
+    over every change, since Soon and Close take turns as the estimate moves. The first pass only notes the states, so
+    a start sends no burst. `compact_states` ports `liveCompactBadge`, whose `states` a test holds it to.
+  - The texts hold the session's title (else its project folder, else its id's start), tool names and counts, never
+    a prompt or a path: the system keeps them in its notification history.
+  - The notifier (`detect`, paths only, nothing run): `[notify] command` (its words with `{title}` and `{body}`
+    replaced, one `re.sub` each, no shell); macOS osascript (the texts as `argv`, one starting with `-` behind a
+    space); Windows and WSL with interop on (`WSLInterop` in binfmt_misc) a toast from Windows PowerShell 5.1 (pwsh
+    7 can't load its WinRT types so) under PowerShell's app id, the texts as base64 of UTF-8 inside an
+    `-EncodedCommand` script (curly quotes end a PowerShell text), a pass in one run since it starts in a second or
+    two; else notify-send, the body's `& < >` escaped, on `DBUS_SESSION_BUS_ADDRESS` or the user's bus socket, else
+    unavailable (D-Bus would start a bus that shows nothing and still succeed).
+  - On WSL PowerShell runs from the C: drive's mount (`windows_drive`), so no `\\wsl.localhost` folder is handed to
+    it, and with a live interop socket (`interop_socket`, per send): `make start` detaches serve, and the terminal's
+    socket goes when it closes; init's `1_interop` outlives it. PowerShell comes from PATH, else the C: drive.
+  - A `Sender` thread runs each pass (`SEND_TIMEOUT`, a bounded queue); failure is judged by the exit code only,
+    since PowerShell writes to stderr as it succeeds. Where none is found, serve warns before the link; that reason or
+    the first failure goes into `/api/live` as `notifications_unavailable`, which the live sessions note.
+    `claude-usage notify-test` (`make notify-test`) shows one at once and names the method. A notification can't
+    open the dashboard; the systems differ too much.
 - **Dashboard:**
   - The by-model chart stacks every model × effort combination (`day_model_effort`, `hour_model_effort`): the
     model's color for low or no effort, one shade further from the surface each for medium, high and max (xhigh

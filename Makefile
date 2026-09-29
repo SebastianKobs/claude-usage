@@ -19,7 +19,7 @@ SERVE_OPTIONS := $(if $(PORT),--port $(PORT)) $(if $(LIVE_MINUTES),--live-minute
 ALIVE = [ -f $(PID_FILE) ] && ps -p "$$(cat $(PID_FILE))" -o args= 2>/dev/null | grep -q "claude_usage serve"
 
 .DEFAULT_GOAL := help
-.PHONY: help start stop restart status logs scan report session backup test clean hook-line cron-line
+.PHONY: help start stop restart status logs scan report session backup test clean hook-line notify-test cron-line
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
@@ -88,6 +88,9 @@ clean: ## remove caches and test scratch folders (never data/)
 
 hook-line: ## print the hook settings that show permission prompts on the dashboard
 	@$(CLI) hook-settings
+
+notify-test: ## show one desktop notification the way the dashboard shows them, and say how
+	@$(CLI) notify-test
 
 cron-line: ## print a crontab line that keeps the history without the dashboard (errors go to cron's mail)
 	@echo "*/30 * * * * cd '$(CURDIR)' && $$(command -v $(PYTHON)) -m claude_usage scan >/dev/null"

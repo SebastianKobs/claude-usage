@@ -227,8 +227,15 @@ class SettingsTest(ConfigCase):
     def test_an_unknown_key_in_a_table_is_refused(self):
         self.assert_refused("[serve]\nlive_minute = 3\n", "serve.live_minute")
 
+    def test_the_notify_table_is_known(self):
+        self.write(self.user, '[notify]\nenabled = false\ncommand = ["my-notifier", "{title}"]\n')
+        self.assertEqual(self.settings().port, 8765)
+
+    def test_an_unknown_key_in_the_notify_table_is_refused(self):
+        self.assert_refused("[notify]\nenable = false\n", "notify.enable")
+
     def test_a_table_given_as_a_value_is_refused(self):
-        for key in ("prices", "chat", "serve", "fees", "auto_compact"):
+        for key in ("prices", "chat", "serve", "fees", "auto_compact", "notify"):
             with self.subTest(key=key):
                 self.assert_refused(f"{key} = 5\n", key, "table")
 

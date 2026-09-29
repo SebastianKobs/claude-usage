@@ -905,6 +905,12 @@ class LiveStateTest(unittest.TestCase):
         self.assertLess(body.index('class: "title"'), body.index("liveWaitBadge(session.waiting)"))
         self.assertLess(body.index("liveWaitBadge(session.waiting)"), body.index("showLiveState("))
 
+    def test_the_live_sessions_note_why_no_desktop_notification_shows(self):
+        # only where they can't show: switched off, they say nothing
+        body = function_body("figures.js", "renderLive")
+        self.assertIn("live.notifications_unavailable", body)
+        self.assertIn("Desktop notifications can't show: ${live.notifications_unavailable}.", body)
+
     def test_the_live_window_names_the_minutes_agents_at_work_keep_a_session(self):
         body = function_body("figures.js", "renderLive")
         self.assertIn("live.agent_minutes > live.minutes", body)

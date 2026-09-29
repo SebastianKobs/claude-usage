@@ -185,8 +185,12 @@ function renderLive(live) {
   // the hook's socket couldn't be opened: Claude Code still asks, only no padlock shows it
   const prompts = live.prompts_unavailable
     ? [el("div", {class: "note", text: `Permission prompts can't show here: ${live.prompts_unavailable}.`})] : [];
+  // serve found no notifier, or it failed; switched off in the config, they say nothing
+  const notices = live.notifications_unavailable
+    ? [el("div", {class: "note", text: `Desktop notifications can't show: ${live.notifications_unavailable}.`})]
+    : [];
   // paged even when none is live, so a pager left from a longer list goes
-  container.replaceChildren(...prompts, paged("live", live.sessions.length
+  container.replaceChildren(...prompts, ...notices, paged("live", live.sessions.length
     ? el("div", {class: "live-grid paged-cards"}, ...cards)
     : el("div", {class: "empty", text: pastDay ? `No live session was active on ${longDay(pastDay)}.`
                                                : `No session active in the last ${live.minutes} minutes.`}),
@@ -303,23 +307,27 @@ function liveCompactBadge(current, now) {
   if (!preview) return null;
   const hint = current.context >= current.hint_tokens ? `Past your ${compact(current.hint_tokens)} compact hint.`
                                                       : null;
+  // the states it shows, which serve's desktop notifications hold to (notify.compact_states)
+  const hinted = hint ? ["hint"] : [];
+  const hintOnly = () => (hint ? {kind: "compact", tone: null, text: hint, states: hinted} : null);
   const estimate = preview.estimate;
-  if (!estimate) return hint ? {kind: "compact", tone: null, text: hint} : null;
+  if (!estimate) return hintOnly();
   const until = preview.cache_warm_until;
   const expired = until !== null && Date.parse(until) < Date.parse(now);
   const tone = payoffTone(estimate, expired);
-  const badge = words => ({kind: "compact", tone, text: [words, hint].filter(Boolean).join(" ")});
+  const badge = (state, words) => ({kind: "compact", tone, text: [words, hint].filter(Boolean).join(" "),
+                                    states: [state, ...hinted]});
   if (compactCallKind({live: true, current}, now) === "cold") {
-    return badge(`Compacting now saves ~${money(estimate.cold_saving)} at once: the cache has expired.`);
+    return badge("cold", `Compacting now saves ~${money(estimate.cold_saving)} at once: the cache has expired.`);
   }
-  if (tone === "later") return hint ? {kind: "compact", tone: null, text: hint} : null;
+  if (tone === "later") return hintOnly();
   const breakeven = expired ? estimate.breakeven_cold : estimate.breakeven_calls;
   if (breakeven === null) {
-    if (expired || estimate.breakeven_low === null) return hint ? {kind: "compact", tone: null, text: hint} : null;
-    return badge("Compacting now would likely not pay off.");
+    if (expired || estimate.breakeven_low === null) return hintOnly();
+    return badge("unlikely", "Compacting now would likely not pay off.");
   }
   const replies = `pays off after ~${whole(breakeven)} replies`;
-  if (!tone) return badge(`Compacting now ${replies}.`);
-  return badge(`${PAYOFF_WORDS[tone]}: compacting now ${replies}, ` +
-               `~${whole(Math.round(estimate.calls_ahead))} ahead on average.`);
+  if (!tone) return badge("pays", `Compacting now ${replies}.`);
+  return badge(tone, `${PAYOFF_WORDS[tone]}: compacting now ${replies}, ` +
+                     `~${whole(Math.round(estimate.calls_ahead))} ahead on average.`);
 }
