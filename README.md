@@ -42,6 +42,17 @@ checkout, with the absolute interpreter path (cron's `python3` may be older than
 ```
 Errors go to stderr, so cron mails them.
 
+## Updating
+```
+make backup FILE=~/backups/usage-$(date +%F).sqlite   # optional, but the store holds days Claude Code has deleted
+git pull --recurse-submodules
+make restart                                          # the running dashboard picks up the new code
+```
+Installed with pip, run `pip install .` again in the updated checkout and restart `claude-usage serve`. The store
+updates itself on the next start or scan: migrations only add tables and columns, so no history is lost. Some
+updates need data only a new read gives; then the next scan reads every transcript again, which takes a little
+longer once. An open dashboard tab needs a reload for the new page.
+
 ## The session view
 Click a session to open it. While the session is running the view updates itself every few seconds, the
 conversation too, without closing what you opened. Besides its cost, time and tables, it shows what its context
