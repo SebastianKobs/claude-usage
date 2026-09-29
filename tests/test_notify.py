@@ -40,7 +40,7 @@ def gauge(context=150_000, warm_until=WARM, estimate=True, compacted=None, last_
 def environment(tmp, **fields):
     """A Linux environment under tmp that has nothing, changed by the given fields."""
     values = {"platform": "linux", "release": "6.8.0-generic", "environ": {}, "which": lambda name: None,
-              "mounts": "", "root": tmp, "uid": 1000}
+              "mounts": "", "root": tmp, "uid": 1000, "windows_path": lambda path: None}
     values.update(fields)
     return notify.Environment(**values)
 
@@ -113,6 +113,10 @@ class DetectTest(TempDirTestCase):
         self.assertEqual((notifier.kind, notifier.program, notifier.wsl), ("powershell", "C:\\ps\\powershell.exe",
                                                                              False))
 
+    def test_windows_takes_the_icons_from_the_package(self):
+        notifier = self.detect(platform="win32", which=finder(**{"powershell.exe": "C:\\ps\\powershell.exe"}))
+        self.assertEqual(notifier.icon_dir, str(notify.ICONS_DIR))
+
     def test_windows_without_powershell_says_so(self):
         with self.assertRaisesRegex(notify.NotifyError, "powershell.exe"):
             self.detect(platform="win32")
@@ -123,6 +127,15 @@ class DetectTest(TempDirTestCase):
         self.assertEqual((notifier.kind, notifier.program, notifier.wsl), ("powershell", "/mnt/c/ps/powershell.exe",
                                                                              True))
         self.assertEqual(notifier.cwd, str(self.tmp / "mnt" / "c"))
+
+    def test_wsl_hands_powershell_the_icons_by_their_windows_path(self):
+        windows = {str(notify.ICONS_DIR): "\\\\wsl.localhost\\Ubuntu\\icons"}
+        notifier = self.wsl(which=finder(**{"powershell.exe": "/mnt/c/ps/powershell.exe"}), windows_path=windows.get)
+        self.assertEqual(notifier.icon_dir, "\\\\wsl.localhost\\Ubuntu\\icons")
+
+    def test_wsl_without_a_windows_path_shows_toasts_without_icons(self):
+        notifier = self.wsl(which=finder(**{"powershell.exe": "/mnt/c/ps/powershell.exe"}))
+        self.assertIsNone(notifier.icon_dir)
 
     def test_wsl_finds_powershell_on_the_c_drive_without_windows_on_the_path(self):
         # appendWindowsPath = false leaves the Windows folders off PATH
@@ -188,6 +201,12 @@ class CommandTest(TempDirTestCase):
         self.assertEqual(command.argv, ("/usr/bin/notify-send", "--app-name=claude-usage", "--", "-a <b>",
                                         "x &amp; &lt;i&gt;y&lt;/i&gt;"))
 
+    def test_notify_send_shows_the_icon_of_its_kind(self):
+        [command] = self.commands(notify.Notifier("notify-send", "notify-send", "notify-send"),
+                                  notify.Notification("a", "b", "waiting"))
+        self.assertEqual(command.argv, ("notify-send", "--app-name=claude-usage",
+                                        f"--icon={notify.ICONS_DIR / 'waiting.png'}", "--", "a", "b"))
+
     def test_notify_send_runs_each_notification(self):
         notifier = notify.Notifier("notify-send", "notify-send", "notify-send")
         self.assertEqual(len(self.commands(notifier, self.NOTE, self.NOTE)), 2)
@@ -198,11 +217,23 @@ class CommandTest(TempDirTestCase):
         [command] = self.commands(notifier, notify.Notification("a {body} b", "c {title} d"))
         self.assertEqual(command.argv, ("my-notifier", "--title=a {body} b", "c {title} d", "{other}"))
 
-    def powershell_texts(self, command):
-        """The titles and bodies the encoded PowerShell script of command shows, decoded."""
-        script = base64.b64decode(command.argv[-1]).decode("utf-16-le")
-        pairs = re.findall(r"^Show-Toast '([A-Za-z0-9+/=]*)' '([A-Za-z0-9+/=]*)'$", script, re.MULTILINE)
-        return [base64.b64decode(text).decode("utf-8") for pair in pairs for text in pair]
+    def test_a_command_of_your_own_gets_the_icons_path(self):
+        notifier = notify.Notifier("yours", "command", "my-notifier", arguments=("my-notifier", "--icon={icon}"))
+        [command] = self.commands(notifier, notify.Notification("a", "b", "permission"))
+        self.assertEqual(command.argv, ("my-notifier", f"--icon={notify.ICONS_DIR / 'permission.png'}"))
+        [command] = self.commands(notifier, notify.Notification("a", "b"))
+        self.assertEqual(command.argv, ("my-notifier", "--icon="))
+
+    def script(self, command):
+        """The PowerShell script of command, decoded."""
+        return base64.b64decode(command.argv[-1]).decode("utf-16-le")
+
+    def powershell_texts(self, command, line="Show-Toast"):
+        """The words of the script's lines that start so (each a quoted text), decoded: a toast's title, body, the
+        icon's source and its name on the Windows side."""
+        quoted = " '([A-Za-z0-9+/=]*)'"
+        rows = re.findall(rf"^{line}{quoted}{quoted}{quoted}{quoted}$", self.script(command), re.MULTILINE)
+        return [tuple(base64.b64decode(text).decode("utf-8") for text in row) for row in rows]
 
     def test_powershell_gets_one_encoded_script(self):
         notifier = notify.Notifier("Windows", "powershell", "powershell.exe")
@@ -211,20 +242,52 @@ class CommandTest(TempDirTestCase):
                                              "-EncodedCommand"))
         script = base64.b64decode(command.argv[-1]).decode("utf-16-le")
         self.assertIn("ToastNotificationManager", script)
-        self.assertIn("{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe", script)
-        self.assertEqual(self.powershell_texts(command), [self.NOTE.title, self.NOTE.body])
+        self.assertIn("appLogoOverride", script)
+        self.assertEqual(self.powershell_texts(command), [(self.NOTE.title, self.NOTE.body, "", "")])
+
+    def test_powershell_shows_the_toasts_as_claude_usage(self):
+        # its own app id, registered for the user (no admin), so Windows names it and lists it in its settings
+        script = self.script(self.commands(notify.Notifier("Windows", "powershell", "powershell.exe"))[0])
+        self.assertIn(f"HKCU:\\Software\\Classes\\AppUserModelId\\{notify.APP_ID}", script)
+        self.assertIn("-Name DisplayName -Value 'claude-usage'", script)
+
+    def test_where_it_cannot_register_powershell_shows_them_as_its_own(self):
+        script = self.script(self.commands(notify.Notifier("Windows", "powershell", "powershell.exe"))[0])
+        self.assertRegex(script, re.compile(rf"\$appId = '{re.escape(notify.POWERSHELL_APP_ID)}'\ntry \{{.*"
+                                            rf"\$appId = '{re.escape(notify.APP_ID)}'\n\}} catch \{{ \}}", re.DOTALL))
+
+    def test_powershell_copies_each_icon_to_the_windows_side_once(self):
+        # a toast shows only local images; the name carries the file's hash, so a changed icon is copied anew
+        notifier = notify.Notifier("WSL", "powershell", "powershell.exe", icon_dir="\\\\wsl.localhost\\U\\icons")
+        [command] = self.commands(notifier, notify.Notification("a", "b", "waiting"))
+        [(_, _, source, name)] = self.powershell_texts(command)
+        self.assertEqual(source, "\\\\wsl.localhost\\U\\icons\\waiting.png")
+        self.assertRegex(name, r"^waiting-[0-9a-f]{10}\.png$")
+        self.assertIn("Test-Path -LiteralPath $target", self.script(command))
+
+    def test_the_app_icon_goes_with_the_registration(self):
+        notifier = notify.Notifier("WSL", "powershell", "powershell.exe", icon_dir="C:\\icons")
+        script = self.script(self.commands(notifier)[0])
+        self.assertIn("-Name IconUri -Value $appIcon", script)
+        self.assertRegex(script, r"\$appIcon = Copy-Icon '[A-Za-z0-9+/=]+' '[A-Za-z0-9+/=]+'")
+
+    def test_without_the_icons_folder_the_toasts_have_no_icon(self):
+        [command] = self.commands(notify.Notifier("Windows", "powershell", "powershell.exe"),
+                                  notify.Notification("a", "b", "waiting"))
+        self.assertEqual(self.powershell_texts(command), [("a", "b", "", "")])
 
     def test_powershell_gets_any_title_intact(self):
         # PowerShell also ends a quoted text at curly quotes, which titles often have
         note = notify.Notification("It’s ‘done’ 'now' \"here\"", "$(Get-Date) `n ü")
         [command] = self.commands(notify.Notifier("Windows", "powershell", "powershell.exe"), note)
-        self.assertEqual(self.powershell_texts(command), [note.title, note.body])
+        self.assertEqual(self.powershell_texts(command), [(note.title, note.body, "", "")])
 
     def test_powershell_shows_a_pass_at_once(self):
         # its start takes a second or two
         notifier = notify.Notifier("Windows", "powershell", "powershell.exe")
         [command] = self.commands(notifier, self.NOTE, notify.Notification("b", "c"))
-        self.assertEqual(self.powershell_texts(command), [self.NOTE.title, self.NOTE.body, "b", "c"])
+        self.assertEqual(self.powershell_texts(command),
+                         [(self.NOTE.title, self.NOTE.body, "", ""), ("b", "c", "", "")])
 
     def wsl_notifier(self):
         """PowerShell from WSL, with its interop sockets under tmp."""
@@ -513,6 +576,32 @@ class TextsTest(unittest.TestCase):
         self.assertEqual((title, body), ("Soon: compacting now pays off after ~10 replies",
                                          "Parser fix · app · past your 200K compact hint"))
 
+    def icons(self, change, session=None, state=None, current=None):
+        """The notifications' icons for change in session (by default SESSION)."""
+        state = state or {"current": current, "secrets": {"high": 1, "medium": 0, "low-medium": 0, "low": 0}}
+        return [note.icon for note in notify.notifications_for(session or self.SESSION, state, change, NOW)]
+
+    def test_each_wait_and_secret_level_has_its_icon(self):
+        wait = notify.Change(True, False, frozenset())
+        for kind, tool, icon in (("question", "AskUserQuestion", "waiting"), ("question", "ExitPlanMode", "waiting"),
+                                 ("permission", "Write", "permission")):
+            with self.subTest(tool=tool):
+                session = {**self.SESSION, "waiting": {"kind": kind, "tool": tool, "since": "x", "agent_type": None}}
+                self.assertEqual(self.icons(wait, session), [icon])
+        secret = notify.Change(False, True, frozenset())
+        self.assertEqual(self.icons(secret), ["secret-high"])
+        medium = {"current": None, "secrets": {"high": 0, "medium": 1, "low-medium": 0, "low": 0}}
+        self.assertEqual(self.icons(secret, state=medium), ["secret-medium"])
+
+    def test_each_compact_state_has_the_icon_of_its_tone(self):
+        # as the live card's trash compactor: cold is soon's tone, hint and pays have none
+        for state, icon, fields in (("soon", "compact-soon", {}), ("cold", "compact-soon", {"cold_saving": 0.4}),
+                                    ("close", "compact-close", {}), ("unlikely", "compact-unlikely", {}),
+                                    ("pays", "compact", {}), ("hint", "compact", {"context": 250_000})):
+            with self.subTest(state=state):
+                change = notify.Change(False, False, frozenset({state}))
+                self.assertEqual(self.icons(change, current=gauge(**fields)), [icon])
+
     def test_an_untitled_session_goes_by_its_project_then_its_id(self):
         change = notify.Change(False, False, frozenset({"soon"}))
         [(_, body)] = self.texts(change, {**self.SESSION, "title": None}, current=gauge())
@@ -588,6 +677,19 @@ class WatcherTest(TempDirTestCase):
             self.assertTrue(passes.wait(5))
             watcher.stop()
         self.assertFalse(watcher.thread.is_alive())
+
+
+class IconsTest(unittest.TestCase):
+    def test_every_icon_ships_as_a_96_pixel_png(self):
+        # rendered from the live cards' icons, white on their tone's color from the light theme
+        for name in notify.ICON_NAMES:
+            with self.subTest(name=name):
+                data = (notify.ICONS_DIR / f"{name}.png").read_bytes()
+                self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
+                self.assertEqual((int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")), (96, 96))
+
+    def test_no_icon_file_is_left_unused(self):
+        self.assertEqual(sorted(path.stem for path in notify.ICONS_DIR.glob("*.png")), sorted(notify.ICON_NAMES))
 
 
 class NotifyTimingTest(unittest.TestCase):

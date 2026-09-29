@@ -21,4 +21,4 @@ version = {attr = "claude_usage.__version__"}
 
 [tool.setuptools.package-data]
 claude_usage = ["static/*.html", "static/css/*.css", "static/css/themes/*.css", "static/js/*.js",
-                "static/js/vendor/*", "config.toml"]
+                "static/js/vendor/*", "icons/*.png", "config.toml"]

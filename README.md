@@ -88,9 +88,13 @@ late, or the cache expired), each state once between two compactions. Only chang
 what was already so. It finds the system's own notifier: a toast from Windows PowerShell on Windows and in WSL,
 osascript on macOS, `notify-send` on Linux (from libnotify). `make notify-test` shows one and names the method; where
 none is found, the dashboard says why at start and under the live sessions. Elsewhere set `[notify] command` to a
-program of your own, with `{title}` and `{body}` in its words; `[notify] enabled = false` turns them off. On Windows the
-toasts show under "Windows PowerShell", and the notifications hold session titles, tool names and counts, never a
-prompt or a path.
+program of your own, with `{title}`, `{body}` and `{icon}` (the icon's file) in its words; `[notify] enabled = false`
+turns them off. Each kind has its icon in the live cards' colors: blue for a wait, amber or red for a secret access,
+and the compact state's tone. On Windows the toasts show as "claude-usage": each one registers that name for your user
+(`HKCU\Software\Classes\AppUserModelId\ClaudeUsage.Dashboard`, no admin), so Settings → Notifications lists it on
+its own, and copies its icon to `%LOCALAPPDATA%\claude-usage\icons`, since a toast shows only local images. To remove
+both, delete that key and that folder. macOS shows them under Script Editor, without icons. The notifications hold
+session titles, tool names and counts, never a prompt or a path.
 
 ## Updating
 ```

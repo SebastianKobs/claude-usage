@@ -243,7 +243,7 @@ def run_notify_test(context: Context) -> int:
     """notify-test: one desktop notification through the notifier serve would use, shown now, and which one it is.
     Raises CliError where none is found or it fails."""
     settings = notify.parse_notify(context.config.values)
-    test = notify.Notification("claude-usage", "A test notification: the dashboard's show like this.")
+    test = notify.Notification("claude-usage", "A test notification: the dashboard's show like this.", notify.APP_ICON)
     try:
         notifier = notify.detect(settings, notify.Environment.current())
         notify.Sender(notifier, warn).deliver([test])

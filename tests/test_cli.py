@@ -307,7 +307,8 @@ class NotifyTestCommandTest(CliCase):
         self.assertEqual(code, 0)
         self.assertIn("sent via notify-send", out)
         [command] = [call.args[0] for call in run.call_args_list]
-        self.assertEqual(command.argv[:3], ("/usr/bin/notify-send", "--app-name=claude-usage", "--"))
+        self.assertEqual(command.argv[:3], ("/usr/bin/notify-send", "--app-name=claude-usage",
+                                            f"--icon={notify.ICONS_DIR / 'app.png'}"))
 
     def test_it_says_why_none_can_show(self):
         with mock.patch.object(notify, "detect", side_effect=notify.NotifyError("notify-send not found")):

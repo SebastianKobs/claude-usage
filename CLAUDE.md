@@ -69,6 +69,7 @@ claude_usage/
                              each compaction against keeping the context
   server.py                  loopback-only http.server + JSON API (a route table)
   readers.py                 who besides you can read the projects folder: serve's warnings at start
+  icons/                     the desktop notifications' icons, PNG (notify.ICON_NAMES)
   static/                    the page: vanilla JS, inline SVG, no external resources (three vendored libraries)
     dashboard.html           the markup only
     css/common.css           layout and components, for every theme
@@ -364,7 +365,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - `config.settings()` refuses unknown keys and checks `[serve]`; `[prices]`/`[fees]` are checked in
     `pricing.py`, `[chat]`/`[auto_compact]` in `compact.py`, `[notify]` in `notify.py`. Numbers must be finite.
   - The version lives in `claude_usage/__init__.py`; `pyproject.toml` reads it from there.
-  - `package-data` must cover every file under `static/` (a test checks it), or an installed copy misses it.
+  - `package-data` must cover every file under `static/` and `icons/` (a test checks it), or an installed copy misses
+    it.
 - **Server:**
   - It binds to loopback only, and refuses requests whose `Host` header isn't a loopback name. The API exposes
     titles and first prompts, so this blocks DNS rebinding.
@@ -510,13 +512,27 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     a start sends no burst. `compact_states` ports `liveCompactBadge`, whose `states` a test holds it to.
   - The texts hold the session's title (else its project folder, else its id's start), tool names and counts, never
     a prompt or a path: the system keeps them in its notification history.
-  - The notifier (`detect`, paths only, nothing run): `[notify] command` (its words with `{title}` and `{body}`
-    replaced, one `re.sub` each, no shell); macOS osascript (the texts as `argv`, one starting with `-` behind a
-    space); Windows and WSL with interop on (`WSLInterop` in binfmt_misc) a toast from Windows PowerShell 5.1 (pwsh
-    7 can't load its WinRT types so) under PowerShell's app id, the texts as base64 of UTF-8 inside an
-    `-EncodedCommand` script (curly quotes end a PowerShell text), a pass in one run since it starts in a second or
-    two; else notify-send, the body's `& < >` escaped, on `DBUS_SESSION_BUS_ADDRESS` or the user's bus socket, else
-    unavailable (D-Bus would start a bus that shows nothing and still succeed).
+  - The notifier (`detect`, paths only, nothing run but WSL's `wslpath`): `[notify] command` (its words with
+    `{title}`, `{body}` and `{icon}`, the icon's path, replaced, one `re.sub` each, no shell); macOS osascript (the
+    texts as `argv`, one starting with `-` behind a space; no icon, and it shows as Script Editor); Windows and WSL
+    with interop on (`WSLInterop` in binfmt_misc) a toast from Windows PowerShell 5.1 (pwsh 7 can't load its WinRT
+    types so), the texts as base64 of UTF-8 inside an `-EncodedCommand` script (curly quotes end a PowerShell text),
+    a pass in one run since it starts in a second or two; else notify-send with `--icon`, the body's `& < >` escaped,
+    on `DBUS_SESSION_BUS_ADDRESS` or the user's bus socket, else unavailable (D-Bus would start a bus that shows
+    nothing and still succeed).
+  - The toasts are `claude-usage`'s own (the user's choice): each run registers `APP_ID` under
+    `HKCU\Software\Classes\AppUserModelId` (`DisplayName`, `IconUri`; no admin), which Windows names and lists in its
+    notification settings (checked 2026-09-29 on Windows 11 26200, no Start-menu shortcut needed); where that fails,
+    PowerShell's app id. Each shows its kind's icon as `appLogoOverride` (`ToastGeneric`), copied once into
+    `%LOCALAPPDATA%\claude-usage\icons` under a name with its hash (`icon_file`), since a toast shows local images
+    only; the source is the package's folder as Windows sees it (`wslpath -w` on WSL). A failed copy or registration
+    costs only the icon or the name.
+  - The icons (`icons/*.png`, `ICON_NAMES`): the live cards' `LIVE_ICONS` and a bar chart for the app, white on their
+    tone's color from the light theme (`--series-1` waiting, `--gain-text`, `--hint-warning-edge`,
+    `--hint-critical-edge`, `--text-secondary`; white on each ≥ 3:1), 96 px with 20 px corners, the glyph 64 px:
+    rendered once in a browser (the page's `LIVE_ICONS` drawn on a canvas). Render them again when an icon or one of
+    those colors changes. A compact state takes its tone's icon (`COMPACT_ICONS`: cold as soon, hint and pays
+    neutral).
   - On WSL PowerShell runs from the C: drive's mount (`windows_drive`), so no `\\wsl.localhost` folder is handed to
     it, and with a live interop socket (`interop_socket`, per send): `make start` detaches serve, and the terminal's
     socket goes when it closes; init's `1_interop` outlives it. PowerShell comes from PATH, else the C: drive.

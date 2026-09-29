@@ -4,9 +4,12 @@ states the live cards show as icons. serve's Watcher looks every WATCH_INTERVAL,
 Sender hands the notifications to the system's own notifier, found by detect():
 
 - macOS: osascript's display notification;
-- Windows, and WSL with interop on: a toast from Windows PowerShell 5.1 (pwsh 7 can't load its WinRT types so);
+- Windows, and WSL with interop on: a toast from Windows PowerShell 5.1 (pwsh 7 can't load its WinRT types so), as
+  claude-usage's own app (APP_ID, registered for the user);
 - Linux, and WSL without interop: notify-send on the user's session bus;
-- or [notify] command, whose words get the texts in place of {title} and {body}.
+- or [notify] command, whose words get the texts in place of {title} and {body}, and the icon's file for {icon}.
+
+Each notification has its kind's icon (icons/), in the live cards' colors.
 
 The first pass after a start only notes the states, so a start sends no burst. A wait notifies once, a secret level
 only as it rises, and each compact state once per stretch between compactions (Soon and Close may take turns as the
@@ -16,6 +19,8 @@ notification history.
 import base64
 import collections
 import concurrent.futures
+import functools
+import hashlib
 import os
 import platform as platform_module
 import queue
@@ -46,14 +51,26 @@ QUEUE_LIMIT = 20                        # passes waiting to be sent; more are dr
 MEMORY_LIMIT = 1000                     # sessions whose notified states are kept
 STOP_TIMEOUT = 5                        # seconds stop() waits for a thread
 APP_NAME = "claude-usage"
-# PowerShell's own app id: a toast needs a registered one, and this one comes with Windows
+# the toasts' own app id, registered for the user (no admin) with APP_NAME and the app icon, so Windows names them and
+# lists them in its notification settings; PowerShell's, which comes with Windows, where that fails
+APP_ID = "ClaudeUsage.Dashboard"
 POWERSHELL_APP_ID = "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe"
+# the icons beside the texts: the live cards' icons, white on their tone's color from the light theme, 96 px,
+# rendered once in a browser from LIVE_ICONS (figures.js); app is the app's own
+ICONS_DIR = Path(__file__).resolve().parent / "icons"
+APP_ICON = "app"
+ICON_NAMES = (APP_ICON, "waiting", "permission", "secret-medium", "secret-high", "compact-soon", "compact-close",
+              "compact-unlikely", "compact")
+# a compact state's icon, by the trash compactor's tone: cold is soon's, hint and pays have none
+COMPACT_ICONS = {"cold": "compact-soon", "soon": "compact-soon", "close": "compact-close",
+                 "unlikely": "compact-unlikely", "pays": "compact", "hint": "compact"}
+WSLPATH_TIMEOUT = 5                     # seconds wslpath may take
 WINDOWS_POWERSHELL = Path("Windows") / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
 WSL_INTEROP_MARKS = ("WSLInterop", "WSLInterop-late")
 WSL_RUN_DIR = Path("run") / "WSL"
 INIT_INTEROP = "1_interop"              # init's socket, which outlives the terminal the dashboard started from
 BUS_VARIABLE = "DBUS_SESSION_BUS_ADDRESS"
-PLACEHOLDER = re.compile(r"\{(title|body)\}")
+PLACEHOLDER = re.compile(r"\{(title|body|icon)\}")
 # the secret levels from medium up, as the live card's black hat shows them
 SECRET_LEVELS = {None: 0, "medium": 1, "high": 2}
 # the compact state a notification is titled by where several are new at once, the most pressing first
@@ -90,9 +107,22 @@ def parse_notify(values: Mapping[str, Any]) -> NotifySettings:
 
 @dataclass(frozen=True)
 class Notification:
-    """What a notification says."""
+    """What a notification says, and the name of its icon (ICON_NAMES), if any."""
     title: str
     body: str
+    icon: str | None = None
+
+
+def icon_path(name: str) -> Path:
+    """An icon's file in the package."""
+    return ICONS_DIR / f"{name}.png"
+
+
+@functools.cache
+def icon_file(name: str) -> str:
+    """An icon's file name on the Windows side, carrying its content's hash: a changed icon is copied anew."""
+    digest = hashlib.sha256(icon_path(name).read_bytes()).hexdigest()[:10]
+    return f"{name}-{digest}.png"
 
 
 @dataclass(frozen=True)
@@ -106,7 +136,7 @@ class Command:
 @dataclass(frozen=True)
 class Environment:
     """What detect() looks at: the platform, the kernel's release, the variables, a program finder, the mount table,
-    the folder /proc and /run are under, and the user id."""
+    the folder /proc and /run are under, the user id, and how Windows sees a WSL path (None where it can't)."""
     platform: str
     release: str
     environ: Mapping[str, str]
@@ -114,19 +144,31 @@ class Environment:
     mounts: str
     root: Path
     uid: int | None
+    windows_path: Callable[[str], str | None]
 
     @classmethod
     def current(cls) -> "Environment":
         """This process's environment."""
         return cls(sys.platform, platform_module.release(), os.environ, shutil.which, readers.read_mounts(),
-                   Path("/"), os.getuid() if hasattr(os, "getuid") else None)
+                   Path("/"), os.getuid() if hasattr(os, "getuid") else None, wsl_windows_path)
+
+
+def wsl_windows_path(path: str) -> str | None:
+    """A WSL path as Windows sees it (wslpath -w: \\\\wsl.localhost\\<distro>\\…), None where that fails."""
+    try:
+        completed = subprocess.run(["wslpath", "-w", path], capture_output=True, text=True, timeout=WSLPATH_TIMEOUT,
+                                   check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return completed.stdout.strip() or None if completed.returncode == 0 else None
 
 
 @dataclass(frozen=True)
 class Notifier:
     """How notifications are shown: the method in words, its kind (command, osascript, powershell, notify-send), the
-    program, a command's words, the variables to set, the folder to run in, and for WSL the folder of its interop
-    sockets, one of which is picked per send."""
+    program, a command's words, the variables to set, the folder to run in, for WSL the folder of its interop
+    sockets, one of which is picked per send, and for PowerShell the icons' folder as Windows sees it (None: no
+    icons)."""
     method: str
     kind: str
     program: str
@@ -135,6 +177,7 @@ class Notifier:
     cwd: str | None = None
     wsl: bool = False
     interop_dir: str | None = None
+    icon_dir: str | None = None
 
     def commands(self, notifications: Sequence[Notification], environ: Mapping[str, str]) -> list[Command]:
         """The commands that show these notifications: one PowerShell run for all of them (it takes a second or two
@@ -145,14 +188,15 @@ class Notifier:
             if socket is not None:
                 environment = (*environment, ("WSL_INTEROP", socket))
         if self.kind == "powershell":
-            return [Command(powershell_argv(self.program, notifications), environment, self.cwd)]
+            return [Command(powershell_argv(self.program, notifications, self.icon_dir), environment, self.cwd)]
         return [Command(self.argv(notification), environment, self.cwd) for notification in notifications]
 
     def argv(self, notification: Notification) -> tuple[str, ...]:
         """The words that show one notification, for every kind but PowerShell's."""
+        icon = str(icon_path(notification.icon)) if notification.icon else ""
         if self.kind == "command":
-            return tuple(PLACEHOLDER.sub(lambda match: getattr(notification, match.group(1)), word)
-                         for word in self.arguments)
+            texts = {"title": notification.title, "body": notification.body, "icon": icon}
+            return tuple(PLACEHOLDER.sub(lambda match: texts[match.group(1)], word) for word in self.arguments)
         if self.kind == "osascript":
             # a text starting with - would be read as an option
             texts = [f" {text}" if text.startswith("-") else text for text in (notification.title, notification.body)]
@@ -160,31 +204,74 @@ class Notifier:
                     "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", *texts)
         # notification daemons may read the body as markup
         body = notification.body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        return (self.program, f"--app-name={APP_NAME}", "--", notification.title, body)
+        return (self.program, f"--app-name={APP_NAME}", *([f"--icon={icon}"] if icon else []), "--",
+                notification.title, body)
 
 
-def powershell_argv(program: str, notifications: Sequence[Notification]) -> tuple[str, ...]:
-    """Windows PowerShell showing each notification as a toast. The texts go in as base64 of UTF-8, decoded inside:
-    PowerShell also ends a quoted text at curly quotes. The script goes in as -EncodedCommand (base64 of UTF-16LE)."""
+def powershell_argv(program: str, notifications: Sequence[Notification],
+                    icon_dir: str | None = None) -> tuple[str, ...]:
+    """Windows PowerShell showing each notification as a toast of APP_ID, registered for the user first (PowerShell's
+    own where that fails), with its icon from icon_dir (as Windows sees it), copied once to the Windows side, since a
+    toast shows local images only. The texts go in as base64 of UTF-8, decoded inside: PowerShell also ends a quoted
+    text at curly quotes. The script goes in as -EncodedCommand (base64 of UTF-16LE)."""
     def encoded(text: str) -> str:
-        """A text as base64 of its UTF-8."""
-        return base64.b64encode(text.encode("utf-8")).decode("ascii")
+        """A text as base64 of its UTF-8, quoted."""
+        return "'" + base64.b64encode(text.encode("utf-8")).decode("ascii") + "'"
 
-    toasts = "\n".join(f"Show-Toast '{encoded(notification.title)}' '{encoded(notification.body)}'"
-                       for notification in notifications)
-    script = f"""$ErrorActionPreference = 'Stop'
+    def icon_words(name: str | None) -> str:
+        """An icon's source and its name on the Windows side, or two empty words without one."""
+        if icon_dir is None or name is None:
+            return "'' ''"
+        return f"{encoded(icon_dir.rstrip(chr(92)) + chr(92) + f'{name}.png')} {encoded(icon_file(name))}"
+
+    toasts = "\n".join(f"Show-Toast {encoded(notification.title)} {encoded(notification.body)} "
+                       f"{icon_words(notification.icon)}" for notification in notifications)
+    app_icon = f"Copy-Icon {icon_words(APP_ICON)}" if icon_dir is not None else "$null"
+    # raw: the registry key and the icons' folder are Windows paths
+    script = rf"""$ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
 [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] > $null
 function Decode($text) {{ [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($text)) }}
-function Show-Toast($title, $body) {{
-  $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent(
-    [Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-  $texts = $template.GetElementsByTagName('text')
-  $texts.Item(0).AppendChild($template.CreateTextNode((Decode $title))) > $null
-  $texts.Item(1).AppendChild($template.CreateTextNode((Decode $body))) > $null
-  $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
-  [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{POWERSHELL_APP_ID}').Show($toast)
+$icons = Join-Path $env:LOCALAPPDATA '{APP_NAME}\icons'
+function Copy-Icon($source, $name) {{
+  if (-not $source) {{ return $null }}
+  try {{
+    $target = Join-Path $icons (Decode $name)
+    if (-not (Test-Path -LiteralPath $target)) {{
+      New-Item -ItemType Directory -Force -Path $icons > $null
+      Copy-Item -LiteralPath (Decode $source) -Destination $target
+    }}
+    return $target
+  }} catch {{ return $null }}
+}}
+$appIcon = {app_icon}
+$appId = '{POWERSHELL_APP_ID}'
+try {{
+  $key = 'HKCU:\Software\Classes\AppUserModelId\{APP_ID}'
+  if (-not (Test-Path -LiteralPath $key)) {{ New-Item -Path $key -Force > $null }}
+  Set-ItemProperty -LiteralPath $key -Name DisplayName -Value '{APP_NAME}'
+  if ($appIcon) {{ Set-ItemProperty -LiteralPath $key -Name IconUri -Value $appIcon }}
+  $appId = '{APP_ID}'
+}} catch {{ }}
+$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId)
+function Show-Toast($title, $body, $source, $name) {{
+  $xml = [Windows.Data.Xml.Dom.XmlDocument]::new()
+  $xml.LoadXml('<toast><visual><binding template="ToastGeneric"/></visual></toast>')
+  $binding = $xml.GetElementsByTagName('binding').Item(0)
+  foreach ($text in @((Decode $title), (Decode $body))) {{
+    $element = $xml.CreateElement('text')
+    $element.AppendChild($xml.CreateTextNode($text)) > $null
+    $binding.AppendChild($element) > $null
+  }}
+  $icon = Copy-Icon $source $name
+  if ($icon) {{
+    $image = $xml.CreateElement('image')
+    $image.SetAttribute('placement', 'appLogoOverride')
+    $image.SetAttribute('src', ([Uri]$icon).AbsoluteUri)
+    $binding.AppendChild($image) > $null
+  }}
+  $notifier.Show([Windows.UI.Notifications.ToastNotification]::new($xml))
 }}
 {toasts}
 """
@@ -210,7 +297,7 @@ def interop_socket(environ: Mapping[str, str], run_dir: Path) -> str | None:
 
 def detect(settings: NotifySettings, environment: Environment) -> Notifier:
     """The notifier for this environment: [notify] command, else the system's own (see the module's docstring). It
-    looks at paths only and runs nothing. Raises NotifyError saying what is missing."""
+    looks at paths only and runs nothing but WSL's wslpath. Raises NotifyError saying what is missing."""
     if settings.command:
         return Notifier(f"your command ({settings.command[0]})", "command", settings.command[0], settings.command)
     if environment.platform == "darwin":
@@ -220,7 +307,7 @@ def detect(settings: NotifySettings, environment: Environment) -> Notifier:
         program = environment.which("powershell.exe") or environment.which("powershell")
         if program is None:
             raise NotifyError("Windows PowerShell (powershell.exe) not found; set [notify] command")
-        return Notifier("Windows toast (powershell.exe)", "powershell", program)
+        return Notifier("Windows toast (powershell.exe)", "powershell", program, icon_dir=str(ICONS_DIR))
     missing = []
     if "microsoft" in environment.release.lower():
         binfmt = environment.root / "proc" / "sys" / "fs" / "binfmt_misc"
@@ -233,7 +320,8 @@ def detect(settings: NotifySettings, environment: Environment) -> Notifier:
                 program = str(Path(drive) / WINDOWS_POWERSHELL)
             if program is not None:
                 return Notifier("Windows toast via powershell.exe (WSL)", "powershell", program, cwd=drive, wsl=True,
-                                interop_dir=str(environment.root / WSL_RUN_DIR))
+                                interop_dir=str(environment.root / WSL_RUN_DIR),
+                                icon_dir=environment.windows_path(str(ICONS_DIR)))
             missing.append("powershell.exe not found")
     program = environment.which("notify-send")
     if program is None:
@@ -548,16 +636,19 @@ def notifications_for(session: Mapping[str, Any], state: Mapping[str, Any] | Non
     name = session_name(session)
     notes = []
     if change.wait and session.get("waiting"):
-        notes.append(Notification(wait_title(session["waiting"]), name))
+        waiting = session["waiting"]
+        notes.append(Notification(wait_title(waiting), name,
+                                  "permission" if waiting["kind"] == "permission" else "waiting"))
     if change.secret and state is not None:
         title, counts = secret_texts(state["secrets"])
-        notes.append(Notification(title, f"{name} · {counts}"))
+        notes.append(Notification(title, f"{name} · {counts}",
+                                  "secret-high" if state["secrets"].get("high", 0) else "secret-medium"))
     if change.compact and state is not None and state["current"] is not None:
         current = state["current"]
         first = next(kind for kind in COMPACT_ORDER if kind in change.compact)
         hint = f" · past your {tokens(current['hint_tokens'])} compact hint" if (
             first != "hint" and "hint" in change.compact) else ""
-        notes.append(Notification(compact_title(first, current, now), f"{name}{hint}"))
+        notes.append(Notification(compact_title(first, current, now), f"{name}{hint}", COMPACT_ICONS[first]))
     return notes
 
 

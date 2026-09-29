@@ -283,10 +283,11 @@ class ShippedConfigTest(unittest.TestCase):
     def test_the_package_data_includes_the_defaults(self):
         self.assertIn("config.toml", self.package_data())
 
-    def test_every_file_of_the_page_is_packaged(self):
+    def test_every_file_of_the_page_and_every_icon_is_packaged(self):
         patterns = [tuple(pattern.split("/")) for pattern in self.package_data()]
         package = REPO / "claude_usage"
-        files = [path.relative_to(package) for path in sorted((package / "static").rglob("*")) if path.is_file()]
+        files = [path.relative_to(package) for folder in ("static", "icons")
+                 for path in sorted((package / folder).rglob("*")) if path.is_file()]
 
         def packaged(relative):
             """Whether a glob matches: setuptools globs don't cross "/", so it needs as many parts as the path."""
