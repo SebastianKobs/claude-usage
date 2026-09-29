@@ -34,7 +34,8 @@ MAX_PORT = 65535
 TABLES: dict[str, tuple[str, ...] | None] = {
     "serve": ("port", "live_minutes"),
     "fees": ("web_search_per_1000",),
-    "chat": ("compact_hint_tokens", "auto_compact_warn_share", "compact_reminder_step", "auto_compact_reminder_step"),
+    "chat": ("compact_hint_tokens", "auto_compact_warn_share", "compact_reminder_step", "auto_compact_reminder_step",
+             "delegate_hint_tokens", "delegate_calls_ahead"),
     "auto_compact": None,
     "prices": None,
 }

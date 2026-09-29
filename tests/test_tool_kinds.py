@@ -79,7 +79,7 @@ class TranscriptToolsTest(TempDirTestCase):
 
     def rows(self):
         """The rows by (tool, kind)."""
-        return {(row.tool, row.kind): row for row in tool_kinds.transcript_tools(self.main.path, PRICES)}
+        return {(row.tool, row.kind): row for row in tool_kinds.transcript_tools(self.main.path, PRICES).rows}
 
     def test_bash_calls_are_split_by_kind_under_their_total(self):
         self.call("m1", "t1", "Bash", {"command": "grep -rn x ."}, "a" * 100)
@@ -102,7 +102,7 @@ class TranscriptToolsTest(TempDirTestCase):
         self.call("m4", "t4", "Bash", {"command": "git status"}, "x")
         self.call("m5", "t5", "Bash", {"command": "git log"}, "x")
         self.call("m6", "t6", "Bash", {"command": "git diff"}, "x")
-        order = [(row.tool, row.kind) for row in tool_kinds.transcript_tools(self.main.path, PRICES)]
+        order = [(row.tool, row.kind) for row in tool_kinds.transcript_tools(self.main.path, PRICES).rows]
         self.assertEqual(order, [("Bash", None), ("Bash", "git"), ("Bash", "list"), ("Read", None)])
 
     def test_errors_sizes_and_inputs(self):
@@ -159,6 +159,46 @@ class TranscriptToolsTest(TempDirTestCase):
         # after a compaction Claude Code may write earlier records again, with the same uuid
         self.main.bare(dict(record, message=dict(record["message"], id="m2")))
         self.assertEqual(self.rows()[("Bash", None)].calls, 1)
+
+    def exploration(self):
+        """The transcript's exploration in its current stretch."""
+        return tool_kinds.transcript_tools(self.main.path, PRICES).exploration
+
+    def test_exploration_counts_reads_searches_views_and_listings(self):
+        self.call("m1", "t1", "Read", {}, "x" * 228)
+        self.call("m2", "t2", "Grep", {}, "x" * 228)
+        self.call("m3", "t3", "Glob", {}, "x" * 228)
+        self.call("m4", "t4", "Bash", {"command": "grep -rn x ."}, "x" * 100)
+        self.call("m5", "t5", "Bash", {"command": "sed -n 1,9p a.rb"}, "x" * 100)
+        self.call("m6", "t6", "Bash", {"command": "ls"}, "x" * 100)
+        exploration = self.exploration()
+        self.assertEqual(exploration.calls, 6)
+        self.assertEqual(exploration.chars, 3 * (228 + 2) + sum(len(f'{{"command": "{command}"}}') + 100 for command
+                                                                    in ("grep -rn x .", "sed -n 1,9p a.rb", "ls")))
+        self.assertAlmostEqual(exploration.tokens, exploration.chars / tool_kinds.CHARS_PER_TOKEN)
+
+    def test_edits_runs_and_other_tools_are_no_exploration(self):
+        self.call("m1", "t1", "Edit", {}, "ok")
+        self.call("m2", "t2", "Bash", {"command": "make test"}, "ok")
+        self.call("m3", "t3", "mcp__srv__find", {}, "ok")
+        self.call("m4", "t4", "Agent", {}, "ok")
+        self.assertIsNone(self.exploration())
+
+    def test_exploration_starts_again_after_a_compaction(self):
+        self.call("m1", "t1", "Read", {}, "x" * 1000)
+        self.main.compaction()
+        self.assertIsNone(self.exploration())
+        self.call("m2", "t2", "Read", {}, "x" * 10)
+        self.assertEqual((self.exploration().calls, self.exploration().chars), (1, 12))
+
+    def test_exploration_carries_its_cost_so_far_and_each_replys_reread(self):
+        self.call("m1", "t1", "Read", {}, "x" * 2298)
+        self.call("m2", "t2", "Edit", {}, "ok")
+        self.call("m3", "t3", "Edit", {}, "ok")
+        exploration = self.exploration()
+        tokens = 2300 / tool_kinds.CHARS_PER_TOKEN
+        self.assertAlmostEqual(exploration.carried, tokens * (2.5 + 0.2) / MILLION)
+        self.assertAlmostEqual(exploration.reread, tokens * 0.2 / MILLION)
 
     def test_a_missing_file_raises(self):
         self.main.path.unlink()

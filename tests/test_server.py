@@ -655,6 +655,18 @@ class ToolKindsTest(ServerCase):
             self.assertEqual(self.kinds()[0], ("Read", None, 2))
             self.assertEqual(read_calls.call_count, 3)
 
+    def test_the_main_threads_exploration_goes_with_the_gauge(self):
+        _, payload = self.get_json("/api/session/s1")
+        self.assertEqual((payload["current"]["exploration"]["calls"], payload["current"]["exploration"]["chars"]),
+                         (1, len("{}") + 3))
+        self.assertEqual((payload["delegate_hint_tokens"], payload["delegate_calls_ahead"]), (20_000, 60))
+
+    def test_without_its_transcript_the_gauge_has_no_exploration(self):
+        self.get_json("/api/summary?days=7")
+        self.main.path.unlink()
+        _, payload = self.get_json("/api/session/s1")
+        self.assertIsNone(payload["current"]["exploration"])
+
     def test_no_command_reaches_the_payload_or_the_store(self):
         command = "grep -rn COMMAND-MARKER-7a1 src"
         self.main.assistant("m8", [tool_use_block("t8", "Bash", {"command": command})], usage(output=1))

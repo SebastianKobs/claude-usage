@@ -198,9 +198,10 @@ class UsageApp:
         self.history_changes: int | None = None
         self.last_scan: float | None = None
         self.scan_errors: tuple[str, ...] = ()
-        # each transcript's tool rows (counts only) by its path, with the (size, mtime) they were read at, so an open
-        # session's poll reads only the files that changed; its own lock, as it is read outside self.lock
-        self.tools_memo: dict[str, tuple[tuple[int, int], list[Payload]]] = {}
+        # each transcript's tool rows and exploration (counts only) by its path, with the (size, mtime) they were read
+        # at, so an open session's poll reads only the files that changed; its own lock, as it is read outside
+        # self.lock
+        self.tools_memo: dict[str, tuple[tuple[int, int], Payload]] = {}
         self.tools_lock = threading.Lock()
 
     def refresh(self) -> None:
@@ -324,8 +325,9 @@ class UsageApp:
     def session(self, session_id: str) -> Payload | None:
         """/api/session/<id>, with the main thread's current context against the auto-compact point, what its
         compactions saved so far, whether the session is live (the page polls it faster then), whether its main
-        transcript still exists (the page shows the conversation higher up then) and each transcript's tools by
-        kind (tool_kinds, None once its file is gone); None for an unknown id."""
+        transcript still exists (the page shows the conversation higher up then), each transcript's tools by
+        kind (tool_kinds, None once its file is gone) and, with the gauge, the main thread's exploration since its
+        last compaction (for the hint to delegate it); None for an unknown id."""
         with self.lock:
             self.refresh()
             detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False,
@@ -342,13 +344,18 @@ class UsageApp:
         prompt = None if path is None else transcripts.first_prompt(path)
         for agent in detail["agents"]:
             agent_path = paths.get(agent["agent_id"])
-            agent["tool_kinds"] = None if agent_path is None else self.transcript_tools(agent_path)
+            tools = None if agent_path is None else self.transcript_tools(agent_path)
+            agent["tool_kinds"] = None if tools is None else tools["rows"]
+            if agent["agent_id"] is None and current is not None:
+                current["exploration"] = None if tools is None else tools["exploration"]
         return {**detail, "prompt": prompt, "compact_hint_tokens": self.compact.hint_tokens, "current": current,
+                "delegate_hint_tokens": self.compact.delegate_hint_tokens,
+                "delegate_calls_ahead": self.compact.delegate_calls_ahead,
                 "live": live, "compaction_savings": savings, "transcript": path is not None and path.exists()}
 
-    def transcript_tools(self, path: Path) -> list[Payload] | None:
-        """A transcript's tool rows (tool_kinds.transcript_tools), read again only once the file changed; None once
-        it is gone. Only the counts stay in memory, for at most TOOLS_MEMO_LIMIT files."""
+    def transcript_tools(self, path: Path) -> Payload | None:
+        """A transcript's tool rows and exploration (tool_kinds.transcript_tools), read again only once the file
+        changed; None once it is gone. Only the counts stay in memory, for at most TOOLS_MEMO_LIMIT files."""
         try:
             stat = path.stat()
             version = (stat.st_size, stat.st_mtime_ns)
@@ -356,15 +363,15 @@ class UsageApp:
                 cached = self.tools_memo.get(str(path))
             if cached is not None and cached[0] == version:
                 return cached[1]
-            rows = [dataclasses.asdict(row) for row in tool_kinds.transcript_tools(path, self.prices)]
+            tools = dataclasses.asdict(tool_kinds.transcript_tools(path, self.prices))
         except OSError:
             return None
         with self.tools_lock:
             self.tools_memo.pop(str(path), None)
-            self.tools_memo[str(path)] = (version, rows)
+            self.tools_memo[str(path)] = (version, tools)
             while len(self.tools_memo) > TOOLS_MEMO_LIMIT:
                 del self.tools_memo[next(iter(self.tools_memo))]
-        return rows
+        return tools
 
 
 def route_live(app: UsageApp, match: re.Match[str], query: str) -> Payload:

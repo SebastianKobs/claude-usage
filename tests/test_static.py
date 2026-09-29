@@ -202,6 +202,36 @@ class ToolTableTest(unittest.TestCase):
         self.assertEqual([(row["agent"], row["tool"]) for row in rows], [("main", "Read"), ("Explore", "Bash")])
 
 
+class DelegateCallTest(unittest.TestCase):
+    def detail(self, live=True, tokens=30_000, calls_ahead=73.5, exploration=True, estimate=True):
+        """A session's detail with the main thread's exploration in this stretch and the calls ahead on average."""
+        return {"live": live, "delegate_hint_tokens": 20_000, "delegate_calls_ahead": 60,
+                "current": {"exploration": {"calls": 12, "chars": tokens * 2.3, "tokens": tokens, "carried": 0.4,
+                                            "reread": 0.006} if exploration else None,
+                            "compact_now": {"estimate": {"calls_ahead": calls_ahead} if estimate else None}}}
+
+    def shown(self, detail):
+        """delegateCallShown of this detail."""
+        return run_function("drilldown.js", "delegateCallShown", detail)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_live_session_with_much_exploration_and_many_calls_ahead_gets_the_hint(self):
+        self.assertTrue(self.shown(self.detail()))
+        self.assertTrue(self.shown(self.detail(tokens=20_000, calls_ahead=60)))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_little_exploration_or_few_calls_ahead_get_none(self):
+        self.assertFalse(self.shown(self.detail(tokens=19_999)))
+        self.assertFalse(self.shown(self.detail(calls_ahead=59.9)))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_without_what_it_rests_on_there_is_none(self):
+        for detail in (self.detail(live=False), self.detail(exploration=False), self.detail(estimate=False),
+                       self.detail(calls_ahead=None), {"live": True, "current": None}):
+            with self.subTest(detail=detail):
+                self.assertFalse(self.shown(detail))
+
+
 class CompactCallTest(unittest.TestCase):
     NOW = "2026-09-28T12:00:00.000+00:00"
     EXPIRED = "2026-09-28T11:00:00.000+00:00"

@@ -67,7 +67,10 @@ holds:
   says in plain words when to compact, with a button that copies `/compact`: once the cache has expired and
   compacting saves at once, and once the context has passed your compact hint (200K by default), whatever the
   estimate says, since how many replies still follow can't be predicted. Replayed on stored sessions, compacting
-  past the hint saved by far the most; an earlier call where compacting likely pays added next to nothing;
+  past the hint saved by far the most; an earlier call where compacting likely pays added next to nothing. A
+  second callout suggests exploring in a subagent once the main thread has read and searched a lot since its last
+  compaction (20K tokens by default) and your past sessions went on for many more replies (60): every later reply
+  re-reads what the main thread read, a subagent hands back only its summary;
 - the context per turn as cache read, cache write and new input, with each `/compact` or auto-compact as a rule;
   the picker switches between the main thread and its subagents;
 - for that transcript, the fixed overhead (the first call's context, which every later call reads again), the

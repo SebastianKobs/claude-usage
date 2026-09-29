@@ -121,6 +121,7 @@ class CompactSettingsTest(unittest.TestCase):
         self.assertEqual((settings.reminder_step, settings.auto_reminder_step), (0.5, 0.05))
         self.assertEqual(compact.auto_compact_point(settings, "claude-opus-5-5[1m]"), 967_000)
         self.assertEqual(compact.auto_compact_point(settings, "claude-haiku-4-5-20251001"), 200_000)
+        self.assertEqual((settings.delegate_hint_tokens, settings.delegate_calls_ahead), (20_000, 60))
 
     def test_missing_tables_take_the_defaults(self):
         self.assertEqual(compact.parse_compact_settings({}), compact.DEFAULT_COMPACT)
@@ -130,7 +131,8 @@ class CompactSettingsTest(unittest.TestCase):
                        {"auto_compact": {"default": -1}}, {"chat": {"compact_hint_tokens": True}},
                        {"chat": {"compact_reminder_step": 0}}, {"chat": {"auto_compact_reminder_step": 1.5}},
                        {"chat": {"compact_reminder_step": float("inf")}}, {"chat": {"auto_compact_warn_share": 5}},
-                       {"chat": 5}, {"auto_compact": "x"}):
+                       {"chat": 5}, {"auto_compact": "x"}, {"chat": {"delegate_hint_tokens": 0}},
+                       {"chat": {"delegate_calls_ahead": 1.5}}):
             with self.subTest(values=values):
                 with self.assertRaises(config.ConfigError):
                     compact.parse_compact_settings(values)

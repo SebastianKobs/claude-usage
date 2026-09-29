@@ -301,3 +301,8 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 .compact-call-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
 .compact-call-status { color: var(--text-secondary); font-size: 13px; }
 .compact-call-field { width: 9em; font: inherit; }
+/* the hint to delegate exploration: advice, so the warning's edge without its wash */
+.delegate-call { margin: 16px 0 0; border: 1px solid var(--hint-warning-edge); border-left-width: 5px;
+  color: var(--text-primary); }
+.delegate-call strong { display: block; margin-bottom: 4px; font-size: 16px; }
+.delegate-call p { margin: 4px 0; font-size: 14px; }

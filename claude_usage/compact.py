@@ -14,12 +14,15 @@ from claude_usage import pricing
 
 @dataclass(frozen=True)
 class CompactSettings:
-    """When the conversation hints at compacting ([chat] and [auto_compact] in the config)."""
+    """When the conversation hints at compacting, and the session view at delegating exploration ([chat] and
+    [auto_compact] in the config)."""
     hint_tokens: int                    # the soft hint: a heuristic threshold, not an Anthropic number
     warn_share: float                   # the stronger warning from this share of the auto-compact point on
     auto_compact: dict[str, int]        # where Claude Code auto-compacts, by model id prefix, and "default"
     reminder_step: float = 0.5          # a soft reminder at each further this share of hint_tokens
     auto_reminder_step: float = 0.05    # an auto reminder at each further this share of the auto-compact point
+    delegate_hint_tokens: int = 20_000  # the hint to delegate exploration: from this much exploration in a stretch
+    delegate_calls_ahead: int = 60      # and this many calls ahead on average
 
 
 
@@ -57,10 +60,16 @@ def parse_compact_settings(values: dict[str, Any]) -> CompactSettings:
                                 whole=False)
     if auto_step > 1:
         raise config.ConfigError(f"chat.auto_compact_reminder_step: expected a share up to 1, got {auto_step!r}")
+    delegate_tokens = positive_number("chat.delegate_hint_tokens",
+                                      chat.get("delegate_hint_tokens", DEFAULT_COMPACT.delegate_hint_tokens),
+                                      whole=True)
+    delegate_ahead = positive_number("chat.delegate_calls_ahead",
+                                     chat.get("delegate_calls_ahead", DEFAULT_COMPACT.delegate_calls_ahead), whole=True)
     points = {**DEFAULT_COMPACT.auto_compact}
     for model, point in (values.get("auto_compact") or {}).items():
         points[model] = int(positive_number(f"auto_compact.{model}", point, whole=True))
-    return CompactSettings(int(hint), float(share), points, float(step), float(auto_step))
+    return CompactSettings(int(hint), float(share), points, float(step), float(auto_step), int(delegate_tokens),
+                           int(delegate_ahead))
 
 
 

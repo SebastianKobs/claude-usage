@@ -54,6 +54,7 @@ function renderDrilldown(detail, refresh = false) {
                                         sessionCostPer100Lines(detail)))
                    : null,
     compactCall(detail),
+    delegateCall(detail),
     currentGauge(detail.current),
     el("div", {class: "chart-head"}, el("h3", {text: "Context per turn"}),
        el("span", {id: "context-note", class: "muted"}),
@@ -396,6 +397,40 @@ function compactCall(detail) {
       : "⚠ The cache has expired: compacting now saves money"}),
     ...lines.map(line => el("p", {text: line})),
     el("div", {class: "compact-call-actions"}, button, status));
+}
+
+// whether the session view suggests delegating exploration: a live session whose main thread has read, searched
+// and listed at least delegate_hint_tokens since its last compaction, with at least delegate_calls_ahead calls
+// ahead on average (the compaction estimate's calls_ahead)
+function delegateCallShown(detail) {
+  const current = detail.live ? detail.current : null;
+  const exploration = current ? current.exploration : null;
+  const estimate = current && current.compact_now ? current.compact_now.estimate : null;
+  if (!exploration || !estimate || estimate.calls_ahead === null || estimate.calls_ahead === undefined) return false;
+  return exploration.tokens >= detail.delegate_hint_tokens && estimate.calls_ahead >= detail.delegate_calls_ahead;
+}
+
+// the hint to delegate exploration, above the gauge, in plain words; a heuristic, so it says so
+function delegateCall(detail) {
+  if (!delegateCallShown(detail)) return null;
+  const exploration = detail.current.exploration;
+  const estimate = detail.current.compact_now.estimate;
+  const ahead = whole(Math.round(estimate.calls_ahead));
+  return el("div", {class: "card delegate-call", id: "delegate-call", role: "region",
+                    "aria-labelledby": "delegate-call-title"},
+    el("strong", {id: "delegate-call-title", text: "Explore in a subagent"}),
+    el("p", {text: `Since the last compaction the main thread has read, searched and listed ` +
+                   `${compact(exploration.tokens)} tokens in ${whole(exploration.calls)} calls. They stay in the ` +
+                   `context: every reply reads them again, ~${money(exploration.reread)} each and ` +
+                   `~${money(exploration.carried)} so far.`}),
+    el("p", {text: (estimate.ahead_from === "longer"
+      ? `After your past compactions, a stretch this long went on for about ${ahead} more replies on average. `
+      : `After your past compactions you went on for about ${ahead} replies on average. `) +
+      "A subagent (such as Explore) reads in its own context and hands back only its summary, so the next search " +
+      "costs less delegated."}),
+    el("p", {class: "muted", text: "A heuristic ([chat] delegate_hint_tokens and delegate_calls_ahead): replayed " +
+      "on real sessions, delegating was cheaper in 52 of 53 cases with 60 to 150 calls ahead, and about even with " +
+      "20 to 60."}));
 }
 
 // the call past the hint, which claims no saving: what each reply re-reads, and what compacting would cost and when

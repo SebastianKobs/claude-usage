@@ -35,6 +35,12 @@ auto_compact_warn_share = 0.8  # the stronger warning, from this share of the au
 # (300K, 400K, ... at 200K), and every further 5% of the auto-compact point (85%, 90%, 95%).
 compact_reminder_step = 0.5
 auto_compact_reminder_step = 0.05
+# The session view suggests delegating exploration to a subagent once the main thread's reads, searches and listings
+# since its last compaction hold this many tokens, and past sessions went on for this many more calls on average.
+# Each later call re-reads them; a subagent hands back only its summary. A heuristic: replayed on real sessions,
+# delegating was cheaper in 52 of 53 cases with 60 to 150 calls ahead, and about even with 20 to 60.
+delegate_hint_tokens = 20000
+delegate_calls_ahead = 60
 
 # Where Claude Code auto-compacts, by model id prefix (the longest match wins, a [1m] suffix is ignored): about 967K
 # on models with a native 1M window, at 200K on 200K windows (code.claude.com/docs/en/model-config, 2026-09-27).

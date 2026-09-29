@@ -405,6 +405,16 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     without its gate it lost money. In plain words (each reply's re-read, the size after, the cost once, when it pays
     back, and compacting before a break; the threshold one claims no saving and says why it shows) with a "Copy
     /compact" button: the clipboard, else the command selected in a field. It turns with the cache, like the gauge.
+  - The hint to delegate exploration (`delegateCall`, after the call to compact), for a live session
+    (`delegateCallShown`): where the main thread's exploration since its last compaction (`current.exploration`
+    from `tool_kinds.exploration`: Read, Grep, Glob, LSP and Bash search, view and list; MCP tools don't count)
+    holds at least `[chat] delegate_hint_tokens` (20K) and the compaction estimate's `calls_ahead` is at least
+    `delegate_calls_ahead` (60). It says what they cost so far and per reply, and that a subagent hands back only
+    its summary. A heuristic, and the page says so. Checked 2026-09-29 on real transcripts (counts only): whether an
+    MCP code index beats grep can't be told (no paired cases; searches that used the index read files too, 53 of
+    80), but where exploration runs can. Against the main thread carrying a subagent's exploration itself (its
+    results through the calls still ahead, and each of its rounds reading the main context), delegating was cheaper
+    in 89 of 106 subagents, 52 of 53 with 60 to 150 calls ahead, and about even with 20 to 60.
   - The conversation is its own framed section (`chatSection`), its head sticky while scrolling through it. It lists
     newest first: the calls in reverse, each call's entries (one `message_id`) in their order above its usage badge. The
     order is an arrow button (`aria-label` "Oldest first", `aria-pressed`, kept as a preference): down for newest first,

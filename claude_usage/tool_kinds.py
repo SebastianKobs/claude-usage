@@ -3,7 +3,8 @@ from the file on demand, never stored. A command's kind comes from its programs,
 interpreter fed code inline is an inline script whether it is Python, Node, PHP or a shell.
 
 What a call costs beyond its own turn is what the later calls carry: its input (which the model wrote) and its
-result stay in the context and are read again by every call after it, up to the next compaction."""
+result stay in the context and are read again by every call after it, up to the next compaction. Exploration (reads,
+searches, views and listings) in the main thread is carried that way; in a subagent only its summary is."""
 import json
 import math
 import re
@@ -26,6 +27,10 @@ BASH = "Bash"
 CHARS_PER_TOKEN = 2.3
 
 KINDS = ("search", "view", "list", "edit_in_place", "write_file", "inline_script", "git", "run")
+# looking at code rather than changing or running it: these tools, and Bash calls of these kinds. MCP tools don't
+# count, since what one does is unknown.
+EXPLORING_TOOLS = frozenset({"Read", "Grep", "Glob", "LSP", "NotebookRead"})
+EXPLORING_KINDS = frozenset({"search", "view", "list"})
 SEARCH_PROGRAMS = frozenset({"grep", "egrep", "fgrep", "rg", "ag", "ack", "find", "fd", "fdfind", "locate",
                              "mdfind", "findstr"})
 VIEW_PROGRAMS = frozenset({"cat", "head", "tail", "less", "more", "nl", "bat", "batcat", "sed", "awk", "gawk", "cut",
@@ -71,6 +76,28 @@ class CallFact:
     calls_after: int                    # the calls after it, up to the next compaction or the last call so far
     carried: float | None               # what those calls pay to have it in their context; None unpriced
     input_cost: float | None            # its input at the output price; None unpriced
+    current: bool = False               # in the transcript's last stretch, since its last compaction
+    reread: float | None = None         # what each later call pays to read it again; None unpriced
+
+    @property
+    def chars(self) -> int:
+        """What it adds to the context: its input and its result."""
+        return self.input_chars + (self.result_chars or 0)
+
+    @property
+    def exploring(self) -> bool:
+        """Whether it looks at code (EXPLORING_TOOLS, EXPLORING_KINDS)."""
+        return self.tool in EXPLORING_TOOLS or self.kind in EXPLORING_KINDS
+
+
+@dataclass(frozen=True)
+class Exploration:
+    """The exploring calls of a transcript's last stretch: what they hold and cost to carry."""
+    calls: int
+    chars: int
+    tokens: float                       # chars at CHARS_PER_TOKEN
+    carried: float | None               # what the later calls paid so far; None unpriced
+    reread: float | None                # what each further call pays to read them again
 
 
 @dataclass(frozen=True)
@@ -227,6 +254,7 @@ def read_calls(path: Path, prices: pricing.Prices) -> list[CallFact]:
                 if block.get("type") == "tool_result" and tool_use_id is not None:
                     results[tool_use_id] = (transcripts.result_chars(block.get("content")),
                                             block.get("is_error") is True)
+    current_stretch = stretch
     last_in_stretch: dict[int, int] = {}
     for number, message_stretch in positions.values():
         last_in_stretch[message_stretch] = number
@@ -236,14 +264,15 @@ def read_calls(path: Path, prices: pricing.Prices) -> list[CallFact]:
         calls_after = last_in_stretch[message_stretch] - number
         result_chars, error = results.get(tool_use_id, (None, False))
         rates = turns.turn_rates(prices, conversation.as_turn(accumulator.usage(call.message_id)))
-        carried = input_cost = None
+        carried = input_cost = reread = None
         if rates is not None:
             tokens = (call.input_chars + (result_chars or 0)) / CHARS_PER_TOKEN
             # the next call writes it to the cache, each one after that reads it
             carried = tokens * (rates.write + rates.read * (calls_after - 1)) if calls_after else 0.0
             input_cost = call.input_chars / CHARS_PER_TOKEN * rates.output
+            reread = tokens * rates.read
         facts.append(CallFact(call.tool, call.kind, call.input_chars, result_chars, error, calls_after, carried,
-                              input_cost))
+                              input_cost, message_stretch == current_stretch, reread))
     return facts
 
 
@@ -299,6 +328,27 @@ def tool_rows(facts: list[CallFact]) -> list[ToolKindRow]:
     return rows
 
 
-def transcript_tools(path: Path, prices: pricing.Prices) -> list[ToolKindRow]:
-    """The Tools table's rows of one transcript file (tool_rows over read_calls). Raises OSError if it is gone."""
-    return tool_rows(read_calls(path, prices))
+def exploration(facts: list[CallFact]) -> Exploration | None:
+    """The exploring calls of the last stretch summed; None without one."""
+    exploring = [fact for fact in facts if fact.current and fact.exploring]
+    if not exploring:
+        return None
+    chars = sum(fact.chars for fact in exploring)
+    return Exploration(calls=len(exploring), chars=chars, tokens=chars / CHARS_PER_TOKEN,
+                       carried=priced_sum(fact.carried for fact in exploring),
+                       reread=priced_sum(fact.reread for fact in exploring))
+
+
+@dataclass(frozen=True)
+class TranscriptTools:
+    """What the session view shows of a transcript's tool calls: the Tools table's rows and the last stretch's
+    exploration."""
+    rows: tuple[ToolKindRow, ...]
+    exploration: Exploration | None
+
+
+def transcript_tools(path: Path, prices: pricing.Prices) -> TranscriptTools:
+    """The Tools table's rows (tool_rows) and the exploration of one transcript file, from one read (read_calls).
+    Raises OSError if it is gone."""
+    facts = read_calls(path, prices)
+    return TranscriptTools(tuple(tool_rows(facts)), exploration(facts))
