@@ -446,8 +446,7 @@ def compact_preview(turns: list[Turn], past: list[VersusKeeping | None], prices:
     (the last context and reply), until when the cache stays warm (the last request plus the lifetime of the latest
     writes; other requests may refresh it), and what keeping costs across a break past that (rewriting it all).
     Estimated from past compactions (preview_estimate, None without one that estimated a summary), calls_so_far
-    being the calls since the last compaction, and whether compacting now likely pays (likely_pays). None without
-    turns or a price."""
+    being the calls since the last compaction. None without turns or a price."""
     if not turns:
         return None
     last = turns[-1]
@@ -466,7 +465,7 @@ def compact_preview(turns: list[Turn], past: list[VersusKeeping | None], prices:
             "cache_warm_until": None if start is None
             else (start + cache_ttl(writer)).isoformat(timespec="milliseconds"),
             "keep_across_break": before * (rates.write - rates.read), "stored_compactions": len(known),
-            "estimate": estimate, "likely_pays": likely_pays(estimate)}
+            "estimate": estimate}
 
 
 def preview_estimate(last: Turn, past: list[VersusKeeping], rates: Rates,

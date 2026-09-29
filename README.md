@@ -63,11 +63,11 @@ holds:
 - the main thread's latest context against the auto-compact point, with the compact hint marked, the turns since
   the last compaction and an estimate of the turns left at the recent pace. Below it, what compacting now would
   cost: what each call re-reads, until when the cache stays warm and what keeping costs after that, and from your
-  stored compactions after how many replies compacting would pay off. While the session runs and compacting now
-  would likely save money, a callout above it says so in plain words, with a button that copies `/compact`. It
-  waits until the last compaction has gained at least what it cost, except once the cache has expired (then
-  compacting saves at once) and once the context has passed your compact hint (200K by default): from there it
-  shows whatever the estimate says, since how many replies still follow can't be predicted;
+  stored compactions after how many replies compacting would pay off. While the session runs, a callout above it
+  says in plain words when to compact, with a button that copies `/compact`: once the cache has expired and
+  compacting saves at once, and once the context has passed your compact hint (200K by default), whatever the
+  estimate says, since how many replies still follow can't be predicted. Replayed on stored sessions, compacting
+  past the hint saved by far the most; an earlier call where compacting likely pays added next to nothing;
 - the context per turn as cache read, cache write and new input, with each `/compact` or auto-compact as a rule;
   the picker switches between the main thread and its subagents;
 - for that transcript, the fixed overhead (the first call's context, which every later call reads again), the
@@ -104,7 +104,7 @@ break-even is the number of replies after which these small savings have covered
 - Compacting costs about $0.40 once (the summary plus caching the new start).
 - $0.40 ÷ $0.05 = 8: after about 8 replies compacting has paid for itself; every reply after that is profit.
 - After your past compactions you went on for 25 replies on average. 8 is less than 25, so compacting now would
-  likely save money, and the page says so.
+  likely save money, and the conversation says so at that reply.
 
 **Where the numbers come from.** The 300K and the $0.06 are exact: they are your last call. The rest is learnt from
 your stored compactions: how big the context was right after them (the summary plus what Claude Code sends every
@@ -134,9 +134,8 @@ paid off: saved in green, cost more in red, and the latest one, while it is stil
 **Where the page shows it.**
 - The gauge in the session view: what each reply re-reads, when the cache runs out, and what compacting now would
   cost and after how many replies it would pay off.
-- The callout above it, with a button that copies `/compact`, while compacting now likely saves money and the
-  last compaction has gained at least what it cost, once the cache has expired and compacting saves at once, and
-  whenever the context is past your compact hint.
+- The callout above it, with a button that copies `/compact`, once the cache has expired and compacting saves at
+  once, and whenever the context is past your compact hint.
 - The conversation: a warning at the reply where compacting started to pay, sterner than the 200K hint.
 - The compactions table and the marker at each compaction in the conversation: how each past one worked out,
   and the table's heading the total.
