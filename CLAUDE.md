@@ -55,6 +55,7 @@ claude_usage/
   conversation.py            a transcript's conversation for the session view, read on demand
   tool_kinds.py              a transcript's tool calls by tool and Bash command kind, sizes and carried cost, read on
                              demand
+  secret_paths.py            the paths a tool call names, matched against the [secrets] patterns
   store.py                   the SQLite history: schema, migrations, backup
   scan.py                    incremental scan and background usage: transcripts into the store
   queries.py                 what the report and the dashboard read from the store
@@ -361,6 +362,19 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       later calls carry: a call's input and result at `CHARS_PER_TOKEN` (2.3, the median over 1,966 single-result
       steps), written once by the next call and read by each one after it up to the next compaction, at the calling
       message's rates. The input costs once more at the output price, since the model wrote it.
+  - `/api/session/<id>` also gives `secret_accesses`: every call of the transcripts still there that named a path
+    matching `[secrets] patterns` (`secret_paths`, found in the same read, `tool_kinds.read_calls(find_secrets)`),
+    with its time, agent, tool, the path as given, the pattern and whether its result was an error, by time. The
+    paths stay in the memo with the counts, never in the store (a test checks the store files).
+    - A pattern is a name matching any part of a path (`.env`, `*.pem`), a path from `~` or `/` matching it and
+      everything below it (wildcards per part), or either negated with `!`; the last match decides, as in a
+      .gitignore. `~`, `$HOME` and `${HOME}` are the server's home, a relative path counts from the record's `cwd`.
+    - The paths a call names (`call_paths`): a file tool's path inputs by name (`PATH_KEY`: `file_path`, `path`,
+      `glob`, …; Glob's `pattern` too, never Grep's regular expression or text a call writes); a command's words
+      and option values (`--env-file=.env`), quoted text only where it holds a slash (a commit message naming
+      `.env` is no access), no URLs, and a heredoc's quoted paths only for an inline script. A heuristic.
+    - The page shows them under the tiles, before the call to compact (`secretAccesses`): a card edged in
+      `--status-critical`, its heading on the critical wash with a `!` mark, the table paged; nothing without one.
   - `/api/session/<id>/chat[?agent=<id>]` reads the conversation from the transcript per request, with tool inputs
     and results cut to `CHAT_TOOL_LIMIT`. Each reply carries its effort level, and the last entry of each API call
     its final usage with the cost at the configured prices, both computed per request. Nothing of it is stored,

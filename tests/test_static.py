@@ -267,6 +267,25 @@ class ToolTableTest(unittest.TestCase):
         self.assertEqual([(row["agent"], row["tool"]) for row in rows], [("main", "Read"), ("Explore", "Bash")])
 
 
+class SecretAccessTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_result_says_whether_the_call_ran(self):
+        cases = [(True, "error: blocked or failed"), (False, "ran"), (None, "no result yet")]
+        for error, text in cases:
+            with self.subTest(error=error):
+                self.assertEqual(run_function("drilldown.js", "secretAccessResult", {"error": error}), text)
+
+    def test_the_warning_comes_after_the_tiles_and_before_the_call_to_compact(self):
+        source = read(STATIC / "js" / "drilldown.js")
+        render = source[source.index("function renderDrilldown("):source.index("\n}\n", source.index(
+            "function renderDrilldown("))]
+        self.assertLess(render.index("runtimeTiles("), render.index("secretAccesses(detail"))
+        self.assertLess(render.index("secretAccesses(detail"), render.index("compactCall(detail)"))
+
+    def test_the_warning_is_edged_in_the_critical_color(self):
+        self.assertIn("var(--status-critical)", css_block(read(STATIC / "css" / "common.css"), ".secret-alert"))
+
+
 class DelegateCallTest(unittest.TestCase):
     def detail(self, live=True, tokens=30_000, calls_ahead=73.5, exploration=True, estimate=True):
         """A session's detail with the main thread's exploration in this stretch and the calls ahead on average."""
@@ -473,7 +492,7 @@ class PagingTest(unittest.TestCase):
         self.assertRegex(script, r"const PAGE_SIZES = \[10, 25, 50\];")
 
     def test_every_table_is_paged(self):
-        sites = {"tables.js": 7, "limits.js": 1, "drilldown.js": 8, "chartkit.js": 1}
+        sites = {"tables.js": 7, "limits.js": 1, "drilldown.js": 9, "chartkit.js": 1}
         for script, count in sites.items():
             with self.subTest(script=script):
                 self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)

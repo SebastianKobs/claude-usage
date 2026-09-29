@@ -31,6 +31,7 @@ from claude_usage import conversation
 from claude_usage import pricing
 from claude_usage import queries
 from claude_usage import scan
+from claude_usage import secret_paths
 from claude_usage import store
 from claude_usage import tool_kinds
 from claude_usage import transcripts
@@ -181,7 +182,8 @@ class UsageApp:
     def __init__(self, usage_store: store.Store, projects_dir: Path, prices: pricing.Prices, live_minutes: float,
                  project: str | None = None, prices_checked: str | None = None, retention_days: int = 0,
                  clock: Callable[[], float] = time.monotonic,
-                 compact: compact.CompactSettings = compact.DEFAULT_COMPACT) -> None:
+                 compact: compact.CompactSettings = compact.DEFAULT_COMPACT, secret_patterns: tuple[str, ...] = (),
+                 home: str | None = None) -> None:
         self.store = usage_store
         self.projects_dir = projects_dir
         self.prices = prices
@@ -191,6 +193,9 @@ class UsageApp:
         self.clock = clock
         self.compact = compact
         self.retention_days = retention_days
+        # the [secrets] patterns, matched against the paths the tool calls name; none looks for nothing
+        self.find_secrets = (secret_paths.finder(secret_patterns, home or str(Path.home()))
+                             if secret_patterns else None)
         self.lock = threading.Lock()
         # every stored compaction compared with keeping the context, for the gauge's preview, and the store's change
         # count it was computed at: rebuilt only once a scan changed the store
@@ -198,9 +203,9 @@ class UsageApp:
         self.history_changes: int | None = None
         self.last_scan: float | None = None
         self.scan_errors: tuple[str, ...] = ()
-        # each transcript's tool rows and exploration (counts only) by its path, with the (size, mtime) they were read
-        # at, so an open session's poll reads only the files that changed; its own lock, as it is read outside
-        # self.lock
+        # each transcript's tool rows and exploration (counts only) and the paths of its secret accesses by its path,
+        # with the (size, mtime) they were read at, so an open session's poll reads only the files that changed; its
+        # own lock, as it is read outside self.lock
         self.tools_memo: dict[str, tuple[tuple[int, int], Payload]] = {}
         self.tools_lock = threading.Lock()
 
@@ -326,8 +331,9 @@ class UsageApp:
         """/api/session/<id>, with the main thread's current context against the auto-compact point, what its
         compactions saved so far, whether the session is live (the page polls it faster then), whether its main
         transcript still exists (the page shows the conversation higher up then), each transcript's tools by
-        kind (tool_kinds, None once its file is gone) and, with the gauge, the main thread's exploration since its
-        last compaction (for the hint to delegate it); None for an unknown id."""
+        kind (tool_kinds, None once its file is gone), with the gauge the main thread's exploration since its last
+        compaction (for the hint to delegate it), and every call of the transcripts still there that named a possible
+        secret location (secret_accesses, by time); None for an unknown id."""
         with self.lock:
             self.refresh()
             detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False,
@@ -342,20 +348,25 @@ class UsageApp:
             return None
         # file reads needn't hold up the other requests
         prompt = None if path is None else transcripts.first_prompt(path)
+        secrets = []
         for agent in detail["agents"]:
             agent_path = paths.get(agent["agent_id"])
             tools = None if agent_path is None else self.transcript_tools(agent_path)
             agent["tool_kinds"] = None if tools is None else tools["rows"]
+            secrets += [{**access, "agent_type": agent["agent_type"], "agent_id": agent["agent_id"]}
+                        for access in (tools["secret_accesses"] if tools is not None else ())]
             if agent["agent_id"] is None and current is not None:
                 current["exploration"] = None if tools is None else tools["exploration"]
         return {**detail, "prompt": prompt, "compact_hint_tokens": self.compact.hint_tokens, "current": current,
                 "delegate_hint_tokens": self.compact.delegate_hint_tokens,
                 "delegate_calls_ahead": self.compact.delegate_calls_ahead,
-                "live": live, "compaction_savings": savings, "transcript": path is not None and path.exists()}
+                "live": live, "compaction_savings": savings, "transcript": path is not None and path.exists(),
+                "secret_accesses": sorted(secrets, key=lambda access: access["time"] or "")}
 
     def transcript_tools(self, path: Path) -> Payload | None:
-        """A transcript's tool rows and exploration (tool_kinds.transcript_tools), read again only once the file
-        changed; None once it is gone. Only the counts stay in memory, for at most TOOLS_MEMO_LIMIT files."""
+        """A transcript's tool rows, exploration and secret accesses (tool_kinds.transcript_tools), read again only
+        once the file changed; None once it is gone. Only the counts and those paths stay in memory, for at most
+        TOOLS_MEMO_LIMIT files."""
         try:
             stat = path.stat()
             version = (stat.st_size, stat.st_mtime_ns)
@@ -363,7 +374,7 @@ class UsageApp:
                 cached = self.tools_memo.get(str(path))
             if cached is not None and cached[0] == version:
                 return cached[1]
-            tools = dataclasses.asdict(tool_kinds.transcript_tools(path, self.prices))
+            tools = dataclasses.asdict(tool_kinds.transcript_tools(path, self.prices, self.find_secrets))
         except OSError:
             return None
         with self.tools_lock:

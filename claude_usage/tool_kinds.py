@@ -5,6 +5,7 @@ interpreter fed code inline is an inline script whether it is Python, Node, PHP 
 What a call costs beyond its own turn is what the later calls carry: its input (which the model wrote) and its
 result stay in the context and are read again by every call after it, up to the next compaction. Exploration (reads,
 searches, views and listings) in the main thread is carried that way; in a subagent only its summary is."""
+import dataclasses
 import json
 import math
 import re
@@ -127,6 +128,21 @@ class Exploration:
     tokens: float                       # chars at CHARS_PER_TOKEN
     carried: float | None               # what the later calls paid so far; None unpriced
     reread: float | None                # what each further call pays to read them again
+
+
+@dataclass(frozen=True)
+class SecretAccess:
+    """A tool call that named a possible secret location (secret_paths): the path as it gave it, never what it read
+    or wrote."""
+    time: str | None                    # its record's timestamp
+    tool: str                           # the display name
+    path: str
+    pattern: str                        # the [secrets] pattern it matched
+    error: bool | None                  # whether its result was an error (blocked or failed); None while it hasn't come
+
+
+# a call's name, input and working folder -> each path it named that marks a possible secret, with the pattern
+SecretFinder = Callable[[str, dict[str, Any], str | None], list[tuple[str, str]]]
 
 
 @dataclass(frozen=True)
@@ -350,10 +366,13 @@ class PendingCall:
     options: str | None
 
 
-def read_calls(path: Path, prices: pricing.Prices) -> list[CallFact]:
-    """Every tool call of a transcript file in order, as counts. A record written again (the same uuid) counts
-    once; synthetic messages (API errors) are no calls. Raises OSError if the file is gone."""
+def read_calls(path: Path, prices: pricing.Prices,
+               find_secrets: SecretFinder | None = None) -> tuple[list[CallFact], list[SecretAccess]]:
+    """Every tool call of a transcript file in order, as counts, and those that named a possible secret location
+    (find_secrets, with the record's working folder). A record written again (the same uuid) counts once; synthetic
+    messages (API errors) are no calls. Raises OSError if the file is gone."""
     calls: dict[str, PendingCall] = {}
+    secrets: list[tuple[str, SecretAccess]] = []
     results: dict[str, tuple[int, bool]] = {}
     positions: dict[str, tuple[int, int]] = {}      # message id -> (its call number, its stretch)
     accumulator = transcripts.MessageAccumulator()
@@ -383,6 +402,11 @@ def read_calls(path: Path, prices: pricing.Prices) -> list[CallFact]:
                 calls[tool_use_id] = PendingCall(call_tool(name), kind,
                                                  len(json.dumps(tool_input, ensure_ascii=False)), message_id, detail,
                                                  options)
+                if find_secrets is not None:
+                    time = transcripts.text_or_none(record.get("timestamp"))
+                    secrets += [(tool_use_id, SecretAccess(time, transcripts.display_name(name), found, pattern, None))
+                                for found, pattern in find_secrets(name, tool_input,
+                                                                   transcripts.text_or_none(record.get("cwd")))]
         elif kind == "user":
             for block in transcripts.content_blocks(record):
                 tool_use_id = transcripts.text_or_none(block.get("tool_use_id"))
@@ -409,7 +433,9 @@ def read_calls(path: Path, prices: pricing.Prices) -> list[CallFact]:
         facts.append(CallFact(call.tool, call.kind, call.input_chars, result_chars, error, calls_after, carried,
                               input_cost, message_stretch == current_stretch, reread, call.detail,
                               call.options))
-    return facts
+    accesses = [dataclasses.replace(access, error=results[tool_use_id][1]) if tool_use_id in results else access
+                for tool_use_id, access in secrets]
+    return facts, accesses
 
 
 def nearest_rank(values: list[int], share: float) -> int | None:
@@ -494,14 +520,15 @@ def exploration(facts: list[CallFact]) -> Exploration | None:
 
 @dataclass(frozen=True)
 class TranscriptTools:
-    """What the session view shows of a transcript's tool calls: the Tools table's rows and the last stretch's
-    exploration."""
+    """What the session view shows of a transcript's tool calls: the Tools table's rows, the last stretch's
+    exploration, and the calls that named a possible secret location."""
     rows: tuple[ToolKindRow, ...]
     exploration: Exploration | None
+    secret_accesses: tuple[SecretAccess, ...] = ()
 
 
-def transcript_tools(path: Path, prices: pricing.Prices) -> TranscriptTools:
-    """The Tools table's rows (tool_rows) and the exploration of one transcript file, from one read (read_calls).
-    Raises OSError if it is gone."""
-    facts = read_calls(path, prices)
-    return TranscriptTools(tuple(tool_rows(facts)), exploration(facts))
+def transcript_tools(path: Path, prices: pricing.Prices, find_secrets: SecretFinder | None = None) -> TranscriptTools:
+    """The Tools table's rows (tool_rows), the exploration and, with find_secrets, the secret accesses of one
+    transcript file, from one read (read_calls). Raises OSError if it is gone."""
+    facts, accesses = read_calls(path, prices, find_secrets)
+    return TranscriptTools(tuple(tool_rows(facts)), exploration(facts), tuple(accesses))

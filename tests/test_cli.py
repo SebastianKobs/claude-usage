@@ -303,6 +303,15 @@ class ServeCommandTest(CliCase):
         self.assertIn("compact_hint_tokens", err)
         self.assertNotIn("Traceback", err)
 
+    def test_bad_secret_patterns_exit_1_without_a_traceback(self):
+        settings = config.load(overrides=[])
+        settings.values["secrets"] = {"patterns": ".env"}
+        with mock.patch.object(cli.config, "load", return_value=settings):
+            code, _, err = self.run_cli("serve", "--port", "8765")
+        self.assertEqual(code, 1)
+        self.assertIn("secrets.patterns", err)
+        self.assertNotIn("Traceback", err)
+
 
 class ArgumentTest(CliCase):
     def test_help_exits_0(self):

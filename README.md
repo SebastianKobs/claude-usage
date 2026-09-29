@@ -77,6 +77,9 @@ holds:
   cache rebuilds and what they cost extra, the compactions, and the turns that grew the context most with the
   tools the call before ran;
 - per subagent, what it returned to the main thread; a Workflow run's agents under one row per run;
+- a warning under the tiles, with a red edge and a "!", listing every tool call that named a possible secret
+  location (`.env`, keys, `~/.ssh`, `~/.aws`, … as set in `[secrets] patterns`): when, which agent and tool, the path,
+  the pattern it matched and whether it ran or was blocked, while the transcript exists;
 - the tools each transcript called, with Bash split by what a command does (search, view, edit in place, write a
   file, inline script, git, run: by the programs, in any language; each kind by program, git by subcommand, and
   each of those by the options it ran with, never its arguments or paths, behind a button; Read, Edit and Write
@@ -175,6 +178,7 @@ never silently leaves a default in place.
 | `[fees]` `web_search_per_1000` | the flat web-search fee |
 | `[chat]` | when a session's conversation view hints at compacting (a heuristic threshold, and reminder steps) |
 | `[auto_compact]` | where Claude Code auto-compacts, by model prefix; `default` for your `autoCompactWindow` |
+| `[secrets]` `patterns` | where secrets may be, for the session view's warning; `!` exempts, an override replaces all |
 
 The store is `data/usage.sqlite` when running from a checkout, and `~/.local/share/claude-usage/usage.sqlite` when
 installed (`$XDG_DATA_HOME` and `$XDG_CONFIG_HOME` are respected). `--store` and `--projects-dir` override both.
@@ -183,7 +187,8 @@ installed (`$XDG_DATA_HOME` and `$XDG_CONFIG_HOME` are respected). `--store` and
 The store keeps token counts, model names, tool names and result sizes, session titles and project paths. It never
 stores prompt text. While a transcript still exists, the drilldown reads its first prompt, and on request the whole
 conversation (prompts, replies, tool inputs and results, cut to a few thousand characters each), from the file for
-that one request. The server answers only on loopback addresses and only to loopback host names.
+that one request. The paths of possible secret accesses are read the same way, and never their contents. The
+server answers only on loopback addresses and only to loopback host names.
 
 ## Development
 See `CLAUDE.md` for the working rules, the style, the transcript format and the design rules.

@@ -53,6 +53,7 @@ function renderDrilldown(detail, refresh = false) {
                                           ? "from its cost record" : "estimated from the transcripts",
                                         sessionCostPer100Lines(detail)))
                    : null,
+    secretAccesses(detail, key("secrets")),
     compactCall(detail),
     delegateCall(detail),
     currentGauge(detail.current),
@@ -437,6 +438,37 @@ function compactCallKind(detail, now) {
     return "cold";
   }
   return fallback;
+}
+
+// Every call that named a possible secret location ([secrets] patterns, matched by the server), under a warning that
+// draws the eye: the path as the call gave it, the pattern, and whether it ran; nothing while none did.
+function secretAccesses(detail, pagerKey) {
+  const accesses = detail.secret_accesses || [];
+  if (!accesses.length) return null;
+  const head = el("tr", {}, el("th", {text: "Time"}), el("th", {text: "Agent"}), el("th", {text: "Tool"}),
+                  el("th", {text: "Path"}), el("th", {text: "Matched", title: "the [secrets] pattern it matched"}),
+                  el("th", {text: "Result"}));
+  const rows = accesses.map(access => el("tr", {},
+    el("td", {text: when(access.time)}), el("td", {text: access.agent_type}), el("td", {text: access.tool}),
+    el("td", {class: "secret-path", text: access.path}), el("td", {text: access.pattern}),
+    el("td", {text: secretAccessResult(access)})));
+  const calls = accesses.length === 1 ? "1 call" : `${whole(accesses.length)} calls`;
+  return el("div", {class: "card secret-alert", id: "secret-alert", role: "region",
+                    "aria-labelledby": "secret-alert-title"},
+    el("h3", {class: "secret-alert-head", id: "secret-alert-title"},
+       el("span", {class: "secret-alert-icon", "aria-hidden": "true", text: "!"}),
+       `Possible secret access: ${calls}`),
+    el("p", {text: "These tool calls named a path that matches a possible secret location. Check that each was " +
+                   "meant; an error means it was blocked or failed."}),
+    el("div", {class: "table-wrap"}, paged(pagerKey, el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows)))),
+    el("p", {class: "muted", text: "Matched against [secrets] patterns in the config: file tools by their path, " +
+                                   "commands by their words (quoted text only where it holds a path)."}));
+}
+
+// whether a call that named a secret location ran
+function secretAccessResult(access) {
+  if (access.error === null || access.error === undefined) return "no result yet";
+  return access.error ? "error: blocked or failed" : "ran";
 }
 
 // the call to compact above the gauge, in plain words, with a button that copies /compact

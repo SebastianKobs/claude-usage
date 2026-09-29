@@ -1,6 +1,7 @@
 """tool_kinds.py: a transcript's tool calls by tool and Bash command kind, read from the file on demand."""
 import unittest
 
+from claude_usage import secret_paths
 from claude_usage import tool_kinds
 from helpers import MILLION
 from helpers import PRICES
@@ -414,6 +415,33 @@ class TranscriptToolsTest(TempDirTestCase):
         tokens = 2300 / tool_kinds.CHARS_PER_TOKEN
         self.assertAlmostEqual(exploration.carried, tokens * (2.5 + 0.2) / MILLION)
         self.assertAlmostEqual(exploration.reread, tokens * 0.2 / MILLION)
+
+    def secrets(self, patterns=(".env", "~/.ssh")):
+        """The transcript's calls that named a possible secret location, matched with a home of /home/dev."""
+        find = secret_paths.finder(patterns, "/home/dev")
+        return tool_kinds.transcript_tools(self.main.path, PRICES, find).secret_accesses
+
+    def test_calls_naming_a_secret_location_are_listed_with_their_result(self):
+        [record] = self.main.assistant("m1", [tool_use_block("t1", "Read", {"file_path": "/srv/.env"})],
+                                       usage(output=5))
+        self.main.tool_result("t1", "denied", is_error=True)
+        self.call("m2", "t2", "Bash", {"command": "ls ~/.ssh"}, "config")
+        self.call("m3", "t3", "Read", {"file_path": "a.go"}, "x")
+        self.main.assistant("m4", [tool_use_block("t4", "Read", {"file_path": ".env"})], usage(output=5))
+        accesses = self.secrets()
+        self.assertEqual([(access.tool, access.path, access.pattern, access.error) for access in accesses],
+                         [("Read", "/srv/.env", ".env", True), ("Bash", "~/.ssh", "~/.ssh", False),
+                          ("Read", ".env", ".env", None)])
+        self.assertEqual(accesses[0].time, record["timestamp"])
+
+    def test_a_relative_path_counts_from_the_calls_working_folder(self):
+        self.main = self.projects.session("s2", project="/home/dev")
+        self.call("m1", "t1", "Read", {"file_path": ".ssh/id_ed25519"}, "x")
+        self.assertEqual([access.pattern for access in self.secrets()], ["~/.ssh"])
+
+    def test_without_a_matcher_nothing_is_listed(self):
+        self.call("m1", "t1", "Read", {"file_path": ".env"}, "x")
+        self.assertEqual(tool_kinds.transcript_tools(self.main.path, PRICES).secret_accesses, ())
 
     def test_a_missing_file_raises(self):
         self.main.path.unlink()

@@ -60,6 +60,7 @@ class FakeClock:
 class ServerCase(TempDirTestCase):
     """Two sessions in two projects, and a server for them on a free port."""
     project = None
+    secret_patterns = ()
 
     def setUp(self):
         super().setUp()
@@ -77,7 +78,8 @@ class ServerCase(TempDirTestCase):
         self.store = store.Store(self.store_path, check_same_thread=False)
         self.addCleanup(self.store.close)
         self.app = server.UsageApp(self.store, self.projects.root, PRICES, live_minutes=5, project=self.project,
-                                   prices_checked="2026-09-27", clock=self.clock)
+                                   prices_checked="2026-09-27", clock=self.clock,
+                                   secret_patterns=self.secret_patterns, home="/home/dev")
         self.httpd = server.make_server(self.app, "127.0.0.1", 0)
         thread = threading.Thread(target=self.httpd.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
         thread.start()
@@ -681,6 +683,45 @@ class ToolKindsTest(ServerCase):
         stored = b"".join(path.read_bytes() for path in self.store_path.parent.glob(f"{self.store_path.name}*"))
         self.assertNotIn(b"COMMAND-MARKER-7a1", stored)
         self.assertNotIn(b"RESULT-MARKER-2b9", stored)
+
+
+class SecretAccessTest(ServerCase):
+    """The calls that named a possible secret location, in /api/session, read from the transcripts on demand."""
+    secret_patterns = (".env", "~/.ssh")
+
+    def accesses(self):
+        """/api/session/s1's secret_accesses."""
+        _, payload = self.get_json("/api/session/s1")
+        return payload["secret_accesses"]
+
+    def test_each_transcripts_calls_are_listed_with_their_agent(self):
+        self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": ".env"})], usage(output=1))
+        self.main.tool_result("t8", "denied", is_error=True)
+        later = datetime.now(UTC) + timedelta(minutes=1)
+        agent = self.projects.subagent("s1", "a1", project="/home/dev/app").at(later)
+        agent.assistant("m9", [tool_use_block("t9", "Bash", {"command": "ls ~/.ssh"})], usage(output=1))
+        accesses = self.accesses()
+        self.assertEqual([(access["agent_type"], access["agent_id"], access["tool"], access["path"], access["pattern"],
+                           access["error"]) for access in accesses],
+                         [("main", None, "Read", ".env", ".env", True), ("general-purpose", "a1", "Bash", "~/.ssh", "~/.ssh", None)])
+        self.assertTrue(all(access["time"] for access in accesses))
+
+    def test_a_session_without_one_lists_none(self):
+        self.assertEqual(self.accesses(), [])
+
+    def test_once_the_transcript_is_gone_its_calls_are_not_listed(self):
+        self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": ".env"})], usage(output=1))
+        self.get_json("/api/summary?days=7")
+        self.main.path.unlink()
+        self.assertEqual(self.accesses(), [])
+
+    def test_no_path_reaches_the_store(self):
+        self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": "/srv/PATH-MARKER-3d4/.env"})],
+                            usage(output=1))
+        self.assertEqual(self.accesses()[0]["path"], "/srv/PATH-MARKER-3d4/.env")
+        self.store.connection.execute("PRAGMA wal_checkpoint")
+        stored = b"".join(path.read_bytes() for path in self.store_path.parent.glob(f"{self.store_path.name}*"))
+        self.assertNotIn(b"PATH-MARKER-3d4", stored)
 
 
 class PageTest(unittest.TestCase):

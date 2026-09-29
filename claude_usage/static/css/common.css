@@ -305,6 +305,16 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 .compact-call-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
 .compact-call-status { color: var(--text-secondary); font-size: 13px; }
 .compact-call-field { width: 9em; font: inherit; }
+/* the calls that named a possible secret location: the critical edge, and a heading on its wash with a ! mark */
+.secret-alert { margin: 16px 0 0; border: 1px solid var(--status-critical); border-left-width: 5px;
+  color: var(--text-primary); }
+.secret-alert-head { display: flex; align-items: center; gap: 10px; margin: -16px -16px 8px; padding: 10px 16px;
+  border-radius: 6px 9px 0 0; background: color-mix(in srgb, var(--status-critical) 14%, var(--surface));
+  font-size: 16px; }
+.secret-alert-icon { display: inline-grid; place-items: center; flex: none; width: 1.5em; height: 1.5em;
+  border: 2px solid var(--status-critical); border-radius: 50%; font-weight: 700; }
+.secret-alert p { margin: 4px 0; font-size: 14px; }
+.secret-path { font-family: var(--mono); overflow-wrap: anywhere; }
 /* the hint to delegate exploration: advice, so the warning's edge without its wash */
 .delegate-call { margin: 16px 0 0; border: 1px solid var(--hint-warning-edge); border-left-width: 5px;
   color: var(--text-primary); }
