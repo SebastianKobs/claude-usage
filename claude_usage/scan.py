@@ -13,7 +13,6 @@ snapshot's day: usage of an evening is not moved to the morning the process ende
 Ultracode: no call records it, only a note on a human prompt in the main thread. After each scan, the messages of
 every touched session made at xhigh while it was on are marked (update_ultracode).
 """
-import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -57,15 +56,6 @@ def local_day(moment: datetime | None) -> str | None:
     if moment is None:
         return None
     return moment.astimezone().date().isoformat()
-
-
-def head_hash(path: Path) -> str | None:
-    """SHA-256 of the file's first line, or None while it has no complete line."""
-    with path.open("rb") as handle:
-        line = handle.readline()
-    if not line.endswith(b"\n"):
-        return None
-    return hashlib.sha256(line).hexdigest()
 
 
 def upsert_transcript(store: Store, chunk: transcripts.Chunk, size: int, mtime_ns: int, meta_mtime_ns: int | None,
@@ -343,7 +333,7 @@ def scan_file(store: Store, path: Path, known: sqlite3.Row | None) -> tuple[int,
     if (known is not None and known["size"] == stat.st_size and known["mtime_ns"] == stat.st_mtime_ns
             and known["meta_mtime_ns"] == meta_mtime_ns):
         return None
-    head = head_hash(path)
+    head = transcripts.head_hash(path)
     offset = 0
     last_user_ts = None
     if known is not None:

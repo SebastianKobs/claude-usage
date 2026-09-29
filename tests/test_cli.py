@@ -255,6 +255,16 @@ class ServeCommandTest(CliCase):
         self.assertEqual(code, 0)
         self.assertIn("http://127.0.0.1:", out)
 
+    def test_serve_reads_the_transcripts_in_reader_processes_and_stops_them(self):
+        with mock.patch.object(server, "make_server", wraps=server.make_server) as make_server:
+            with mock.patch.object(server.UsageApp, "close", autospec=True) as close:
+                with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
+                    self.run_cli("serve", "--port", "0")
+        app = make_server.call_args.args[0]
+        self.assertIsInstance(app.tool_reader, server.tool_reader.ReaderPool)
+        self.assertEqual(len(app.tool_reader.workers), server.READ_PROCESSES)
+        close.assert_called_once_with(app)
+
     def test_serve_prints_the_link_with_its_token(self):
         with mock.patch.object(server.UsageServer, "serve_forever", side_effect=KeyboardInterrupt):
             _, out, _ = self.run_cli("serve", "--port", "0")

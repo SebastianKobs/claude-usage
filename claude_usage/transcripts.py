@@ -5,6 +5,7 @@ parse() returns a Chunk with what the new part holds and the offset to continue 
 consumed; a last line without "\\n" is still being written and waits for the next read. Lines are split as bytes
 and decoded one by one, so the offsets are exact byte positions whatever the text contains.
 """
+import hashlib
 import json
 import re
 from collections.abc import Iterable
@@ -196,6 +197,29 @@ def read_lines(path: Path, offset: int = 0) -> tuple[list[Record], int]:
         if record is not None:
             records.append(record)
     return records, offset + end
+
+
+def lines_from(path: Path, offset: int = 0) -> Iterator[tuple[Record | None, int]]:
+    """Each complete line from offset on, one at a time, as its record (None for a line that isn't one) and the offset
+    just after it; a line still being written ends it. For a read that goes on later from where it stopped without
+    holding the whole rest of the file in memory."""
+    with path.open("rb") as handle:
+        handle.seek(offset)
+        for raw in handle:
+            if not raw.endswith(b"\n"):
+                return
+            offset += len(raw)
+            yield decode_line(raw), offset
+
+
+def head_hash(path: Path) -> str | None:
+    """SHA-256 of the file's first line, or None while it has no complete line: another one means the file was
+    rewritten."""
+    with path.open("rb") as handle:
+        line = handle.readline()
+    if not line.endswith(b"\n"):
+        return None
+    return hashlib.sha256(line).hexdigest()
 
 
 def iter_lines(path: Path) -> Iterator[Record]:

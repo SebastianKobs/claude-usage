@@ -491,6 +491,34 @@ class UltracodeTest(ParseCase):
         self.assertEqual([state.record_id for state in self.parse().ultracode_states], ["u1", "u2"])
 
 
+class LinesFromTest(ParseCase):
+    def lines(self, offset=0):
+        """lines_from of the main transcript as (record type or None, offset after the line)."""
+        return [(None if record is None else record["type"], end)
+                for record, end in transcripts.lines_from(self.main.path, offset)]
+
+    def test_each_complete_line_comes_with_the_offset_after_it(self):
+        self.main.user("hi")
+        first_end = self.main.path.stat().st_size
+        self.main.assistant("m1", [text_block("a")], usage(output=1))
+        self.assertEqual(self.lines(), [("user", first_end), ("assistant", self.main.path.stat().st_size)])
+
+    def test_reading_from_an_offset_starts_there(self):
+        self.main.user("hi")
+        first_end = self.main.path.stat().st_size
+        self.main.assistant("m1", [text_block("a")], usage(output=1))
+        self.assertEqual(self.lines(first_end), [("assistant", self.main.path.stat().st_size)])
+
+    def test_a_line_still_being_written_ends_the_read(self):
+        self.main.user("hi")
+        self.main.partial('{"type": "ai-title"')
+        self.assertEqual([kind for kind, _ in self.lines()], ["user"])
+
+    def test_a_line_that_is_no_object_comes_as_none_with_its_offset(self):
+        self.main.raw("[1, 2]")
+        self.assertEqual(self.lines(), [(None, self.main.path.stat().st_size)])
+
+
 class OffsetTest(ParseCase):
     def test_full_read_ends_at_the_file_size(self):
         self.main.user("hi")

@@ -39,7 +39,7 @@ from claude_usage import queries
 from claude_usage import scan
 from claude_usage import secret_paths
 from claude_usage import store
-from claude_usage import tool_kinds
+from claude_usage import tool_reader
 from claude_usage import transcripts
 from claude_usage import turns
 
@@ -51,10 +51,7 @@ ASSETS = {f"/static/{path.relative_to(STATIC).as_posix()}": path
           for folder in ("css", "js") for path in sorted((STATIC / folder).rglob("*")) if path.suffix in ASSET_TYPES}
 SCAN_INTERVAL = 5.0                     # seconds between scans triggered by requests
 CONNECTION_TIMEOUT = 30                 # seconds an idle connection may keep its handler thread
-TOOLS_MEMO_LIMIT = 256                  # transcripts whose tool rows stay in memory until the file changes
-# a live card's state takes a changed transcript's secret accesses from a read at most this many seconds old: a live
-# transcript changes every few seconds, and each live card asks every 5 s (17 MB with 6,000 calls read in 0.23 s)
-STATE_READ_AGE = 15.0
+READ_PROCESSES = 2                      # serve's reader processes for the transcripts' tool calls (tool_reader)
 MAX_DAYS = 3650
 # what the sessions list shows of each session: it holds every session of the range, so only that goes to the page
 SESSION_LIST_FIELDS = ("session_id", "title", "project", "last_ts", "subagents", "turns", "context_avg",
@@ -224,14 +221,15 @@ def day_navigation(days: int, until: date, previous_day: date | None, next_day: 
 
 
 class UsageApp:
-    """What the API serves: the store, the transcripts it scans, prices, and the scan throttle."""
+    """What the API serves: the store, the transcripts it scans, prices, and the scan throttle. close() stops its
+    transcript readers."""
 
     def __init__(self, usage_store: store.Store, projects_dir: Path, prices: pricing.Prices, live_minutes: float,
                  project: str | None = None, prices_checked: str | None = None, retention_days: int = 0,
                  clock: Callable[[], float] = time.monotonic,
                  compact: compact.CompactSettings = compact.DEFAULT_COMPACT,
                  secret_settings: secret_paths.SecretSettings | None = None, home: str | None = None,
-                 token: str | None = None) -> None:
+                 token: str | None = None, read_processes: int = 0) -> None:
         self.store = usage_store
         # the API answers only requests with this start's token (a new one unless given)
         self.token = token or secrets.token_urlsafe(TOKEN_BYTES)
@@ -244,9 +242,12 @@ class UsageApp:
         self.compact = compact
         self.retention_days = retention_days
         # the [secrets] patterns, matched against the paths the tool calls name; none looks for nothing
-        self.find_secrets = (secret_paths.finder(secret_settings.patterns, home or str(Path.home()),
-                                                 secret_settings.network_programs, secret_settings.test_patterns)
-                             if secret_settings is not None and secret_settings.patterns else None)
+        self.looks_for_secrets = secret_settings is not None and bool(secret_settings.patterns)
+        # each transcript's tool rows, exploration and secret accesses, read on from where they stopped: in
+        # read_processes reader processes (serve's), else in the request's thread
+        self.tool_reader: tool_reader.ToolsReader | tool_reader.ReaderPool = (
+            tool_reader.ReaderPool(read_processes, prices, secret_settings, home or str(Path.home())) if read_processes
+            else tool_reader.ToolsReader(prices, secret_settings, home or str(Path.home())))
         self.lock = threading.Lock()
         # every stored compaction compared with keeping the context, for the gauge's preview, and the store's change
         # count it was computed at: rebuilt only once a scan changed the store
@@ -254,11 +255,6 @@ class UsageApp:
         self.history_changes: int | None = None
         self.last_scan: float | None = None
         self.scan_errors: tuple[str, ...] = ()
-        # each transcript's tool rows and exploration (counts only) and the paths of its secret accesses by its path,
-        # with the (size, mtime) and the clock they were read at, so an open session's poll reads only the files that
-        # changed; its own lock, as it is read outside self.lock
-        self.tools_memo: dict[str, tuple[tuple[int, int], float, Payload]] = {}
-        self.tools_lock = threading.Lock()
 
     def refresh(self) -> None:
         """Scan if the last scan is SCAN_INTERVAL or more ago. Call with the lock held. A failure keeps the stored
@@ -417,7 +413,7 @@ class UsageApp:
         secrets = []
         for agent in detail["agents"]:
             agent_path = paths.get(agent["agent_id"])
-            tools = None if agent_path is None else self.transcript_tools(agent_path)
+            tools = None if agent_path is None else self.tool_reader.tools(agent_path)
             agent["tool_kinds"] = None if tools is None else tools["rows"]
             secrets += [{**access, "agent_type": agent["agent_type"], "agent_id": agent["agent_id"]}
                         for access in (tools["secret_accesses"] if tools is not None else ())]
@@ -443,35 +439,17 @@ class UsageApp:
         if not paths:
             return None
         severities: collections.Counter[str] = collections.Counter()
-        if self.find_secrets is not None:          # without patterns there is nothing to look for
+        if self.looks_for_secrets:                 # without patterns there is nothing to look for
             for path in paths:
-                tools = self.transcript_tools(path, STATE_READ_AGE)
+                tools = self.tool_reader.tools(path)
                 if tools is not None:
                     severities.update(access["severity"] for access in tools["secret_accesses"])
         return {"session_id": session_id, "current": current,
                 "secrets": {severity: severities[severity] for severity in SECRET_SEVERITIES}}
 
-    def transcript_tools(self, path: Path, max_age: float = 0.0) -> Payload | None:
-        """A transcript's tool rows, exploration and secret accesses (tool_kinds.transcript_tools), read again only
-        once the file changed, and with max_age only once the last read is that many seconds old; None once it is
-        gone. Only the counts and those paths stay in memory, for at most TOOLS_MEMO_LIMIT files."""
-        try:
-            stat = path.stat()
-            version = (stat.st_size, stat.st_mtime_ns)
-            with self.tools_lock:
-                cached = self.tools_memo.get(str(path))
-            if cached is not None and (cached[0] == version or self.clock() - cached[1] < max_age):
-                return cached[2]
-            read_at = self.clock()
-            tools = dataclasses.asdict(tool_kinds.transcript_tools(path, self.prices, self.find_secrets))
-        except OSError:
-            return None
-        with self.tools_lock:
-            self.tools_memo.pop(str(path), None)
-            self.tools_memo[str(path)] = (version, read_at, tools)
-            while len(self.tools_memo) > TOOLS_MEMO_LIMIT:
-                del self.tools_memo[next(iter(self.tools_memo))]
-        return tools
+    def close(self) -> None:
+        """Stop the transcript readers."""
+        self.tool_reader.close()
 
 
 def route_live(app: UsageApp, match: re.Match[str], query: str) -> Payload:

@@ -375,83 +375,145 @@ class PendingCall:
     options: str | None
 
 
-def read_calls(path: Path, prices: pricing.Prices,
-               find_secrets: SecretFinder | None = None) -> tuple[list[CallFact], list[SecretAccess]]:
-    """Every tool call of a transcript file in order, as counts, and those that named a possible secret location
-    (a scan find_secrets starts, with the record's working folder). A record written again (the same uuid) counts
-    once; synthetic messages (API errors) are no calls. Raises OSError if the file is gone."""
-    calls: dict[str, PendingCall] = {}
-    secrets: list[tuple[str, SecretAccess]] = []
-    scan = None if find_secrets is None else find_secrets()
-    results: dict[str, tuple[int, bool]] = {}
-    positions: dict[str, tuple[int, int]] = {}      # message id -> (its call number, its stretch)
-    accumulator = transcripts.MessageAccumulator()
-    stretch = 0
-    seen: set[str] = set()
-    for record in transcripts.iter_lines(path):
+class CallReader:
+    """A transcript's tool calls as far as they have been read, to go on from there once the file grew (read), as the
+    scan does: complete lines only, and from the start again once the file was rewritten (shorter than what was read,
+    or with another first line). tools() gives what one full read of the file would, since every record is taken in
+    once, in order. A record written again (the same uuid) counts once; synthetic messages (API errors) are no calls.
+    It holds counts, the paths that named a possible secret location and the scan's texts of the files the
+    transcript wrote, in memory only."""
+
+    def __init__(self, find_secrets: SecretFinder | None = None) -> None:
+        self.find_secrets = find_secrets
+        self.start()
+
+    def start(self) -> None:
+        """Nothing read yet: from the file's first line on."""
+        self.offset = 0
+        self.head: str | None = None                        # the first line's hash, once read
+        self.calls: dict[str, PendingCall] = {}
+        self.secrets: list[tuple[str, SecretAccess]] = []
+        self.scan = None if self.find_secrets is None else self.find_secrets()
+        self.results: dict[str, tuple[int, bool]] = {}
+        self.positions: dict[str, tuple[int, int]] = {}    # message id -> (its call number, its stretch)
+        self.accumulator = transcripts.MessageAccumulator()
+        self.stretch = 0
+        self.seen: set[str] = set()
+        # each message's rates at the prices they were worked out for: facts() runs after every read, and working
+        # them out for each call again was most of its time (35,000 calls: 220 of 250 ms)
+        self.rates: dict[str, turns.Rates | None] = {}
+        self.rates_prices: pricing.Prices | None = None
+
+    def read(self, path: Path) -> None:
+        """Take in the complete lines the file holds past what was read, or all of them again once it was rewritten.
+        Raises OSError if it is gone."""
+        if self.offset and (path.stat().st_size < self.offset or transcripts.head_hash(path) != self.head):
+            self.start()
+        for record, end in transcripts.lines_from(path, self.offset):
+            if self.offset == 0:
+                self.head = transcripts.head_hash(path)
+            self.offset = end
+            if record is not None:
+                self.add(record)
+
+    def add(self, record: transcripts.Record) -> None:
+        """Take in one record: a compaction starts a stretch, an assistant record's tool calls are noted (and the
+        paths they name matched), a user record's tool results sized."""
         record_id = transcripts.text_or_none(record.get("uuid"))
-        if record_id is not None and record_id in seen:
-            continue
+        if record_id is not None and record_id in self.seen:
+            return
         if record_id is not None:
-            seen.add(record_id)
+            self.seen.add(record_id)
         kind = record.get("type")
         if kind == "system" and record.get("subtype") == transcripts.COMPACT_BOUNDARY:
-            stretch += 1
+            self.stretch += 1
         elif kind == "assistant":
-            message_id = accumulator.add(record)
-            if message_id is None:
-                continue
-            positions.setdefault(message_id, (len(positions), stretch))
-            for block in transcripts.content_blocks(record):
-                tool_use_id = transcripts.text_or_none(block.get("id"))
-                name = transcripts.text_or_none(block.get("name"))
-                if block.get("type") != "tool_use" or tool_use_id is None or name is None or tool_use_id in calls:
-                    continue
-                tool_input = block.get("input") if isinstance(block.get("input"), dict) else {}
-                kind, detail, options = call_class(name, tool_input)
-                calls[tool_use_id] = PendingCall(call_tool(name), kind,
-                                                 len(json.dumps(tool_input, ensure_ascii=False)), message_id, detail,
-                                                 options)
-                if scan is not None:
-                    time = transcripts.text_or_none(record.get("timestamp"))
-                    secrets += [(tool_use_id,
-                                 SecretAccess(time, transcripts.display_name(name), found, pattern, None, via, sent,
-                                              test))
-                                for found, pattern, via, sent, test in scan(
-                                    name, tool_input, transcripts.text_or_none(record.get("cwd")))]
+            self.add_calls(record)
         elif kind == "user":
             for block in transcripts.content_blocks(record):
                 tool_use_id = transcripts.text_or_none(block.get("tool_use_id"))
                 if block.get("type") == "tool_result" and tool_use_id is not None:
-                    results[tool_use_id] = (transcripts.result_chars(block.get("content")),
-                                            block.get("is_error") is True)
-    current_stretch = stretch
-    last_in_stretch: dict[int, int] = {}
-    for number, message_stretch in positions.values():
-        last_in_stretch[message_stretch] = number
-    facts = []
-    for tool_use_id, call in calls.items():
-        number, message_stretch = positions[call.message_id]
-        calls_after = last_in_stretch[message_stretch] - number
-        result_chars, error = results.get(tool_use_id, (None, False))
-        rates = turns.turn_rates(prices, conversation.as_turn(accumulator.usage(call.message_id)))
-        carried = input_cost = reread = None
-        if rates is not None:
-            tokens = (call.input_chars + (result_chars or 0)) / CHARS_PER_TOKEN
-            # the next call writes it to the cache, each one after that reads it
-            carried = tokens * (rates.write + rates.read * (calls_after - 1)) if calls_after else 0.0
-            input_cost = call.input_chars / CHARS_PER_TOKEN * rates.output
-            reread = tokens * rates.read
-        facts.append(CallFact(call.tool, call.kind, call.input_chars, result_chars, error, calls_after, carried,
-                              input_cost, message_stretch == current_stretch, reread, call.detail,
-                              call.options))
-    accesses = []
-    for tool_use_id, access in secrets:
-        result = results.get(tool_use_id)
-        reach, severity = secret_reach(access.sent, result, access.test)
-        accesses.append(dataclasses.replace(access, error=None if result is None else result[1], reach=reach,
-                                            severity=severity))
-    return facts, accesses
+                    self.results[tool_use_id] = (transcripts.result_chars(block.get("content")),
+                                                 block.get("is_error") is True)
+
+    def add_calls(self, record: transcripts.Record) -> None:
+        """An assistant record's tool calls, each once, and the paths they name that mark a possible secret."""
+        message_id = self.accumulator.add(record)
+        if message_id is None:
+            return
+        self.rates.pop(message_id, None)                    # its usage may have changed
+        self.positions.setdefault(message_id, (len(self.positions), self.stretch))
+        for block in transcripts.content_blocks(record):
+            tool_use_id = transcripts.text_or_none(block.get("id"))
+            name = transcripts.text_or_none(block.get("name"))
+            if block.get("type") != "tool_use" or tool_use_id is None or name is None or tool_use_id in self.calls:
+                continue
+            tool_input = block.get("input") if isinstance(block.get("input"), dict) else {}
+            call_kind, detail, options = call_class(name, tool_input)
+            self.calls[tool_use_id] = PendingCall(call_tool(name), call_kind,
+                                                  len(json.dumps(tool_input, ensure_ascii=False)), message_id,
+                                                  detail, options)
+            if self.scan is not None:
+                time = transcripts.text_or_none(record.get("timestamp"))
+                self.secrets += [(tool_use_id,
+                                  SecretAccess(time, transcripts.display_name(name), found, pattern, None, via, sent,
+                                               test))
+                                 for found, pattern, via, sent, test in self.scan(
+                                     name, tool_input, transcripts.text_or_none(record.get("cwd")))]
+
+    def message_rates(self, message_id: str, prices: pricing.Prices) -> turns.Rates | None:
+        """A message's $ per token (turns.turn_rates of its final usage), worked out once per usage and prices."""
+        if prices is not self.rates_prices:
+            self.rates = {}
+            self.rates_prices = prices
+        if message_id not in self.rates:
+            self.rates[message_id] = turns.turn_rates(prices,
+                                                      conversation.as_turn(self.accumulator.usage(message_id)))
+        return self.rates[message_id]
+
+    def facts(self, prices: pricing.Prices) -> tuple[list[CallFact], list[SecretAccess]]:
+        """Every tool call read so far in order, as counts priced by prices, and those that named a possible secret
+        location with how far each got."""
+        last_in_stretch: dict[int, int] = {}
+        for number, message_stretch in self.positions.values():
+            last_in_stretch[message_stretch] = number
+        facts = []
+        for tool_use_id, call in self.calls.items():
+            number, message_stretch = self.positions[call.message_id]
+            calls_after = last_in_stretch[message_stretch] - number
+            result_chars, error = self.results.get(tool_use_id, (None, False))
+            rates = self.message_rates(call.message_id, prices)
+            carried = input_cost = reread = None
+            if rates is not None:
+                tokens = (call.input_chars + (result_chars or 0)) / CHARS_PER_TOKEN
+                # the next call writes it to the cache, each one after that reads it
+                carried = tokens * (rates.write + rates.read * (calls_after - 1)) if calls_after else 0.0
+                input_cost = call.input_chars / CHARS_PER_TOKEN * rates.output
+                reread = tokens * rates.read
+            facts.append(CallFact(call.tool, call.kind, call.input_chars, result_chars, error, calls_after, carried,
+                                  input_cost, message_stretch == self.stretch, reread, call.detail, call.options))
+        accesses = []
+        for tool_use_id, access in self.secrets:
+            result = self.results.get(tool_use_id)
+            reach, severity = secret_reach(access.sent, result, access.test)
+            accesses.append(dataclasses.replace(access, error=None if result is None else result[1], reach=reach,
+                                                severity=severity))
+        return facts, accesses
+
+    def tools(self, prices: pricing.Prices) -> "TranscriptTools":
+        """The Tools table's rows (tool_rows), the exploration and the secret accesses of what was read."""
+        facts, accesses = self.facts(prices)
+        return TranscriptTools(tuple(tool_rows(facts)), exploration(facts), tuple(accesses))
+
+
+def read_calls(path: Path, prices: pricing.Prices,
+               find_secrets: SecretFinder | None = None) -> tuple[list[CallFact], list[SecretAccess]]:
+    """Every tool call of a transcript file in order, as counts, and those that named a possible secret location
+    (a scan find_secrets starts, with the record's working folder), from one full read (CallReader). Raises OSError
+    if the file is gone."""
+    reader = CallReader(find_secrets)
+    reader.read(path)
+    return reader.facts(prices)
 
 
 def secret_reach(sent: bool, result: tuple[int, bool] | None, test: bool = False) -> tuple[str, str]:
@@ -563,6 +625,7 @@ class TranscriptTools:
 
 def transcript_tools(path: Path, prices: pricing.Prices, find_secrets: SecretFinder | None = None) -> TranscriptTools:
     """The Tools table's rows (tool_rows), the exploration and, with find_secrets, the secret accesses of one
-    transcript file, from one read (read_calls). Raises OSError if it is gone."""
-    facts, accesses = read_calls(path, prices, find_secrets)
-    return TranscriptTools(tuple(tool_rows(facts)), exploration(facts), tuple(accesses))
+    transcript file, from one full read (CallReader). Raises OSError if it is gone."""
+    reader = CallReader(find_secrets)
+    reader.read(path)
+    return reader.tools(prices)

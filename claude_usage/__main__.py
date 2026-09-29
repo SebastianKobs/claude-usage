@@ -122,7 +122,8 @@ def run_serve(context: Context) -> int:
     with store.Store(context.store_path, check_same_thread=False) as usage_store:
         app = server.UsageApp(usage_store, context.projects_dir, context.prices, live_minutes, project=args.project,
                               prices_checked=context.settings.prices_checked, compact=compact_settings,
-                              retention_days=context.settings.retention_days, secret_settings=secret_settings)
+                              retention_days=context.settings.retention_days, secret_settings=secret_settings,
+                              read_processes=server.READ_PROCESSES)
         httpd = server.make_server(app, HOST, port)
         previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
         try:
@@ -145,6 +146,7 @@ def run_serve(context: Context) -> int:
         finally:
             signal.signal(signal.SIGTERM, previous)
             httpd.server_close()
+            app.close()
     return 0
 
 

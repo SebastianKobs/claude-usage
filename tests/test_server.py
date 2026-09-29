@@ -53,6 +53,14 @@ class KeepRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+READ = tool_kinds.CallReader.read
+
+
+def counted_reads():
+    """CallReader.read, counting its calls."""
+    return mock.patch.object(tool_kinds.CallReader, "read", autospec=True, side_effect=READ)
+
+
 # urllib must not route 127.0.0.1 through a proxy from the environment
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 NO_REDIRECT_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), KeepRedirect)
@@ -69,9 +77,11 @@ class FakeClock:
 
 
 class ServerCase(TempDirTestCase):
-    """Two sessions in two projects, and a server for them on a free port."""
+    """Two sessions in two projects, and a server for them on a free port, reading the transcripts' tool calls in
+    its own process unless read_processes is set."""
     project = None
     secret_patterns = ()
+    read_processes = 0
 
     def setUp(self):
         super().setUp()
@@ -92,7 +102,8 @@ class ServerCase(TempDirTestCase):
                                    prices_checked="2026-09-27", clock=self.clock,
                                    secret_settings=secret_paths.SecretSettings(self.secret_patterns,
                                                                                frozenset({"curl"}), ("tests",)),
-                                   home="/home/dev")
+                                   home="/home/dev", read_processes=self.read_processes)
+        self.addCleanup(self.app.close)
         self.httpd = server.make_server(self.app, "127.0.0.1", 0)
         thread = threading.Thread(target=self.httpd.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
         thread.start()
@@ -715,13 +726,18 @@ class ToolKindsTest(ServerCase):
         self.assertEqual(payload["agents"][0]["tools"], [{"tool": "Read", "calls": 1, "result_chars": 3}])
 
     def test_an_unchanged_transcript_is_not_read_again(self):
-        with mock.patch.object(tool_kinds, "read_calls", wraps=tool_kinds.read_calls) as read_calls:
+        with counted_reads() as read:
             self.get_json("/api/session/s1")
             self.get_json("/api/session/s1")
-            self.assertEqual(read_calls.call_count, 2)          # the main thread and the subagent, once each
-            self.main.assistant("m8", [tool_use_block("t8", "Read")], usage(output=1))
+        self.assertEqual(read.call_count, 2)                    # the main thread and the subagent, once each
+
+    def test_a_changed_transcript_is_read_on_from_where_it_stopped(self):
+        self.get_json("/api/session/s1")
+        self.main.assistant("m8", [tool_use_block("t8", "Read")], usage(output=1))
+        add = mock.patch.object(tool_kinds.CallReader, "add", autospec=True, side_effect=tool_kinds.CallReader.add)
+        with add as added:
             self.assertEqual(self.kinds()[0], ("Read", None, None, None, 2))
-            self.assertEqual(read_calls.call_count, 3)
+        self.assertEqual(added.call_count, 1)
 
     def test_the_main_threads_exploration_goes_with_the_gauge(self):
         _, payload = self.get_json("/api/session/s1")
@@ -847,16 +863,10 @@ class SessionStateTest(ServerCase):
     def test_an_unknown_session_is_not_found(self):
         self.assertEqual(self.state("s9")[0], 404)
 
-    def test_a_changed_transcript_read_moments_ago_is_not_read_again(self):
-        with mock.patch.object(tool_kinds, "read_calls", wraps=tool_kinds.read_calls) as read_calls:
-            self.state()
-            self.assertEqual(read_calls.call_count, 2)          # the main thread and the subagent
-            self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": ".env"})], usage(output=1))
-            self.assertEqual(self.state()[1]["secrets"]["medium"], 0)
-            self.assertEqual(read_calls.call_count, 2)
-            self.clock.now += server.STATE_READ_AGE
-            self.assertEqual(self.state()[1]["secrets"]["medium"], 1)
-            self.assertEqual(read_calls.call_count, 3)
+    def test_a_new_access_shows_in_the_next_state(self):
+        self.state()
+        self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": ".env"})], usage(output=1))
+        self.assertEqual(self.state()[1]["secrets"]["medium"], 1)
 
     def test_the_session_view_reads_a_changed_transcript_at_once(self):
         self.state()
@@ -865,11 +875,30 @@ class SessionStateTest(ServerCase):
         self.assertEqual(len(payload["secret_accesses"]), 1)
 
 
+class ReadProcessTest(ServerCase):
+    """The transcripts' tool calls read in reader processes, as serve does."""
+    secret_patterns = (".env",)
+    read_processes = 1
+
+    def test_the_session_views_tools_and_secret_accesses_come_from_a_reader_process(self):
+        self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": ".env"})], usage(output=1))
+        with mock.patch.object(tool_kinds.CallReader, "read", side_effect=AssertionError("read in the server")):
+            status, payload = self.get_json("/api/session/s1")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["agents"][0]["tool_kinds"][0]["calls"], 2)
+        self.assertEqual([access["path"] for access in payload["secret_accesses"]], [".env"])
+
+    def test_a_live_cards_state_comes_from_a_reader_process(self):
+        self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": ".env"})], usage(output=1))
+        _, payload = self.get_json("/api/session/s1/state")
+        self.assertEqual(payload["secrets"]["medium"], 1)
+
+
 class SessionStateWithoutPatternsTest(ServerCase):
     def test_without_secret_patterns_no_transcript_is_read(self):
-        with mock.patch.object(tool_kinds, "read_calls", wraps=tool_kinds.read_calls) as read_calls:
+        with counted_reads() as read:
             _, payload = self.get_json("/api/session/s1/state")
-        self.assertEqual(read_calls.call_count, 0)
+        self.assertEqual(read.call_count, 0)
         self.assertEqual(payload["secrets"], {"high": 0, "medium": 0, "low-medium": 0, "low": 0})
 
 

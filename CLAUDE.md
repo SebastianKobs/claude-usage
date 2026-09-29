@@ -54,7 +54,8 @@ claude_usage/
   transcripts.py             parser: reads a transcript from a byte offset into a Chunk
   conversation.py            a transcript's conversation for the session view, read on demand
   tool_kinds.py              a transcript's tool calls by tool and Bash command kind, sizes and carried cost, read on
-                             demand
+                             demand, from where the last read stopped (CallReader)
+  tool_reader.py             those readers kept by path, in serve's reader processes (ReaderPool) or in-process
   secret_paths.py            the paths a tool call names, matched against the [secrets] patterns
   store.py                   the SQLite history: schema, migrations, backup
   scan.py                    incremental scan and background usage: transcripts into the store
@@ -366,9 +367,22 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     go to stderr. Unexpected errors answer a JSON 500 and log their traceback.
   - `serve` prints "Serving …" before its first scan (a new store's reads every file), since `make start` waits
     for that line; SIGTERM (`make stop`) stops it like Ctrl+C.
-  - `/api/session/<id>` gives each agent `tool_kinds` (`tool_kinds.transcript_tools`), read from its transcript
-    and kept in memory by path until the file's size or mtime changes (`TOOLS_MEMO_LIMIT` files, counts only), None
-    once the file is gone; the Tools table then shows the stored `tools`.
+  - `/api/session/<id>` gives each agent `tool_kinds`, read from its transcript (counts only), None once the file is
+    gone; the Tools table then shows the stored `tools`.
+    - Each transcript has a reader (`tool_kinds.CallReader`) that goes on from where its last read stopped once the
+      file's size or mtime changed, as the scan does: complete lines only, from the start again once the file was
+      rewritten (shorter than what was read, or another first line: `transcripts.head_hash`). A test checks that
+      reading in two parts, wherever the file is split, gives what one full read gives. It keeps each message's
+      rates, since building the rows was mostly working them out again (35,000 calls: 250 ms, now 75 ms).
+    - The readers live in `serve`'s reader processes (`tool_reader.ReaderPool`, `READ_PROCESSES`, spawned at their
+      first read), each file always in the same one (a checksum of its path), which keeps the readers of the
+      `MEMO_LIMIT` files it used last; one request reads a file at a time, another waits and finds it read. A request
+      only waits for the answer. Checked 2026-09-29 on four synthetic live sessions of 98 MB: reading in the
+      server's own process, a first read's parsing starved the thread holding the store lock (the live list waited
+      10.6 s while the four were read at once, 0.9 s while each grew by 5 calls); with the processes it waited
+      0.17 and 0.19 s, as when idle. The tests read in-process (`tool_reader.ToolsReader`, `read_processes=0`), where
+      they can patch the reader; a script starting the processes needs `if __name__ == "__main__":`, as spawning
+      imports its main module again.
     - A Bash call's kind comes from its programs, never from a language (`command_kind`): past `cd`, assignments,
       wrappers and quoted text, an edit in place anywhere (`sed -i`, `perl -i`), else by the first program: a file
       written (a heredoc or `echo`/`printf`/`cat` redirected, `tee`), an inline script (any interpreter fed code by a
@@ -397,10 +411,11 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       steps), written once by the next call and read by each one after it up to the next compaction, at the calling
       message's rates. The input costs once more at the output price, since the model wrote it.
   - `/api/session/<id>` also gives `secret_accesses`: every call of the transcripts still there that named a path
-    matching `[secrets] patterns` (`secret_paths`, found in the same read, `tool_kinds.read_calls(find_secrets)`),
+    matching `[secrets] patterns` (`secret_paths`, found in the same read, `tool_kinds.CallReader(find_secrets)`),
     with its time, agent, tool, the path as given, the pattern, whether its result was an error, and how far it got,
-    the most severe first, then by time. The paths stay in the memo with the counts, never in the store (a test
-    checks the store files).
+    the most severe first, then by time. The paths stay in the readers with the counts, and so do the texts of the
+    files the transcript wrote (the scan of scripts needs them), in memory only, never in the store (a test checks
+    the store files).
     - A pattern is a name matching any part of a path (`.env`, `*.pem`), a path from `~` or `/` matching it and
       everything below it (wildcards per part), or either negated with `!`; the last match decides, as in a
       .gitignore. `~`, `$HOME` and `${HOME}` are the server's home, a relative path counts from the record's `cwd`.
@@ -437,10 +452,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       low-medium rows (`quiet`); nothing without one.
   - `/api/session/<id>/state` (`UsageApp.session_state`) is what a live card shows besides its totals: the main
     thread's gauge (`current`, as in `/api/session`) and how many calls of the transcripts still there named a
-    possible secret location, by severity (counts only, never the paths). It reads through the same memo, but takes
-    a changed transcript from a read up to `STATE_READ_AGE` (15 s) old: a live transcript changes every few seconds,
-    and each card asks every 5 s. The session view still reads every change. Without `[secrets]` patterns it reads no
-    transcript.
+    possible secret location, by severity (counts only, never the paths), from the same readers, so a card costs what
+    its transcripts added since. Without `[secrets]` patterns it reads no transcript.
   - `/api/session/<id>/chat[?agent=<id>]` reads the conversation from the transcript per request, with tool inputs
     and results cut to `CHAT_TOOL_LIMIT`. Each reply carries its effort level, and the last entry of each API call
     its final usage with the cost at the configured prices, both computed per request. Nothing of it is stored,
