@@ -529,6 +529,11 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     tool, since when, the subagent's type), the card shows it first by the title (`liveWaitBadge`, in `--series-1`:
     nothing is wrong): a speech bubble with a question mark, or a padlock, described on hover; the heading adds "or
     waiting for you".
+    - An open session's view hides the live list, so a notice under its heading (`showSessionWaits`, a status, in
+      `--series-1`) shows what it waits for (`waiting` in `/api/session`, from the same `waiting_calls`) and what the
+      other live sessions wait for (the latest `/api/live`), each linked; drawn again only where it changed. A wait
+      makes the session `live`, so its view keeps polling every 5 s, and a live answer that sees the open session's
+      wait change asks for it at once (`waitChanged`), unless another session is loading (`sessionShown`).
   - Permission prompts come from a `PermissionRequest` hook that posts Claude Code's hook input to the running
     dashboard over a Unix socket, `permission.sock` next to the store (`server.open_prompt_socket`, the user's choice
     over a file next to the store and over a TCP route without the token), so it works the same for a checkout and an
@@ -566,8 +571,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     tone with `PAYOFF_WORDS` where it has a break-even, what it saves at once where `compactCallKind` is cold, and
     past the compact hint. None where compacting would never pay off, or only once the context has grown (`later`).
     A card's icons are drawn again only where they changed, which a cache expiring does too.
-  - An open session polls too: every 5 s while it is `live` (a transcript changed within `live_minutes`), else
-    every 60 s, which notices a resumed session. A changed one is drawn in place (`renderDrilldown(detail, true)`):
+  - An open session polls too: every 5 s while it is `live` (a transcript changed within `live_minutes`, or waiting
+    for the user), else every 60 s, which notices a resumed session. A changed one is drawn in place
+    (`renderDrilldown(detail, true)`):
     the conversation's nodes move into the new view, and the table view, the folds open (a workflow run's agents,
     an inline script's interpreters: `data-fold`), focus and the element at the top of the window are kept. A conversation shown is read again and drawn only if it changed,
     keeping its open entries (by time, kind and position) and, once scrolled into, the entry at the top. It reads

@@ -43,6 +43,8 @@ function renderDrilldown(detail, refresh = false) {
        el("a", {href: "#", text: "Close", "aria-keyshortcuts": "Escape"})),
     detail.prompt ? el("div", {class: "prompt", text: detail.prompt}) : null,
     el("div", {class: "muted", text: `${detail.project}${detail.git_branch ? " · " + detail.git_branch : ""} · ${when(detail.first_ts)} – ${when(detail.last_ts)} · ${detail.session_id}`}),
+    // what waits for you first: the live list, whose cards show it otherwise, is hidden while a session is open
+    el("div", {class: "card wait-notice", id: "session-waits", role: "status", hidden: true}),
     // the page's tile rows with this session's numbers: its whole usage, main thread, subagents and background
     el("div", {class: "kpis session-kpis"},
        ...kpiTiles(detail, "this session", detail.context, detail.compact_hint_tokens,
@@ -82,6 +84,7 @@ function renderDrilldown(detail, refresh = false) {
     el("div", {class: "table-wrap"}, paged(key("api-errors"),
        limitEventsTable(detail.api_errors, "No API errors in this session.", false))),
     ...order[1]);
+  showSessionWaits(detail);
   document.getElementById("context-table-toggle").addEventListener("click", event => {
     const table = document.getElementById("context-table");
     table.hidden = !table.hidden;
@@ -92,6 +95,40 @@ function renderDrilldown(detail, refresh = false) {
   renderContext(detail);                                  // after unhiding, so the chart can measure its width
   if (kept) restoreFocusAndScroll(panel, kept);
   scheduleGaugeRefresh(detail);
+}
+
+// what waits for the user while a session is open, whose view hides the live list: the open session's own wait
+// first (its waiting in /api/session), then the other live sessions' (the latest /api/live), each as its wait badge
+// with its session; the open one's entry in the list is left out, since the list may answer before or after it
+function sessionWaits(detail, sessions) {
+  const own = detail.waiting ? [{...liveWaitBadge(detail.waiting), session_id: detail.session_id, title: null}] : [];
+  const others = sessions.filter(session => session.waiting && session.session_id !== detail.session_id)
+    .map(session => ({...liveWaitBadge(session.waiting), session_id: session.session_id,
+                      title: session.title || "Untitled session"}));
+  return [...own, ...others];
+}
+
+// whether the live list says the open session waits otherwise than its view shows (nothing where the list leaves it
+// out): then the view asks at once, not at its next poll, a minute away while the session was quiet
+function waitChanged(detail, sessions) {
+  const entry = sessions.find(session => session.session_id === detail.session_id);
+  return entry !== undefined && JSON.stringify(entry.waiting ?? null) !== JSON.stringify(detail.waiting ?? null);
+}
+
+// the waits in their notice at the top of the session view (a status, so a screen reader hears a new one), each
+// by its icon, another session's by a link to it; drawn again only where they changed, hidden while none waits
+function showSessionWaits(detail) {
+  const slot = document.getElementById("session-waits");
+  if (!slot) return;
+  const waits = sessionWaits(detail, state.live ? state.live.sessions : []);
+  const key = JSON.stringify(waits);
+  if (slot.dataset.shown === key) return;
+  slot.dataset.shown = key;
+  slot.hidden = !waits.length;
+  slot.replaceChildren(...waits.map(wait => el("p", {class: "wait-line"},
+    el("span", {class: "wait-icon"}, liveIcon(wait.kind)),
+    wait.title === null ? el("strong", {text: `This session is ${wait.text[0].toLowerCase()}${wait.text.slice(1)}`})
+      : el("span", {}, sessionLink(wait), `: ${wait.text}`))));
 }
 
 // the conversation in the Tools table's place while its transcript exists, the tools at the end then; without it

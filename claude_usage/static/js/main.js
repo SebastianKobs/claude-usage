@@ -87,7 +87,12 @@ async function loadLive() {
     const key = JSON.stringify(live);
     if (key !== liveKey) {
       liveKey = key;
+      state.live = live;
       renderLive(live);
+      if (state.session) {                                  // the open session hides the list, not the waits
+        showSessionWaits(state.session);
+        if (sessionShown() && waitChanged(state.session, live.sessions)) refreshSession();
+      }
     } else {
       refreshAgo();
     }
@@ -192,6 +197,13 @@ async function loadSession() {
   } catch (error) {
     if (request === sessionRequest) showError("session", error.message);
   }
+}
+
+// whether the open session is the one the address names: not while another one loads, whose answer a refresh of the
+// open one would drop (sessionRequest)
+function sessionShown() {
+  const match = location.hash.match(SESSION_HASH);
+  return Boolean(state.session && match && match[1] === state.session.session_id);
 }
 
 // The open session asks again after each answer: every LIVE_INTERVAL_MS while it is live, else every

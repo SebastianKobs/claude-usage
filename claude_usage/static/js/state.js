@@ -20,8 +20,9 @@ const METRICS = {
   input: {label: "Input tokens", value: inputTotal, format: compact},
 };
 
-// day: the day the Daily range shows, as "YYYY-MM-DD"; null follows today, also past midnight
-const state = {days: 30, day: null, metric: "cost", summary: null, session: null};
+// day: the day the Daily range shows, as "YYYY-MM-DD"; null follows today, also past midnight; live: the latest
+// /api/live answer
+const state = {days: 30, day: null, metric: "cost", summary: null, session: null, live: null};
 // each live card's last state by session id (/api/session/<id>/state), so a redrawn list shows it at once, and the
 // sessions whose state is on its way
 const liveStates = new Map();

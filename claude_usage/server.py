@@ -414,11 +414,13 @@ class UsageApp:
 
     def session(self, session_id: str) -> Payload | None:
         """/api/session/<id>, with the main thread's current context against the auto-compact point, what its
-        compactions saved so far, whether the session is live (the page polls it faster then), whether its main
-        transcript still exists (the page shows the conversation higher up then), each transcript's tools by
-        kind (tool_kinds, None once its file is gone), with the gauge the main thread's exploration since its last
-        compaction (for the hint to delegate it), and every call of the transcripts still there that named a possible
-        secret location (secret_accesses, the most severe first, then by time); None for an unknown id."""
+        compactions saved so far, what it waits for (waiting, as in /api/live, whose list the open session hides),
+        whether the session is live (the page polls it faster then; a wait counts, as Claude Code writes nothing
+        meanwhile), whether its main transcript still exists (the page shows the conversation higher up then), each
+        transcript's tools by kind (tool_kinds, None once its file is gone), with the gauge the main thread's
+        exploration since its last compaction (for the hint to delegate it), and every call of the transcripts still
+        there that named a possible secret location (secret_accesses, the most severe first, then by time); None for
+        an unknown id."""
         with self.lock:
             self.refresh()
             detail = queries.session_detail(self.store, session_id, self.prices, read_prompt=False,
@@ -426,7 +428,9 @@ class UsageApp:
             current = queries.current_context(self.store, session_id, self.compact, self.prices,
                                               self.stored_comparisons())
             path = queries.transcript_path(self.store, session_id, None)
-            live = queries.session_live(self.store, session_id, self.live_minutes)
+            waiting = queries.waiting_calls(self.store, prompts=list(self.prompts),
+                                            session_id=session_id).get(session_id)
+            live = waiting is not None or queries.session_live(self.store, session_id, self.live_minutes)
             savings = queries.compaction_savings(self.store, self.prices, self.compact, session_id=session_id)
             paths = {row["agent_id"]: Path(row["path"]) for row in queries.session_rows(self.store, session_id)}
         if detail is None:
@@ -445,7 +449,8 @@ class UsageApp:
         return {**detail, "prompt": prompt, "compact_hint_tokens": self.compact.hint_tokens, "current": current,
                 "delegate_hint_tokens": self.compact.delegate_hint_tokens,
                 "delegate_calls_ahead": self.compact.delegate_calls_ahead,
-                "live": live, "compaction_savings": savings, "transcript": path is not None and path.exists(),
+                "waiting": waiting, "live": live, "compaction_savings": savings,
+                "transcript": path is not None and path.exists(),
                 "secret_accesses": sorted(secrets, key=secret_order)}
 
     def session_state(self, session_id: str) -> Payload | None:

@@ -688,16 +688,16 @@ def agent_at_work(store: Store, path: str) -> bool:
     return last is not None and last["tool"] != RESULT_TOOL and last["result_ts"] > last_reply
 
 
-def waiting_calls(store: Store, project: str | None = None,
-                  prompts: Sequence[permissions.Prompt] = ()) -> dict[str, Row]:
-    """Per session (of one project, if given), the oldest of its calls that wait for the user, however long ago they
-    were asked, unless their transcript made an API call after them (the session moved on): a call of WAITING_TOOLS
-    without a result (kind question: a question or a plan to approve), or another call without one that a
-    permission prompt asks about (kind permission, prompt_for). Its tool, since when it waits, and the subagent's
-    type where it isn't the main thread's. Checked 2026-09-29 (counts only): every one of 141 questions and plans
-    got its result (an error where declined), all in main threads, and none had an API call before it; the records
-    meanwhile were the results of the calls beside it, hook results and queued prompts, and in 4 of them a background
-    subagent's calls, none of which ends the wait."""
+def waiting_calls(store: Store, project: str | None = None, prompts: Sequence[permissions.Prompt] = (),
+                  session_id: str | None = None) -> dict[str, Row]:
+    """Per session (of one project, or only session_id, if given), the oldest of its calls that wait for the user,
+    however long ago they were asked, unless their transcript made an API call after them (the session moved on): a
+    call of WAITING_TOOLS without a result (kind question: a question or a plan to approve), or another call without
+    one that a permission prompt asks about (kind permission, prompt_for). Its tool, since when it waits, and the
+    subagent's type where it isn't the main thread's. Checked 2026-09-29 (counts only): every one of 141 questions
+    and plans got its result (an error where declined), all in main threads, and none had an API call before it; the
+    records meanwhile were the results of the calls beside it, hook results and queued prompts, and in 4 of them a
+    background subagent's calls, none of which ends the wait."""
     asked: dict[tuple[str, str | None], list[permissions.Prompt]] = {}
     for prompt in prompts:
         if prompt.tool not in WAITING_TOOLS:                    # a question's dialog fires the hook too
@@ -707,8 +707,9 @@ def waiting_calls(store: Store, project: str | None = None,
             "SELECT t.session_id AS session_id, t.agent_id AS agent_id, t.agent_type AS agent_type, c.path AS path, "
             "c.tool AS tool, c.call_ts AS call_ts FROM tool_calls c JOIN transcripts t ON t.path = c.path "
             "WHERE c.result_chars IS NULL AND c.call_ts IS NOT NULL AND (? IS NULL OR t.slug = ?) "
+            "AND (? IS NULL OR t.session_id = ?) "
             "AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.path = c.path AND m.ts > c.call_ts) "
-            "ORDER BY c.call_ts", (project_slug(project), project_slug(project))).fetchall():
+            "ORDER BY c.call_ts", (project_slug(project), project_slug(project), session_id, session_id)).fetchall():
         if call["session_id"] in waiting:
             continue
         agent_type = call["agent_type"] if call["agent_id"] is not None else None

@@ -20,9 +20,10 @@ Claude asked you something (a question or a plan to approve) and waits for your 
 until you answer, unless the session went on without it. A trash compactor shows when compacting now would pay off, in
 its own view's colors, and an agent in a black hat a possible secret access where one returned a result or was sent out;
 hover them for the details. With the permission hook set up (see Usage), a padlock shows a call that waits for your
-permission; without it, a permission prompt can't be told from a command still running, so it shows nothing. While a
-subagent or a workflow's agent is still at work (in a call, or before its next reply), its session stays in the list for
-up to `agent_live_minutes` (180) after its last change, even when a long command leaves every transcript quiet.
+permission; without it, a permission prompt can't be told from a command still running, so it shows nothing. A session
+you have open says the same under its heading, with what the other live sessions wait for. While a subagent or a
+workflow's agent is still at work (in a call, or before its next reply), its session stays in the list for up to
+`agent_live_minutes` (180) after its last change, even when a long command leaves every transcript quiet.
 
 Rate limits show per day, and each 5-hour window that hit one shows what it used from its start (5 hours before
 its reset) up to the first hit, by model: a lower bound on what a window holds, since the limit also counts what

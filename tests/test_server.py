@@ -489,6 +489,25 @@ class ApiTest(ServerCase):
         self.assertTrue(self.get_json("/api/session/s1")[1]["live"])
         self.assertFalse(self.get_json("/api/session/s2")[1]["live"])
 
+    def test_session_detail_says_what_it_waits_for(self):
+        # the live list, which shows it otherwise, is hidden while a session is open
+        self.other.assistant("m4", [tool_use_block("q1", "AskUserQuestion", {"questions": []})], usage(output=5))
+        self.assertIsNone(self.get_json("/api/session/s1")[1]["waiting"])
+        self.assertEqual(self.get_json("/api/session/s2")[1]["waiting"]["kind"], "question")
+
+    def test_session_detail_waits_for_a_permission_the_hook_noted(self):
+        self.other.assistant("m4", [tool_use_block("w1", "Write", {})], usage(output=5))
+        self.app.prompts.append(permissions.Prompt(scan.iso(datetime.now(UTC)), "s2", None, "Write", "auto"))
+        waiting = self.get_json("/api/session/s2")[1]["waiting"]
+        self.assertEqual((waiting["kind"], waiting["tool"]), ("permission", "Write"))
+
+    def test_a_session_waiting_for_the_user_is_live_past_the_window(self):
+        # Claude Code writes nothing while it waits: the open session keeps polling fast
+        self.other.assistant("m4", [tool_use_block("q1", "AskUserQuestion", {"questions": []})], usage(output=5))
+        hour_ago = datetime.now(UTC).timestamp() - 3600
+        os.utime(self.other.path, (hour_ago, hour_ago))
+        self.assertTrue(self.get_json("/api/session/s2")[1]["live"])
+
     def test_session_detail_says_whether_its_transcript_still_exists(self):
         self.assertTrue(self.get_json("/api/session/s1")[1]["transcript"])
         self.other.path.unlink()

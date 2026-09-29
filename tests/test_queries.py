@@ -628,6 +628,14 @@ class LiveWaitingTest(StoreCase):
         agent.assistant("m-agent", [text_block("still exploring")], usage(output=5))
         self.assertEqual(self.live(10)[0]["waiting"]["tool"], "AskUserQuestion")
 
+    def test_one_sessions_wait_alone(self):
+        # the session view asks for its own
+        self.ask()
+        other = self.projects.session("s-other").at(self.asked)
+        other.assistant("m-other", [tool_use_block("q2", "AskUserQuestion", {"questions": []})], usage(output=5))
+        self.scan()
+        self.assertEqual(list(queries.waiting_calls(self.store, session_id="s-other")), ["s-other"])
+
 
 class LiveAgentsTest(StoreCase):
     def setUp(self):

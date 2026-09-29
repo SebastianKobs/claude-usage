@@ -363,6 +363,13 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 .secret-severity-medium { background: var(--hint-warning-edge); }
 .secret-severity-low { background: var(--text-secondary); }
 .secret-severity-low-medium { background: var(--series-1); }        /* returned, but likely a test */
+/* what waits for you while a session is open: the live cards' waiting tone, nothing is wrong */
+.wait-notice { margin: 16px 0 0; border: 1px solid var(--series-1); border-left-width: 5px;
+  color: var(--text-primary); }
+.wait-line { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 14px; }
+.wait-line strong { font-size: 16px; }
+.wait-icon { display: inline-flex; flex: none; width: 22px; height: 22px; color: var(--series-1); }
+.wait-icon svg { width: 100%; height: 100%; }
 /* the hint to delegate exploration: advice, so the warning's edge without its wash */
 .delegate-call { margin: 16px 0 0; border: 1px solid var(--hint-warning-edge); border-left-width: 5px;
   color: var(--text-primary); }

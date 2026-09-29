@@ -1027,6 +1027,93 @@ class SessionListTest(unittest.TestCase):
                               read(STATIC / "css" / "themes" / f"{theme}.css"))
 
 
+class SessionWaitTest(unittest.TestCase):
+    NOW = "2026-09-29T20:11:17.932+00:00"
+    QUESTION = {"kind": "question", "tool": "AskUserQuestion", "since": NOW, "agent_type": None}
+    PERMISSION = {"kind": "permission", "tool": "Write", "since": NOW, "agent_type": None}
+    USES = ("figures.js:liveWaitBadge", "util.js:when")
+
+    def waits(self, waiting, sessions):
+        """sessionWaits of the open session s1 waiting so, with these live sessions."""
+        return run_function("drilldown.js", "sessionWaits", {"session_id": "s1", "waiting": waiting}, sessions,
+                            uses=self.USES)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_open_session_says_what_it_waits_for(self):
+        [wait] = self.waits(self.QUESTION, [])
+        self.assertEqual((wait["kind"], wait["session_id"], wait["title"]), ("waiting", "s1", None))
+        self.assertTrue(wait["text"].startswith("Waiting for your answer since "))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_other_live_sessions_waits_follow_with_their_titles(self):
+        # the open session's view hides the live list, and with it their icons
+        sessions = [{"session_id": "s1", "title": "Open", "waiting": self.QUESTION},
+                    {"session_id": "s2", "title": "Parser fix", "waiting": self.PERMISSION},
+                    {"session_id": "s3", "title": None, "waiting": self.QUESTION},
+                    {"session_id": "s4", "title": "Busy", "waiting": None}]
+        waits = self.waits(self.QUESTION, sessions)
+        self.assertEqual([(wait["session_id"], wait["title"], wait["kind"]) for wait in waits],
+                         [("s1", None, "waiting"), ("s2", "Parser fix", "permission"),
+                          ("s3", "Untitled session", "waiting")])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_open_sessions_own_wait_comes_from_its_detail_not_the_live_list(self):
+        sessions = [{"session_id": "s1", "title": "Open", "waiting": self.QUESTION}]
+        self.assertEqual(self.waits(None, sessions), [])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_wait_the_live_list_saw_first_asks_for_the_session_at_once(self):
+        # a session quiet for minutes is asked for once a minute, the live list every five seconds
+        detail = {"session_id": "s1", "waiting": None}
+        changed = [{"session_id": "s1", "waiting": self.QUESTION}]
+        self.assertTrue(run_function("drilldown.js", "waitChanged", detail, changed))
+        self.assertFalse(run_function("drilldown.js", "waitChanged", {**detail, "waiting": self.QUESTION}, changed))
+        self.assertFalse(run_function("drilldown.js", "waitChanged", detail, [{"session_id": "s1", "waiting": None}]))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_an_answered_wait_goes_as_soon_as_the_live_list_sees_it(self):
+        detail = {"session_id": "s1", "waiting": self.QUESTION}
+        self.assertTrue(run_function("drilldown.js", "waitChanged", detail, [{"session_id": "s1", "waiting": None}]))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_session_off_the_live_list_says_nothing_of_its_wait(self):
+        # a past day's range leaves it out
+        detail = {"session_id": "s1", "waiting": self.QUESTION}
+        self.assertFalse(run_function("drilldown.js", "waitChanged", detail, []))
+
+    def test_the_waits_come_first_under_the_sessions_heading(self):
+        body = function_body("drilldown.js", "renderDrilldown")
+        self.assertLess(body.index('id: "drilldown-title"'), body.index('id: "session-waits"'))
+        self.assertLess(body.index('id: "session-waits"'), body.index("session-kpis"))
+        self.assertIn('role: "status"', body[body.index('id: "session-waits"') - 80:])
+        self.assertIn("showSessionWaits(detail)", body)
+
+    def test_each_live_answer_draws_the_waits_again(self):
+        body = function_body("main.js", "loadLive")
+        self.assertIn("state.live = live", body)
+        self.assertIn("showSessionWaits(state.session)", body)
+        self.assertIn("if (sessionShown() && waitChanged(state.session, live.sessions)) refreshSession()", body)
+
+    def test_a_wait_asks_for_the_open_session_only_while_no_other_one_loads(self):
+        # a refresh of the open one would drop the answer of the one loading
+        body = function_body("main.js", "sessionShown")
+        self.assertIn("location.hash.match(SESSION_HASH)", body)
+        self.assertIn("match[1] === state.session.session_id", body)
+
+    def test_the_waits_are_drawn_again_only_where_they_changed(self):
+        # a screen reader hears a new wait once, not every five seconds
+        body = function_body("drilldown.js", "showSessionWaits")
+        self.assertIn("slot.dataset.shown === key", body)
+        self.assertIn("sessionLink(", body)
+        self.assertIn("liveIcon(wait.kind)", body)
+
+    def test_the_notice_is_in_the_waiting_tone(self):
+        # blue, like the live cards' icons: nothing is wrong, a session only waits
+        css = read(STATIC / "css" / "common.css")
+        self.assertIn("var(--series-1)", css_block(css, ".wait-notice {"))
+        self.assertIn("var(--series-1)", css_block(css, ".wait-icon {"))
+
+
 class SessionPollTest(unittest.TestCase):
     def function_body(self, name):
         """main.js's function `name`, from its line to its closing brace."""
