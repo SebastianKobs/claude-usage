@@ -30,8 +30,8 @@ function pageWindow(count, size, page) {
   return {page: kept, pages, first: kept * size, last: Math.min(count, (kept + 1) * size)};
 }
 
-function pageText(shown, count) {
-  return `rows ${shown.first + 1}–${shown.last} of ${count}`;
+function pageText(shown, count, noun = "rows") {
+  return `${noun} ${shown.first + 1}–${shown.last} of ${count}`;
 }
 
 // a saved page size, if it is one on offer
@@ -44,23 +44,26 @@ function pageSize() {
   return pageSizeFrom(readPreference(PAGE_SIZE_PREFERENCE), PAGE_SIZES, DEFAULT_PAGE_SIZE);
 }
 
-// A table with more groups of rows than the smallest page, with a pager above it: the page size (a preference),
-// previous and next, and which rows show. `node` is the table or an element holding it; the pager goes right
-// before the table. Rows off the page get a class, not `hidden`, which a workflow run's switch uses.
-function paged(key, node) {
-  const table = node.tagName === "TABLE" ? node : node.querySelector("table");
-  const rows = table ? [...table.tBodies[0].rows] : [];
+// A table with more groups of rows than the smallest page, or a grid with more cards (`paged-cards`, each card a
+// group of its own), with a pager above it: the page size (a preference), previous and next, and which rows show,
+// named by `noun`. `node` is the table or grid or an element holding it; the pager goes right before the table or
+// grid. Rows off the page get a class, not `hidden`, which a workflow run's switch uses.
+function paged(key, node, noun = "rows") {
+  const list = node.matches("table, .paged-cards") ? node : node.querySelector("table, .paged-cards");
+  let rows = [];
+  if (list) rows = list.tagName === "TABLE" ? [...list.tBodies[0].rows] : [...list.children];
   const units = pageUnits(rows.map(row => row.classList.contains("sub-row")));
   const count = units.length ? units[units.length - 1] + 1 : 0;
   if (count <= PAGE_SIZES[0]) {
     // a pager left in the title row from a longer draw goes
     queueMicrotask(() => placePager(node, null));
+    queueMicrotask(forgetDetachedPagers);
     return node;
   }
   const id = `pager-${key}`;
   const refocus = document.activeElement && document.activeElement.id ? document.activeElement.id : null;
-  const size = el("select", {id: `${id}-size`, "aria-label": "Rows per page"},
-    ...PAGE_SIZES.map(option => el("option", {value: option, text: `${option} rows`})));
+  const size = el("select", {id: `${id}-size`, "aria-label": `${noun[0].toUpperCase()}${noun.slice(1)} per page`},
+    ...PAGE_SIZES.map(option => el("option", {value: option, text: `${option} ${noun}`})));
   const previous = el("button", {type: "button", id: `${id}-previous`, text: "‹ Previous"});
   const next = el("button", {type: "button", id: `${id}-next`, text: "Next ›"});
   const status = el("span", {class: "muted", "aria-live": "polite"});
@@ -73,7 +76,7 @@ function paged(key, node) {
     size.value = String(pageSize());
     previous.disabled = shown.page === 0;
     next.disabled = shown.page === shown.pages - 1;
-    status.textContent = pageText(shown, count);
+    status.textContent = pageText(shown, count, noun);
   };
   // the pager stays where it was on the screen while the tables above it grow or shrink with the page size
   const turn = page => {
@@ -99,22 +102,33 @@ function paged(key, node) {
   show(tablePages.get(key) ?? 0);
   // once the caller has put the table in the page; before the refocus, since moving a control drops its focus
   queueMicrotask(() => placePager(pager, pager));
+  queueMicrotask(forgetDetachedPagers);
   if (refocus && [size, previous, next].some(control => control.id === refocus)) {
     queueMicrotask(() => document.getElementById(refocus)?.focus({preventScroll: true}));
   }
-  if (table === node) return el("div", {class: "paged"}, pager, table);
-  table.before(pager);
+  if (list === node) return el("div", {class: "paged"}, pager, list);
+  list.before(pager);
   return node;
 }
 
-// The pager into its table's title row, right-aligned: the heading right before the table's wrap (a note may sit
-// between them) becomes a row with it. A table without one, such as a chart's table view under its chart, keeps the
-// pager above it. A redraw finds the row already made and swaps its pager, or drops it for a table without one
-// (pager null); `node` is what the caller put in the page.
+// Once a draw is in the page, the pagers it replaced go: a list drawn again every few seconds (the live sessions, an
+// open live session) would otherwise keep every old draw alive through its pager
+function forgetDetachedPagers() {
+  for (const other of [...pagers]) {
+    if (!other.pager.isConnected) pagers.delete(other);
+  }
+}
+
+// The pager into its table's title row, right-aligned: the heading right before the table's wrap (or a grid's,
+// `paged-wrap`; a note or the table's filters may sit between them) becomes a row with it. A table without one,
+// such as a chart's table view under its chart, keeps the pager above it. A redraw finds the row already made and
+// swaps its pager, or drops it for a table without one (pager null); `node` is what the caller put in the page.
 function placePager(node, pager) {
-  const wrap = node.isConnected ? node.closest(".table-wrap") : null;
+  const wrap = node.isConnected ? node.closest(".table-wrap, .paged-wrap") : null;
   let title = wrap ? wrap.previousElementSibling : null;
-  while (title && title.classList.contains("note")) title = title.previousElementSibling;
+  while (title && ["note", "table-filters"].some(name => title.classList.contains(name))) {
+    title = title.previousElementSibling;
+  }
   if (!title) return;
   if (title.classList.contains("title-row")) {
     title.querySelector(":scope > .pager")?.remove();
@@ -183,8 +197,57 @@ function renderTables(summary) {
   renderCostly(summary.costly_sessions);
 }
 
+// --- the sessions list: every session of the range, filtered by project and words ----------------------------
+
+// whether a session is of the project picked ("" for all) and holds every word, in any case, in its title, project
+// or id
+function sessionMatches(session, project, text) {
+  if (project && session.project !== project) return false;
+  const haystack = `${session.title || ""} ${session.project} ${session.session_id}`.toLowerCase();
+  return text.toLowerCase().split(/\s+/).filter(Boolean).every(word => haystack.includes(word));
+}
+
+// the projects to pick from, by name, with their sessions; the one picked stays on offer in a range without it, so
+// the filter still shows
+function sessionProjects(sessions, picked) {
+  const counts = new Map();
+  for (const session of sessions) counts.set(session.project, (counts.get(session.project) || 0) + 1);
+  if (picked && !counts.has(picked)) counts.set(picked, 0);
+  return [...counts].sort(([left], [right]) => left.localeCompare(right))
+    .map(([project, count]) => ({project, count}));
+}
+
+function sessionCount(shown, total) {
+  const sessions = `${total} session${total === 1 ? "" : "s"}`;
+  return shown === total ? sessions : `${shown} of ${sessions}`;
+}
+
+// the range's sessions, drawn again through the filter as it changes; a refresh keeps the filter
+let sessionList = [];
+let sessionOptionsKey = null;
+
 function renderSessions(sessions) {
+  sessionList = sessions;
+  const picker = document.getElementById("sessions-project");
+  const picked = picker.value;
+  const projects = sessionProjects(sessions, picked);
+  // the options change only with the projects, so a refresh doesn't close the list while it is open
+  const key = JSON.stringify(projects);
+  if (key !== sessionOptionsKey) {
+    sessionOptionsKey = key;
+    picker.replaceChildren(el("option", {value: "", text: "All projects"}),
+      ...projects.map(({project, count}) => el("option", {value: project, text: `${project} (${whole(count)})`})));
+    picker.value = picked;
+  }
+  drawSessions();
+}
+
+function drawSessions() {
   const container = document.getElementById("sessions");
+  const project = document.getElementById("sessions-project").value;
+  const text = document.getElementById("sessions-search").value;
+  const sessions = sessionList.filter(session => sessionMatches(session, project, text));
+  document.getElementById("sessions-count").textContent = sessionCount(sessions.length, sessionList.length);
   const head = el("tr", {}, el("th", {text: "Last activity"}), el("th", {text: "Session"}),
                   el("th", {class: "num", text: "Subagents"}), el("th", {class: "num", text: "Turns"}),
                   el("th", {class: "num", text: "Avg context"}), el("th", {class: "num", text: "Peak context"}),
@@ -196,8 +259,20 @@ function renderSessions(sessions) {
     el("td", {class: "num", text: compact(session.context_avg)}),
     el("td", {class: "num", text: compact(session.context_peak)}),
     el("td", {class: "num", text: compact(session.output)}), el("td", {class: "num", text: money(session.cost)})));
+  const empty = sessionList.length ? "No sessions match the filter." : "No sessions in this range.";
   // paged even when empty, so a pager left from a longer list goes
   container.replaceChildren(paged("sessions", sessions.length
     ? el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows))
-    : el("div", {class: "empty", text: "No sessions in this range."})));
+    : el("div", {class: "empty", text: empty})));
+}
+
+// the controls are in the markup, outside what a redraw replaces, so typing keeps its focus; a new filter starts
+// at the first page
+function setupSessionFilters() {
+  for (const [id, event] of [["sessions-project", "change"], ["sessions-search", "input"]]) {
+    document.getElementById(id).addEventListener(event, () => {
+      tablePages.delete("sessions");
+      drawSessions();
+    });
+  }
 }

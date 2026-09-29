@@ -27,6 +27,11 @@ select {
   font: inherit; color: var(--text-primary); background: var(--surface);
   border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer;
 }
+input[type="search"] {
+  font: inherit; color: var(--text-primary); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; min-width: min(18em, 100%);
+}
+input[type="search"]::placeholder { color: var(--text-muted); opacity: 1; }
 .theme-picker { display: inline-flex; align-items: center; gap: 6px; }
 button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-secondary); }
 .filters { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
@@ -147,8 +152,10 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
 /* tables */
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; }
-/* rows off a table's page; a workflow run's agents are shown and hidden with `hidden` on their own */
+/* rows off a table's page, and cards off a grid's; a workflow run's agents are shown and hidden with
+   `hidden` on their own */
 tr.off-page { display: none; }
+.paged-cards > .off-page { display: none; }
 /* sticky: it stays in view while a wide table scrolls sideways */
 .pager { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 13px;
          position: sticky; left: 0; }
@@ -156,6 +163,9 @@ tr.off-page { display: none; }
 /* a table's heading with its pager, right-aligned; the heading keeps its margins, the pager sits on its baseline */
 .title-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; }
 .title-row .pager { margin-left: auto; margin-bottom: 0; position: static; }
+/* a table's filters, between its heading and the table; a long project path doesn't widen the page */
+.table-filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 8px; }
+.table-filters select { max-width: 100%; text-overflow: ellipsis; }
 th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--grid); vertical-align: top; }
 th { color: var(--text-secondary); font-weight: 500; white-space: nowrap; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }

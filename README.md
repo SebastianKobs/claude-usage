@@ -10,8 +10,11 @@ Usage is split by model and effort level. Calls made while ultracode was on coun
 xhigh between switching ultracode on and switching it off or picking another effort level. Subagents and Workflow
 agents count by that time too.
 
-Tables longer than 10 rows come in pages, with 10, 25 or 50 rows per page (the choice is remembered) and
-previous and next below them; a refresh stays on the page you are reading.
+Tables longer than 10 rows, and more than 10 live sessions, come in pages, with 10, 25 or 50 rows per page (the
+choice is remembered) and previous and next by their heading; a refresh stays on the page you are reading. The
+sessions list holds every session of the range: pick a project, or type words from a title, a project path or a
+session id, to narrow it. The live sessions follow the range too: on an earlier day they are the running sessions
+that were active on it.
 
 Python ≥ 3.12, standard library only. Run it from the checkout as it is, or install it with `pip install .` to get
 a `claude-usage` command.

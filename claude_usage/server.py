@@ -47,6 +47,9 @@ SCAN_INTERVAL = 5.0                     # seconds between scans triggered by req
 CONNECTION_TIMEOUT = 30                 # seconds an idle connection may keep its handler thread
 TOOLS_MEMO_LIMIT = 256                  # transcripts whose tool rows stay in memory until the file changes
 MAX_DAYS = 3650
+# what the sessions list shows of each session: it holds every session of the range, so only that goes to the page
+SESSION_LIST_FIELDS = ("session_id", "title", "project", "last_ts", "subagents", "turns", "context_avg",
+                       "context_peak", "output", "cost")
 SESSION_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})")
 CHAT_PATH = re.compile(r"/api/session/([A-Za-z0-9_-]{1,128})/chat")
 AGENT_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
@@ -234,24 +237,36 @@ class UsageApp:
         self.scan_errors = errors
         self.last_scan = now
 
-    def live(self) -> Payload:
-        """/api/live"""
+    def date_range(self, days: int, until: date | None) -> tuple[int, date, date]:
+        """The `days` local days up to until (default today, included) as (days, since, until), cut to the retention:
+        the store holds no more, so a longer range would only show empty days."""
+        until = until or date.today()
+        if self.retention_days:
+            days = min(days, self.retention_days)
+        return days, queries.first_day(days, until), until
+
+    def live(self, days: int | None = None, until: date | None = None) -> Payload:
+        """/api/live: the live sessions, with days or until only those active in that range (date_range), which the
+        dashboard asks for so they follow the range it shows."""
+        since = None
+        if days is not None or until is not None:
+            days, since, until = self.date_range(queries.DEFAULT_DAYS if days is None else days, until)
         with self.lock:
             self.refresh()
-            sessions = queries.live_sessions(self.store, self.live_minutes, self.prices, project=self.project)
+            sessions = queries.live_sessions(self.store, self.live_minutes, self.prices, project=self.project,
+                                             since=since, until=until)
             scan_errors = list(self.scan_errors)
-        return {"minutes": self.live_minutes, "sessions": sessions, "scan_errors": scan_errors}
+        return {"minutes": self.live_minutes, "days": days,
+                "since": None if since is None else since.isoformat(),
+                "until": None if until is None else until.isoformat(), "sessions": sessions,
+                "scan_errors": scan_errors}
 
     def summary(self, days: int, until: date | None = None) -> Payload:
         """/api/summary: totals of the `days` local days up to until (default today, included), per hour too for a
         single day with the nearest days before and after it that have usage, the run totals of the sessions that
         ended in them, the failed API calls (rate limits), what the main threads' compactions of the range saved so
         far, the newest sessions and the costliest."""
-        until = until or date.today()
-        # the store holds no more: a longer range would only show empty days
-        if self.retention_days:
-            days = min(days, self.retention_days)
-        since = queries.first_day(days, until)
+        days, since, until = self.date_range(days, until)
         single_day = days == 1
 
         def totals(group: str) -> list[Payload]:
@@ -276,7 +291,8 @@ class UsageApp:
             }
             context = queries.context_stats(self.store, since, project=self.project, until=until)
             runtime = queries.runtime_totals(self.store, since, self.prices, project=self.project, until=until)
-            # every session of the range once: the newest for the list, the costliest for the ranking
+            # every session of the range once: all of them for the list, which the page pages and filters, the costliest
+            # for the ranking
             sessions = queries.recent_sessions(self.store, since, self.prices, limit=None, project=self.project,
                                                until=until)
             history_since = queries.first_stored_day(self.store, project=self.project)
@@ -290,7 +306,8 @@ class UsageApp:
                 "prices_checked": self.prices_checked, "totals": queries.combined(groups["model"]), **groups,
                 "runtime": runtime, "api_errors": api_errors, "context": context,
                 "compact_hint_tokens": self.compact.hint_tokens, "compaction_savings": savings,
-                "scan_errors": scan_errors, "sessions": sessions[:queries.DEFAULT_SESSION_LIMIT],
+                "scan_errors": scan_errors,
+                "sessions": [{field: session[field] for field in SESSION_LIST_FIELDS} for session in sessions],
                 "costly_sessions": queries.costliest(sessions)}
 
     def chat(self, session_id: str, agent_id: str | None) -> Payload | None:
@@ -395,8 +412,11 @@ class UsageApp:
 
 
 def route_live(app: UsageApp, match: re.Match[str], query: str) -> Payload:
-    """/api/live"""
-    return app.live()
+    """/api/live[?days=<n>&until=<day>]: without either, every live session"""
+    given = parse_qs(query)
+    if "days" not in given and "until" not in given:
+        return app.live()
+    return app.live(parse_days(query), parse_until(query))
 
 
 def route_summary(app: UsageApp, match: re.Match[str], query: str) -> Payload:

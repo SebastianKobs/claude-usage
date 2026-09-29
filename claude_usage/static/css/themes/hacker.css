@@ -26,7 +26,8 @@
 [data-theme="hacker"] .hero, [data-theme="hacker"] .tile-value {
   color: var(--term-green); text-shadow: 0 0 10px rgba(0, 255, 156, 0.55);
 }
-[data-theme="hacker"] button, [data-theme="hacker"] select { border-radius: 0; border-color: var(--border); }
+[data-theme="hacker"] button, [data-theme="hacker"] select,
+[data-theme="hacker"] input[type="search"] { border-radius: 0; border-color: var(--border); }
 [data-theme="hacker"] button[aria-pressed="true"] { background: var(--term-green); color: #000000; }
 [data-theme="hacker"] .dot { background: var(--term-green); box-shadow: 0 0 8px var(--term-green);
   animation: term-blink 1s steps(1) infinite; }

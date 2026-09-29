@@ -2,7 +2,9 @@
 import os
 import time
 import unittest
+from datetime import UTC
 from datetime import date
+from datetime import datetime
 from datetime import timedelta
 
 from claude_usage import compact
@@ -15,6 +17,7 @@ from helpers import DAY_3
 from helpers import HAIKU
 from helpers import MILLION
 from helpers import PRICES
+from helpers import START
 from helpers import StoreCase
 from helpers import build_session
 from helpers import create_result
@@ -412,11 +415,57 @@ class LiveSessionsTest(StoreCase):
         self.assertFalse(queries.session_live(self.store, "s-old", 5, now=self.now))
         self.assertFalse(queries.session_live(self.store, "unknown", 5, now=self.now))
 
-    def test_most_recent_first(self):
-        self.age(self.main, 120)
-        self.age(self.agent, 120)
-        self.age(self.old, 10)
+    def test_most_recent_activity_first_by_the_last_record_not_the_file_time(self):
+        # a copied or restored transcript gets a new mtime but keeps its records' times, which the sessions list
+        # orders by too
+        self.old.at(START + timedelta(days=1)).user("later")
+        self.age(self.main, 10)
+        self.age(self.agent, 10)
+        self.age(self.old, 120)
         self.assertEqual([session["session_id"] for session in self.live()], ["s-old", "s1"])
+
+    def test_the_last_activity_is_the_last_records_time_not_the_files(self):
+        # the card shows the time the order goes by; a copied transcript's mtime is when it was copied
+        self.old.at(START + timedelta(days=1)).user("later")
+        self.age(self.main, 10)
+        self.age(self.agent, 10)
+        self.age(self.old, 120)
+        sessions = {session["session_id"]: session for session in self.live()}
+        self.assertEqual(sessions["s-old"]["last_activity"], "2026-09-02T12:00:00.000+00:00")
+
+    def test_a_subagents_last_activity_is_its_last_records_time(self):
+        self.agent.at(START + timedelta(days=2)).assistant("s1-a1-m2", [text_block("more")], usage(output=1),
+                                                           model="claude-opus-5")
+        self.age(self.main, 10)
+        self.age(self.agent, 10)
+        self.age(self.old, 3600)
+        session = self.live()[0]
+        self.assertEqual(session["subagents"][0]["last_activity"], "2026-09-03T12:00:00.000+00:00")
+        self.assertEqual(session["last_activity"], "2026-09-03T12:00:00.000+00:00")
+
+    def test_without_a_record_time_the_last_activity_is_the_files(self):
+        bare = self.projects.session("s-bare")
+        bare.ai_title("Only a title")
+        self.age(self.main, 3600)
+        self.age(self.agent, 3600)
+        self.age(self.old, 3600)
+        self.age(bare, 10)
+        session = self.live()[0]
+        self.assertEqual(session["session_id"], "s-bare")
+        self.assertEqual(session["last_activity"][:19],
+                         datetime.fromtimestamp(self.now - 10, UTC).isoformat(timespec="seconds")[:19])
+
+    def test_the_same_last_record_time_goes_by_the_file_time(self):
+        first = self.projects.session("s-a").at(START + timedelta(days=1))
+        first.user("same time")
+        second = self.projects.session("s-b").at(START + timedelta(days=1))
+        second.user("same time")
+        self.age(self.main, 3600)
+        self.age(self.agent, 3600)
+        self.age(self.old, 3600)
+        self.age(first, 120)
+        self.age(second, 10)
+        self.assertEqual([session["session_id"] for session in self.live()], ["s-b", "s-a"])
 
     def test_project_filter(self):
         for transcript in (self.main, self.agent, self.old):
@@ -431,6 +480,48 @@ class LiveSessionsTest(StoreCase):
             self.age(transcript, 600)
         self.assertEqual(self.live(minutes=5), [])
         self.assertEqual(len(self.live(minutes=15)), 2)
+
+
+class LiveSessionsInRangeTest(StoreCase):
+    def setUp(self):
+        super().setUp()
+        now = time.time()
+        self.now = now
+        # s1 used tokens on the first day and was active again two days later, without a reply yet; s-old has no
+        # usage at all, its last activity on the second day
+        self.main, self.agent = build_session(self.projects)
+        self.main.at(START + timedelta(days=2)).user("still going")
+        self.old = self.projects.session("s-old")
+        self.old.user("long ago")
+        self.old.at(START + timedelta(days=1)).user("later")
+        for transcript in (self.main, self.agent, self.old):
+            os.utime(transcript.path, (now - 10, now - 10))
+        self.scan()
+
+    def live_in(self, since, until):
+        """The ids of the live sessions of the local days of since up to until."""
+        return [session["session_id"] for session in queries.live_sessions(
+            self.store, 5, PRICES, now=self.now, since=date.fromisoformat(local_day(since)),
+            until=date.fromisoformat(local_day(until)))]
+
+    def test_a_range_keeps_the_live_sessions_that_used_tokens_in_it(self):
+        # the sessions list's rule: a session still running shows on each day it used tokens
+        self.assertEqual(self.live_in(START, START), ["s1"])
+
+    def test_a_live_session_without_usage_in_the_range_counts_by_its_last_activity(self):
+        # a session whose first reply hasn't come yet has no usage at all
+        self.assertEqual(self.live_in(START + timedelta(days=1), START + timedelta(days=1)), ["s-old"])
+        self.assertEqual(self.live_in(START + timedelta(days=2), START + timedelta(days=2)), ["s1"])
+
+    def test_a_range_without_their_activity_has_no_live_session(self):
+        self.assertEqual(self.live_in(START + timedelta(days=5), START + timedelta(days=6)), [])
+
+    def test_a_longer_range_keeps_them_in_their_order(self):
+        self.assertEqual(self.live_in(START, START + timedelta(days=2)), ["s1", "s-old"])
+
+    def test_without_a_range_every_live_session(self):
+        self.assertEqual([session["session_id"] for session in
+                          queries.live_sessions(self.store, 5, PRICES, now=self.now)], ["s1", "s-old"])
 
 
 class SessionDetailTest(StoreCase):

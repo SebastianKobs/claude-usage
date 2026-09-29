@@ -15,6 +15,17 @@ function placeholder(id, text) {
   document.getElementById(id).replaceChildren(el("div", {class: "empty", text}));
 }
 
+// The range the page shows, as a query: the day only for a single day, which the arrows step through
+function rangeQuery(days, day) {
+  return `days=${days}` + (days === 1 && day !== null ? `&until=${day}` : "");
+}
+
+// A new range: the live sessions follow it too, at once rather than at their next poll
+function loadRange() {
+  loadSummary();
+  loadLive();
+}
+
 let summaryRequest = 0;
 let summaryKey = null;
 async function loadSummary() {
@@ -22,9 +33,8 @@ async function loadSummary() {
   container.classList.add("loading");                      // keep the previous render, dimmed
   // stepping through days quickly overlaps requests: only the newest one may render
   const request = ++summaryRequest;
-  const until = state.days === 1 && state.day !== null ? `&until=${state.day}` : "";
   try {
-    const summary = await fetchJson(`/api/summary?days=${state.days}${until}`);
+    const summary = await fetchJson(`/api/summary?${rangeQuery(state.days, state.day)}`);
     if (request !== summaryRequest) return;
     showError("summary", "");
     showScanErrors(summary);
@@ -64,10 +74,14 @@ function renderSummary() {
     (themeCopy().footer || "");
 }
 
+let liveRequest = 0;
 let liveKey = null;
 async function loadLive() {
+  // a poll for the range before may answer after a new range's request: only the newest one may render
+  const request = ++liveRequest;
   try {
-    const live = await fetchJson("/api/live");
+    const live = await fetchJson(`/api/live?${rangeQuery(state.days, state.day)}`);
+    if (request !== liveRequest) return;
     showError("live", "");
     showScanErrors(live);
     const key = JSON.stringify(live);
@@ -80,6 +94,7 @@ async function loadLive() {
     document.getElementById("updated").textContent = `updated ${new Date().toLocaleTimeString()}`;
     return true;
   } catch (error) {
+    if (request !== liveRequest) return;
     showError("live", error.message);
     if (liveKey === null) placeholder("live", "Could not load the live sessions.");
     return false;
@@ -241,7 +256,7 @@ function setup() {
     savePreference("days", state.days);
     pressed("range", "days", state.days);
     renderDayNav();
-    loadSummary();
+    loadRange();
   });
   document.getElementById("day-prev").addEventListener("click", () => stepDay("previous_day"));
   document.getElementById("day-next").addEventListener("click", () => stepDay("next_day"));
@@ -260,6 +275,7 @@ function setup() {
       event.currentTarget.setAttribute("aria-pressed", String(!table.hidden));
     });
   }
+  setupSessionFilters();
   document.getElementById("theme").addEventListener("change", event => {
     savePreference("theme", event.target.value);
     applyTheme(event.target.value);

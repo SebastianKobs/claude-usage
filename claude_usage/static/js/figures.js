@@ -133,7 +133,7 @@ function stepDay(name) {
   if (!shown || !shown[name]) return;
   state.day = shown[name] === dayText(new Date()) ? null : shown[name];
   renderDayNav();
-  loadSummary();
+  loadRange();
 }
 
 function renderDayNav() {
@@ -146,13 +146,17 @@ function renderDayNav() {
 
 // --- live ----------------------------------------------------------------------------------------------------
 
+// The day the live sessions were kept by, when the arrows went back to it: a running session shows there only if
+// it was active on it. Null for a range up to today, or none.
+function livePastDay(live, today) {
+  return live.days === 1 && live.until !== today ? live.until : null;
+}
+
 function renderLive(live) {
-  document.getElementById("live-window").textContent = `· changed in the last ${live.minutes} min`;
+  const pastDay = livePastDay(live, dayText(new Date()));
+  document.getElementById("live-window").textContent =
+    `· changed in the last ${live.minutes} min${pastDay ? `, active on ${longDay(pastDay)}` : ""}`;
   const container = document.getElementById("live");
-  if (!live.sessions.length) {
-    container.replaceChildren(el("div", {class: "empty", text: `No session active in the last ${live.minutes} minutes.`}));
-    return;
-  }
   const cards = live.sessions.map(session => {
     const number = (label, value) => el("div", {}, el("span", {class: "label", text: label}),
                                         el("strong", {text: value}));
@@ -172,5 +176,10 @@ function renderLive(live) {
          number("Last context", compact(session.last_context)), number("Cost", money(session.cost))),
       agents);
   });
-  container.replaceChildren(el("div", {class: "live-grid"}, ...cards));
+  // paged even when none is live, so a pager left from a longer list goes
+  container.replaceChildren(paged("live", live.sessions.length
+    ? el("div", {class: "live-grid paged-cards"}, ...cards)
+    : el("div", {class: "empty", text: pastDay ? `No live session was active on ${longDay(pastDay)}.`
+                                               : `No session active in the last ${live.minutes} minutes.`}),
+    "sessions"));
 }

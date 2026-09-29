@@ -42,7 +42,7 @@
 }
 [data-theme="rgb"] .tile-value { font-weight: 900; text-shadow: 0 0 14px rgba(0, 229, 255, 0.6); }
 [data-theme="rgb"] .dot { background: #ff0033; box-shadow: 0 0 10px #ff0033; animation: rgb-pulse 1.2s infinite; }
-[data-theme="rgb"] button, [data-theme="rgb"] select {
+[data-theme="rgb"] button, [data-theme="rgb"] select, [data-theme="rgb"] input[type="search"] {
   border-radius: 999px; border-color: var(--rgb-magenta); font-weight: 700;
   box-shadow: 0 0 12px rgba(255, 0, 229, 0.35);
 }

@@ -258,9 +258,13 @@ def api_error_events(store: Store, since: date | None, project: str | None = Non
     return [dict(row) for row in rows]
 
 
-def activity_time(mtime_ns: int) -> str:
-    """A file mtime as ISO text in UTC."""
-    return datetime.fromtimestamp(mtime_ns / 1e9, UTC).isoformat(timespec="seconds")
+def activity_time(row: sqlite3.Row) -> str:
+    """When a transcript was last active, as ISO text in UTC with milliseconds like the stored times, so text order
+    is time order: its last record's time, else its file's mtime (no record with a time). Not the mtime first: a
+    copied or restored transcript has a new one but keeps its records' times."""
+    if row["last_ts"] is not None:
+        return row["last_ts"]
+    return datetime.fromtimestamp(row["mtime_ns"] / 1e9, UTC).isoformat(timespec="milliseconds")
 
 
 def effort_order(effort: str | None) -> tuple[int, str]:
@@ -523,17 +527,41 @@ def session_live(store: Store, session_id: str, minutes: float, now: float | Non
     return row is not None
 
 
+def sessions_used_in(store: Store, session_ids: list[str], since: date | None, until: date | None) -> set[str]:
+    """Which of the sessions have usage (messages or background) from the local day since up to the local day until.
+    A list of values, unlike a subquery, reaches into the usage_rows view; in batches, under SQLite's limit."""
+    days, parameters = range_filter(USAGE_COLUMNS, since, until)
+    used = set()
+    for start in range(0, len(session_ids), ID_BATCH):
+        batch = {f"id{index}": session_id for index, session_id in enumerate(session_ids[start:start + ID_BATCH])}
+        placeholders = ", ".join(f":{name}" for name in batch)
+        used.update(row["session_id"] for row in store.connection.execute(
+            f"SELECT DISTINCT u.session_id AS session_id FROM usage_rows u "
+            f"WHERE u.session_id IN ({placeholders}) AND {days}", {**parameters, **batch}))
+    return used
+
+
 def live_sessions(store: Store, minutes: float, prices: pricing.Prices, now: float | None = None,
-                  project: str | None = None) -> list[Row]:
+                  project: str | None = None, since: date | None = None, until: date | None = None) -> list[Row]:
     """Sessions with a transcript changed within `minutes` (by the mtime seen at the last scan), most recent first,
-    with their totals so far, the main thread's last context and output, and the subagents active in the window."""
+    with their totals so far, the main thread's last context and output, and the subagents active in the window.
+    Most recent by the last activity (activity_time), like the sessions list, then by the mtime.
+    With since or until, only those active from the local day since up to the local day until: with usage then, as
+    the sessions list counts them, or else with their last activity then (a session without a reply yet)."""
     cutoff_ns = live_cutoff_ns(minutes, now)
     session_ids = [row["session_id"] for row in store.connection.execute(
         "SELECT DISTINCT session_id FROM transcripts WHERE mtime_ns >= ? AND (? IS NULL OR slug = ?)",
         (cutoff_ns, project_slug(project), project_slug(project)))]
+    ranged = since is not None or until is not None
+    used = sessions_used_in(store, session_ids, since, until) if ranged else set()
     sessions = []
     for session_id in session_ids:
         rows = session_rows(store, session_id)
+        last_activity = max(activity_time(row) for row in rows)
+        if ranged and session_id not in used:
+            day = datetime.fromisoformat(last_activity).astimezone().date()
+            if (since is not None and day < since) or (until is not None and day > until):
+                continue
         main = rows[0]
         main_turns = turn_contexts(store, main["path"]) if main["agent_id"] is None else []
         subagents = []
@@ -544,18 +572,19 @@ def live_sessions(store: Store, minutes: float, prices: pricing.Prices, now: flo
             subagents.append({"agent_id": row["agent_id"], "agent_type": row["agent_type"],
                               "description": row["description"],
                               "model": turns[-1]["model"] if turns else None,
-                              "last_activity": activity_time(row["mtime_ns"]), "turns": len(turns),
+                              "last_activity": activity_time(row), "turns": len(turns),
                               "last_context": turns[-1]["context"] if turns else None})
         last_ns = max(row["mtime_ns"] for row in rows)
         sessions.append({"session_id": session_id, "project": main["project"], "title": main["title"],
-                         "git_branch": main["git_branch"], "last_activity": activity_time(last_ns),
+                         "git_branch": main["git_branch"], "last_activity": last_activity,
                          **usage_where(store, "u.session_id = ?", (session_id,), prices).as_dict(),
                          "last_context": main_turns[-1]["context"] if main_turns else None,
                          "last_output": main_turns[-1]["output"] if main_turns else None,
-                         "subagents": subagents, "_last_ns": last_ns})
-    sessions.sort(key=lambda session: session["_last_ns"], reverse=True)
+                         "subagents": subagents,
+                         "_order": (last_activity, last_ns)})
+    sessions.sort(key=lambda session: session["_order"], reverse=True)
     for session in sessions:
-        del session["_last_ns"]
+        del session["_order"]
     return sessions
 
 

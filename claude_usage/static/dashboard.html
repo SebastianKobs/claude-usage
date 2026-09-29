@@ -60,7 +60,7 @@
 
     <section class="card" aria-labelledby="live-title">
       <h2 id="live-title"><span data-label="Live sessions">Live sessions</span> <span id="live-window" class="muted"></span></h2>
-      <div id="live"></div>
+      <div id="live" class="paged-wrap"></div>
     </section>
 
     <section class="card" aria-labelledby="trend-title">
@@ -129,7 +129,16 @@
         <p class="note">turns Claude Code attributes to an MCP server's tools</p>
         <div id="by-mcp-server" class="table-wrap"></div></section>
     </div>
-    <section class="card"><h2 data-label="Sessions">Sessions</h2><div id="sessions" class="table-wrap"></div></section>
+    <section class="card" aria-labelledby="sessions-title">
+      <h2 id="sessions-title" data-label="Sessions">Sessions</h2>
+      <div class="table-filters" role="search" aria-label="Filter the sessions">
+        <select id="sessions-project" aria-label="Project"><option value="">All projects</option></select>
+        <input type="search" id="sessions-search" aria-label="Filter by title, project or session id"
+               placeholder="Title, project or id" autocomplete="off" spellcheck="false">
+        <span class="muted" id="sessions-count" aria-live="polite"></span>
+      </div>
+      <div id="sessions" class="table-wrap"></div>
+    </section>
   </div>
 
   <footer id="footer"></footer>

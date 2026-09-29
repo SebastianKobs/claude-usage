@@ -578,16 +578,21 @@ class PagingTest(unittest.TestCase):
         self.assertRegex(script, r"const PAGE_SIZES = \[10, 25, 50\];")
 
     def test_every_table_is_paged(self):
-        sites = {"tables.js": 7, "limits.js": 1, "drilldown.js": 9, "chartkit.js": 1}
+        sites = {"tables.js": 7, "limits.js": 1, "drilldown.js": 9, "chartkit.js": 1, "figures.js": 1}
         for script, count in sites.items():
             with self.subTest(script=script):
                 self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)
 
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_pager_of_cards_names_what_they_are(self):
+        window = {"page": 0, "pages": 30, "first": 0, "last": 10}
+        self.assertEqual(run_function("tables.js", "pageText", window, 300, "sessions"), "sessions 1–10 of 300")
+
     def test_the_pager_comes_before_the_table(self):
         script = read(STATIC / "js" / "tables.js")
-        self.assertIn('el("div", {class: "paged"}, pager, table)', script)
-        self.assertIn("table.before(pager)", script)
-        self.assertNotIn("table.after(pager)", script)
+        self.assertIn('el("div", {class: "paged"}, pager, list)', script)
+        self.assertIn("list.before(pager)", script)
+        self.assertNotIn("list.after(pager)", script)
         self.assertIn("margin-bottom: 8px", css_block(read(STATIC / "css" / "common.css"), ".pager"))
 
     def test_the_pager_joins_the_title_row(self):
@@ -603,6 +608,157 @@ class PagingTest(unittest.TestCase):
         # a workflow run's agents are shown and hidden with `hidden`, so paging keeps to its own switch
         self.assertIn("display: none", css_block(read(STATIC / "css" / "common.css"), "tr.off-page"))
         self.assertIn('classList.toggle("off-page"', read(STATIC / "js" / "tables.js"))
+
+    def test_a_redrawn_tables_old_pager_is_let_go(self):
+        # the live sessions redraw every 5 s: a pager kept for good would keep every old draw's rows alive
+        body = re.search(r"^function paged\(.*?^\}$", read(STATIC / "js" / "tables.js"),
+                         re.DOTALL | re.MULTILINE).group(0)
+        self.assertIn("queueMicrotask(forgetDetachedPagers)", body)
+        forget = re.search(r"^function forgetDetachedPagers\(.*?^\}$", read(STATIC / "js" / "tables.js"),
+                           re.DOTALL | re.MULTILINE).group(0)
+        self.assertIn("isConnected", forget)
+        self.assertIn("pagers.delete", forget)
+
+    def test_the_live_sessions_are_paged_as_cards_their_pager_by_the_heading(self):
+        figures = read(STATIC / "js" / "figures.js")
+        # paged even when none is live, so a pager left from a longer list goes
+        self.assertRegex(figures, r'paged\("live", live\.sessions\.length')
+        self.assertIn('class: "live-grid paged-cards"', figures)
+        self.assertIn('<div id="live" class="paged-wrap">', dashboard())
+        self.assertIn('".table-wrap, .paged-wrap"', read(STATIC / "js" / "tables.js"))
+        self.assertIn("display: none", css_block(read(STATIC / "css" / "common.css"), ".paged-cards > .off-page"))
+
+
+def function_body(script, name):
+    """The source of a script's top-level function."""
+    return re.search(rf"^(?:async )?function {name}\(.*?^\}}$", read(STATIC / "js" / script),
+                     re.DOTALL | re.MULTILINE).group(0)
+
+
+class LiveRangeTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_range_names_its_day_only_for_a_single_day(self):
+        self.assertEqual(run_function("main.js", "rangeQuery", 1, "2026-09-28"), "days=1&until=2026-09-28")
+        self.assertEqual(run_function("main.js", "rangeQuery", 1, None), "days=1")
+        self.assertEqual(run_function("main.js", "rangeQuery", 7, "2026-09-28"), "days=7")
+
+    def test_the_live_sessions_ask_for_the_summarys_range(self):
+        script = read(STATIC / "js" / "main.js")
+        self.assertIn("fetchJson(`/api/live?${rangeQuery(state.days, state.day)}`)", script)
+        self.assertIn("fetchJson(`/api/summary?${rangeQuery(state.days, state.day)}`)", script)
+
+    def test_a_new_range_loads_the_live_sessions_at_once(self):
+        load = function_body("main.js", "loadRange")
+        self.assertIn("loadSummary();", load)
+        self.assertIn("loadLive();", load)
+        self.assertIn("loadRange();", function_body("figures.js", "stepDay"))
+        setup = function_body("main.js", "setup")
+        self.assertIn("loadRange();", setup)
+        self.assertNotIn("loadSummary();", setup)
+
+    def test_only_the_newest_live_request_renders(self):
+        # a poll for the range before may answer after the new range's request
+        body = function_body("main.js", "loadLive")
+        self.assertIn("const request = ++liveRequest;", body)
+        self.assertEqual(body.count("if (request !== liveRequest) return;"), 2)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_past_day_is_the_day_the_live_sessions_were_kept_by(self):
+        past = {"days": 1, "since": "2026-09-28", "until": "2026-09-28"}
+        self.assertEqual(run_function("figures.js", "livePastDay", past, "2026-09-29"), "2026-09-28")
+        today = {"days": 1, "since": "2026-09-29", "until": "2026-09-29"}
+        self.assertIsNone(run_function("figures.js", "livePastDay", today, "2026-09-29"))
+        week = {"days": 7, "since": "2026-09-23", "until": "2026-09-29"}
+        self.assertIsNone(run_function("figures.js", "livePastDay", week, "2026-09-29"))
+        self.assertIsNone(run_function("figures.js", "livePastDay", {"days": None, "since": None, "until": None},
+                                       "2026-09-29"))
+
+    def test_the_live_sessions_name_a_past_day(self):
+        body = function_body("figures.js", "renderLive")
+        self.assertIn("livePastDay(live, dayText(new Date()))", body)
+        self.assertIn("active on ${longDay(pastDay)}", body)
+        self.assertIn("No live session was active on ${longDay(pastDay)}.", body)
+
+
+class SessionListTest(unittest.TestCase):
+    SESSIONS = [
+        {"session_id": "abc-1", "title": "Parser fix", "project": "/home/dev/app"},
+        {"session_id": "def-2", "title": None, "project": "/home/dev/other"},
+        {"session_id": "ghi-3", "title": "Chart colors", "project": "/home/dev/app"},
+    ]
+
+    def matching(self, project, text):
+        """The ids of the sessions the filter keeps."""
+        return [session["session_id"] for session in self.SESSIONS
+                if run_function("tables.js", "sessionMatches", session, project, text)]
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_no_filter_keeps_every_session(self):
+        self.assertEqual(self.matching("", ""), ["abc-1", "def-2", "ghi-3"])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_project_keeps_only_its_sessions(self):
+        self.assertEqual(self.matching("/home/dev/app", ""), ["abc-1", "ghi-3"])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_every_word_must_be_in_the_title_project_or_id_in_any_case(self):
+        self.assertEqual(self.matching("", "parser"), ["abc-1"])
+        self.assertEqual(self.matching("", "  OTHER "), ["def-2"])
+        self.assertEqual(self.matching("", "ghi app"), ["ghi-3"])
+        self.assertEqual(self.matching("", "parser other"), [])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_project_and_the_words_both_count(self):
+        self.assertEqual(self.matching("/home/dev/other", "parser"), [])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_projects_to_pick_come_by_name_with_their_sessions(self):
+        self.assertEqual(run_function("tables.js", "sessionProjects", self.SESSIONS, ""),
+                         [{"project": "/home/dev/app", "count": 2}, {"project": "/home/dev/other", "count": 1}])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_picked_project_stays_on_offer_in_a_range_without_it(self):
+        self.assertEqual(run_function("tables.js", "sessionProjects", self.SESSIONS[:1], "/home/dev/gone"),
+                         [{"project": "/home/dev/app", "count": 1}, {"project": "/home/dev/gone", "count": 0}])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_count_says_how_many_of_the_ranges_sessions_show(self):
+        self.assertEqual(run_function("tables.js", "sessionCount", 84, 84), "84 sessions")
+        self.assertEqual(run_function("tables.js", "sessionCount", 1, 1), "1 session")
+        self.assertEqual(run_function("tables.js", "sessionCount", 12, 84), "12 of 84 sessions")
+
+    def test_the_filters_come_between_the_heading_and_the_table(self):
+        markup = dashboard()
+        heading = markup.index('id="sessions-title"')
+        for control in ('id="sessions-project"', 'id="sessions-search"', 'id="sessions-count"'):
+            with self.subTest(control=control):
+                self.assertLess(heading, markup.index(control))
+                self.assertLess(markup.index(control), markup.index('id="sessions" class="table-wrap"'))
+        self.assertRegex(markup, r'<select id="sessions-project" aria-label="[^"]+"')
+        self.assertRegex(markup, r'<input type="search" id="sessions-search" aria-label="[^"]+"')
+
+    def test_the_pager_still_joins_the_heading_past_the_filters(self):
+        body = re.search(r"^function placePager\(.*?^\}$", read(STATIC / "js" / "tables.js"),
+                         re.DOTALL | re.MULTILINE).group(0)
+        self.assertIn('"table-filters"', body)
+        self.assertIn('class="table-filters"', dashboard())
+
+    def test_a_new_filter_starts_at_the_first_page(self):
+        body = re.search(r"^function setupSessionFilters\(.*?^\}$", read(STATIC / "js" / "tables.js"),
+                         re.DOTALL | re.MULTILINE).group(0)
+        self.assertIn('"sessions-search", "input"', body)
+        self.assertIn('"sessions-project", "change"', body)
+        self.assertIn('tablePages.delete("sessions")', body)
+        self.assertIn("setupSessionFilters()", read(STATIC / "js" / "main.js"))
+
+    def test_the_search_field_looks_like_the_other_controls_in_every_theme(self):
+        css = read(STATIC / "css" / "common.css")
+        self.assertIn("var(--surface)", css_block(css, 'input[type="search"] {'))
+        self.assertIn("var(--text-muted)", css_block(css, 'input[type="search"]::placeholder'))
+        for theme in GIMMICK_THEMES:
+            with self.subTest(theme=theme):
+                self.assertIn(f'[data-theme="{theme}"] input[type="search"]',
+                              read(STATIC / "css" / "themes" / f"{theme}.css"))
 
 
 class SessionPollTest(unittest.TestCase):

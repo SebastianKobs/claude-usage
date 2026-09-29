@@ -193,6 +193,28 @@ class ApiTest(ServerCase):
         self.assertEqual(sorted(sessions), ["s1", "s2"])
         self.assertEqual((sessions["s1"]["title"], sessions["s1"]["turns"]), ("Parser fix", 2))
 
+    def test_live_without_a_range_lists_every_live_session(self):
+        _, payload = self.get_json("/api/live")
+        self.assertEqual((payload["days"], payload["since"], payload["until"]), (None, None, None))
+
+    def test_live_of_a_range_keeps_the_sessions_active_in_it(self):
+        status, payload = self.get_json("/api/live?days=1")
+        self.assertEqual(status, 200)
+        self.assertEqual(sorted(session["session_id"] for session in payload["sessions"]), ["s1", "s2"])
+        today = date.today().isoformat()
+        self.assertEqual((payload["days"], payload["since"], payload["until"]), (1, today, today))
+
+    def test_live_of_a_past_day_leaves_out_the_sessions_not_active_on_it(self):
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        _, payload = self.get_json(f"/api/live?days=1&until={yesterday}")
+        self.assertEqual(payload["sessions"], [])
+        self.assertEqual((payload["since"], payload["until"]), (yesterday, yesterday))
+
+    def test_live_refuses_a_bad_range(self):
+        for query in ("days=0", "days=x", "until=2026-13-01", f"until={date.today() + timedelta(days=1)}"):
+            with self.subTest(query=query):
+                self.assertEqual(self.get_json(f"/api/live?{query}")[0], 400)
+
     def test_summary_of_today_has_hourly_totals(self):
         status, payload = self.get_json("/api/summary?days=1")
         self.assertEqual(status, 200)
@@ -431,6 +453,23 @@ class ApiTest(ServerCase):
         self.assertEqual(week["hour_model_effort"], [])
         _, today = self.get_json("/api/summary?days=1")
         self.assertIn("max", [row["effort"] for row in today["hour_model_effort"]])
+
+    def test_summary_lists_every_session_of_the_range(self):
+        # the page pages and filters the list: a cut would hide the older sessions without a word
+        now = datetime.now(UTC)
+        for index in range(60):
+            extra = self.projects.session(f"x{index}", project="/home/dev/app").at(now - timedelta(minutes=index + 1))
+            extra.assistant(f"mx{index}", [text_block("y")], usage(output=1))
+        _, payload = self.get_json("/api/summary?days=7")
+        self.assertEqual(len(payload["sessions"]), 62)
+
+    def test_summary_sessions_carry_only_what_the_list_shows(self):
+        _, payload = self.get_json("/api/summary?days=7")
+        sessions = {session["session_id"]: session for session in payload["sessions"]}
+        self.assertEqual(set(sessions["s1"]), {"session_id", "title", "project", "last_ts", "subagents", "turns",
+                                               "context_avg", "context_peak", "output", "cost"})
+        self.assertEqual((sessions["s1"]["title"], sessions["s1"]["project"], sessions["s1"]["subagents"],
+                          sessions["s1"]["output"]), ("Parser fix", "/home/dev/app", 1, 55))
 
     def test_costly_sessions_rank_every_session_by_cost(self):
         _, payload = self.get_json("/api/summary?days=7")
@@ -867,6 +906,10 @@ class RetentionTest(ServerCase):
         today = date.today()
         self.assertEqual((payload["days"], payload["retention_days"], payload["since"]),
                          (7, 7, (today - timedelta(days=6)).isoformat()))
+
+    def test_the_live_sessions_range_is_cut_to_the_retention_too(self):
+        _, payload = self.get_json("/api/live?days=30")
+        self.assertEqual((payload["days"], payload["since"]), (7, (date.today() - timedelta(days=6)).isoformat()))
 
     def test_the_summary_says_where_the_history_starts(self):
         _, payload = self.get_json("/api/summary?days=7")

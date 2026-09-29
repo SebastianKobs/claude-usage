@@ -434,6 +434,11 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - Polling: live every 5 s, the summary every 60 s, each after the previous answer, none while the tab is hidden.
     An unchanged payload isn't drawn again, so focus stays put. The banner keeps one message per source (live,
     summary, session, scan), and a response only renders if it answers the newest request.
+  - The live sessions follow the range shown: both requests carry it (`rangeQuery`), a new range loads both at once
+    (`loadRange`), and the server cuts both to the retention (`UsageApp.date_range`). `/api/live` then keeps the
+    live sessions active in the range (`queries.live_sessions` with since and until): with usage in it, as the
+    sessions list counts them, else by their last activity (a session without a reply yet). So a past day shows
+    only the running sessions that were active on it, and says so; without a range `/api/live` lists every one.
   - An open session polls too: every 5 s while it is `live` (a transcript changed within `live_minutes`), else
     every 60 s, which notices a resumed session. A changed one is drawn in place (`renderDrilldown(detail, true)`):
     the conversation's nodes move into the new view, and the table view, the folds open (a workflow run's agents,
@@ -490,7 +495,20 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     25 or 50 rows (25 by default, kept as a preference and applied to every table at once), previous and next, and
     "rows 11–20 of 84". Each table keeps its page by key across redraws (the session view's keys carry the session and
     the picked transcript, so another one starts at the first page), and its controls keep focus. Rows off the page
-    get the `off-page` class, since a workflow run's switch uses `hidden`.
+    get the `off-page` class, since a workflow run's switch uses `hidden`. The live sessions' cards page the same way
+    (`paged-cards` in a `paged-wrap`, each card a group, "sessions 1–10 of 300"), most recent first like the sessions
+    list: by the last record's time, then the mtime (`queries.live_sessions`; a copied transcript has a new mtime).
+    Each card and subagent shows that time (`queries.activity_time`: the last record's, else the mtime); only
+    whether a session is live goes by the mtime.
+    Once a draw is in the page, the pagers it replaced are let go (`forgetDetachedPagers`), since a list drawn every
+    5 s would keep each old draw.
+  - The sessions list holds every session of the range, newest first (`sessions` in `/api/summary`, only
+    `server.SESSION_LIST_FIELDS`, about 250 bytes each; the costliest keep their parts), so no older session is cut
+    without a word. A project picker (the range's projects by name, with their sessions; a picked one stays on offer
+    in a range without it) and a text filter (every word, in any case, in the title, project or id:
+    `sessionMatches`) narrow it, counted as "12 of 84 sessions". The controls are markup outside what a redraw
+    replaces, so a refresh keeps the filter and typing keeps its focus; a new filter starts at the first page, and the
+    pager joins the heading past them (`table-filters`).
   - All data goes into the DOM via `textContent`. Two exceptions, both in `chat.js`:
     - `highlighted()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans
       with classes.

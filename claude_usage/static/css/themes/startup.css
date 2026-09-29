@@ -32,8 +32,10 @@
   background: linear-gradient(180deg, #ffffff, #a1a1aa); -webkit-background-clip: text; background-clip: text;
   color: transparent;
 }
-[data-theme="startup"] button, [data-theme="startup"] select { border-radius: 8px; background: #111114; }
-[data-theme="startup"] button:hover, [data-theme="startup"] select:hover { border-color: var(--flex-violet); }
+[data-theme="startup"] button, [data-theme="startup"] select,
+[data-theme="startup"] input[type="search"] { border-radius: 8px; background: #111114; }
+[data-theme="startup"] button:hover, [data-theme="startup"] select:hover,
+[data-theme="startup"] input[type="search"]:hover { border-color: var(--flex-violet); }
 [data-theme="startup"] button[aria-pressed="true"] { border-color: var(--flex-violet); color: #ffffff;
   box-shadow: 0 0 0 1px var(--flex-violet); }
 [data-theme="startup"] .dot { background: var(--flex-violet); box-shadow: 0 0 10px var(--flex-violet); }
