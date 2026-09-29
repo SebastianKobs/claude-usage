@@ -7,6 +7,7 @@ from datetime import date
 from datetime import datetime
 from datetime import time as clock_time
 from datetime import timedelta
+from unittest import mock
 
 from claude_usage import compact
 from claude_usage import queries
@@ -1014,6 +1015,11 @@ class ContextPartsTest(StoreCase):
         current = queries.current_context(self.store, "s1", compact.DEFAULT_COMPACT, PRICES)
         self.assertEqual((current["context"], current["turns_since_compaction"], current["last_compaction"]),
                          (3_000, 1, self.boundary["timestamp"].replace("Z", "+00:00")))
+
+    def test_the_preview_projects_the_context_at_the_gauges_pace(self):
+        with mock.patch.object(turns, "compact_preview", wraps=turns.compact_preview) as preview:
+            current = queries.current_context(self.store, "s1", compact.DEFAULT_COMPACT, PRICES)
+        self.assertEqual(preview.call_args.args[4], current["mean_step"])
 
     def test_no_current_context_without_main_thread_turns(self):
         self.assertIsNone(queries.current_context(self.store, "nope", compact.DEFAULT_COMPACT, PRICES))

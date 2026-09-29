@@ -441,12 +441,13 @@ def cache_writer(turns: list[Turn]) -> Turn:
 
 
 def compact_preview(turns: list[Turn], past: list[VersusKeeping | None], prices: pricing.Prices,
-                    calls_so_far: int = 0) -> dict[str, Any] | None:
+                    calls_so_far: int = 0, step: int | None = None) -> dict[str, Any] | None:
     """What compacting after the last turn would cost and when it would pay off. Exact: what each call reads again
     (the last context and reply), until when the cache stays warm (the last request plus the lifetime of the latest
     writes; other requests may refresh it), and what keeping costs across a break past that (rewriting it all).
     Estimated from past compactions (preview_estimate, None without one that estimated a summary), calls_so_far
-    being the calls since the last compaction. None without turns or a price."""
+    being the calls since the last compaction and step the context's recent growth per call (the gauge's mean
+    step). None without turns or a price."""
     if not turns:
         return None
     last = turns[-1]
@@ -459,7 +460,7 @@ def compact_preview(turns: list[Turn], past: list[VersusKeeping | None], prices:
     before = last.context + last.output
     start = last.request_ts or last.ts
     known = [item for item in past if item is not None]
-    estimate = preview_estimate(last, known, rates, calls_so_far)
+    estimate = preview_estimate(last, known, rates, calls_so_far, step)
     return {"before": before, "reread_cost": before * rates.read,
             "cache_ttl_minutes": round(cache_ttl(writer).total_seconds() / 60),
             "cache_warm_until": None if start is None
@@ -468,14 +469,15 @@ def compact_preview(turns: list[Turn], past: list[VersusKeeping | None], prices:
             "estimate": estimate}
 
 
-def preview_estimate(last: Turn, past: list[VersusKeeping], rates: Rates,
-                     calls_so_far: int = 0) -> dict[str, Any] | None:
+def preview_estimate(last: Turn, past: list[VersusKeeping], rates: Rates, calls_so_far: int = 0,
+                     step: int | None = None) -> dict[str, Any] | None:
     """compact_preview's estimates from past comparisons: the context after (the median cached prefix plus what
     past compactions added beyond it, the next call's rewrite never below nothing), the summary (the same model's
     median), the one-time cost, the calls to break even with a range, the calls that followed finished stretches,
     what compacting right before a break past the cache's lifetime saves at the fastest summary, and the same once
-    the cache has expired (compacting cold against keeping's rewrite of everything), and the calls still ahead
-    (calls_ahead). None without a past summary."""
+    the cache has expired (compacting cold against keeping's rewrite of everything), the calls still ahead
+    (calls_ahead), and in how many replies at step a reply compacting would pay off within them (later_payoff).
+    None without a past summary."""
     same_model = [item for item in past if item.model == last.model and item.call.summary_tokens is not None]
     timed = same_model or [item for item in past if item.call.summary_tokens is not None]
     if not timed:
@@ -488,9 +490,7 @@ def preview_estimate(last: Turn, past: list[VersusKeeping], rates: Rates,
 
     def horizon(add: float, summary: float) -> tuple[float, int | None]:
         """The one-time cost and the calls to break even when compacting adds this much and summarises so long."""
-        one_time = warm_input + summary * rates.output + max(0.0, add - last.output) * (rates.write - rates.read)
-        saving = (before - prefix - add) * rates.read
-        return one_time, math.ceil(one_time / saving) if saving > 0 else None
+        return warm_horizon(last, rates, prefix, add, summary)
 
     add = statistics.mean(added)
     summary = statistics.median(summaries)
@@ -506,6 +506,7 @@ def preview_estimate(last: Turn, past: list[VersusKeeping], rates: Rates,
         cold_calls = 1 + math.ceil(-cold_saving / per_call) if per_call > 0 else None
     finished = [item.calls_after for item in past if not item.last_stretch]
     ahead, ahead_from = calls_ahead(finished, calls_so_far)
+    later_in, later_at = later_payoff(last, step, finished, calls_so_far, rates, prefix, add, summary)
     return {"compactions": len(past), "after": round(prefix + add), "after_low": round(prefix + min(added)),
             "after_high": round(prefix + max(added)), "summary_tokens": round(summary), "one_time": one_time,
             "breakeven_calls": calls, "breakeven_low": horizon(min(added), min(summaries))[1],
@@ -514,7 +515,36 @@ def preview_estimate(last: Turn, past: list[VersusKeeping], rates: Rates,
             "cold_saving": cold_saving, "breakeven_cold": cold_calls if difference > 0 else None,
             "calls_after_low": min(finished, default=None), "calls_after_high": max(finished, default=None),
             "calls_ahead": ahead, "ahead_from": ahead_from,
-            "stretches_ahead": sum(1 for calls in finished if calls > calls_so_far)}
+            "stretches_ahead": sum(1 for calls in finished if calls > calls_so_far),
+            "pays_later_in": later_in, "pays_later_at": later_at}
+
+
+def warm_horizon(last: Turn, rates: Rates, prefix: float, add: float, summary: float) -> tuple[float, int | None]:
+    """The one-time cost of compacting warm after the last turn and the calls to break even, when compacting leaves
+    the cached prefix, adds this much and summarises so long; None where each call would save nothing."""
+    one_time = (compaction_input(last, rates, warm=True) + summary * rates.output
+                + max(0.0, add - last.output) * (rates.write - rates.read))
+    saving = (last.context + last.output - prefix - add) * rates.read
+    return one_time, math.ceil(one_time / saving) if saving > 0 else None
+
+
+def later_payoff(last: Turn, step: int | None, finished: list[int], calls_so_far: int, rates: Rates, prefix: float,
+                 add: float, summary: float) -> tuple[int | None, int | None]:
+    """In how many replies compacting would pay off within the calls still ahead then (likely_pays), with the
+    context growing by step a reply through the cache as a warm stretch does, and the context then; (None, None)
+    where no reply within the calls ahead now does, the context doesn't grow, or nothing tells the calls ahead.
+    Early in a stretch the context is small, so compacting saves little per call: that is too early, not too late,
+    and the page tells the two apart by this."""
+    ahead, _ = calls_ahead(finished, calls_so_far)
+    if step is None or step <= 0 or ahead is None:
+        return None, None
+    for replies in range(1, math.floor(ahead) + 1):
+        grown = dataclasses.replace(last, cache_read=last.cache_read + replies * step)
+        _, calls = warm_horizon(grown, rates, prefix, add, summary)
+        still_ahead, _ = calls_ahead(finished, calls_so_far + replies)
+        if calls is not None and still_ahead is not None and calls <= still_ahead:
+            return replies, grown.context
+    return None, None
 
 
 def calls_ahead(finished: list[int], calls_so_far: int) -> tuple[float | None, str | None]:

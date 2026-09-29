@@ -254,8 +254,8 @@ function liveSecretBadge(secrets) {
 
 // compacting now, in the tone and words of the session view's estimate (payoffTone, PAYOFF_WORDS): when it pays off
 // against the replies still ahead on average, or what it saves at once where the call to compact says so
-// (compactCallKind "cold"), and past the compact hint; null without a gauge, where it would never pay off, or below
-// the hint without an estimate
+// (compactCallKind "cold"), and past the compact hint; null without a gauge, where it would never pay off or only
+// once the context has grown (too early: nothing to do yet), or below the hint without an estimate
 function liveCompactBadge(current, now) {
   const preview = current ? current.compact_now : null;
   if (!preview) return null;
@@ -270,6 +270,7 @@ function liveCompactBadge(current, now) {
   if (compactCallKind({live: true, current}, now) === "cold") {
     return badge(`Compacting now saves ~${money(estimate.cold_saving)} at once: the cache has expired.`);
   }
+  if (tone === "later") return hint ? {kind: "compact", tone: null, text: hint} : null;
   const breakeven = expired ? estimate.breakeven_cold : estimate.breakeven_calls;
   if (breakeven === null) {
     if (expired || estimate.breakeven_low === null) return hint ? {kind: "compact", tone: null, text: hint} : null;

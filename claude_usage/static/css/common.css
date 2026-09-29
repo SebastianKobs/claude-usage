@@ -128,6 +128,7 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
 .payoff-soon { background: var(--gain-text); }
 .payoff-close { background: var(--hint-warning-edge); }
 .payoff-unlikely { background: var(--hint-critical-edge); }
+.payoff-later { background: var(--text-secondary); }
 .panel-title { fill: var(--text-secondary); font-size: 12px; }
 .axis-text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .value-text { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }

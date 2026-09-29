@@ -667,7 +667,8 @@ function compactNowNotes(preview) {
 }
 
 // how soon compacting now pays off against the replies still ahead on average (calls_ahead): "soon" within half of
-// them, "close" within them, "unlikely" past them or never; null without calls ahead to compare with
+// them, "close" within them; else "later" where it would once the context has grown at its recent pace
+// (pays_later_in: too early, not too late), "unlikely" past them or never; null without calls ahead to compare with
 function payoffTone(estimate, expired) {
   const ahead = estimate.calls_ahead;
   let breakeven = estimate.breakeven_calls;
@@ -675,18 +676,26 @@ function payoffTone(estimate, expired) {
     if (estimate.cold_saving >= 0) return "soon";
     breakeven = estimate.breakeven_cold;
   }
+  const known = ahead !== null && ahead !== undefined;
+  if (breakeven !== null && known && breakeven <= ahead) return breakeven <= ahead / 2 ? "soon" : "close";
+  if ((estimate.pays_later_in ?? null) !== null) return "later";
   if (breakeven === null) return "unlikely";
-  if (ahead === null || ahead === undefined) return null;
-  if (breakeven <= ahead / 2) return "soon";
-  return breakeven <= ahead ? "close" : "unlikely";
+  return known ? "unlikely" : null;
 }
 
-const PAYOFF_WORDS = {soon: "Soon", close: "Close", unlikely: "Likely too late"};
+const PAYOFF_WORDS = {soon: "Soon", close: "Close", later: "Not yet", unlikely: "Likely too late"};
 
-// the tone in words, which carry it, not the mark's color: against the replies still ahead on average; nothing
-// where the pay-off phrase already says it all (never, likely not, or at once)
+// the tone in words, which carry it, not the mark's color: against the replies still ahead on average, or when the
+// context will have grown enough; nothing where the pay-off phrase already says it all (never, likely not, or at
+// once)
 function payoffAhead(tone, estimate, expired) {
   if (!tone || estimate.calls_ahead === null || estimate.calls_ahead === undefined) return null;
+  if (tone === "later") {
+    const replies = estimate.pays_later_in === 1 ? "1 reply" : `${whole(estimate.pays_later_in)} replies`;
+    return `${PAYOFF_WORDS.later}: growing at its recent pace, the context reaches about ` +
+           `${compact(estimate.pays_later_at)} in ${replies}, and compacting then would pay off within the replies ` +
+           "still ahead on average.";
+  }
   const breakeven = expired ? (estimate.cold_saving >= 0 ? null : estimate.breakeven_cold) : estimate.breakeven_calls;
   if (breakeven === null) return null;
   const ahead = whole(Math.round(estimate.calls_ahead));
@@ -696,10 +705,12 @@ function payoffAhead(tone, estimate, expired) {
 }
 
 // when compacting now pays off: warm against the next calls' reads; once the cache has expired, cold against
-// keeping's rewrite of everything
+// keeping's rewrite of everything. A context below what compacting leaves pays off not yet, rather than never,
+// where it will once it has grown (pays_later_in).
 function payoffText(estimate, expired) {
+  const never = (estimate.pays_later_in ?? null) === null ? "would never pay off" : "would not pay off yet";
   if (expired) {
-    if (estimate.breakeven_cold === null) return "would never pay off: the context is below what compacting leaves";
+    if (estimate.breakeven_cold === null) return `${never}: the context is below what compacting leaves`;
     return estimate.cold_saving >= 0
       ? `pays off at once (about ${money(estimate.cold_saving)}), since the next reply sends it all anyway`
       : `would pay off after about ${whole(estimate.breakeven_cold)} replies`;
@@ -710,7 +721,7 @@ function payoffText(estimate, expired) {
            spread(calls(estimate.breakeven_low), calls(estimate.breakeven_high));
   }
   return estimate.breakeven_low === null
-    ? "would never pay off: the context is below what compacting leaves"
+    ? `${never}: the context is below what compacting leaves`
     : `would likely not pay off (at best after about ${whole(estimate.breakeven_low)} replies)`;
 }
 

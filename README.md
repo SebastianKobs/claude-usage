@@ -77,7 +77,8 @@ holds:
   the last compaction and an estimate of the turns left at the recent pace. Below it, what compacting now would
   cost: what each call re-reads, until when the cache stays warm and what keeping costs after that, and from your
   stored compactions after how many replies compacting would pay off, marked green (soon: within half the replies
-  you usually still make), yellow (close) or red (likely too late), with the words to say so. While the session
+  you usually still make), yellow (close), grey (not yet: the context is still too small, and at its recent pace
+  compacting would pay off in so many replies) or red (likely too late), with the words to say so. While the session
   runs, a callout above it says in plain words when to compact, with a button that copies `/compact`: once the
   cache has expired and compacting saves at once, and once the context has passed your compact hint (200K by
   default), whatever the estimate says, since how many replies still follow can't be predicted. Replayed on stored

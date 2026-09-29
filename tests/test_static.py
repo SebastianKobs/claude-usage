@@ -391,10 +391,47 @@ class PayoffToneTest(unittest.TestCase):
         self.assertEqual(self.tone(expired=True, breakeven_cold=30), "close")
         self.assertEqual(self.tone(expired=True, breakeven_cold=None), "unlikely")
 
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_where_it_pays_off_only_once_the_context_has_grown_it_is_not_yet(self):
+        # a young stretch or one right after a compaction: too early, not too late
+        self.assertEqual(self.tone(breakeven_calls=41, pays_later_in=5), "later")
+        self.assertEqual(self.tone(breakeven_calls=None, pays_later_in=6), "later")
+        self.assertEqual(self.tone(expired=True, breakeven_cold=50, pays_later_in=3), "later")
+        self.assertEqual(self.tone(breakeven_calls=41, pays_later_in=None), "unlikely")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_paying_off_now_goes_before_later(self):
+        self.assertEqual(self.tone(breakeven_calls=20, pays_later_in=1), "soon")
+        self.assertEqual(self.tone(expired=True, cold_saving=0.2, pays_later_in=1), "soon")
+
+    def estimate_words(self, name, *arguments):
+        """A pay-off wording function of drilldown.js called with these arguments."""
+        return run_function("drilldown.js", name, *arguments,
+                            uses=("util.js:compactFormat", "util.js:wholeFormat", "util.js:compact", "util.js:whole",
+                                  "util.js:money", "drilldown.js:spread", "drilldown.js:PAYOFF_WORDS"))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_not_yet_says_when_compacting_would_pay_off(self):
+        estimate = {"breakeven_calls": 60, "calls_ahead": 40.0, "ahead_from": "longer", "pays_later_in": 5,
+                    "pays_later_at": 70_000}
+        self.assertEqual(self.estimate_words("payoffAhead", "later", estimate, False),
+                         "Not yet: growing at its recent pace, the context reaches about 70K in 5 replies, and "
+                         "compacting then would pay off within the replies still ahead on average.")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_a_context_below_what_compacting_leaves_pays_off_not_yet_rather_than_never(self):
+        below = {"breakeven_calls": None, "breakeven_low": None, "breakeven_cold": None, "cold_saving": -0.5}
+        for expired in (False, True):
+            with self.subTest(expired=expired):
+                self.assertEqual(self.estimate_words("payoffText", {**below, "pays_later_in": 6}, expired),
+                                 "would not pay off yet: the context is below what compacting leaves")
+                self.assertEqual(self.estimate_words("payoffText", {**below, "pays_later_in": None}, expired),
+                                 "would never pay off: the context is below what compacting leaves")
+
     def test_each_tone_has_its_mark_color(self):
         css = read(STATIC / "css" / "common.css")
         for tone, color in (("soon", "--gain-text"), ("close", "--hint-warning-edge"),
-                            ("unlikely", "--hint-critical-edge")):
+                            ("unlikely", "--hint-critical-edge"), ("later", "--text-secondary")):
             with self.subTest(tone=tone):
                 self.assertIn(f"var({color})", css_block(css, f".payoff-{tone}"))
 
@@ -729,6 +766,13 @@ class LiveStateTest(unittest.TestCase):
     def test_where_compacting_would_never_pay_off_there_is_no_compact_badge(self):
         self.assertEqual(self.badges(breakeven_calls=None, breakeven_low=None), [])
         self.assertEqual(self.badges(warm_until=self.EXPIRED, breakeven_cold=None), [])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_where_compacting_pays_off_only_later_there_is_no_compact_badge(self):
+        self.assertEqual(self.badges(breakeven_calls=50, pays_later_in=5), [])
+        self.assertEqual(self.badges(breakeven_calls=None, breakeven_low=60, pays_later_in=5), [])
+        self.assertEqual(self.badge(context=250_000, breakeven_calls=50, pays_later_in=5),
+                         ("compact", None, "Past your 200K compact hint."))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_where_it_likely_would_not_the_badge_says_so_in_the_late_tone(self):

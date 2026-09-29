@@ -275,6 +275,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       - the summary (the same model's median), and the one-time cost with the rewrite never below nothing;
       - the calls to break even (a range);
       - how many calls followed finished stretches, and how many are still ahead on average (`calls_ahead`);
+      - in how many replies compacting would pay off within the calls then still ahead, the context growing by the
+        gauge's mean step through the cache (`pays_later_in`, `pays_later_at`: `turns.later_payoff`), since early
+        in a stretch, a session's first too, compacting pays off too late only because the context is still small;
       - what compacting right before a break past the cache's lifetime saves at the fastest summary;
       - once the cache has expired, compacting cold against keeping's rewrite of everything (`cold_saving`,
         `breakeven_cold`), which the page switches to, drawing the gauge again when the cache runs out.
@@ -504,8 +507,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     picks them: an agent in a black hat for a possible secret access, first and only from medium up (`secretTone`'s
     warning and alert: high where one was sent out), then a trash compactor for compacting now, in `payoffTone`'s
     tone with `PAYOFF_WORDS` where it has a break-even, what it saves at once where `compactCallKind` is cold, and
-    past the compact hint. None where compacting would never pay off. A card's icons are drawn again only where they
-    changed, which a cache expiring does too.
+    past the compact hint. None where compacting would never pay off, or only once the context has grown (`later`).
+    A card's icons are drawn again only where they changed, which a cache expiring does too.
   - An open session polls too: every 5 s while it is `live` (a transcript changed within `live_minutes`), else
     every 60 s, which notices a resumed session. A changed one is drawn in place (`renderDrilldown(detail, true)`):
     the conversation's nodes move into the new view, and the table view, the folds open (a workflow run's agents,
@@ -526,9 +529,11 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - Under the gauge the exact parts are a muted note; the estimate (`compact-estimate`) is full-size text in
     `--text-secondary` under a `--border` hairline, its pay-off phrase bold in `--text-primary` after a mark by
     `payoffTone` against `calls_ahead`: `soon` within half of them (`--gain-text`), `close` within them
-    (`--hint-warning-edge`), `unlikely` past them or never (`--hint-critical-edge`); once the cache has expired by
-    the cold break-even, at once being soon. Words after it
-    ("Soon:", "Close:", "Likely too late:" with the replies ahead) carry the tone, not the mark's color. It calls
+    (`--hint-warning-edge`); else `later` where it would once the context has grown (`pays_later_in`: too early,
+    not too late; `--text-secondary`, and "would not pay off yet" rather than "never" below what compacting
+    leaves), `unlikely` past them or never (`--hint-critical-edge`); once the cache has expired by the cold
+    break-even, at once being soon. Words after it ("Soon:", "Close:", "Likely too late:" with the replies
+    ahead, "Not yet:" with the replies and the context by then) carry the tone, not the mark's color. It calls
     for nothing: replayed on the stored sessions (38 main threads, 2026-09-29, counts only), heeding a warm hint
     below the threshold on top of it added at best $0.03, and lost with 10K re-read after compacting.
   - The call to compact (`compactCall`, above the gauge), for a live session (`compactCallKind`): cold once the cache

@@ -506,7 +506,8 @@ def current_context(store: Store, session_id: str, settings: compact.CompactSett
         return None
     if past is None:
         past = compaction_history(store, prices, settings)
-    return {**gauge, "compact_now": turns.compact_preview(history, past, prices, gauge["turns_since_compaction"])}
+    return {**gauge, "compact_now": turns.compact_preview(history, past, prices, gauge["turns_since_compaction"],
+                                                          gauge["mean_step"])}
 
 
 def compaction_history(store: Store, prices: pricing.Prices,

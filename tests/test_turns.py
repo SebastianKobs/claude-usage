@@ -503,6 +503,47 @@ class PreviewTest(unittest.TestCase):
                                 turn(2, cache_read=301_000, output=10))
         self.assertEqual(self.preview(current)["cache_ttl_minutes"], 60)
 
+    def finished(self):
+        """Three finished stretches of 30, 40 and 50 calls, learnt from past()."""
+        [first] = self.past()
+        return [dataclasses.replace(first, last_stretch=False, calls_after=calls) for calls in (30, 40, 50)]
+
+    def later_estimate(self, cache_read, calls_so_far, step=None):
+        """The estimate for a 10K cache write and a 1K reply on this cache read, calls_so_far into the stretch."""
+        current = with_overhead(turn(1, cache_1h=10_000, cache_read=cache_read, output=1_000))
+        return turns.compact_preview(current, self.finished(), PRICES, calls_so_far, step)["estimate"]
+
+    def test_where_compacting_pays_off_only_later_it_says_in_how_many_replies(self):
+        estimate = self.later_estimate(50_000, 1, step=2_000)
+        self.assertFalse(turns.likely_pays(estimate))
+        replies = estimate["pays_later_in"]
+        self.assertEqual(estimate["pays_later_at"], 60_000 + replies * 2_000)
+        # the context grown that much pays off within the calls then still ahead, one reply earlier it doesn't
+        self.assertGreater(replies, 1)
+        self.assertTrue(turns.likely_pays(self.later_estimate(50_000 + replies * 2_000, 1 + replies)))
+        self.assertFalse(turns.likely_pays(self.later_estimate(50_000 + (replies - 1) * 2_000, replies)))
+
+    def test_a_context_below_what_compacting_leaves_pays_off_once_it_has_grown(self):
+        # right after a compaction: compacting again would leave as much as there is
+        estimate = self.later_estimate(30_000, 1, step=5_000)
+        self.assertIsNone(estimate["breakeven_calls"])
+        self.assertIsNotNone(estimate["pays_later_in"])
+
+    def test_where_no_reply_within_the_calls_ahead_pays_off_there_is_no_later(self):
+        estimate = self.later_estimate(50_000, 1, step=100)
+        self.assertEqual((estimate["pays_later_in"], estimate["pays_later_at"]), (None, None))
+
+    def test_a_context_that_does_not_grow_pays_off_no_later(self):
+        for step in (None, 0, -2_000):
+            with self.subTest(step=step):
+                self.assertIsNone(self.later_estimate(50_000, 1, step)["pays_later_in"])
+
+    def test_without_calls_ahead_there_is_no_later(self):
+        [first] = self.past()
+        current = with_overhead(turn(1, cache_1h=10_000, cache_read=50_000, output=1_000))
+        estimate = turns.compact_preview(current, [first], PRICES, 1, 2_000)["estimate"]
+        self.assertEqual((estimate["calls_ahead"], estimate["pays_later_in"]), (None, None))
+
     def test_stored_compactions_without_a_summary_estimate_are_counted(self):
         [first] = self.past()
         untimed = dataclasses.replace(first, call=dataclasses.replace(first.call, summary_tokens=None))
