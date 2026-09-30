@@ -30,12 +30,18 @@ function session(changes: Partial<SessionDetail> = {}): SessionDetail {
   });
 }
 
-/** A prompt, a call's two entries (one message) and a later reply: the order they come in. */
+/** A tool call by the name given, which is what its summary line shows in bold; without a result unless given. */
+function toolCall(name: string, changes: Partial<ChatEntry> = {}): ChatEntry {
+  return chatEntry({ kind: 'tool', text: null, tool: name, ...changes });
+}
+
+/** A prompt, a call's two entries (one message: a reply and a tool call without a result yet) and a later reply: the
+ *  order they come in. */
 function entries(): ChatEntry[] {
   return [
     chatEntry({ kind: 'prompt', timestamp: '2026-09-30T08:00:00.000Z', text: 'the prompt' }),
     chatEntry({ timestamp: '2026-09-30T08:00:01.000Z', text: 'reply one', message_id: 'm-1' }),
-    chatEntry({ kind: 'tool', timestamp: '2026-09-30T08:00:02.000Z', text: 'call one', message_id: 'm-1' }),
+    toolCall('call one', { timestamp: '2026-09-30T08:00:02.000Z', message_id: 'm-1' }),
     chatEntry({ timestamp: '2026-09-30T08:00:03.000Z', text: 'reply two', message_id: 'm-2' }),
   ];
 }
@@ -70,22 +76,25 @@ function holding() {
   return { stub, pending };
 }
 
-/** The old script's drawing of an entry, reduced: a block with a details and the text. */
-function stubEntryDrawing() {
-  const draw = vi.fn((entry: ChatEntry) => {
-    const block = document.createElement('div');
-    block.className = 'entry';
-    block.innerHTML = `<details><summary></summary><p>more</p></details>`;
-    (block.querySelector('summary') as HTMLElement).textContent = entry.text;
-    return block;
-  });
-  vi.stubGlobal('chatEntry', draw);
-  return draw;
-}
-
 const chatNode = () => document.getElementById('chat') as HTMLElement;
 const rows = () => [...document.querySelectorAll<HTMLElement>('.chat-row')];
-const texts = () => rows().map((row) => row.querySelector('summary')?.textContent);
+/** What each row says: a message's text, or the name of a tool call, in the rows' order. */
+const texts = () => rows().map((row) => row.querySelector('.chat-text, summary strong')?.textContent);
+const detailsOf = (row: HTMLElement | undefined) => row?.querySelector('details') as HTMLDetailsElement;
+/** The row nodes and what they hold, by each row's key. */
+const nodesByKey = () => new Map(rows().map((row) => [row.dataset.key, [row, ...row.querySelectorAll('*')]]));
+
+/** Every node is the very node it was, row for row by key, in whatever order (`toEqual` compares DOM nodes by their
+ *  content, not their identity). */
+function expectSameNodes(after: Map<string | undefined, Element[]>, before: Map<string | undefined, Element[]>): void {
+  expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+  for (const [key, nodes] of after) {
+    const old = before.get(key) ?? [];
+    expect(nodes).toHaveLength(old.length);
+    nodes.forEach((node, index) => expect(node).toBe(old[index]));
+  }
+}
+
 const showButton = () => screen.getByRole('button', { name: /^(Show conversation|Reload)$/ });
 const closeButton = () => document.getElementById('chat-close') as HTMLButtonElement;
 const picker = () => screen.getByRole('combobox', { name: 'Conversation of' });
@@ -102,12 +111,9 @@ async function load(): Promise<void> {
   await settle();
 }
 
-let draw: ReturnType<typeof stubEntryDrawing>;
-
 beforeEach(() => {
   localStorage.clear();
   preferences.oldestFirst = false;
-  draw = stubEntryDrawing();
   setPayload({ session: session() });
 });
 
@@ -238,7 +244,7 @@ describe('the picker', () => {
     pending[0]?.resolve(chatAnswer([chatEntry({ text: 'stale' })]));
     await settle();
     expect(texts()).toEqual(['newest']);
-    expect(draw).not.toHaveBeenCalledWith(expect.objectContaining({ text: 'stale' }));
+    expect(chatNode()).not.toHaveTextContent('stale');
   });
 });
 
@@ -421,16 +427,25 @@ describe('the order button', () => {
     expect(order()).toHaveAttribute('aria-pressed', 'false');
   });
 
-  test('moves the entries` nodes without drawing them again', async () => {
+  test('moves the entries` nodes, rows and what is in them, as they are', async () => {
     answering(chatAnswer(entries()));
     render(Conversation);
     await load();
-    const before = new Map(rows().map((row) => [row.dataset.key, row]));
-    const drawn = draw.mock.calls.length;
+    const before = nodesByKey();
     await userEvent.click(order());
     expect(rows()).toHaveLength(4);
-    for (const row of rows()) expect(row).toBe(before.get(row.dataset.key));
-    expect(draw).toHaveBeenCalledTimes(drawn);
+    expect(texts()).toEqual(['the prompt', 'reply one', 'call one', 'reply two']);
+    expectSameNodes(nodesByKey(), before);
+  });
+
+  test('keeps open what the reader opened while it turns the list', async () => {
+    answering(chatAnswer(entries()));
+    render(Conversation);
+    await load();
+    detailsOf(rows()[2]).open = true;
+    await userEvent.click(order());
+    expect(texts()).toEqual(['the prompt', 'reply one', 'call one', 'reply two']);
+    expect(detailsOf(rows()[2]).open).toBe(true);
   });
 
   test('starts pressed where the saved choice is oldest first', async () => {
@@ -464,7 +479,6 @@ describe('Close', () => {
     pending[0]?.resolve(chatAnswer(entries()));
     await settle();
     expect(chatNode()).toBeEmptyDOMElement();
-    expect(draw).not.toHaveBeenCalled();
     expect(showButton()).toHaveTextContent('Show conversation');
   });
 
@@ -506,7 +520,8 @@ describe('when it is destroyed', () => {
     unmount();
     pending[0]?.resolve(chatAnswer(entries()));
     await settle();
-    expect(draw).not.toHaveBeenCalled();
+    expect(rows()).toHaveLength(0);
+    expect(chatNode()).toBeNull();
   });
 });
 
@@ -527,65 +542,139 @@ describe('a refresh of the session', () => {
     expect(stub).toHaveBeenLastCalledWith('/api/session/abc123/chat?agent=a-1', { cache: 'no-store' });
   });
 
-  test('draws nothing where the answer is the same', async () => {
+  test('changes nothing where the answer is the same: every node stays', async () => {
     const stub = answering(chatAnswer(entries()));
     render(Conversation);
     await load();
-    const before = rows();
-    const drawn = draw.mock.calls.length;
+    const before = nodesByKey();
     refreshed();
     await settle();
     expect(stub).toHaveBeenCalledTimes(2);
-    expect(draw).toHaveBeenCalledTimes(drawn);
-    expect(rows()).toEqual(before);
+    expectSameNodes(nodesByKey(), before);
   });
 
-  test('draws only the entries that changed or came, and keeps the nodes of the others', async () => {
-    const first = entries();
+  test('keeps the nodes of an entry that came again as another object, equal to the old', async () => {
     // as read from the server: equal entries, but other objects
+    answering(chatAnswer(entries()), chatAnswer(structuredClone(entries())));
+    render(Conversation);
+    await load();
+    const before = nodesByKey();
+    refreshed();
+    await settle();
+    expectSameNodes(nodesByKey(), before);
+  });
+
+  test('adds the entries that came and keeps the nodes of the others', async () => {
+    const first = entries();
     const second = structuredClone([
-      ...first.slice(0, 3),
-      chatEntry({ ...first[3], text: 'reply two, longer' }),
+      ...first,
       chatEntry({ timestamp: '2026-09-30T08:00:04.000Z', text: 'reply three', message_id: 'm-3' }),
     ]);
     answering(chatAnswer(first), chatAnswer(second));
     render(Conversation);
     await load();
-    const before = new Map(rows().map((row) => [row.dataset.key, row]));
-    draw.mockClear();
+    const before = nodesByKey();
     refreshed();
     await settle();
-    expect(texts()).toEqual(['reply three', 'reply two, longer', 'reply one', 'call one', 'the prompt']);
-    expect(draw.mock.calls.map(([entry]) => entry.text).sort()).toEqual(['reply three', 'reply two, longer']);
-    for (const row of rows()) {
-      const node = before.get(row.dataset.key);
-      if (node) expect(row).toBe(node);
+    expect(texts()).toEqual(['reply three', 'reply two', 'reply one', 'call one', 'the prompt']);
+    for (const [key, nodes] of before) {
+      const now = rows().find((row) => row.dataset.key === key);
+      expect(now).toBe(nodes[0]);
     }
   });
 
-  test('keeps open what the reader opened in an entry that changed', async () => {
+  test('shows an entry that changed in its own node, its text new', async () => {
     const first = entries();
-    const second = [...first.slice(0, 3), chatEntry({ ...first[3], text: 'reply two, longer' })];
+    const second = structuredClone([
+      ...first.slice(0, 3),
+      chatEntry({ ...first[3], text: 'reply two, longer' }),
+    ]);
     answering(chatAnswer(first), chatAnswer(second));
     render(Conversation);
     await load();
-    (rows()[0]?.querySelector('details') as HTMLDetailsElement).open = true;
-    (rows()[1]?.querySelector('details') as HTMLDetailsElement).open = false;
+    const before = nodesByKey();
+    const row = rows()[0];
     refreshed();
     await settle();
-    const [changed, untouched] = rows();
-    expect(changed?.querySelector('summary')).toHaveTextContent('reply two, longer');
-    expect((changed?.querySelector('details') as HTMLDetailsElement).open).toBe(true);
-    expect((untouched?.querySelector('details') as HTMLDetailsElement).open).toBe(false);
+    expect(texts()).toEqual(['reply two, longer', 'reply one', 'call one', 'the prompt']);
+    expect(rows()[0]).toBe(row);
+    // the others, every node of them
+    const others = (nodes: Map<string | undefined, Element[]>) =>
+      new Map([...nodes].filter(([key]) => key !== row?.dataset.key));
+    expectSameNodes(others(nodesByKey()), others(before));
+  });
+
+  describe('a tool call that got its result', () => {
+    const asked = () => [toolCall('call one', { message_id: 'm-1' }), chatEntry({ kind: 'thinking', text: 'hmm' })];
+    const answered = () => [
+      toolCall('call one', { message_id: 'm-1', result: 'the result', result_chars: 10 }),
+      chatEntry({ kind: 'thinking', text: 'hmm' }),
+    ];
+    // newest first: the thinking, then the call
+    const call = () => rows()[1] as HTMLElement;
+
+    /** Loads the call without its result, then has the next read give it. */
+    async function loadAsked(): Promise<void> {
+      answering(chatAnswer(asked()), chatAnswer(answered()));
+      render(Conversation);
+      await load();
+    }
+
+    test('shows the result in the node it had', async () => {
+      await loadAsked();
+      const node = detailsOf(call());
+      expect(node.textContent).not.toContain('the result');
+      refreshed();
+      await settle();
+      expect(detailsOf(call())).toBe(node);
+      expect(node.querySelector(':scope > pre')?.textContent).toBe('the result');
+      expect(node.querySelector('summary')?.textContent).not.toContain('no result yet');
+    });
+
+    test('keeps open what the reader opened in it', async () => {
+      await loadAsked();
+      detailsOf(call()).open = true;
+      refreshed();
+      await settle();
+      expect(detailsOf(call()).open).toBe(true);
+      expect(detailsOf(call()).querySelector(':scope > pre')?.textContent).toBe('the result');
+    });
+
+    test('keeps closed what the reader left closed', async () => {
+      await loadAsked();
+      refreshed();
+      await settle();
+      expect(detailsOf(call()).open).toBe(false);
+    });
+
+    test('keeps the focus on its summary', async () => {
+      await loadAsked();
+      const summary = call().querySelector('summary') as HTMLElement;
+      summary.setAttribute('tabindex', '0');
+      summary.focus();
+      expect(summary).toHaveFocus();
+      refreshed();
+      await settle();
+      expect(call().querySelector('summary')).toBe(summary);
+      expect(summary).toHaveFocus();
+    });
+
+    test('leaves what the reader opened in the entries that did not change', async () => {
+      await loadAsked();
+      detailsOf(rows()[0]).open = true;
+      refreshed();
+      await settle();
+      expect(detailsOf(rows()[0]).open).toBe(true);
+    });
   });
 
   test('keeps a fresh load from inheriting what was open before', async () => {
     answering(chatAnswer(entries()));
     render(Conversation);
     await load();
-    (rows()[0]?.querySelector('details') as HTMLDetailsElement).open = true;
+    detailsOf(rows()[2]).open = true;
     await load();
-    expect((rows()[0]?.querySelector('details') as HTMLDetailsElement).open).toBe(false);
+    expect(detailsOf(rows()[2]).open).toBe(false);
   });
 
   test('keeps the reader`s place where the conversation starts above the window', async () => {
@@ -626,12 +715,10 @@ describe('a refresh of the session', () => {
     answering(chatAnswer(entries()), new Error('HTTP 500'));
     render(Conversation);
     await load();
-    const before = rows();
-    const drawn = draw.mock.calls.length;
+    const before = nodesByKey();
     refreshed();
     await settle();
-    expect(rows()).toEqual(before);
-    expect(draw).toHaveBeenCalledTimes(drawn);
+    expectSameNodes(nodesByKey(), before);
     expect(chatNode()).not.toHaveTextContent('HTTP 500');
   });
 

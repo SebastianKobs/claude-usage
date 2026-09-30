@@ -6,7 +6,7 @@ calls above it (`ContextGauge`), the secret accesses (`SecretAccesses`, before t
 (`ContextPerTurn`, after the gauge) and its tables: usage by model, the main thread and subagents, by skill, by MCP
 server, the API errors and the tools (`ToolsTable`: after the agents, or, with the main transcript there, after the
 API errors, since the conversation then takes its place) and the conversation (`Conversation`: its frame, which
-comes after the agents with a transcript, else last; its entries are still drawn by the old script's `chatEntry`).
+comes after the agents with a transcript, else last).
 Another session gets a new view (folds, the conversation and all), which takes the page over while it is there: the
 range's filters and summary step aside, focus goes to its heading, and closing it (the link or Escape, which clears
 the address's hash) puts the page back.

@@ -598,10 +598,18 @@ export interface CompactionMarker {
 
 /** The hint on a call whose context passed the compact threshold. */
 export interface SoftHint {
-  kind: 'soft' | 'soft_reminder';
+  kind: 'soft';
   context: number;
   threshold: number;
   reread_cost: number;
+}
+
+/** A reminder that the context is still past the threshold, at this many times it. */
+export interface SoftReminderHint {
+  kind: 'soft_reminder';
+  context: number;
+  threshold: number;
+  times: number;
 }
 
 /** The hint on a call after which compacting likely pays off, then its reminders. */
@@ -631,7 +639,7 @@ export interface AutoHint {
 }
 
 /** A hint to compact, by tier. */
-export type CompactHint = SoftHint | PaysHint | PaysReminderHint | AutoHint;
+export type CompactHint = SoftHint | SoftReminderHint | PaysHint | PaysReminderHint | AutoHint;
 
 /** One step of a conversation. */
 export interface ChatEntry {

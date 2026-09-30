@@ -86,7 +86,7 @@ claude_usage/
     css/themes/              one file per theme (light, dark, hacker, startup, rgb); the gimmicks share dark's
                              palette, fun.css their other rules
     js/                      classic scripts sharing one scope, loaded in order: util, state, chartkit,
-                             tables, highlight.js, marked, DOMPurify, chat, drilldown, themes, main
+                             tables, highlight.js, marked, DOMPurify, drilldown, themes, main
                              (calls setup())
       app.js                 the bundle built from web/ (make build, committed): a module loaded before them,
                              which hands them what moved (web/src/legacy.svelte.ts); app-licenses.md the
@@ -159,8 +159,13 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/conversation.ts    the conversation's frame: its URL, the picker's choices (a workflow run's agents in one
                              group), the reminder note and the notices, whether two answers are the same, and keeping
                              an unchanged entry's object across a refresh (used by the component)
-  src/lib/legacy-entry.ts    an entry drawn by the old script's `chatEntry` into a node of the component's own, with
-                             its open details and focus kept when it is drawn again; goes with 3.30
+  src/lib/entries.ts         the conversation's entries before any markup: who speaks and with which model, a prompt's
+                             shape (command, JSON, markdown), a tool call's input and result (Bash, Edit and Write each
+                             with their own view), the highlight.js language of a file, hidden context, a compaction's
+                             line, a call's usage badge and its chips and hints to compact (used by the components)
+  src/lib/markup.ts          the two places a string becomes markup: highlight.js's output (`highlight`, an attachment)
+                             and Claude's answers as sanitized markdown (`markdown`, an attachment), both libraries
+                             still the vendored globals until 3.31
   src/lib/http.ts            `fetchJson`: the server's JSON, or the reason it gave (the old scripts have their own
                              until the app fetches)
   src/lib/opening.ts         opening and closing the session view (`opening`, an attachment): the page's other sections
@@ -176,8 +181,9 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              `AgentsTable`, `ToolsTable` and `EventsTable`, the secret accesses: `SecretAccesses`, and
                              the gauge with the calls above it: `ContextGauge`, `CompactCall`, `DelegateCall`, the
                              context per turn: `ContextPerTurn` with `ContextChart` and `ContextDetails`, and the
-                             conversation's frame: `Conversation`, whose entries the old script still draws), each
-                             with its Testing Library test
+                             conversation: `Conversation` with `ConversationEntry`, which picks `ChatMessage`,
+                             `ChatToolCall`, `ChatInjected` or `ChatMarker` and puts `ChatUsage` under a call's last
+                             entry; `Code` and `Markdown` are their bodies), each with its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
@@ -728,11 +734,11 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - An open session polls too: every 5 s while it is `live` (a transcript changed within `live_minutes`, or waiting
     for the user), else every 60 s, which notices a resumed session. A changed one is drawn in place
     (`renderDrilldown(detail, true)`):
-    the conversation's nodes move into the new view, and the components keep their own state (the table view, the
-    folds open: a workflow run's agents, an inline script's interpreters in the Tools table), focus and the element at
-    the top of the window are kept. A conversation shown (`Conversation`) reads itself again when the session's
-    payload changes, and is drawn only if it changed: an unchanged entry keeps its node (`reuseEntries`), a changed one
-    its open parts and focus (`legacyEntry`), and, once scrolled into, the entry at the top stays put. It reads the
+    the components keep their own state (the table view, the folds open: a workflow run's agents, an inline script's
+    interpreters in the Tools table), focus and the element at the top of the window are kept. A conversation shown
+    (`Conversation`) reads itself again when the session's payload changes, and is drawn only if it changed: an
+    unchanged entry keeps its object (`reuseEntries`) and so its nodes, a changed one is updated in place, so its open
+    parts and focus stay, and, once scrolled into, the entry at the top stays put. It reads the
     transcript itself, so a reply the scan hasn't reached yet may show plain xhigh until the next change.
   - The range buttons stop at `retention_days` (`RangeFilter`, `visibleRanges`): the summary cuts a longer `days` to it
     and returns `retention_days` and `history_since` (the first stored day); the page leaves the longer buttons out,
@@ -812,14 +818,14 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     any case, in the title, project or id: `sessionMatches`) narrow it, counted as "12 of 84 sessions". The choice is
     the component's own state (`SessionsList`), so a refresh keeps the filter and typing keeps its focus; a new filter
     starts at the first page, and the pager joins the heading past the controls (`table-filters`).
-  - All data goes into the DOM via `textContent`. Two exceptions, both in `chat.js`:
-    - `highlighted()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans
+  - All data goes into the DOM as text. Two exceptions, both in `web/src/lib/markup.ts` (a test counts them):
+    - `highlightInto()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans
       with classes.
-    - `markdown()` inserts Claude's answers and the user's prompts (line breaks kept; a slash command shown as
-      typed, a whole-JSON prompt highlighted) as marked's HTML after DOMPurify. That keeps only `MARKDOWN_TAGS` and
-      `MARKDOWN_ATTRIBUTES`: no images, styles, forms or event attributes, `class` only as `language-*` on
-      `code`, and links only to http, https and mailto, opened with `noopener noreferrer`. Checked in jsdom
-      against scripts, `onerror`, `javascript:` links and `<style>` (the `class` rule not yet).
+    - `renderMarkdown()` inserts Claude's answers and the user's prompts (line breaks kept; a slash command shown as
+      typed, a whole-JSON prompt highlighted) as marked's HTML after DOMPurify. That keeps only `TAGS` and
+      `ATTRIBUTES`: no images, styles, forms or event attributes, `class` only as `language-*` on `code`, and links
+      only to http, https and mailto, opened with `noopener noreferrer`. `markup.test.ts` checks it in jsdom, with the
+      vendored libraries, against scripts, `onerror`, `javascript:` and `data:` links, `<style>`, forms and classes.
   - highlight.js is vendored, not fetched: `static/js/vendor/highlight.min.js`, the cdnjs "common" build of
     11.11.2 (sha256 `62960a35…7d5a`). To update: download the new `highlight.min.js` and LICENSE from
     cdnjs / the tag, check its output still escapes `<`, `>` and `&`, and update the version here and in

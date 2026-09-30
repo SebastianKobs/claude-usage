@@ -6,12 +6,13 @@ order, the buttons that load and close it) stays in view while scrolling through
 picker loads that transcript's, and the order button flips the preference and moves the entries, which keep their
 nodes. It lists newest first, a call's entries together. A skip button leaves the long list for the note at its end.
 The session's refreshes (a new `payload.session` of the same session) read the conversation shown again, drawn only
-if it changed: the unchanged entries keep their nodes and open parts, and where the reader has scrolled into it, the
-entry at the top of the window stays there. Close drops the conversation, and a load under way with it. The entries
-themselves are still drawn by the old script's `chatEntry` (`legacyEntry`), until they are components.
+if it changed: an unchanged entry keeps its object and so its nodes, one that changed (a call that got its result)
+updates its own nodes in place, so what the reader opened and what has focus stay, and where the reader has scrolled
+into it, the entry at the top of the window stays there. The entries are components (`ConversationEntry`). Close drops
+the conversation, and a load under way with it.
 -->
 <script lang="ts">
-  import { flushSync, tick, untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import type { Chat, ChatEntry } from '../lib/api';
   import {
     agentChoices,
@@ -23,11 +24,11 @@ themselves are still drawn by the old script's `chatEntry` (`legacyEntry`), unti
     sameChat,
   } from '../lib/conversation';
   import { fetchJson } from '../lib/http';
-  import { legacyEntry, type EntryMemory } from '../lib/legacy-entry';
-  import { payload } from '../lib/payload.svelte';
+    import { payload } from '../lib/payload.svelte';
   import { hype, preferences } from '../lib/prefs.svelte';
   import { keepScroll, scrollAnchor } from '../lib/scroll';
   import { chatRows } from '../lib/tables';
+  import ConversationEntry from './ConversationEntry.svelte';
 
   // The picked transcript by the agent's id, '' for the main thread.
   let agentId = $state('');
@@ -42,14 +43,12 @@ themselves are still drawn by the old script's `chatEntry` (`legacyEntry`), unti
   let endNode = $state<HTMLElement>();
   // The newest read's number: a read only counts while it is still the newest (quick switches, a close, a refresh).
   let request = 0;
-  // What the reader did to each entry's drawing, by its key, which the old script's drawing would lose.
-  const memory = new Map<string, EntryMemory>();
 
   const choices = $derived(agentChoices(payload.session?.agents ?? []));
   const notice = $derived(chat ? chatNotice(chat) : null);
   const reminders = $derived(chat ? reminderNote(chat.reminders) : null);
   // Each entry's row kept as the same object while its entry and place are the same: an order change or a refresh
-  // then hands the row's node nothing new, where a new object would draw the entry again.
+  // then hands the row's component nothing new, where a new object would update the entry again.
   const rowOf = new WeakMap<ChatEntry, { key: string; entry: ChatEntry }>();
   const rows = $derived.by(() => {
     if (!chat) return [];
@@ -68,9 +67,6 @@ themselves are still drawn by the old script's `chatEntry` (`legacyEntry`), unti
     const token = ++request;
     chat = null;
     note = 'Loading…';
-    // the drawn entries go first: what they hand to the memory as they go must not reach the next drawing
-    flushSync();
-    memory.clear();
     try {
       const answer = await fetchJson<Chat>(chatUrl(session.session_id, agentId || null));
       if (token !== request) return;
@@ -185,7 +181,7 @@ themselves are still drawn by the old script's `chatEntry` (`legacyEntry`), unti
       {/if}
       <div class="chat">
         {#each rows as row (row.key)}
-          <div class="chat-row" data-key={row.key} {@attach legacyEntry(row.entry, row.key, memory)}></div>
+          <div class="chat-row" data-key={row.key}><ConversationEntry entry={row.entry} /></div>
         {/each}
       </div>
     {/if}

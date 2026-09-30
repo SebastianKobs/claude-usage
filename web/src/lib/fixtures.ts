@@ -4,6 +4,7 @@
 import type {
   Agent,
   ApiErrorEvent,
+  CallUsage,
   Chat,
   ChatEntry,
   Compaction,
@@ -441,6 +442,31 @@ export function compaction(changes: Partial<Compaction> = {}): Compaction {
     duration_ms: 30_000,
     next_context: 20_000,
     versus_keeping: versusKeeping(),
+    ...changes,
+  };
+}
+
+/** A call's usage under its last entry: 50K of context (1K new, 4K written, 45K read), 500 out, $0.25, which grew 2K
+ *  beyond the previous reply's 0.5K; standard speed, no rebuild, no token reminder. */
+export function callUsage(changes: Partial<CallUsage> = {}): CallUsage {
+  return {
+    new_input: 1_000,
+    cache_write_5m: 4_000,
+    cache_write_1h: 0,
+    cache_read: 45_000,
+    output: 500,
+    cache_write: 4_000,
+    web_searches: 0,
+    context: 50_000,
+    model: 'claude-opus-5-5',
+    speed: 'standard',
+    effort: null,
+    cost: 0.25,
+    cost_parts: { new_input: 0.05, cache_write: 0.1, cache_read: 0.05, output: 0.05, web_search: 0 },
+    growth: 2_000,
+    reply: 500,
+    rebuild: null,
+    reminder_chars: 0,
     ...changes,
   };
 }

@@ -98,7 +98,7 @@ class ScriptTest(unittest.TestCase):
         self.assertEqual(object_keys(MODULES["compact.ts"], "REBUILD_CAUSES"), {"model", "idle", "prefix"})
 
     def test_every_injected_kind_that_is_no_attachment_type_has_its_words(self):
-        self.assertEqual(object_keys("chat.js", "INJECTED_KINDS"), {"meta", "skill", "summary"})
+        self.assertEqual(object_keys(LIB / "entries.ts", "INJECTED_KINDS"), {"meta", "skill", "summary"})
 
     def test_every_compaction_verdict_has_its_words(self):
         self.assertEqual(object_keys(MODULES["compact.ts"], "COMPACTION_VERDICTS"), set(turns.VERDICTS))
@@ -136,9 +136,11 @@ class ScriptTest(unittest.TestCase):
         self.assertIn("45deg", run_function("colors.ts", "swatchFill", "red", "blue", -45))
         self.assertEqual(run_function("colors.ts", "swatchFill", "red", None, None), "red")
 
-    def test_html_is_inserted_only_by_the_two_sanitized_paths_in_chat_js(self):
-        uses = {path.name: len(re.findall(r"\binnerHTML\b", read(path))) for path in OWN_SCRIPTS}
-        self.assertEqual({name: count for name, count in uses.items() if count}, {"chat.js": 2})
+    def test_html_is_inserted_only_by_the_two_sanitized_paths_in_markup_ts(self):
+        sources = OWN_SCRIPTS + sorted(path for path in (ROOT / "web" / "src").rglob("*")
+                                       if path.suffix in (".ts", ".svelte") and ".test." not in path.name)
+        uses = {path.name: len(re.findall(r"\binnerHTML\b|\{@html\b", read(path))) for path in sources}
+        self.assertEqual({name: count for name, count in uses.items() if count}, {"markup.ts": 2})
 
     def test_the_scripts_load_in_the_order_claude_md_gives(self):
         loaded = [Path(source).stem.replace(".min", "").replace(".umd", "")
