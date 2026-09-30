@@ -9,8 +9,10 @@ import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
 import * as live from './lib/live';
+import * as prefs from './lib/prefs.svelte';
 import * as secrets from './lib/secrets';
 import * as tables from './lib/tables';
+import * as themes from './lib/themes';
 
 // Typed from the modules themselves, so what Window declares can't drift from what the old scripts are handed. The
 // formatters are lib/format.ts (numbers, money, durations, days, hours, moments), the colors lib/colors.ts (the
@@ -19,7 +21,9 @@ import * as tables from './lib/tables';
 // access tone, origin and reach words), the live cards lib/live.ts (their badges and what waits) and the tables
 // lib/tables.ts (paging, the sessions filter and count, the Tools table's rows, folds and labels, the conversation's
 // order) and the charts lib/charts.ts (scales and ticks, the time axis, the by-model series and stacks, the rate-limit
-// counts and windows, the cost bars' split). Their names must stay apart: a shared one would be handed over twice, the
+// counts and windows, the cost bars' split), the themes lib/themes.ts (the themes and their wording) and the saved
+// preferences lib/prefs.svelte.ts (the theme, page size and conversation order, the theme's `hype` and footer copy).
+// Their names must stay apart: a shared one would be handed over twice, the
 // second silently winning.
 type Formatters = typeof format;
 type Colors = typeof colors;
@@ -28,12 +32,14 @@ type Secrets = typeof secrets;
 type Live = typeof live;
 type Tables = typeof tables;
 type Charts = typeof charts;
+type Themes = typeof themes;
+type Prefs = typeof prefs;
 
 // Every module handed over: a new one is imported above, typed in Window's extends and listed here.
-const MODULES = [format, colors, compact, secrets, live, tables, charts];
+const MODULES = [format, colors, compact, secrets, live, tables, charts, themes, prefs];
 
 declare global {
-  interface Window extends Formatters, Colors, Compacting, Secrets, Live, Tables, Charts {
+  interface Window extends Formatters, Colors, Compacting, Secrets, Live, Tables, Charts, Themes, Prefs {
     /** Sets a source's banner message (empty removes it), drawn at once. */
     showError(source: string, message: string): void;
     /** Whether a source has a banner message now. */

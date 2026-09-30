@@ -4,11 +4,8 @@
 // --- conversation --------------------------------------------------------------------------------------------
 
 const CHAT_ROLES = {prompt: "You", text: "Claude", thinking: "Thinking"};
-const CHAT_ORDER_PREFERENCE = "chat-oldest-first";
 let chatRequest = 0;
 let shownChat = null;                                     // the conversation on the page, drawn again on a switch
-
-function oldestFirst() { return readPreference(CHAT_ORDER_PREFERENCE) === "true"; }
 
 // The conversation's own framed section: its head (the picker of main thread or a subagent, the order, the buttons
 // that load and close it) stays in view while scrolling through it; the conversation loads into #chat
@@ -29,12 +26,12 @@ function chatSection(detail) {
     if (!close.hidden) loadChat(detail.session_id, picker.value || null, button);
   });
   // an arrow as for any sort: down for newest first (descending), turned up for oldest first
-  const order = el("button", {type: "button", id: "chat-order", "aria-pressed": String(oldestFirst()),
+  const order = el("button", {type: "button", id: "chat-order", "aria-pressed": String(preferences.oldestFirst),
                               "aria-label": "Oldest first", title: orderTitle()},
                    el("span", {class: "chat-order-arrow", "aria-hidden": "true", text: "↓"}));
   order.addEventListener("click", () => {
-    savePreference(CHAT_ORDER_PREFERENCE, String(!oldestFirst()));
-    order.setAttribute("aria-pressed", String(oldestFirst()));
+    preferences.oldestFirst = !preferences.oldestFirst;
+    order.setAttribute("aria-pressed", String(preferences.oldestFirst));
     order.title = orderTitle();
     if (shownChat) renderChat(shownChat.container, shownChat.chat, shownChat.agentId);
   });
@@ -47,7 +44,7 @@ function chatSection(detail) {
 }
 
 function orderTitle() {
-  return oldestFirst() ? "Oldest first: click for newest first" : "Newest first: click for oldest first";
+  return preferences.oldestFirst ? "Oldest first: click for newest first" : "Newest first: click for oldest first";
 }
 
 // Close: the conversation leaves the page (a load still under way is dropped), and the refresh stops reading it
@@ -164,7 +161,7 @@ function renderChat(container, chat, agentId) {
     return node;
   };
   fill(container, reminderNote(chat.reminders),
-       el("div", {class: "chat"}, ...chatRows(chat.entries, oldestFirst()).map(keyed)));
+       el("div", {class: "chat"}, ...chatRows(chat.entries, preferences.oldestFirst).map(keyed)));
 }
 
 // Claude Code's token reminder comes before almost every call: summed here once, not shown as a line each

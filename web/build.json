@@ -3,15 +3,17 @@
     "web/package-lock.json": "a4c499001d8d60541bd11b832e64746e07866d901ae7979b417f334e166188ee",
     "web/package.json": "f8e1725af6c59a8aea0a0735bc465bb9feaa7bbe5f30e86f70f72bc6f9d3f786",
     "web/src/components/Banner.svelte": "d449dc6ef39c779958212c5cc073467795804ded04c1b33d815dc59cc5bbdb36",
-    "web/src/legacy.svelte.ts": "c1ae0888215c02af9cee6abf5ff064f1367b37eacde88c22982baa89a5153575",
+    "web/src/legacy.svelte.ts": "7c57ab8c09e138170885572606b46e3b4dd43d515c3b7b440481861e3e81afc0",
     "web/src/lib/banner.svelte.ts": "2bcc2747224c3bc55c4120fd47e17ad383527684826309e01cda94763bbb67e9",
     "web/src/lib/charts.ts": "876dae0a41357a84a2425cb7cc8befec574a9605c6fcc9164afabe37bd0b21f7",
     "web/src/lib/colors.ts": "ad3085cf71cbebbdb1a2c54f913c354201056ecab3beba04290602062bfcb54d",
     "web/src/lib/compact.ts": "6ead0048229e475d91baffc135fb21f979c9f4154b5093be50bb410b9fb02d3a",
     "web/src/lib/format.ts": "57d78f4b8bb1c588430a346be6d48b7eae0067fdbaf78adb724b84b244ec81f5",
     "web/src/lib/live.ts": "c77a2a16090835b48c473a24f7b029f4a0d5598f8d870dc0d91b5e215a72c9b2",
+    "web/src/lib/prefs.svelte.ts": "3cef57db6b563e4f2287604140c719fc0c0f2ea90aed136c266b5e4032c055e0",
     "web/src/lib/secrets.ts": "6f3d9eba95314a859de7032776c1eb77fa29e93949793c51d7ccf4816cca865a",
     "web/src/lib/tables.ts": "c3422d7fe746ce9df51499a2ac2a77150b2fe8751ace554a69df1bc7dbbe4c36",
+    "web/src/lib/themes.ts": "ada0027dc8e18c4eb4227e0a4ed92d929de5d10384b097195b2897b612ed94d1",
     "web/src/main.ts": "829705d889cad3440c39035bd31f5c785930c1fd8edc1d34c6db390868e4cbc3",
     "web/svelte.config.js": "3e0d2411358605a176fc80eee6b368d3c2f71fba851cdc4ce4123f193c049337",
     "web/tsconfig.json": "2601049b254d943443bd30ee2824029ad0867d0e385e992840025450b61dc515",
@@ -19,6 +21,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "f2e10bbc0f42e92d7f6fa9f5f2eca6474d286e638703eaf9d9240a3037ae0109",
-    "claude_usage/static/js/app.js": "425fd5d1c0745f317ec9f11fff52ba5305a82ec292b3e855aad07debdb06e28e"
+    "claude_usage/static/js/app.js": "02c8f8477bee346274ed7a6f6a74f666f077c4f0eb5cbfee60811c69be25bb99"
   }
 }

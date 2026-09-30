@@ -561,8 +561,9 @@ class ChatOrderTest(unittest.TestCase):
     def test_the_order_switch_is_a_toggle_kept_as_a_preference(self):
         script = read(STATIC / "js" / "chat.js")
         self.assertRegex(script, r'id: "chat-order", "aria-pressed"')
-        self.assertIn("savePreference(CHAT_ORDER_PREFERENCE", script)
-        self.assertIn("readPreference(CHAT_ORDER_PREFERENCE)", script)
+        # saved and read by the bundle's preferences (prefs.svelte.test.ts holds the key and the round trip)
+        self.assertIn("preferences.oldestFirst = !preferences.oldestFirst;", script)
+        self.assertIn("chat-oldest-first", read(LIB / "prefs.svelte.ts"))
 
     def test_the_order_switch_is_an_arrow_turning_with_the_order(self):
         script = read(STATIC / "js" / "chat.js")
@@ -673,8 +674,9 @@ class PagingTest(unittest.TestCase):
 
     def test_the_page_size_is_a_preference(self):
         script = read(STATIC / "js" / "tables.js")
-        self.assertIn("savePreference(PAGE_SIZE_PREFERENCE", script)
-        self.assertIn("readPreference(PAGE_SIZE_PREFERENCE)", script)
+        # saved and read by the bundle's preferences (prefs.svelte.test.ts holds the key and the round trip)
+        self.assertIn("preferences.pageSize = Number(size.value);", script)
+        self.assertIn("page_size", read(LIB / "prefs.svelte.ts"))
         module = read(MODULES["tables.ts"])
         self.assertIn("export const DEFAULT_PAGE_SIZE = 25;", module)
         self.assertRegex(module, r"export const PAGE_SIZES = \[10, 25, 50\];")
@@ -1237,7 +1239,7 @@ class CopyTest(unittest.TestCase):
 
     def copy(self, theme):
         """A gimmick theme's label -> wording."""
-        block = re.search(rf"\n  {theme}: \{{(.*?)\n  \}},", read(STATIC / "js" / "themes.js"), re.DOTALL).group(1)
+        block = re.search(rf"\n  {theme}: \{{(.*?)\n  \}},", read(LIB / "themes.ts"), re.DOTALL).group(1)
         return set(re.findall(r'^\s+"([^"]+)":', block, re.MULTILINE))
 
     def labels(self):
@@ -1259,7 +1261,7 @@ class CopyTest(unittest.TestCase):
 
     def test_every_wording_belongs_to_a_label(self):
         # a label can also reach themed() through a variable: then it is a string elsewhere in the scripts
-        scripts = "".join(read(path) for path in OWN_SCRIPTS if path.name != "themes.js")
+        scripts = "".join(read(path) for path in OWN_SCRIPTS)
         for theme in GIMMICK_THEMES:
             with self.subTest(theme=theme):
                 unused = [key for key in self.copy(theme) - self.labels() if f'"{key}"' not in scripts]

@@ -8,10 +8,12 @@ import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
 import * as live from './lib/live';
+import * as prefs from './lib/prefs.svelte';
 import * as secrets from './lib/secrets';
 import * as tables from './lib/tables';
+import * as themes from './lib/themes';
 
-const MODULES = [format, colors, compact, secrets, live, tables, charts];
+const MODULES = [format, colors, compact, secrets, live, tables, charts, themes, prefs];
 
 // a path, not a URL: the simulated DOM's URL class isn't node's
 const PAGE = join(import.meta.dirname, '../../claude_usage/static/dashboard.html');
@@ -72,6 +74,8 @@ test.each([
   ['live helpers', live, 'liveWaitBadge'],
   ['tables helpers', tables, 'pageWindow'],
   ['charts helpers', charts, 'niceMax'],
+  ['theme wording', themes, 'themeLabel'],
+  ['preferences', prefs, 'savedOption'],
 ])("the old scripts' %s are the module's exports", (_kind, module, sample) => {
   const names = Object.keys(module) as (keyof typeof module & keyof Window)[];
   expect(names).toContain(sample);
@@ -100,6 +104,19 @@ test('the compacting, secrets and live helpers answer as the old scripts call th
   expect(window.secretReach({ reach: 'sent', sent: true, test: false })).toBe('sent to a service');
   const waiting = { kind: 'question', tool: 'AskUserQuestion', since: null, agent_type: null } as const;
   expect(window.waitChanged({ session_id: 's', waiting: null }, [{ session_id: 's', waiting }])).toBe(true);
+});
+
+test("the old scripts' preferences are the module's own state, and hype follows its theme", () => {
+  try {
+    expect(window.preferences).toBe(prefs.preferences);
+    expect(window.hype('Estimated cost')).toBe('Estimated cost');
+    window.preferences.theme = 'hacker';
+    expect(prefs.preferences.theme).toBe('hacker');
+    expect(window.hype('Estimated cost')).toBe('burn_rate');
+  } finally {
+    prefs.preferences.theme = null;
+    localStorage.clear();
+  }
 });
 
 test('stopping takes the banner and the globals away', () => {

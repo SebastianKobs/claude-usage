@@ -3,17 +3,12 @@
 
 // --- paging -------------------------------------------------------------------------------------------------
 
-const PAGE_SIZE_PREFERENCE = "page_size";
-// PAGE_SIZES, DEFAULT_PAGE_SIZE, pageUnits, pageWindow, pageText and pageSizeFrom come from the bundle
-// (web/src/lib/tables.ts)
+// PAGE_SIZES, pageUnits, pageWindow and pageText come from the bundle (web/src/lib/tables.ts), the page size
+// (preferences.pageSize) from web/src/lib/prefs.svelte.ts
 // the page each table shows, by its key, so a table drawn again (a refresh, another range) stays on it
 const tablePages = new Map();
 // the pagers on the page, so a new page size applies to every table at once
 const pagers = new Set();
-
-function pageSize() {
-  return pageSizeFrom(readPreference(PAGE_SIZE_PREFERENCE), PAGE_SIZES, DEFAULT_PAGE_SIZE);
-}
 
 // A table with more groups of rows than the smallest page, or a grid with more cards (`paged-cards`, each card a
 // group of its own), with a pager above it: the page size (a preference), previous and next, and which rows show,
@@ -40,11 +35,11 @@ function paged(key, node, noun = "rows") {
   const status = el("span", {class: "muted", "aria-live": "polite"});
   const pager = el("div", {class: "pager", role: "group", "aria-label": "Pages"}, size, previous, status, next);
   const show = page => {
-    const shown = pageWindow(count, pageSize(), page);
+    const shown = pageWindow(count, preferences.pageSize, page);
     tablePages.set(key, shown.page);
     rows.forEach((row, index) =>
       row.classList.toggle("off-page", units[index] < shown.first || units[index] >= shown.last));
-    size.value = String(pageSize());
+    size.value = String(preferences.pageSize);
     previous.disabled = shown.page === 0;
     next.disabled = shown.page === shown.pages - 1;
     status.textContent = pageText(shown, count, noun);
@@ -58,7 +53,7 @@ function paged(key, node, noun = "rows") {
   previous.addEventListener("click", () => turn(tablePages.get(key) - 1));
   next.addEventListener("click", () => turn(tablePages.get(key) + 1));
   size.addEventListener("change", () => {
-    savePreference(PAGE_SIZE_PREFERENCE, size.value);
+    preferences.pageSize = Number(size.value);
     for (const other of [...pagers]) {
       if (other.pager.isConnected) other.keepFirst();
       else pagers.delete(other);
@@ -67,7 +62,7 @@ function paged(key, node, noun = "rows") {
   // at a new page size, the page that holds the first row shown before
   const keepFirst = () => {
     const first = rows.findIndex(row => !row.classList.contains("off-page"));
-    turn(Math.floor(Math.max(units[first], 0) / pageSize()));
+    turn(Math.floor(Math.max(units[first], 0) / preferences.pageSize));
   };
   pagers.add({pager, keepFirst});
   show(tablePages.get(key) ?? 0);

@@ -71,7 +71,7 @@ function renderSummary() {
     ". “(background)” is usage Claude Code counted but no transcript shows (e.g. Haiku for titles), taken from the " +
     "cost records it writes during and at the end of a session: it has no turns, is filed under the time of the " +
     "record that first counted it, and is hatched in the chart." +
-    (themeCopy().footer || "");
+    footerCopy();
 }
 
 let liveRequest = 0;
@@ -272,18 +272,12 @@ function pressed(groupId, attribute, value) {
   }
 }
 
-function savePreference(name, value) {
-  try { localStorage.setItem(`claude-usage.${name}`, value); } catch (error) { /* storage unavailable */ }
-}
-function readPreference(name) {
-  try { return localStorage.getItem(`claude-usage.${name}`); } catch (error) { return null; }
-}
-
 function setup() {
   const days = Number(readPreference("days"));
   if ([1, 7, 30, 90, 365].includes(days)) state.days = days;
-  if (METRICS[readPreference("metric")]) state.metric = readPreference("metric");
-  applyTheme(readPreference("theme"));
+  const metric = savedOption("metric", Object.keys(METRICS));
+  if (metric) state.metric = metric;
+  applyTheme();
   pressed("range", "days", state.days);
   pressed("metric", "metric", state.metric);
   renderDayNav();
@@ -317,8 +311,8 @@ function setup() {
   }
   setupSessionFilters();
   document.getElementById("theme").addEventListener("change", event => {
-    savePreference("theme", event.target.value);
-    applyTheme(event.target.value);
+    preferences.theme = event.target.value;
+    applyTheme();
   });
   window.addEventListener("hashchange", loadSession);
   document.addEventListener("keydown", event => {

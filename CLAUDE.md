@@ -110,6 +110,10 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              table's rows with their keys, folds and labels, the conversation's order and keys
   src/lib/charts.ts          the charts' maths: scales and ticks, where a point or column falls, the time axis, the
                              by-model series and stacks, the rate-limit counts and windows, the cost bars' split
+  src/lib/themes.ts          the themes and the gimmick themes' wording (`test_static.py` reads its labels): which theme
+                             a saved choice names, what a label and the footer say in a theme
+  src/lib/prefs.svelte.ts    the saved preferences (theme, page size, the conversation's order) as reactive state,
+                             written back in their setters, and `hype`, which words a label for the theme chosen
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
