@@ -4,6 +4,7 @@
     "web/package.json": "f8e1725af6c59a8aea0a0735bc465bb9feaa7bbe5f30e86f70f72bc6f9d3f786",
     "web/src/components/AreaLine.svelte": "962503ddd079563119b9ec8f115a154f3e0c54949d42e4fdd901ca7ec959f2ff",
     "web/src/components/Banner.svelte": "d449dc6ef39c779958212c5cc073467795804ded04c1b33d815dc59cc5bbdb36",
+    "web/src/components/ByModel.svelte": "88647984b02e89a789e5abafee3a6b7e0abb84c0e73d7155736dcc4c0c0cfd9a",
     "web/src/components/Chart.svelte": "cf18d433a7892c96ce2c40b1e238730b1d2004774897b01bfd33e0c34eca32f0",
     "web/src/components/ChartCard.svelte": "570d5846f11aca804669332357a369017bf33e1f6698b7b83c27aa4c41f147b8",
     "web/src/components/ChartTooltip.svelte": "95295ba9aab6d486333ee64eb2b531b6aec5f927157cd044c7b9044de0b01186",
@@ -15,12 +16,13 @@
     "web/src/components/RuntimeTiles.svelte": "6acbc1390e855f37291433650391daabaea907d2e9448f7dad8a4bb9baa4498c",
     "web/src/components/StatTile.svelte": "5ecd0138f05cfe87e68a69d64ec6a3478e04e1bd1dc141808a5d2e9fd2993b49",
     "web/src/components/SummaryTiles.svelte": "b125eb266c417c3ed3898f5d239bf2cbaebc2b1aa1f025ea5f201aec59637a51",
-    "web/src/components/Swatch.svelte": "7ec1631f6d24ecdf40a5a51db64bdc1123c1ccb15eb9155bf29dd20ce3e4209c",
+    "web/src/components/Swatch.svelte": "9fbd95c37c02f0d1ce1c6c27d9cb5efb32167f60456e1037a55d97d1e99e1028",
     "web/src/components/TableView.svelte": "6f59711d87b6f015c3a301b6b13c11606a4be7a0f1ba1e1028192fce4a679f9b",
     "web/src/components/XLabels.svelte": "3fa5052afc89d04d739c86128fb829419fafbfa5d1ec1775ee0279ab073fb3c5",
     "web/src/components/YAxis.svelte": "a45c8f9d24b1dda129393df88eb58ce4bc58ae38f1d9cc0f9292ff53ea410d07",
-    "web/src/legacy.svelte.ts": "439ae9993d7c670e4909045f3ef4d87e3c01b6559e2f5f5be5827fcbef39eda9",
+    "web/src/legacy.svelte.ts": "5c867959b10652b5cdc65e3f2c1c1b65a04a26f14b41d05e956b3f60a5b23171",
     "web/src/lib/banner.svelte.ts": "2bcc2747224c3bc55c4120fd47e17ad383527684826309e01cda94763bbb67e9",
+    "web/src/lib/bymodel.ts": "1f1b26f6ad7515c3473fd90709b3fbdfc0410c5fcc7c406b5e62febabc3554cc",
     "web/src/lib/chartkit.ts": "0abc565531d389285a10e0d8017d1bad67f4acec851289b234dc7d382b1b879f",
     "web/src/lib/charts.ts": "876dae0a41357a84a2425cb7cc8befec574a9605c6fcc9164afabe37bd0b21f7",
     "web/src/lib/colors.ts": "ad3085cf71cbebbdb1a2c54f913c354201056ecab3beba04290602062bfcb54d",
@@ -44,6 +46,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "6d80e4fb7b0647d9b9a3ce6ffb2721afbd1d0e8a403c135068f9b3ac4a09b597",
-    "claude_usage/static/js/app.js": "d0e3bef3aec9ba3699ebbc6265fe64e0bc83daa4df71529e081a592a09766073"
+    "claude_usage/static/js/app.js": "66fbdd19957ea97d3481539022e98e8bb2e67c3bfb240343359d8b763c64c466"
   }
 }

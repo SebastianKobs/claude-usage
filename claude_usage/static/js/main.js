@@ -59,7 +59,6 @@ function renderSummary() {
   if (!summary) return;
   setPayload({summary});
   renderDayNav();
-  renderChart(summary);
   renderTables(summary);
   renderLimits(summary);
   const scope = summary.project_filter ? `project ${summary.project_filter}` : "all projects";
@@ -273,11 +272,8 @@ function pressed(groupId, attribute, value) {
 function setup() {
   const days = Number(readPreference("days"));
   if ([1, 7, 30, 90, 365].includes(days)) state.days = days;
-  const metric = savedOption("metric", Object.keys(METRICS));
-  if (metric) state.metric = metric;
   applyTheme();
   pressed("range", "days", state.days);
-  pressed("metric", "metric", state.metric);
   renderDayNav();
 
   document.getElementById("range").addEventListener("click", event => {
@@ -292,15 +288,7 @@ function setup() {
   });
   document.getElementById("day-prev").addEventListener("click", () => stepDay("previous_day"));
   document.getElementById("day-next").addEventListener("click", () => stepDay("next_day"));
-  document.getElementById("metric").addEventListener("click", event => {
-    const button = event.target.closest("button");
-    if (!button) return;
-    state.metric = button.dataset.metric;
-    savePreference("metric", state.metric);
-    pressed("metric", "metric", state.metric);
-    if (state.summary) renderChart(state.summary);
-  });
-  for (const name of ["chart", "costly", "limits"]) {
+  for (const name of ["costly", "limits"]) {
     document.getElementById(`${name}-table-toggle`).addEventListener("click", event => {
       const table = document.getElementById(`${name}-table`);
       table.hidden = !table.hidden;
@@ -320,10 +308,8 @@ function setup() {
   const resize = new ResizeObserver(() => {
     if (state.session) renderContext(state.session);
     if (!state.summary) return;
-    renderChart(state.summary);
     renderLimits(state.summary);
   });
-  resize.observe(document.getElementById("chart"));
   resize.observe(document.getElementById("limits"));
   resize.observe(document.getElementById("drilldown"));
 

@@ -191,6 +191,17 @@ test('the over-time section is mounted in its container: a card, drawn from the 
   expect(card.querySelectorAll('.panel-title')).toHaveLength(3);
 });
 
+test('the by-model section is mounted in its container: a card, drawn from the payload', () => {
+  const card = tilesOf('chart-card');
+  expect(screen.getByRole('region', { name: 'Per day, by model' })).toBeInTheDocument();
+  expect(card).toContainElement(screen.getByRole('region', { name: 'Per day, by model' }));
+  expect(card.querySelector('svg')).toBeNull();
+  window.setPayload({ summary: summary() });
+  expect(screen.getByRole('region', { name: 'Per day, by model and effort' })).toBeInTheDocument();
+  expect(card.querySelector('svg')).not.toBeNull();
+  expect(card.querySelectorAll('.segmented button')).toHaveLength(3);
+});
+
 test('a page without the tile containers fails loudly and mounts nothing', () => {
   bridged.stop();
   document.body.replaceChildren(pageBody());
@@ -208,6 +219,23 @@ test('a page without the over-time container fails loudly and mounts nothing', (
   expect(() => bridge(window)).toThrow('The page has no #trend-card container for the over-time section');
   expect(document.getElementById('error')).not.toBeNull();
   expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('a page without the by-model container fails loudly and mounts nothing', () => {
+  bridged.stop();
+  document.body.replaceChildren(pageBody());
+  document.getElementById('chart-card')?.remove();
+  expect(() => bridge(window)).toThrow('The page has no #chart-card container for the by-model section');
+  expect(document.getElementById('error')).not.toBeNull();
+  expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  expect(document.getElementById('trend-card')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('stopping takes the by-model section away too', () => {
+  bridged.stop();
+  expect(tilesOf('chart-card').children).toHaveLength(0);
   bridged = { stop() {} };
 });
 

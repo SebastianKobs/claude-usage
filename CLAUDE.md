@@ -125,6 +125,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              saved so far, the input split's parts, the runtime's notes (used by the components)
   src/lib/trend.ts           the over-time panels: their geometry, each bucket's cost, input and output, their words
                              and table rows (used by the component)
+  src/lib/bymodel.ts         the by-model chart: its metrics (cost, output, input), the stacked columns' geometry and
+                             segments, the hatched fills, the legend, tooltip and table rows (used by the component)
   src/lib/payload.svelte.ts  what the page has loaded, as reactive state (`payload`: the summary, or that loading it
                              failed), which the old scripts fill through `setPayload`
   src/lib/overview.svelte.ts the session view's tile rows, mounted for the old scripts (`mountSessionKpis`,
@@ -132,8 +134,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
                              `YAxis`, `XLabels`, `AreaLine`, `PointDot`, and the tiles: `StatTile`, `InputSplit`,
                              `KpiTiles`, `RuntimeTiles`, `SummaryTiles`; `ChartCard`, the section a chart lives in, with
-                             its table-view toggle; `TableView`, a paged table; `OverTime`), each with its Testing
-                             Library test
+                             its table-view toggle; `TableView`, a paged table; `OverTime`, `ByModel`), each with
+                             its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)

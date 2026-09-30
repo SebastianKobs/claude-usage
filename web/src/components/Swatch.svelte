@@ -1,7 +1,8 @@
 <!--
 @component
-A color swatch: a small square in `fill` (any CSS background), the default swatch for null. Nothing draws it yet: the
-old scripts build their swatches as DOM strings until the sections that draw them move to components (3.16 on).
+A color swatch: a small square in `fill` (any CSS background), the default swatch for null. The by-model section's
+legend and tooltip draw it (a hatched series' fill is a gradient); the old scripts build the swatches of the sections
+that have not moved yet as DOM strings.
 -->
 <script lang="ts">
   let { fill }: { fill: string | null } = $props();
