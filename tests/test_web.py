@@ -46,7 +46,7 @@ class BuildSettingsTest(unittest.TestCase):
                 self.assertNotIn("customElement", options)
 
     def test_no_component_writes_a_style_attribute(self):
-        # the CSP will drop style attributes (3.34): style: sets a style through the CSSOM, while a style attribute
+        # the CSP allows no style attribute: style: sets a style through the CSSOM, while a style attribute
         # and a component's --x prop, which wraps the component in an element with one, need them
         for path in components():
             with self.subTest(component=path.name):
@@ -54,7 +54,7 @@ class BuildSettingsTest(unittest.TestCase):
                 self.assertNotRegex(markup(path), r"<[A-Z][\w.]*\b[^>]*\s--[\w-]+\s*=")
 
     def test_the_compiler_neither_injects_css_nor_builds_templates_from_html(self):
-        # html fragments need a Trusted Types policy of Svelte's own, which the CSP won't name
+        # html fragments need a Trusted Types policy of Svelte's own, which the CSP doesn't name
         settings = read(WEB / "svelte.config.js")
         self.assertNotIn("injected", settings)
         self.assertIn("fragments: 'tree'", settings)
@@ -105,11 +105,14 @@ class BundleTest(unittest.TestCase):
             with self.subTest(package=package):
                 self.assertIn(f"## {package} - ", licenses)
 
-    def test_the_bundle_creates_only_dompurifys_trusted_types_policy(self):
-        # fragments: 'tree' builds templates without one; 3.34's CSP names only DOMPurify's and highlight.js's
+    def test_the_bundle_creates_only_the_two_trusted_types_policies_the_csp_names(self):
+        # fragments: 'tree' builds templates without one of Svelte's own; DOMPurify's and ours for highlight.js's
+        # output are the two the CSP's trusted-types directive lists
         bundle = read(BUNDLE)
-        self.assertEqual(len(re.findall(r"createPolicy\(", bundle)), 1)
+        self.assertEqual(len(re.findall(r"createPolicy\(", bundle)), 2)
         self.assertIn('"dompurify"', bundle)
+        self.assertIn('"highlight"', bundle)
+        self.assertIn("trusted-types dompurify highlight", read(REPO / "claude_usage" / "server.py"))
 
 
 if __name__ == "__main__":

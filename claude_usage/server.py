@@ -80,9 +80,11 @@ COOKIE_PREFIX = "claude_usage_"
 COOKIE_MAX_AGE = 400 * 24 * 3600        # browsers keep a cookie 400 days at most; the next start's token replaces it
 TOKEN_NEEDED = ("this dashboard answers only a browser that opened the link it printed at its start, with its token "
                 "(make status shows it); after a restart, open the new link")
-# no inline scripts or stylesheets; style attributes stay allowed, as the charts set colors and sizes with them
-DASHBOARD_POLICY = ("default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; "
-                    "connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+# no inline scripts, stylesheets or style attributes (the page sets colors and sizes through the CSSOM, which a CSP
+# doesn't block), and markup only from the two Trusted Types policies the bundle creates: DOMPurify's and highlight.js's
+DASHBOARD_POLICY = ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src data:; "
+                    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'; "
+                    "require-trusted-types-for 'script'; trusted-types dompurify highlight")
 
 Payload = dict[str, Any]
 

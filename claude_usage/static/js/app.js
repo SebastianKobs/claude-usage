@@ -18257,21 +18257,25 @@ Yv.use = Xv, Yv.walkTokens = function(e, t) {
 }, Yv.parseInline = Jv.parseInline, Yv.Parser = Kv, Yv.parser = Kv.parse, Yv.Renderer = Wv, Yv.TextRenderer = Gv, Yv.Lexer = Uv, Yv.lexer = Uv.lex, Yv.Tokenizer = Hv, Yv.Hooks = qv, Yv.parse = Yv, Yv.options, Yv.setOptions, Yv.walkTokens, Yv.parseInline, Kv.parse, Uv.lex;
 //#endregion
 //#region src/lib/markup.ts
-function Zv(e) {
+var Zv = globalThis.trustedTypes?.createPolicy("highlight", { createHTML: (e) => e });
+function Qv(e) {
 	return !!(e && a_.getLanguage(e));
 }
-function Qv(e, t, n) {
-	Zv(n) ? e.innerHTML = a_.highlight(t, {
-		language: n,
-		ignoreIllegals: !0
-	}).value : e.textContent = t;
+function $v(e, t, n) {
+	if (Qv(n)) {
+		let { value: r } = a_.highlight(t, {
+			language: n,
+			ignoreIllegals: !0
+		});
+		e.innerHTML = Zv?.createHTML(r) ?? r;
+	} else e.textContent = t;
 }
-function $v(e, t) {
+function ey(e, t) {
 	return (n) => {
-		Qv(n, e, t);
+		$v(n, e, t);
 	};
 }
-var ey = [
+var ty = [
 	"p",
 	"br",
 	"strong",
@@ -18297,66 +18301,67 @@ var ey = [
 	"tr",
 	"th",
 	"td"
-], ty = [
+], ny = [
 	"href",
 	"title",
 	"class",
 	"align",
 	"start"
-], ny = /^language-[\w+-]+$/, ry = /^(?:https?|mailto):/i, iy = !1;
-function ay() {
-	return xg.isSupported ? iy ? !0 : (xg.addHook("uponSanitizeElement", (e) => {
+], ry = /^language-[\w+-]+$/, iy = /^(?:https?|mailto):/i, ay = !1;
+function oy() {
+	return xg.isSupported ? ay ? !0 : (xg.addHook("uponSanitizeElement", (e) => {
 		e instanceof HTMLInputElement && e.getAttribute("type") === "checkbox" && e.replaceWith(document.createTextNode(e.hasAttribute("checked") ? "☑" : "☐"));
 	}), xg.addHook("afterSanitizeAttributes", (e) => {
 		let t = e.getAttribute("class");
-		t !== null && !(e.tagName === "CODE" && ny.test(t)) && e.removeAttribute("class"), e.tagName === "A" && (e.setAttribute("target", "_blank"), e.setAttribute("rel", "noopener noreferrer"));
-	}), iy = !0, !0) : !1;
+		t !== null && !(e.tagName === "CODE" && ry.test(t)) && e.removeAttribute("class"), e.tagName === "A" && (e.setAttribute("target", "_blank"), e.setAttribute("rel", "noopener noreferrer"));
+	}), ay = !0, !0) : !1;
 }
-function oy() {
-	return ay();
+function sy() {
+	return oy();
 }
-function sy(e, t) {
-	if (!ay()) return null;
+function cy(e, t) {
+	if (!oy()) return null;
 	let n = document.createElement("div");
 	n.innerHTML = xg.sanitize(Yv.parse(e, {
 		gfm: !0,
 		breaks: t,
 		async: !1
 	}), {
-		ALLOWED_TAGS: ey,
-		ALLOWED_ATTR: ty,
-		ALLOWED_URI_REGEXP: ry
+		ALLOWED_TAGS: ty,
+		ALLOWED_ATTR: ny,
+		ALLOWED_URI_REGEXP: iy,
+		RETURN_TRUSTED_TYPE: !0
 	});
 	for (let e of n.querySelectorAll("pre > code")) {
 		let t = e.className.match(/\blanguage-([\w+-]+)/)?.[1], n = document.createElement("code");
-		n.className = "hljs", Qv(n, e.textContent ?? "", gm(t));
+		n.className = "hljs", $v(n, e.textContent ?? "", gm(t));
 		let r = document.createElement("pre");
 		r.className = "code", r.append(n), e.parentElement?.replaceWith(r);
 	}
 	return [...n.childNodes];
 }
-function cy(e, t = !1) {
+function ly(e, t = !1) {
 	return (n) => {
-		n.replaceChildren(...sy(e, t) ?? []);
+		n.replaceChildren(...cy(e, t) ?? []);
 	};
 }
 //#endregion
 //#region src/components/Code.svelte
-var ly = /* @__PURE__ */ U([["code", { class: "hljs" }]]), uy = /* @__PURE__ */ U([[
+var uy = /* @__PURE__ */ U([["code", { class: "hljs" }]]), dy = /* @__PURE__ */ U([[
 	"pre",
 	{ class: "code" },
 	,
 ]]);
-function dy(e, t) {
+function fy(e, t) {
 	j(t, !0);
 	let n = (e) => {
-		var n = ly();
-		gi(n, () => $v(t.code, r())), G(e, n);
+		var n = uy();
+		gi(n, () => ey(t.code, r())), G(e, n);
 	}, r = $i(t, "language", 3, null), i = $i(t, "inline", 3, !1);
 	var a = W(), o = R(a), s = (e) => {
 		n(e);
 	}, c = (e) => {
-		var t = uy(), r = L(t);
+		var t = dy(), r = L(t);
 		n(r), A(t), G(e, t);
 	};
 	q(o, (e) => {
@@ -18365,19 +18370,19 @@ function dy(e, t) {
 }
 //#endregion
 //#region src/components/Markdown.svelte
-var fy = /* @__PURE__ */ U([["div", { class: "chat-markdown" }]]), py = /* @__PURE__ */ U([[
+var py = /* @__PURE__ */ U([["div", { class: "chat-markdown" }]]), my = /* @__PURE__ */ U([[
 	"div",
 	{ class: "chat-markdown chat-text" },
 	" "
 ]]);
-function my(e, t) {
+function hy(e, t) {
 	j(t, !0);
 	let n = $i(t, "breaks", 3, !1);
 	var r = W(), i = R(r), a = (e) => {
-		var r = fy();
-		gi(r, () => cy(t.text, n())), G(e, r);
-	}, o = /* @__PURE__ */ N(() => oy()), s = (e) => {
-		var n = py(), r = z(n, !0);
+		var r = py();
+		gi(r, () => ly(t.text, n())), G(e, r);
+	}, o = /* @__PURE__ */ N(() => sy()), s = (e) => {
+		var n = my(), r = z(n, !0);
 		V(() => K(r, t.text)), G(e, n);
 	};
 	q(i, (e) => {
@@ -18386,7 +18391,7 @@ function my(e, t) {
 }
 //#endregion
 //#region src/components/ChatMessage.svelte
-var hy = /* @__PURE__ */ U([
+var gy = /* @__PURE__ */ U([
 	[
 		"strong",
 		null,
@@ -18404,7 +18409,7 @@ var hy = /* @__PURE__ */ U([
 		{ class: "muted" },
 		" "
 	]
-], 1), gy = /* @__PURE__ */ U([
+], 1), _y = /* @__PURE__ */ U([
 	[
 		"strong",
 		null,
@@ -18416,7 +18421,7 @@ var hy = /* @__PURE__ */ U([
 		{ class: "muted" },
 		" "
 	]
-], 1), _y = /* @__PURE__ */ U([[
+], 1), vy = /* @__PURE__ */ U([[
 	"details",
 	{ class: "chat-entry chat-thinking" },
 	[
@@ -18434,7 +18439,7 @@ var hy = /* @__PURE__ */ U([
 		{ class: "chat-text" },
 		" "
 	]
-]]), vy = /* @__PURE__ */ U([[
+]]), yy = /* @__PURE__ */ U([[
 	"div",
 	{ class: "chat-command" },
 	[
@@ -18442,11 +18447,11 @@ var hy = /* @__PURE__ */ U([
 		null,
 		" "
 	]
-]]), yy = /* @__PURE__ */ U([[
+]]), by = /* @__PURE__ */ U([[
 	"div",
 	{ class: "chat-text" },
 	" "
-]]), by = /* @__PURE__ */ U([[
+]]), xy = /* @__PURE__ */ U([[
 	"div",
 	null,
 	[
@@ -18457,16 +18462,16 @@ var hy = /* @__PURE__ */ U([
 	" ",
 	,
 ]]);
-function xy(e, t) {
+function Sy(e, t) {
 	j(t, !0);
 	let n = (e) => {
 		var n = W(), r = R(n), a = (e) => {
-			var n = hy(), r = R(n), a = z(r, !0), o = B(r, 2), s = z(o, !0), c = z(B(o, 2), !0);
+			var n = gy(), r = R(n), a = z(r, !0), o = B(r, 2), s = z(o, !0), c = z(B(o, 2), !0);
 			V((e, t) => {
 				K(a, e), K(s, H(i)), K(c, t);
 			}, [() => om(t.entry.kind), () => Ia(t.entry.timestamp)]), G(e, n);
 		}, o = (e) => {
-			var n = gy(), r = R(n), i = z(r, !0), a = z(B(r, 2), !0);
+			var n = _y(), r = R(n), i = z(r, !0), a = z(B(r, 2), !0);
 			V((e, t) => {
 				K(i, e), K(a, t);
 			}, [() => om(t.entry.kind), () => Ia(t.entry.timestamp)]), G(e, n);
@@ -18476,36 +18481,36 @@ function xy(e, t) {
 		}), G(e, n);
 	}, r = /* @__PURE__ */ N(() => t.entry.text ?? ""), i = /* @__PURE__ */ N(() => sm(t.entry)), a = /* @__PURE__ */ N(() => t.entry.kind === "prompt" ? dm(H(r)) : null);
 	var o = W(), s = R(o), c = (e) => {
-		var t = _y(), i = L(t), a = L(i), o = L(a);
+		var t = vy(), i = L(t), a = L(i), o = L(a);
 		n(o), A(a), A(i);
 		var s = z(B(i, 2), !0);
 		A(t), V(() => K(s, H(r))), G(e, t);
 	}, l = (e) => {
-		var i = by(), o = L(i), s = L(o);
+		var i = xy(), o = L(i), s = L(o);
 		n(s), A(o);
 		var c = B(o, 2), l = (e) => {
-			var t = vy(), n = z(L(t), !0);
+			var t = yy(), n = z(L(t), !0);
 			A(t), V(() => K(n, H(a).text)), G(e, t);
 		}, u = (e) => {
-			dy(e, {
+			fy(e, {
 				get code() {
 					return H(a).code;
 				},
 				language: "json"
 			});
 		}, d = (e) => {
-			my(e, {
+			hy(e, {
 				get text() {
 					return H(a).text;
 				},
 				breaks: !0
 			});
 		}, f = (e) => {
-			my(e, { get text() {
+			hy(e, { get text() {
 				return H(r);
 			} });
 		}, p = (e) => {
-			var t = yy(), n = z(t, !0);
+			var t = by(), n = z(t, !0);
 			V(() => K(n, H(r))), G(e, t);
 		};
 		q(c, (e) => {
@@ -18518,12 +18523,12 @@ function xy(e, t) {
 }
 //#endregion
 //#region src/components/ChatToolCall.svelte
-var Sy = (e, t = b) => {
+var Cy = (e, t = b) => {
 	var n = W(), r = R(n), i = (e) => {
-		var n = Ty();
+		var n = Ey();
 		J(n, 20, t, (e) => e, (e, t, n, r) => {
-			var i = wy(), a = R(i), o = z(a, !0), s = B(a, 2), c = L(s), l = (e) => {
-				dy(e, {
+			var i = Ty(), a = R(i), o = z(a, !0), s = B(a, 2), c = L(s), l = (e) => {
+				fy(e, {
 					get code() {
 						return t.value;
 					},
@@ -18533,7 +18538,7 @@ var Sy = (e, t = b) => {
 					}
 				});
 			}, u = (e) => {
-				var n = Cy(), r = z(n, !0);
+				var n = wy(), r = z(n, !0);
 				V(() => K(r, t.value)), G(e, n);
 			}, d = (e) => {
 				var n = Jr();
@@ -18547,11 +18552,11 @@ var Sy = (e, t = b) => {
 	q(r, (e) => {
 		t().length > 0 && e(i);
 	}), G(e, n);
-}, Cy = /* @__PURE__ */ U([[
+}, wy = /* @__PURE__ */ U([[
 	"pre",
 	{ class: "code" },
 	" "
-]]), wy = /* @__PURE__ */ U([
+]]), Ty = /* @__PURE__ */ U([
 	[
 		"dt",
 		null,
@@ -18563,27 +18568,13 @@ var Sy = (e, t = b) => {
 		null,
 		,
 	]
-], 1), Ty = /* @__PURE__ */ U([["dl", { class: "tool-fields" }]]), Ey = /* @__PURE__ */ U([[
+], 1), Ey = /* @__PURE__ */ U([["dl", { class: "tool-fields" }]]), Dy = /* @__PURE__ */ U([[
 	"div",
 	{ class: "tool-description" },
 	" "
-]]), Dy = /* @__PURE__ */ U([
+]]), Oy = /* @__PURE__ */ U([
 	,
 	,
-	" ",
-	[
-		"div",
-		{ class: "label" },
-		" "
-	],
-	" ",
-	,
-], 1), Oy = /* @__PURE__ */ U([
-	[
-		"div",
-		{ class: "tool-description" },
-		" "
-	],
 	" ",
 	[
 		"div",
@@ -18606,15 +18597,13 @@ var Sy = (e, t = b) => {
 	],
 	" ",
 	,
-], 1), Ay = /* @__PURE__ */ U([[
-	"div",
-	{ class: "label" },
-	" "
-]]), jy = /* @__PURE__ */ U([[
-	"pre",
-	{ class: "code" },
-	" "
-]]), My = /* @__PURE__ */ U([
+], 1), Ay = /* @__PURE__ */ U([
+	[
+		"div",
+		{ class: "tool-description" },
+		" "
+	],
+	" ",
 	[
 		"div",
 		{ class: "label" },
@@ -18622,7 +18611,23 @@ var Sy = (e, t = b) => {
 	],
 	" ",
 	,
-], 1), Ny = /* @__PURE__ */ U([[
+], 1), jy = /* @__PURE__ */ U([[
+	"div",
+	{ class: "label" },
+	" "
+]]), My = /* @__PURE__ */ U([[
+	"pre",
+	{ class: "code" },
+	" "
+]]), Ny = /* @__PURE__ */ U([
+	[
+		"div",
+		{ class: "label" },
+		" "
+	],
+	" ",
+	,
+], 1), Py = /* @__PURE__ */ U([[
 	"details",
 	{ class: "chat-tool" },
 	[
@@ -18651,29 +18656,29 @@ var Sy = (e, t = b) => {
 	" ",
 	,
 ]]);
-function Py(e, t) {
+function Fy(e, t) {
 	j(t, !0);
 	let n = /* @__PURE__ */ N(() => `${vm(t.entry) ? ` ${vm(t.entry)}` : ""}${ym(t.entry)}`), r = /* @__PURE__ */ N(() => Sm(t.entry)), i = /* @__PURE__ */ N(() => t.entry.result === null ? null : Cm(t.entry));
-	var a = Ny(), o = L(a), s = L(o), c = z(s, !0), l = B(s), u = z(B(l), !0);
+	var a = Py(), o = L(a), s = L(o), c = z(s, !0), l = B(s), u = z(B(l), !0);
 	A(o);
 	var d = B(o, 2), f = L(d), p = (e) => {
-		var t = Dy(), n = R(t), i = (e) => {
-			var t = Ey(), n = z(t, !0);
+		var t = Oy(), n = R(t), i = (e) => {
+			var t = Dy(), n = z(t, !0);
 			V(() => K(n, H(r).description)), G(e, t);
 		};
 		q(n, (e) => {
 			H(r).description && e(i);
 		});
 		var a = B(n, 2), o = z(a, !0);
-		dy(B(a, 2), {
+		fy(B(a, 2), {
 			get code() {
 				return H(r).command;
 			},
 			language: "bash"
 		}), V(() => K(o, H(r).label)), G(e, t);
 	}, m = (e) => {
-		var t = Oy(), n = R(t), i = z(n, !0), a = B(n, 2), o = z(a, !0);
-		dy(B(a, 2), {
+		var t = ky(), n = R(t), i = z(n, !0), a = B(n, 2), o = z(a, !0);
+		fy(B(a, 2), {
 			get code() {
 				return H(r).diff;
 			},
@@ -18682,8 +18687,8 @@ function Py(e, t) {
 			K(i, H(r).path), K(o, H(r).label);
 		}), G(e, t);
 	}, h = (e) => {
-		var t = ky(), n = R(t), i = z(n, !0), a = B(n, 2), o = z(a, !0);
-		dy(B(a, 2), {
+		var t = Ay(), n = R(t), i = z(n, !0), a = B(n, 2), o = z(a, !0);
+		fy(B(a, 2), {
 			get code() {
 				return H(r).content;
 			},
@@ -18694,15 +18699,15 @@ function Py(e, t) {
 			K(i, H(r).path), K(o, H(r).label);
 		}), G(e, t);
 	}, g = (e) => {
-		var t = Ay(), n = z(t, !0);
+		var t = jy(), n = z(t, !0);
 		V(() => K(n, H(r).label)), G(e, t);
 	};
 	q(f, (e) => {
 		H(r).kind === "bash" ? e(p) : H(r).kind === "edit" ? e(m, 1) : H(r).kind === "write" ? e(h, 2) : e(g, -1);
-	}), Sy(B(f, 2), () => H(r).rest), A(d);
+	}), Cy(B(f, 2), () => H(r).rest), A(d);
 	var _ = B(d, 2), v = (e) => {
-		var n = My(), r = R(n), a = z(r, !0), o = B(r, 2), s = (e) => {
-			dy(e, {
+		var n = Ny(), r = R(n), a = z(r, !0), o = B(r, 2), s = (e) => {
+			fy(e, {
 				get code() {
 					return H(i).code;
 				},
@@ -18711,7 +18716,7 @@ function Py(e, t) {
 				}
 			});
 		}, c = (e) => {
-			var t = jy(), n = z(t, !0);
+			var t = My(), n = z(t, !0);
 			V(() => K(n, H(i).text)), G(e, t);
 		};
 		q(o, (e) => {
@@ -18726,18 +18731,18 @@ function Py(e, t) {
 }
 //#endregion
 //#region src/components/ChatUsage.svelte
-var Fy = /* @__PURE__ */ U([" ", [
+var Iy = /* @__PURE__ */ U([" ", [
 	"span",
 	{ role: "note" },
 	" "
-]], 1), Iy = /* @__PURE__ */ U([" ", [
+]], 1), Ly = /* @__PURE__ */ U([" ", [
 	"span",
 	{
 		class: "rebuild-chip",
 		role: "note"
 	},
 	" "
-]], 1), Ly = /* @__PURE__ */ U([[
+]], 1), Ry = /* @__PURE__ */ U([[
 	"div",
 	{ role: "note" },
 	[
@@ -18746,7 +18751,7 @@ var Fy = /* @__PURE__ */ U([" ", [
 		" "
 	],
 	" "
-]]), Ry = /* @__PURE__ */ U([
+]]), zy = /* @__PURE__ */ U([
 	[
 		"div",
 		null,
@@ -18766,11 +18771,11 @@ var Fy = /* @__PURE__ */ U([" ", [
 	" ",
 	,
 ], 1);
-function zy(e, t) {
+function By(e, t) {
 	j(t, !0);
 	let n = /* @__PURE__ */ N(() => t.hint && Im(t.hint) ? Rm(t.hint) : null), r = /* @__PURE__ */ N(() => t.usage.rebuild ? zm(t.usage.rebuild) : null), i = /* @__PURE__ */ N(() => Bm(t.hint));
-	var a = Ry(), o = R(a), s = L(o), c = z(s, !0), l = B(s), u = z(l, !0), d = B(l), f = (e) => {
-		var t = Fy(), r = R(t, !0);
+	var a = zy(), o = R(a), s = L(o), c = z(s, !0), l = B(s), u = z(l, !0), d = B(l), f = (e) => {
+		var t = Iy(), r = R(t, !0);
 		r.nodeValue = " ";
 		var i = B(r), a = z(i, !0);
 		V(() => {
@@ -18781,7 +18786,7 @@ function zy(e, t) {
 		H(n) && e(f);
 	});
 	var p = B(d), m = (e) => {
-		var t = Iy(), n = R(t, !0);
+		var t = Ly(), n = R(t, !0);
 		n.nodeValue = " ";
 		var i = B(n), a = z(i, !0);
 		V(() => {
@@ -18792,7 +18797,7 @@ function zy(e, t) {
 		H(r) && e(m);
 	}), A(o);
 	var h = B(o, 2), g = (e) => {
-		var t = Ly(), n = L(t), r = z(n, !0), a = B(n);
+		var t = Ry(), n = L(t), r = z(n, !0), a = B(n);
 		A(t), V(() => {
 			Ti(t, 1, yi(["compact-hint", H(i).tone])), K(r, H(i).label), K(a, ` ${H(i).text ?? ""}`);
 		}), G(e, t);
@@ -18810,15 +18815,15 @@ function zy(e, t) {
 }
 //#endregion
 //#region src/components/ConversationEntry.svelte
-var By = /* @__PURE__ */ U([
+var Vy = /* @__PURE__ */ U([
 	,
 	,
 	" ",
 	,
 ], 1);
-function Vy(e, t) {
+function Hy(e, t) {
 	j(t, !0);
-	var n = By(), r = R(n), i = (e) => {
+	var n = Vy(), r = R(n), i = (e) => {
 		Km(e, { get entry() {
 			return t.entry;
 		} });
@@ -18827,11 +18832,11 @@ function Vy(e, t) {
 			return t.entry;
 		} });
 	}, o = (e) => {
-		Py(e, { get entry() {
+		Fy(e, { get entry() {
 			return t.entry;
 		} });
 	}, s = (e) => {
-		xy(e, { get entry() {
+		Sy(e, { get entry() {
 			return t.entry;
 		} });
 	};
@@ -18839,7 +18844,7 @@ function Vy(e, t) {
 		t.entry.kind === "compaction" || t.entry.kind === "error" ? e(i) : t.entry.kind === "injected" ? e(a, 1) : t.entry.kind === "tool" ? e(o, 2) : e(s, -1);
 	});
 	var c = B(r, 2), l = (e) => {
-		zy(e, {
+		By(e, {
 			get usage() {
 				return t.entry.usage;
 			},
@@ -18854,17 +18859,13 @@ function Vy(e, t) {
 }
 //#endregion
 //#region src/components/Conversation.svelte
-var Hy = /* @__PURE__ */ U([[
+var Uy = /* @__PURE__ */ U([[
 	"option",
 	null,
 	" "
-]]), Uy = /* @__PURE__ */ U([["optgroup"]]), Wy = /* @__PURE__ */ U([[
+]]), Wy = /* @__PURE__ */ U([["optgroup"]]), Gy = /* @__PURE__ */ U([[
 	"option",
 	null,
-	" "
-]]), Gy = /* @__PURE__ */ U([[
-	"div",
-	{ class: "empty" },
 	" "
 ]]), Ky = /* @__PURE__ */ U([[
 	"div",
@@ -18872,13 +18873,17 @@ var Hy = /* @__PURE__ */ U([[
 	" "
 ]]), qy = /* @__PURE__ */ U([[
 	"div",
-	{ class: "chat-reminders muted" },
+	{ class: "empty" },
 	" "
 ]]), Jy = /* @__PURE__ */ U([[
 	"div",
+	{ class: "chat-reminders muted" },
+	" "
+]]), Yy = /* @__PURE__ */ U([[
+	"div",
 	{ class: "chat-row" },
 	,
-]]), Yy = /* @__PURE__ */ U([
+]]), Xy = /* @__PURE__ */ U([
 	[
 		"button",
 		{
@@ -18891,7 +18896,7 @@ var Hy = /* @__PURE__ */ U([[
 	,
 	" ",
 	["div", { class: "chat" }]
-], 1), Xy = /* @__PURE__ */ U([
+], 1), Zy = /* @__PURE__ */ U([
 	[
 		"section",
 		{
@@ -18972,7 +18977,7 @@ var Hy = /* @__PURE__ */ U([[
 		"aria-label": "End of the conversation"
 	}]
 ], 1);
-function Zy(e, t) {
+function Qy(e, t) {
 	j(t, !0);
 	let { payload: n, hype: r, preferences: i } = as(), a = /* @__PURE__ */ F(""), o = /* @__PURE__ */ F(!1), s = /* @__PURE__ */ F(null), c = /* @__PURE__ */ F(null), l = /* @__PURE__ */ F(void 0), u = /* @__PURE__ */ F(void 0), d = /* @__PURE__ */ F(void 0), f = 0, p = /* @__PURE__ */ N(() => em(n.session?.agents ?? [])), m = /* @__PURE__ */ N(() => H(s) ? nm(H(s)) : null), h = /* @__PURE__ */ N(() => H(s) ? tm(H(s).reminders) : null), g = /* @__PURE__ */ new WeakMap(), _ = /* @__PURE__ */ N(() => H(s) ? Fo(H(s).entries, i.oldestFirst).map((e) => {
 		let t = g.get(e.entry);
@@ -19020,18 +19025,18 @@ function Zy(e, t) {
 	}), In(() => () => {
 		f++;
 	});
-	var ee = Xy(), C = R(ee), w = L(C), te = L(w), ne = z(te, !0), re = B(te, 6);
+	var ee = Zy(), C = R(ee), w = L(C), te = L(w), ne = z(te, !0), re = B(te, 6);
 	J(re, 21, () => H(p), (e) => "group" in e ? `group ${e.group}` : `option ${e.value}`, (e, t) => {
 		var n = W(), r = R(n), i = (e) => {
-			var n = Uy();
+			var n = Wy();
 			J(n, 21, () => H(t).options, (e) => e.value, (e, t) => {
-				var n = Hy(), r = z(n, !0), i = {};
+				var n = Uy(), r = z(n, !0), i = {};
 				V(() => {
 					K(r, H(t).label), i !== (i = H(t).value) && (n.value = (n.__value = i) ?? "");
 				}), G(e, n);
 			}), A(n), V(() => Y(n, "label", H(t).group)), G(e, n);
 		}, a = (e) => {
-			var n = Wy(), r = z(n, !0), i = {};
+			var n = Gy(), r = z(n, !0), i = {};
 			V(() => {
 				K(r, H(t).label), i !== (i = H(t).value) && (n.value = (n.__value = i) ?? "");
 			}), G(e, n);
@@ -19045,14 +19050,14 @@ function Zy(e, t) {
 	var E = B(T, 2);
 	A(w);
 	var oe = B(w, 2), D = L(oe), se = (e) => {
-		var t = Gy(), n = z(t, !0);
+		var t = Ky(), n = z(t, !0);
 		V(() => K(n, H(c))), G(e, t);
 	}, ce = (e) => {
-		var t = Ky(), n = z(t, !0);
+		var t = qy(), n = z(t, !0);
 		V(() => K(n, H(m))), G(e, t);
 	}, le = (e) => {
-		var t = Yy(), n = R(t), r = B(n, 2), i = (e) => {
-			var t = qy(), n = z(t, !0);
+		var t = Xy(), n = R(t), r = B(n, 2), i = (e) => {
+			var t = Jy(), n = z(t, !0);
 			V(() => K(n, H(h))), G(e, t);
 		};
 		q(r, (e) => {
@@ -19060,8 +19065,8 @@ function Zy(e, t) {
 		});
 		var a = B(r, 2);
 		J(a, 21, () => H(_), (e) => e.key, (e, t) => {
-			var n = Jy();
-			Vy(L(n), { get entry() {
+			var n = Yy();
+			Hy(L(n), { get entry() {
 				return H(t).entry;
 			} }), A(n), V(() => Y(n, "data-key", H(t).key)), G(e, n);
 		}), A(a), Br("click", n, () => H(d)?.focus()), G(e, t);
@@ -19075,7 +19080,7 @@ function Zy(e, t) {
 Vr(["change", "click"]);
 //#endregion
 //#region src/components/InputSplit.svelte
-var Qy = /* @__PURE__ */ U([["span"]]), $y = /* @__PURE__ */ U([[
+var $y = /* @__PURE__ */ U([["span"]]), eb = /* @__PURE__ */ U([[
 	"div",
 	{ class: "split-row" },
 	,
@@ -19103,11 +19108,11 @@ var Qy = /* @__PURE__ */ U([["span"]]), $y = /* @__PURE__ */ U([[
 		{ class: "split-number" },
 		" "
 	]
-]]), eb = /* @__PURE__ */ U([[
+]]), tb = /* @__PURE__ */ U([[
 	"div",
 	{ class: "note" },
 	" "
-]]), tb = /* @__PURE__ */ U([[
+]]), nb = /* @__PURE__ */ U([[
 	"div",
 	{ class: "card" },
 	[
@@ -19131,12 +19136,12 @@ var Qy = /* @__PURE__ */ U([["span"]]), $y = /* @__PURE__ */ U([[
 	" ",
 	,
 ]]);
-function nb(e, t) {
+function rb(e, t) {
 	j(t, !0);
 	let { hype: n } = as(), r = /* @__PURE__ */ N(() => Ra(t.totals)), i = /* @__PURE__ */ N(() => Bd(t.totals)), a = /* @__PURE__ */ N(() => Hd(t.context, t.hintTokens));
-	var o = tb(), s = L(o), c = z(s, !0), l = B(s, 2), u = z(l, !0), d = B(l, 2);
+	var o = nb(), s = L(o), c = z(s, !0), l = B(s, 2), u = z(l, !0), d = B(l, 2);
 	J(d, 21, () => H(i).filter((e) => e.tokens > 0), (e) => e.label, (e, t) => {
-		var n = Qy();
+		var n = $y();
 		let r;
 		V(() => r = Di(n, "", r, {
 			"flex-grow": H(t).tokens,
@@ -19145,7 +19150,7 @@ function nb(e, t) {
 	}), A(d);
 	var f = B(d, 2);
 	J(f, 17, () => H(i), (e) => e.label, (e, t) => {
-		var i = $y(), a = L(i);
+		var i = eb(), a = L(i);
 		Mc(a, { get fill() {
 			return H(t).color;
 		} });
@@ -19160,7 +19165,7 @@ function nb(e, t) {
 		]), G(e, i);
 	});
 	var p = B(f, 2), m = (e) => {
-		var t = eb();
+		var t = tb();
 		Y(t, "title", "The context a main-thread turn reads: new input, cache writes and reads. The conversation hints at compacting from the threshold on ([chat] compact_hint_tokens).");
 		var n = z(t, !0);
 		V(() => K(n, H(a))), G(e, t);
@@ -19177,7 +19182,7 @@ function nb(e, t) {
 }
 //#endregion
 //#region src/components/KpiTiles.svelte
-var rb = /* @__PURE__ */ U([
+var ib = /* @__PURE__ */ U([
 	[
 		"div",
 		null,
@@ -19189,11 +19194,11 @@ var rb = /* @__PURE__ */ U([
 		null,
 		" "
 	]
-], 1), ib = /* @__PURE__ */ U([[
+], 1), ab = /* @__PURE__ */ U([[
 	"div",
 	{ class: "note" },
 	,
-]]), ab = /* @__PURE__ */ U([
+]]), ob = /* @__PURE__ */ U([
 	[
 		"div",
 		{ class: "card" },
@@ -19229,14 +19234,14 @@ var rb = /* @__PURE__ */ U([
 	" ",
 	,
 ], 1);
-function ob(e, t) {
+function sb(e, t) {
 	j(t, !0);
 	let { hype: n } = as(), r = /* @__PURE__ */ N(() => t.savings ? zd(t.savings) : null);
-	var i = ab(), a = R(i), o = L(a), s = L(o), c = z(s, !0), l = B(s);
+	var i = ob(), a = R(i), o = L(a), s = L(o), c = z(s, !0), l = B(s);
 	A(o);
 	var u = B(o, 2), d = z(u, !0), f = B(u, 2), p = z(f, !0), m = B(f, 2), h = (e) => {
-		var t = ib(), n = L(t), i = (e) => {
-			var t = rb(), n = R(t), i = z(n, !0), a = z(B(n, 2), !0);
+		var t = ab(), n = L(t), i = (e) => {
+			var t = ib(), n = R(t), i = z(n, !0), a = z(B(n, 2), !0);
 			V(() => {
 				Ti(n, 1, yi(H(r).verdict === "gain" ? "verdict-gain" : "verdict-loss")), K(i, H(r).amount), K(a, H(r).count);
 			}), G(e, t);
@@ -19252,7 +19257,7 @@ function ob(e, t) {
 		H(r) && e(h);
 	}), A(a);
 	var g = B(a, 2);
-	nb(g, {
+	rb(g, {
 		get totals() {
 			return t.totals;
 		},
@@ -19298,7 +19303,7 @@ function ob(e, t) {
 }
 //#endregion
 //#region src/components/RuntimeTiles.svelte
-var sb = /* @__PURE__ */ U([
+var cb = /* @__PURE__ */ U([
 	,
 	,
 	" ",
@@ -19308,10 +19313,10 @@ var sb = /* @__PURE__ */ U([
 	" ",
 	,
 ], 1);
-function cb(e, t) {
+function lb(e, t) {
 	j(t, !0);
 	let n = /* @__PURE__ */ N(() => "source" in t.runtime && t.runtime.source === "transcripts"), r = /* @__PURE__ */ N(() => Ud(t.runtime, t.from, t.costPer100Lines, H(n)));
-	var i = sb(), a = R(i);
+	var i = cb(), a = R(i);
 	{
 		let e = /* @__PURE__ */ N(() => Oa(t.runtime.duration_ms));
 		Dp(a, {
@@ -19367,23 +19372,23 @@ function cb(e, t) {
 }
 //#endregion
 //#region src/lib/secrets.ts
-function lb(e) {
+function ub(e) {
 	let t = (e.secret_accesses ?? []).map((e) => e.severity);
 	return t.length ? t.includes("high") ? "alert" : t.includes("medium") ? "warning" : "quiet" : null;
 }
-function ub(e) {
+function db(e) {
 	return e.via ? `in ${e.via}, which it ran` : null;
 }
-var db = {
+var fb = {
 	sent: "sent to a service",
 	returned: "into the conversation",
 	empty: "nothing returned",
 	pending: "no result yet"
 };
-function fb(e) {
-	return e.reach === "error" ? e.sent ? "error, the service may have got it" : "error: blocked or failed" : e.reach === "returned" && e.test ? "into the conversation, likely a test" : Object.hasOwn(db, e.reach) ? db[e.reach] ?? "" : "no result yet";
+function pb(e) {
+	return e.reach === "error" ? e.sent ? "error, the service may have got it" : "error: blocked or failed" : e.reach === "returned" && e.test ? "into the conversation, likely a test" : Object.hasOwn(fb, e.reach) ? fb[e.reach] ?? "" : "no result yet";
 }
-var pb = [
+var mb = [
 	{ label: "Time" },
 	{ label: "Agent" },
 	{ label: "Tool" },
@@ -19394,7 +19399,7 @@ var pb = [
 	},
 	{ label: "Reached" }
 ];
-function mb(e) {
+function hb(e) {
 	let t = /* @__PURE__ */ new Map();
 	return e.map((e) => {
 		let n = [
@@ -19410,33 +19415,33 @@ function mb(e) {
 			agent: e.agent_type,
 			tool: e.tool,
 			path: e.path,
-			via: ub(e),
+			via: db(e),
 			pattern: e.pattern,
 			severity: e.severity || "medium",
-			reach: fb(e)
+			reach: pb(e)
 		};
 	});
 }
-function hb(e) {
+function gb(e) {
 	return e.length === 1 ? "1 call" : `${Z(e.length)} calls`;
 }
-function gb(e, t) {
+function _b(e, t) {
 	return e.filter((e) => e.severity === t).length;
 }
-function _b(e) {
-	return `Possible secret access: ${hb(e)} (${Z(gb(e, "high"))} sent out)`;
+function vb(e) {
+	return `Possible secret access: ${gb(e)} (${Z(_b(e, "high"))} sent out)`;
 }
-function vb(e, t) {
-	let n = `${hb(e)} named a possible secret location`;
-	if (t === "warning") return `${n}, ${Z(gb(e, "medium"))} of them returned a result or may still`;
-	let r = gb(e, "low-medium");
+function yb(e, t) {
+	let n = `${gb(e)} named a possible secret location`;
+	if (t === "warning") return `${n}, ${Z(_b(e, "medium"))} of them returned a result or may still`;
+	let r = _b(e, "low-medium");
 	return r ? `${n}, ${Z(r)} returned a result only in a likely test` : `${n}, none reached anything`;
 }
 //#endregion
 //#region src/components/SecretAccesses.svelte
-var yb = (e, t = b) => {
-	var n = Sb(), r = R(n), i = z(r, !0), a = B(r, 2), o = z(a, !0), s = B(a, 2), c = z(s, !0), l = B(s, 2), u = L(l), d = z(u, !0), f = B(u), p = (e) => {
-		var n = xb(), r = z(n, !0);
+var bb = (e, t = b) => {
+	var n = Cb(), r = R(n), i = z(r, !0), a = B(r, 2), o = z(a, !0), s = B(a, 2), c = z(s, !0), l = B(s, 2), u = L(l), d = z(u, !0), f = B(u), p = (e) => {
+		var n = Sb(), r = z(n, !0);
 		V(() => K(r, t().via)), G(e, n);
 	};
 	q(f, (e) => {
@@ -19446,7 +19451,7 @@ var yb = (e, t = b) => {
 	A(g), V(() => {
 		K(i, t().time), K(o, t().agent), K(c, t().tool), K(d, t().path), K(h, t().pattern), Ti(_, 1, `secret-severity secret-severity-${t().severity ?? ""}`), K(v, t().reach);
 	}), G(e, n);
-}, bb = /* @__PURE__ */ U([[
+}, xb = /* @__PURE__ */ U([[
 	"div",
 	null,
 	[
@@ -19462,11 +19467,11 @@ var yb = (e, t = b) => {
 		{ class: "muted" },
 		"Matched against [secrets] patterns in the config: file tools by their path, commands by their words with the\n      variables they set (quoted text only where it holds a path), and scripts this transcript wrote and then ran by\n      their text. Variables from earlier calls and other scripts are unknown. A result counts whatever it held: a test\n      that only mentions a path returns output too."
 	]
-]]), xb = /* @__PURE__ */ U([[
+]]), Sb = /* @__PURE__ */ U([[
 	"span",
 	{ class: "secret-via" },
 	" "
-]]), Sb = /* @__PURE__ */ U([
+]]), Cb = /* @__PURE__ */ U([
 	[
 		"td",
 		null,
@@ -19508,7 +19513,7 @@ var yb = (e, t = b) => {
 		["span", { "aria-hidden": "true" }],
 		" "
 	]
-], 1), Cb = /* @__PURE__ */ U([[
+], 1), wb = /* @__PURE__ */ U([[
 	"div",
 	{
 		id: "secret-alert",
@@ -19534,7 +19539,7 @@ var yb = (e, t = b) => {
 	],
 	" ",
 	,
-]]), wb = /* @__PURE__ */ U([[
+]]), Tb = /* @__PURE__ */ U([[
 	"div",
 	{
 		id: "secret-alert",
@@ -19565,10 +19570,10 @@ var yb = (e, t = b) => {
 	" ",
 	,
 ]]);
-function Tb(e, t) {
+function Eb(e, t) {
 	j(t, !0);
 	let n = (e, t = b, n = b) => {
-		var r = bb(), i = B(L(r), 2);
+		var r = xb(), i = B(L(r), 2);
 		{
 			let e = /* @__PURE__ */ N(() => `${t()}-secrets`);
 			Hc(i, {
@@ -19576,27 +19581,27 @@ function Tb(e, t) {
 					return H(e);
 				},
 				get columns() {
-					return pb;
+					return mb;
 				},
 				get rows() {
 					return H(c);
 				},
 				rowKey: (e) => e.key,
 				get cells() {
-					return yb;
+					return bb;
 				},
 				labelledby: "secret-alert-title"
 			});
 		}
 		Ne(2), A(r), V(() => Y(r, "hidden", n())), G(e, r);
-	}, { payload: r } = as(), i = /* @__PURE__ */ N(() => r.session), a = /* @__PURE__ */ N(() => H(i)?.secret_accesses ?? []), o = /* @__PURE__ */ N(() => H(i) ? lb(H(i)) : null), s = /* @__PURE__ */ N(() => H(o) === "warning" || H(o) === "quiet" ? H(o) : null), c = /* @__PURE__ */ N(() => mb(H(a))), l = /* @__PURE__ */ F(!1);
+	}, { payload: r } = as(), i = /* @__PURE__ */ N(() => r.session), a = /* @__PURE__ */ N(() => H(i)?.secret_accesses ?? []), o = /* @__PURE__ */ N(() => H(i) ? ub(H(i)) : null), s = /* @__PURE__ */ N(() => H(o) === "warning" || H(o) === "quiet" ? H(o) : null), c = /* @__PURE__ */ N(() => hb(H(a))), l = /* @__PURE__ */ F(!1);
 	var u = W(), d = R(u), f = (e) => {
-		var t = Cb(), r = L(t), o = B(L(r), 1, !0);
+		var t = wb(), r = L(t), o = B(L(r), 1, !0);
 		A(r);
 		var s = B(r, 2);
-		n(s, () => H(i).session_id, () => !1), A(t), V((e) => K(o, e), [() => _b(H(a))]), G(e, t);
+		n(s, () => H(i).session_id, () => !1), A(t), V((e) => K(o, e), [() => vb(H(a))]), G(e, t);
 	}, p = (e) => {
-		var t = wb(), r = L(t), o = L(r), c = z(o, !0), u = B(o, 2), d = z(u, !0);
+		var t = Tb(), r = L(t), o = L(r), c = z(o, !0), u = B(o, 2), d = z(u, !0);
 		A(r);
 		var f = B(r, 2);
 		n(f, () => H(i).session_id, () => !H(l)), A(t), V((e) => {
@@ -19605,7 +19610,7 @@ function Tb(e, t) {
 				"secret-folded",
 				H(s) === "warning" && "secret-warning"
 			])), K(c, e), Y(u, "aria-expanded", H(l)), K(d, H(l) ? "Hide them" : "Show them");
-		}, [() => vb(H(a), H(s))]), Br("click", u, () => I(l, !H(l))), G(e, t);
+		}, [() => yb(H(a), H(s))]), Br("click", u, () => I(l, !H(l))), G(e, t);
 	};
 	q(d, (e) => {
 		H(i) && H(o) === "alert" ? e(f) : H(i) && H(s) && e(p, 1);
@@ -19614,11 +19619,11 @@ function Tb(e, t) {
 Vr(["click"]);
 //#endregion
 //#region src/components/SessionWaits.svelte
-var Eb = /* @__PURE__ */ U([[
+var Db = /* @__PURE__ */ U([[
 	"strong",
 	null,
 	" "
-]]), Db = /* @__PURE__ */ U([[
+]]), Ob = /* @__PURE__ */ U([[
 	"span",
 	null,
 	[
@@ -19627,7 +19632,7 @@ var Eb = /* @__PURE__ */ U([[
 		" "
 	],
 	" "
-]]), Ob = /* @__PURE__ */ U([[
+]]), kb = /* @__PURE__ */ U([[
 	"p",
 	{ class: "wait-line" },
 	[
@@ -19637,24 +19642,24 @@ var Eb = /* @__PURE__ */ U([[
 	],
 	" ",
 	,
-]]), kb = /* @__PURE__ */ U([["div", {
+]]), Ab = /* @__PURE__ */ U([["div", {
 	class: "card wait-notice",
 	role: "status"
 }]]);
-function Ab(e, t) {
+function jb(e, t) {
 	j(t, !0);
 	let { payload: n } = as(), r = /* @__PURE__ */ N(() => n.session), i = /* @__PURE__ */ N(() => H(r) ? Bs(H(r), n.live?.sessions ?? []) : []);
-	var a = kb();
+	var a = Ab();
 	J(a, 21, () => H(i), (e) => e.session_id, (e, t) => {
-		var n = Ob(), r = L(n);
+		var n = kb(), r = L(n);
 		Rl(L(r), { get badge() {
 			return H(t);
 		} }), A(r);
 		var i = B(r, 2), a = (e) => {
-			var n = Eb(), r = z(n);
+			var n = Db(), r = z(n);
 			V((e, t) => K(r, `This session is ${e ?? ""}${t ?? ""}`), [() => H(t).text.charAt(0).toLowerCase(), () => H(t).text.slice(1)]), G(e, n);
 		}, o = (e) => {
-			var n = Db(), r = L(n), i = z(r, !0), a = B(r);
+			var n = Ob(), r = L(n), i = z(r, !0), a = B(r);
 			A(n), V((e) => {
 				Y(r, "href", e), K(i, H(t).title), K(a, `: ${H(t).text ?? ""}`);
 			}, [() => _l(H(t))]), G(e, n);
@@ -19666,28 +19671,28 @@ function Ab(e, t) {
 }
 //#endregion
 //#region src/components/ToolsTable.svelte
-var jb = (e) => {
-	G(e, Mb());
-}, Mb = /* @__PURE__ */ U([[
+var Mb = (e) => {
+	G(e, Nb());
+}, Nb = /* @__PURE__ */ U([[
 	"h3",
 	{ id: "session-tools-title" },
 	"Tools"
-]]), Nb = /* @__PURE__ */ U([[
+]]), Pb = /* @__PURE__ */ U([[
 	"div",
 	{ class: "note" },
 	" "
-]]), Pb = /* @__PURE__ */ U([[
+]]), Fb = /* @__PURE__ */ U([[
 	"button",
 	{
 		type: "button",
 		class: "link-button"
 	},
 	" "
-], ")"], 1), Fb = /* @__PURE__ */ U([[
+], ")"], 1), Ib = /* @__PURE__ */ U([[
 	"td",
 	{ class: "num" },
 	" "
-]]), Ib = /* @__PURE__ */ U([
+]]), Lb = /* @__PURE__ */ U([
 	[
 		"td",
 		null,
@@ -19707,15 +19712,15 @@ var jb = (e) => {
 	" ",
 	,
 ], 1);
-function Lb(e, t) {
+function Rb(e, t) {
 	j(t, !0);
 	let n = (e) => {
-		var t = Nb(), n = z(t, !0);
+		var t = Pb(), n = z(t, !0);
 		V(() => K(n, H(s))), G(e, t);
 	}, r = (e, t = b) => {
-		var n = Ib(), r = R(n), i = z(r, !0), o = B(r, 2), s = L(o), l = L(s, !0), u = B(l), d = (e) => {
+		var n = Lb(), r = R(n), i = z(r, !0), o = B(r, 2), s = L(o), l = L(s, !0), u = B(l), d = (e) => {
 			let n = /* @__PURE__ */ N(() => t().fold);
-			var r = Pb(), i = R(r), a = z(i, !0);
+			var r = Fb(), i = R(r), a = z(i, !0);
 			Ne(), V(() => {
 				Y(i, "aria-expanded", H(n).open), K(a, H(n).label);
 			}), Br("click", i, () => c(H(n).fold)), G(e, r);
@@ -19723,7 +19728,7 @@ function Lb(e, t) {
 		q(u, (e) => {
 			t().fold && e(d);
 		}), A(s), A(o), J(B(o, 2), 19, () => a.slice(2), (e) => e.label, (e, n, r) => {
-			var i = Fb(), a = z(i, !0);
+			var i = Ib(), a = z(i, !0);
 			V(() => K(a, t().cells[H(r)])), G(e, i);
 		}), V(() => {
 			K(i, t().agent), Ti(s, 1, yi(t().name.className)), K(l, t().fold ? `${t().name.text} (` : t().name.text);
@@ -19751,7 +19756,7 @@ function Lb(e, t) {
 			sub: (e) => e.sub,
 			group: (e) => e.group,
 			get heading() {
-				return jb;
+				return Mb;
 			},
 			get intro() {
 				return H(i);
@@ -19765,32 +19770,32 @@ function Lb(e, t) {
 Vr(["click"]);
 //#endregion
 //#region src/components/UsageTable.svelte
-var Rb = /* @__PURE__ */ U([[
+var zb = /* @__PURE__ */ U([[
 	"h3",
 	null,
 	" "
-]]), zb = /* @__PURE__ */ U([[
+]]), Bb = /* @__PURE__ */ U([[
 	"h2",
 	null,
 	" "
-]]), Bb = /* @__PURE__ */ U([[
+]]), Vb = /* @__PURE__ */ U([[
 	"p",
 	{ class: "note" },
 	" "
-]]), Vb = /* @__PURE__ */ U([[
+]]), Hb = /* @__PURE__ */ U([[
 	"span",
 	null,
 	,
 	" "
-]]), Hb = /* @__PURE__ */ U([[
+]]), Ub = /* @__PURE__ */ U([[
 	"span",
 	{ class: "effort" },
 	" "
-]]), Ub = /* @__PURE__ */ U([[
+]]), Wb = /* @__PURE__ */ U([[
 	"td",
 	{ class: "num" },
 	" "
-]]), Wb = /* @__PURE__ */ U([
+]]), Gb = /* @__PURE__ */ U([
 	[
 		"td",
 		null,
@@ -19798,12 +19803,12 @@ var Rb = /* @__PURE__ */ U([[
 	],
 	" ",
 	,
-], 1), Gb = /* @__PURE__ */ U([[
+], 1), Kb = /* @__PURE__ */ U([[
 	"section",
 	{ class: "card" },
 	,
 ]]);
-function Kb(e, t) {
+function qb(e, t) {
 	j(t, !0);
 	let n = (e) => {
 		var n = W(), o = R(n), c = (e) => {
@@ -19847,12 +19852,12 @@ function Kb(e, t) {
 		}), G(e, n);
 	}, r = (e) => {
 		var n = W(), r = R(n), i = (e) => {
-			var n = Rb(), r = z(n, !0);
+			var n = zb(), r = z(n, !0);
 			V(() => {
 				Y(n, "id", `${t.id ?? ""}-title`), K(r, t.title);
 			}), G(e, n);
 		}, a = (e) => {
-			var n = zb(), r = z(n, !0);
+			var n = Bb(), r = z(n, !0);
 			V(() => {
 				Y(n, "id", `${t.id ?? ""}-title`), K(r, t.title);
 			}), G(e, n);
@@ -19861,18 +19866,18 @@ function Kb(e, t) {
 			o() ? e(i) : e(a, -1);
 		}), G(e, n);
 	}, i = (e) => {
-		var n = Bb(), r = z(n, !0);
+		var n = Vb(), r = z(n, !0);
 		V(() => K(r, t.note)), G(e, n);
 	}, a = (e, t = b) => {
-		var n = Wb(), r = R(n), i = L(r), a = (e) => {
-			var n = Vb(), r = L(n);
+		var n = Gb(), r = R(n), i = L(r), a = (e) => {
+			var n = Hb(), r = L(n);
 			Mc(r, { get fill() {
 				return t().swatch;
 			} });
 			var i = B(r, 1, !0);
 			A(n), V(() => K(i, t().name)), G(e, n);
 		}, o = (e) => {
-			var n = Hb(), r = z(n, !0);
+			var n = Ub(), r = z(n, !0);
 			V(() => K(r, t().name)), G(e, n);
 		}, s = (e) => {
 			var n = Jr();
@@ -19881,14 +19886,14 @@ function Kb(e, t) {
 		q(i, (e) => {
 			t().kind === "model" ? e(a) : t().kind === "effort" ? e(o, 1) : e(s, -1);
 		}), A(r), J(B(r, 2), 19, () => H(c), (e) => e.label, (e, n, r) => {
-			var i = Ub(), a = z(i, !0);
+			var i = Wb(), a = z(i, !0);
 			V(() => K(a, t().cells[H(r)])), G(e, i);
 		}), G(e, n);
 	}, o = $i(t, "inline", 3, !1), s = $i(t, "pagerKey", 19, () => t.id), c = /* @__PURE__ */ N(() => qd(t.nameLabel).slice(1));
 	var l = W(), u = R(l), d = (e) => {
 		n(e);
 	}, f = (e) => {
-		var r = Gb(), i = L(r);
+		var r = Kb(), i = L(r);
 		n(i), A(r), V(() => Y(r, "aria-labelledby", `${t.id ?? ""}-title`)), G(e, r);
 	};
 	q(u, (e) => {
@@ -19897,11 +19902,11 @@ function Kb(e, t) {
 }
 //#endregion
 //#region src/components/SessionView.svelte
-var qb = /* @__PURE__ */ U([[
+var Jb = /* @__PURE__ */ U([[
 	"div",
 	{ class: "prompt" },
 	" "
-]]), Jb = /* @__PURE__ */ U([[
+]]), Yb = /* @__PURE__ */ U([[
 	"div",
 	{
 		class: "kpis session-kpis",
@@ -19909,7 +19914,7 @@ var qb = /* @__PURE__ */ U([[
 		"aria-label": "Time and lines changed"
 	},
 	,
-]]), Yb = /* @__PURE__ */ U([[
+]]), Xb = /* @__PURE__ */ U([[
 	"section",
 	{
 		id: "drilldown",
@@ -19994,7 +19999,7 @@ var qb = /* @__PURE__ */ U([[
 	" ",
 	,
 ]]);
-function Xb(e, t) {
+function Zb(e, t) {
 	j(t, !0);
 	let { payload: n, hype: r } = as(), i = /* @__PURE__ */ N(() => n.session), a = /* @__PURE__ */ N(() => H(i) ? Yd(H(i).models, H(i).model_effort, aa(H(i).models.map((e) => e.model))) : []), o = /* @__PURE__ */ N(() => H(i) ? Jd(H(i).skills, (e) => e.skill) : []), s = /* @__PURE__ */ N(() => H(i) ? Jd(H(i).mcp_servers, (e) => e.mcp_server) : []), c = /* @__PURE__ */ N(() => H(i) ? Hu(H(i).api_errors) : []);
 	function l(e) {
@@ -20006,19 +20011,19 @@ function Xb(e, t) {
 		let t = /* @__PURE__ */ N(() => H(i).session_id), n = /* @__PURE__ */ N(() => H(i).runtime);
 		var l = W();
 		ai(R(l), () => H(t), (e) => {
-			var l = Yb(), u = L(l), d = z(L(u), !0);
+			var l = Xb(), u = L(l), d = z(L(u), !0);
 			Ne(4), A(u);
 			var f = B(u, 2), p = (e) => {
-				var t = qb(), n = z(t, !0);
+				var t = Jb(), n = z(t, !0);
 				V(() => K(n, H(i).prompt)), G(e, t);
 			};
 			q(f, (e) => {
 				H(i).prompt && e(p);
 			});
 			var m = B(f, 2), h = z(m, !0), g = B(m, 2);
-			Ab(g, {});
+			jb(g, {});
 			var _ = B(g, 2);
-			ob(L(_), {
+			sb(L(_), {
 				get totals() {
 					return H(i);
 				},
@@ -20034,13 +20039,13 @@ function Xb(e, t) {
 				}
 			}), A(_);
 			var v = B(_, 2), y = (e) => {
-				var t = Jb(), r = L(t);
+				var t = Yb(), r = L(t);
 				{
 					let e = /* @__PURE__ */ N(() => Gd(H(n).source)), t = /* @__PURE__ */ N(() => Kd({
 						cost: H(i).cost,
 						runtime: H(n)
 					}));
-					cb(r, {
+					lb(r, {
 						get runtime() {
 							return H(n);
 						},
@@ -20058,7 +20063,7 @@ function Xb(e, t) {
 				H(n) && e(y);
 			});
 			var b = B(v, 2);
-			Tb(b, {});
+			Eb(b, {});
 			var x = B(b, 2);
 			Af(x, {});
 			var S = B(x, 2);
@@ -20066,7 +20071,7 @@ function Xb(e, t) {
 			var ee = B(S, 2);
 			{
 				let e = /* @__PURE__ */ N(() => r("By model"));
-				Kb(ee, {
+				qb(ee, {
 					inline: !0,
 					id: "session-models",
 					get title() {
@@ -20092,7 +20097,7 @@ function Xb(e, t) {
 				}
 			});
 			var w = B(C, 2), te = (e) => {
-				Lb(e, {
+				Rb(e, {
 					get agents() {
 						return H(i).agents;
 					},
@@ -20105,7 +20110,7 @@ function Xb(e, t) {
 				H(i).transcript || e(te);
 			});
 			var ne = B(w, 2), re = (e) => {
-				Zy(e, {});
+				Qy(e, {});
 			};
 			q(ne, (e) => {
 				H(i).transcript && e(re);
@@ -20113,7 +20118,7 @@ function Xb(e, t) {
 			var ie = B(ne, 2), T = L(ie), ae = L(T);
 			{
 				let e = /* @__PURE__ */ N(() => r("By skill"));
-				Kb(ae, {
+				qb(ae, {
 					inline: !0,
 					id: "session-skills",
 					get title() {
@@ -20133,7 +20138,7 @@ function Xb(e, t) {
 			var E = B(T, 2), oe = L(E);
 			{
 				let e = /* @__PURE__ */ N(() => r("By MCP server"));
-				Kb(oe, {
+				qb(oe, {
 					inline: !0,
 					id: "session-mcp-servers",
 					get title() {
@@ -20169,7 +20174,7 @@ function Xb(e, t) {
 				});
 			}
 			var se = B(D, 2), ce = (e) => {
-				Lb(e, {
+				Rb(e, {
 					get agents() {
 						return H(i).agents;
 					},
@@ -20182,7 +20187,7 @@ function Xb(e, t) {
 				H(i).transcript && e(ce);
 			});
 			var le = B(se, 2), ue = (e) => {
-				Zy(e, {});
+				Qy(e, {});
 			};
 			q(le, (e) => {
 				H(i).transcript || e(ue);
@@ -20200,19 +20205,19 @@ function Xb(e, t) {
 }
 //#endregion
 //#region src/components/SummaryTiles.svelte
-var Zb = /* @__PURE__ */ U([[
+var Qb = /* @__PURE__ */ U([[
 	"div",
 	{ class: "empty" },
 	" "
 ]]);
-function Qb(e, t) {
+function $b(e, t) {
 	j(t, !0);
 	let { payload: n } = as(), r = /* @__PURE__ */ N(() => n.summary);
 	var i = W(), a = R(i), o = (e) => {
 		var n = W(), i = R(n), a = (e) => {
 			{
 				let t = /* @__PURE__ */ N(() => Id(H(r)));
-				ob(e, {
+				sb(e, {
 					get totals() {
 						return H(r).totals;
 					},
@@ -20233,7 +20238,7 @@ function Qb(e, t) {
 		}, o = (e) => {
 			{
 				let t = /* @__PURE__ */ N(() => Wd(H(r).runtime.sessions));
-				cb(e, {
+				lb(e, {
 					get runtime() {
 						return H(r).runtime;
 					},
@@ -20250,7 +20255,7 @@ function Qb(e, t) {
 			t.rows === "kpis" ? e(a) : e(o, -1);
 		}), G(e, n);
 	}, s = (e) => {
-		var t = Zb(), r = z(t, !0);
+		var t = Qb(), r = z(t, !0);
 		V(() => K(r, n.summaryFailed ? "Could not load the summary." : "Loading…")), G(e, t);
 	};
 	q(a, (e) => {
@@ -20259,7 +20264,7 @@ function Qb(e, t) {
 }
 //#endregion
 //#region src/components/ThemePicker.svelte
-var $b = /* @__PURE__ */ U([[
+var ex = /* @__PURE__ */ U([[
 	"label",
 	{ class: "theme-picker" },
 	[
@@ -20309,13 +20314,13 @@ var $b = /* @__PURE__ */ U([[
 		]
 	]
 ]]);
-function ex(e, t) {
+function tx(e, t) {
 	j(t, !0);
 	let { preferences: n } = as();
 	function r(e) {
 		n.theme = e === "auto" ? null : e;
 	}
-	var i = $b(), a = B(L(i), 2), o = L(a);
+	var i = ex(), a = B(L(i), 2), o = L(a);
 	o.value = o.__value = "auto";
 	var s = B(o);
 	s.value = s.__value = "light";
@@ -20335,7 +20340,7 @@ function ex(e, t) {
 Vr(["change"]);
 //#endregion
 //#region src/components/UsageTables.svelte
-var tx = /* @__PURE__ */ U([
+var nx = /* @__PURE__ */ U([
 	[
 		"div",
 		{ class: "grid-2 stack" },
@@ -20354,13 +20359,13 @@ var tx = /* @__PURE__ */ U([
 		,
 	]
 ], 1);
-function nx(e, t) {
+function rx(e, t) {
 	j(t, !0);
 	let { payload: n, hype: r } = as(), i = /* @__PURE__ */ N(() => n.summary), a = /* @__PURE__ */ N(() => H(i) ? Jd(H(i).agent_type, (e) => e.agent_type) : null), o = /* @__PURE__ */ N(() => H(i) ? aa([...new Set(H(i).day_model.map((e) => e.model))]) : null), s = /* @__PURE__ */ N(() => H(i) && H(o) ? Yd(H(i).model, H(i).model_effort, H(o)) : null), c = /* @__PURE__ */ N(() => H(i) ? Jd(H(i).project, (e) => e.project) : null), l = /* @__PURE__ */ N(() => H(i) ? Jd(H(i).skill, (e) => e.skill) : null), u = /* @__PURE__ */ N(() => H(i) ? Jd(H(i).mcp_server, (e) => e.mcp_server) : null);
-	var d = tx(), f = R(d), p = L(f);
+	var d = nx(), f = R(d), p = L(f);
 	{
 		let e = /* @__PURE__ */ N(() => r("By agent type"));
-		Kb(p, {
+		qb(p, {
 			id: "by-agent",
 			get title() {
 				return H(e);
@@ -20375,7 +20380,7 @@ function nx(e, t) {
 	var m = B(p, 2);
 	{
 		let e = /* @__PURE__ */ N(() => r("By model"));
-		Kb(m, {
+		qb(m, {
 			id: "by-model",
 			get title() {
 				return H(e);
@@ -20391,7 +20396,7 @@ function nx(e, t) {
 	var h = B(f, 2);
 	{
 		let e = /* @__PURE__ */ N(() => r("By project"));
-		Kb(h, {
+		qb(h, {
 			id: "by-project",
 			get title() {
 				return H(e);
@@ -20406,7 +20411,7 @@ function nx(e, t) {
 	var g = B(h, 2), _ = L(g);
 	{
 		let e = /* @__PURE__ */ N(() => r("By skill"));
-		Kb(_, {
+		qb(_, {
 			id: "by-skill",
 			get title() {
 				return H(e);
@@ -20422,7 +20427,7 @@ function nx(e, t) {
 	var v = B(_, 2);
 	{
 		let e = /* @__PURE__ */ N(() => r("By MCP server"));
-		Kb(v, {
+		qb(v, {
 			id: "by-mcp-server",
 			get title() {
 				return H(e);
@@ -20439,7 +20444,7 @@ function nx(e, t) {
 }
 //#endregion
 //#region src/components/App.svelte
-var rx = /* @__PURE__ */ U([
+var ix = /* @__PURE__ */ U([
 	[
 		"header",
 		null,
@@ -20563,7 +20568,7 @@ var rx = /* @__PURE__ */ U([
 		" "
 	]
 ], 1);
-function ix(e, t) {
+function ax(e, t) {
 	j(t, !0);
 	let n = $i(t, "app", 19, () => new is()), r = $i(t, "loaderOptions", 19, () => ({}));
 	os(n());
@@ -20578,24 +20583,24 @@ function ix(e, t) {
 			delete t.theme;
 		};
 	};
-	var u = rx();
+	var u = ix();
 	zr("visibilitychange", mn, () => c.visibilityChanged()), gi(mn, () => l), zr("hashchange", pn, () => c.hashChanged());
 	var d = R(u), f = L(d), p = z(f, !0), m = B(f, 2), h = z(m, !0), g = B(m, 4), _ = z(g, !0);
-	ex(B(g, 2), {}), A(d);
+	tx(B(g, 2), {}), A(d);
 	var v = B(d, 2);
 	Qs(v, { get messages() {
 		return n().messages;
 	} });
 	var y = B(v, 2);
-	Xb(L(y), {}), A(y);
+	Zb(L(y), {}), A(y);
 	var b = B(y, 2);
 	ku(L(b), {}), A(b);
 	var x = B(b, 2);
 	let S;
 	var ee = L(x);
-	Qb(L(ee), { rows: "kpis" }), A(ee);
+	$b(L(ee), { rows: "kpis" }), A(ee);
 	var C = B(ee, 2);
-	Qb(L(C), { rows: "runtime" }), A(C);
+	$b(L(C), { rows: "runtime" }), A(C);
 	var w = B(C, 2);
 	eu(L(w), {}), A(w);
 	var te = B(w, 2);
@@ -20607,7 +20612,7 @@ function ix(e, t) {
 	var ie = B(re, 2);
 	pd(L(ie), {}), A(ie);
 	var T = B(ie, 2);
-	nx(L(T), {}), A(T);
+	rx(L(T), {}), A(T);
 	var ae = B(T, 2);
 	xd(L(ae), {}), A(ae), A(x);
 	var E = z(B(x, 2), !0);
@@ -20622,7 +20627,7 @@ function ix(e, t) {
 }
 //#endregion
 //#region src/main.ts
-var ax = document.querySelector("main");
-if (!ax) throw Error("The page has no <main> to mount the app on");
-$r(ix, { target: ax });
+var ox = document.querySelector("main");
+if (!ox) throw Error("The page has no <main> to mount the app on");
+$r(ax, { target: ox });
 //#endregion

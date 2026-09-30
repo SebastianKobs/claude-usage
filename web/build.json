@@ -71,7 +71,7 @@
     "web/src/lib/limits.ts": "1a49596a587d98caa09ff6028df4d32b7c6b95354671735152651fe0414491d0",
     "web/src/lib/live.ts": "c47e01bf43760e2a125a3d3b25bb3b4a4fec5157fbfbc0945ab71beb2bbd331f",
     "web/src/lib/loader.ts": "e9bde8dc867b1bae76d1fedd7177c751670f4764d64401ef6dfd3ae6a4c75e85",
-    "web/src/lib/markup.ts": "30e6cea31f998a7c61dfd077fca7a5dada34163a143fba7fcf093aefcc167779",
+    "web/src/lib/markup.ts": "988b94969605f501ff7e2d1dbeb532e67bc1d0acea31cc59b0694084612f0e2d",
     "web/src/lib/opening.ts": "a88ceed4e028873b66fee5fde3d07bc8455f4994218d0c95ce5c54aec8c056d8",
     "web/src/lib/page.ts": "32cd0703c5460fd06e547f7d6ff449ebf69a2739ffb9463abfed89dcc7c5bc3e",
     "web/src/lib/paging.svelte.ts": "ad39efa52f0ceef853454ce7ebdde1bdcb6a6332c5f92ffcdcce81ccd279b196",
@@ -88,12 +88,12 @@
     "web/src/lib/trend.ts": "ae38d2ff93617b24da1d6f5be5edd445513925d2248253f762bbc2537e28ae62",
     "web/src/lib/usage.ts": "fda8412ff9237fdd59c17f13a039688a56aa643f36f42fcc67f744e6b8ebd0c8",
     "web/src/main.ts": "4506cbc283fcd25b48c611a5cbdb6f474b73bbb48ba32cd59a11c1163ddeb3d8",
-    "web/svelte.config.js": "3e0d2411358605a176fc80eee6b368d3c2f71fba851cdc4ce4123f193c049337",
+    "web/svelte.config.js": "ae0419e50da9a27b55fba71fe33dfecaf71ed84f90b5ec2277a7132ff5411d2b",
     "web/tsconfig.json": "2601049b254d943443bd30ee2824029ad0867d0e385e992840025450b61dc515",
     "web/vite.config.ts": "ca872345989b0ff2d7615516a6f109f5c002f77de0fc0f5cb1c9088cf2425fe5"
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "3c525a4396da2826db8d4a28b199cc76422a91de952802ae471d7e3caeb749ce",
-    "claude_usage/static/js/app.js": "a982fb4876e79cbfa064ffb40a38098887c2a7e83218fadbc36868cf6f64541b"
+    "claude_usage/static/js/app.js": "8cbe7f4ad268cea09c47b1325c233d76a444f2d870ec3fc0e2d02228402a581b"
   }
 }

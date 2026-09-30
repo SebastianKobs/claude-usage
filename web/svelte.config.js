@@ -6,7 +6,7 @@ export default {
     // legacy components (Testing Library does).
     runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true),
     // Templates built as DOM trees, not HTML strings: html mode creates a Trusted Types policy of its
-    // own, which the page's CSP won't allow.
+    // own, which the page's CSP doesn't name.
     fragments: 'tree',
   },
 };

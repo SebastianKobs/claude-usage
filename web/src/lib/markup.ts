@@ -1,12 +1,26 @@
 // The two places markup goes into the page, and the only two: highlight.js's output for a code block, and Claude's
 // answers and the user's prompts as markdown (marked's HTML after DOMPurify). Both are attachments on the element that
-// holds them. A test counts the places where a string becomes markup in the page's sources.
+// holds them. A test counts the places where a string becomes markup in the page's sources. The page's CSP accepts
+// markup only from two Trusted Types policies: DOMPurify's own (`dompurify`) and `highlight` below.
 
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/common';
 import { marked } from 'marked';
 import type { Attachment } from 'svelte/attachments';
 import { fenceLanguage } from './entries';
+
+/** The part of the browser's `trustedTypes` used here; the project's types don't load the global ones. */
+interface TrustedTypes {
+  createPolicy(name: string, rules: { createHTML: (html: string) => string }): { createHTML(html: string): unknown };
+}
+
+// Under the CSP's `require-trusted-types-for 'script'` a string can't be put into an element as markup. This policy
+// hands highlight.js's output over as it is, which is safe only because that output escapes the text it is given (<,
+// >, & and quotes) and adds nothing but spans with classes: a test runs it against the real library. Without Trusted
+// Types (a test's DOM) there is no policy and the string goes in as it is.
+const highlightPolicy = (globalThis as { trustedTypes?: TrustedTypes }).trustedTypes?.createPolicy('highlight', {
+  createHTML: (html) => html,
+});
 
 /** Whether `language` is one highlight.js knows. */
 export function highlightable(language: string | null | undefined): language is string {
@@ -17,7 +31,8 @@ export function highlightable(language: string | null | undefined): language is 
  *  given (<, >, & and quotes), and its spans only carry classes. */
 function highlightInto(node: HTMLElement, code: string, language: string | null | undefined): void {
   if (highlightable(language)) {
-    node.innerHTML = hljs.highlight(code, { language, ignoreIllegals: true }).value;
+    const { value } = hljs.highlight(code, { language, ignoreIllegals: true });
+    node.innerHTML = (highlightPolicy?.createHTML(value) ?? value) as string;
   } else {
     node.textContent = code;
   }
@@ -78,11 +93,13 @@ export function markdownAvailable(): boolean {
 export function renderMarkdown(text: string, breaks: boolean): Node[] | null {
   if (!setup()) return null;
   const container = document.createElement('div');
+  // DOMPurify's TrustedHTML, from its own policy, is what the CSP lets in as markup
   container.innerHTML = DOMPurify.sanitize(marked.parse(text, { gfm: true, breaks, async: false }), {
     ALLOWED_TAGS: TAGS,
     ALLOWED_ATTR: ATTRIBUTES,
     ALLOWED_URI_REGEXP: LINKS,
-  });
+    RETURN_TRUSTED_TYPE: true,
+  }) as unknown as string;
   for (const code of container.querySelectorAll('pre > code')) {
     const name = code.className.match(/\blanguage-([\w+-]+)/)?.[1];
     const block = document.createElement('code');

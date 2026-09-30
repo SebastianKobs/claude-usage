@@ -323,6 +323,20 @@ class DashboardTest(ServerCase):
                 with self.subTest(path=path, external=external):
                     self.assertNotIn(external, body)
 
+    def test_the_policy_allows_no_style_attribute_and_no_untrusted_markup(self):
+        # styles are set through the CSSOM, which a CSP doesn't block; markup only through the two named policies
+        _, headers, _ = self.get("/")
+        directives = [part.strip() for part in headers["Content-Security-Policy"].split(";")]
+        self.assertIn("style-src 'self'", directives)
+        self.assertIn("require-trusted-types-for 'script'", directives)
+        self.assertIn("trusted-types dompurify highlight", directives)
+        self.assertNotIn("unsafe-inline", headers["Content-Security-Policy"])
+        self.assertNotIn("unsafe-eval", headers["Content-Security-Policy"])
+
+    def test_the_page_has_no_style_attribute_or_inline_script(self):
+        _, _, body = self.get("/")
+        self.assertNotRegex(body.decode("utf-8"), r"(?i)\sstyle\s*=|<style\b|<script(?![^>]*\ssrc=)")
+
     def test_the_markdown_renderer_sanitizer_and_highlighter_are_in_the_bundle(self):
         self.assertIn(BUNDLE, self.page_assets())
         _, _, body = self.get(BUNDLE)

@@ -171,7 +171,8 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
                              line, a call's usage badge and its chips and hints to compact (used by the components)
   src/lib/markup.ts          the two places a string becomes markup: highlight.js's output (`highlight`, an attachment)
                              and Claude's answers as sanitized markdown (`markdown`, an attachment), on highlight.js,
-                             marked and DOMPurify from npm
+                             marked and DOMPurify from npm, each through a Trusted Types policy (`highlight`, and
+                             DOMPurify's own) which the CSP names
   src/lib/http.ts            `fetchJson`: the server's JSON, or the reason it gave
   src/lib/opening.ts         opening and closing the session view (`opening`, an attachment): the page's other sections
                              step aside, focus goes to the heading, closing returns focus and scroll to the link
@@ -505,8 +506,11 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     - On a Windows drive (WSL's drvfs without `metadata`, found in /proc/self/mounts: `permissionless_mount`) chmod
       does nothing, so the fix is a mount option. A heuristic: ACLs, hard links elsewhere and the names in an open
       folder aren't counted.
-  - The page is served with a strict CSP: no inline scripts or stylesheets, only style attributes. JSON is
-    `no-store`.
+  - The page is served with a strict CSP: no inline scripts, stylesheets or style attributes (the components set
+    colors and sizes with `style:`, through the CSSOM, which a CSP doesn't block), and Trusted Types
+    (`require-trusted-types-for 'script'; trusted-types dompurify highlight`): a string can't be assigned to
+    `innerHTML`, and the bundle creates only those two policies (`test_web.py` counts them). A new style attribute, a
+    `<Child --x>` prop or another raw-HTML place breaks the page, not only a test. JSON is `no-store`.
   - Only files under `static/css` and `static/js` are served, a list fixed at start: a new one needs a restart.
   - Each request scans at most every 5 s, behind one lock. A failed scan (no projects folder, a locked store)
     or a skipped file doesn't fail the request: the stored history is served with `scan_errors`, and new errors
@@ -826,12 +830,15 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     starts at the first page, and the pager joins the heading past the controls (`table-filters`).
   - All data goes into the DOM as text. Two exceptions, both in `web/src/lib/markup.ts` (a test counts them):
     - `highlightInto()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans
-      with classes.
+      with classes, through the `highlight` policy (it hands the string over as it is: that is what the escaping
+      allows).
     - `renderMarkdown()` inserts Claude's answers and the user's prompts (line breaks kept; a slash command shown as
-      typed, a whole-JSON prompt highlighted) as marked's HTML after DOMPurify. That keeps only `TAGS` and
-      `ATTRIBUTES`: no images, styles, forms or event attributes, `class` only as `language-*` on `code`, and links
-      only to http, https and mailto, opened with `noopener noreferrer`. `markup.test.ts` checks it in jsdom, with the
-      real libraries, against scripts, `onerror`, `javascript:` and `data:` links, `<style>`, forms and classes.
+      typed, a whole-JSON prompt highlighted) as marked's HTML after DOMPurify, which hands over a TrustedHTML from its
+      own policy (`RETURN_TRUSTED_TYPE`). That keeps only `TAGS` and `ATTRIBUTES`: no images, styles, forms or event
+      attributes, `class` only as `language-*` on `code`, and links only to http, https and mailto, opened with
+      `noopener noreferrer`. `markup.test.ts` checks it in jsdom, with the real libraries, against scripts, `onerror`,
+      `javascript:` and `data:` links, `<style>`, forms and classes; `markup.trusted.test.ts` runs them against a
+      stand-in for the enforcement (a string for `innerHTML` throws).
   - highlight.js (11.11.2, `highlight.js/lib/common`, BSD-3), marked (18.0.14, MIT) and DOMPurify (3.4.16, MPL-2.0 or
     Apache-2.0) are npm packages in `web/package.json`, exact versions, built into the bundle (their licenses are in
     `app-licenses.md`); nothing is fetched and no file of theirs is served. To update: bump them, check
