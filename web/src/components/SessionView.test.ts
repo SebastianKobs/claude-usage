@@ -2,8 +2,18 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import type { SessionDetail, Waiting } from '../lib/api';
-import { agent, apiErrorEvent, gauge, live, liveSession, sessionDetail, sessionRuntime, usage } from '../lib/fixtures';
+import type { SecretAccess, SessionDetail, Waiting } from '../lib/api';
+import {
+  agent,
+  apiErrorEvent,
+  gauge,
+  live,
+  liveSession,
+  secretAccess,
+  sessionDetail,
+  sessionRuntime,
+  usage,
+} from '../lib/fixtures';
 import { tablePages } from '../lib/paging.svelte';
 import { payload, setPayload } from '../lib/payload.svelte';
 import { preferences } from '../lib/prefs.svelte';
@@ -290,43 +300,70 @@ describe('the tile rows', () => {
   });
 });
 
+describe('the secret accesses', () => {
+  const accesses = (...severities: SecretAccess['severity'][]) =>
+    severities.map((severity, index) => secretAccess({ severity, path: `place-${index}` }));
+
+  test('come after the tile rows and before the gauge', () => {
+    render(SessionView);
+    setPayload({ session: fullSession({ live: true, current: gauge(), secret_accesses: accesses('medium') }) });
+    const card = document.getElementById('secret-alert') as HTMLElement;
+    expect(card.previousElementSibling).toBe(screen.getByRole('group', { name: 'Time and lines changed' }));
+    expect(card.nextElementSibling).toBe(document.getElementById('current-gauge'));
+  });
+
+  test('leave nothing in the view for a session without any', () => {
+    render(SessionView);
+    setPayload({ session: fullSession({ live: true, current: gauge() }) });
+    expect(document.getElementById('secret-alert')).toBeNull();
+    const group = screen.getByRole('group', { name: 'Time and lines changed' });
+    expect(group.nextElementSibling).toBe(document.getElementById('current-gauge'));
+  });
+
+  test('stay folded open or shut through a refresh, and start folded again in another session', async () => {
+    const user = userEvent.setup();
+    render(SessionView);
+    setPayload({ session: fullSession({ secret_accesses: accesses('medium') }) });
+    await user.click(screen.getByRole('button', { name: 'Show them' }));
+    setPayload({ session: fullSession({ secret_accesses: accesses('medium', 'low') }) });
+    expect(screen.getByRole('button', { name: 'Hide them' })).toHaveAttribute('aria-expanded', 'true');
+    setPayload({ session: fullSession({ session_id: 'other', secret_accesses: accesses('medium') }) });
+    expect(screen.getByRole('button', { name: 'Show them' })).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
 describe('the gauge', () => {
-  test('follows the secrets slot and the tile rows, and comes before the `#session-top` slot', () => {
+  test('follows the tile rows and comes before the `#session-top` slot', () => {
     render(SessionView);
     setPayload({ session: fullSession({ live: true, current: gauge() }) });
     const gaugeCard = document.getElementById('current-gauge') as HTMLElement;
     const group = screen.getByRole('group', { name: 'Time and lines changed' });
-    const secrets = document.getElementById('session-secrets') as HTMLElement;
-    expect(secrets.previousElementSibling).toBe(group);
-    expect(secrets.nextElementSibling).toBe(gaugeCard);
+    expect(gaugeCard.previousElementSibling).toBe(group);
     expect(gaugeCard.nextElementSibling).toBe(document.getElementById('session-top'));
   });
 
-  test('leaves nothing between the slots for a session without a gauge', () => {
+  test('leaves nothing between the tile rows and the slot for a session without a gauge', () => {
     render(SessionView);
     setPayload({ session: fullSession() });
     expect(document.getElementById('current-gauge')).toBeNull();
-    expect(document.getElementById('session-secrets')?.nextElementSibling).toBe(
-      document.getElementById('session-top'),
-    );
+    const group = screen.getByRole('group', { name: 'Time and lines changed' });
+    expect(group.nextElementSibling).toBe(document.getElementById('session-top'));
   });
 });
 
 describe('the slots for the old scripts', () => {
   const ids = () => [...document.querySelectorAll('.legacy-slot')].map((slot) => slot.id);
 
-  test('are four empty divs, in order between the tile rows, the tables and the end', () => {
+  test('are three empty divs, in order between the tile rows, the tables and the end', () => {
     render(SessionView);
     setPayload({ session: fullSession() });
-    expect(ids()).toEqual(['session-secrets', 'session-top', 'session-mid', 'session-end']);
+    expect(ids()).toEqual(['session-top', 'session-mid', 'session-end']);
     for (const slot of document.querySelectorAll('.legacy-slot')) {
       expect(slot.tagName).toBe('DIV');
       expect(slot).toBeEmptyDOMElement();
     }
     const top = document.getElementById('session-top') as HTMLElement;
-    const secrets = document.getElementById('session-secrets') as HTMLElement;
-    expect(secrets.previousElementSibling).toBe(screen.getByRole('group', { name: 'Time and lines changed' }));
-    expect(top.previousElementSibling).toBe(secrets);
+    expect(top.previousElementSibling).toBe(screen.getByRole('group', { name: 'Time and lines changed' }));
     expect(top.nextElementSibling).toBe(document.getElementById('session-models-title'));
     const mid = document.getElementById('session-mid') as HTMLElement;
     const agentsTable = screen.getByRole('table', { name: 'Main thread and subagents' });

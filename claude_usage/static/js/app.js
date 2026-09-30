@@ -7703,12 +7703,259 @@ function xf(e, t) {
 	U(e, i), D();
 }
 //#endregion
+//#region src/lib/secrets.ts
+function Sf(e) {
+	let t = (e.secret_accesses ?? []).map((e) => e.severity);
+	return t.length ? t.includes("high") ? "alert" : t.includes("medium") ? "warning" : "quiet" : null;
+}
+function Cf(e) {
+	return e.via ? `in ${e.via}, which it ran` : null;
+}
+var wf = {
+	sent: "sent to a service",
+	returned: "into the conversation",
+	empty: "nothing returned",
+	pending: "no result yet"
+};
+function Tf(e) {
+	return e.reach === "error" ? e.sent ? "error, the service may have got it" : "error: blocked or failed" : e.reach === "returned" && e.test ? "into the conversation, likely a test" : Object.hasOwn(wf, e.reach) ? wf[e.reach] ?? "" : "no result yet";
+}
+var Ef = [
+	{ label: "Time" },
+	{ label: "Agent" },
+	{ label: "Tool" },
+	{ label: "Path" },
+	{
+		label: "Matched",
+		title: "the [secrets] pattern it matched"
+	},
+	{ label: "Reached" }
+];
+function Df(e) {
+	let t = /* @__PURE__ */ new Map();
+	return e.map((e) => {
+		let n = [
+			e.time,
+			e.agent_id,
+			e.tool,
+			e.path,
+			e.pattern
+		].join("\0"), r = t.get(n) ?? 0;
+		return t.set(n, r + 1), {
+			key: r ? `${n}\u0000${r}` : n,
+			time: Z(e.time),
+			agent: e.agent_type,
+			tool: e.tool,
+			path: e.path,
+			via: Cf(e),
+			pattern: e.pattern,
+			severity: e.severity || "medium",
+			reach: Tf(e)
+		};
+	});
+}
+function Of(e) {
+	return e.length === 1 ? "1 call" : `${Y(e.length)} calls`;
+}
+function kf(e, t) {
+	return e.filter((e) => e.severity === t).length;
+}
+function Af(e) {
+	return `Possible secret access: ${Of(e)} (${Y(kf(e, "high"))} sent out)`;
+}
+function jf(e, t) {
+	let n = `${Of(e)} named a possible secret location`;
+	if (t === "warning") return `${n}, ${Y(kf(e, "medium"))} of them returned a result or may still`;
+	let r = kf(e, "low-medium");
+	return r ? `${n}, ${Y(r)} returned a result only in a likely test` : `${n}, none reached anything`;
+}
+//#endregion
+//#region src/components/SecretAccesses.svelte
+var Mf = (e, t = v) => {
+	var n = Ff(), r = P(n), i = F(r, !0), a = I(r, 2), o = F(a, !0), s = I(a, 2), c = F(s, !0), l = I(s, 2), u = N(l), d = F(u, !0), f = I(u), p = (e) => {
+		var n = Pf(), r = F(n, !0);
+		L(() => W(r, t().via)), U(e, n);
+	};
+	G(f, (e) => {
+		t().via && e(p);
+	}), T(l);
+	var m = I(l, 2), h = F(m, !0), g = I(m, 2), _ = N(g), y = I(_, 1, !0);
+	T(g), L(() => {
+		W(i, t().time), W(o, t().agent), W(c, t().tool), W(d, t().path), W(h, t().pattern), si(_, 1, `secret-severity secret-severity-${t().severity ?? ""}`), W(y, t().reach);
+	}), U(e, n);
+}, Nf = /* @__PURE__ */ V([[
+	"div",
+	null,
+	[
+		"p",
+		null,
+		"These tool calls named a path that matches a possible secret location. Most severe first: sent to an MCP server or\n      a network program, then returned into the conversation (and so to the API), then blocked, failed or empty. Check\n      that each was meant."
+	],
+	" ",
+	,
+	" ",
+	[
+		"p",
+		{ class: "muted" },
+		"Matched against [secrets] patterns in the config: file tools by their path, commands by their words with the\n      variables they set (quoted text only where it holds a path), and scripts this transcript wrote and then ran by\n      their text. Variables from earlier calls and other scripts are unknown. A result counts whatever it held: a test\n      that only mentions a path returns output too."
+	]
+]]), Pf = /* @__PURE__ */ V([[
+	"span",
+	{ class: "secret-via" },
+	" "
+]]), Ff = /* @__PURE__ */ V([
+	[
+		"td",
+		null,
+		" "
+	],
+	" ",
+	[
+		"td",
+		null,
+		" "
+	],
+	" ",
+	[
+		"td",
+		null,
+		" "
+	],
+	" ",
+	[
+		"td",
+		null,
+		[
+			"span",
+			{ class: "secret-path" },
+			" "
+		],
+		,
+	],
+	" ",
+	[
+		"td",
+		null,
+		" "
+	],
+	" ",
+	[
+		"td",
+		null,
+		["span", { "aria-hidden": "true" }],
+		" "
+	]
+], 1), If = /* @__PURE__ */ V([[
+	"div",
+	{
+		id: "secret-alert",
+		class: "card secret-alert",
+		role: "region",
+		"aria-labelledby": "secret-alert-title"
+	},
+	[
+		"h3",
+		{
+			class: "secret-alert-head",
+			id: "secret-alert-title"
+		},
+		[
+			"span",
+			{
+				class: "secret-alert-icon",
+				"aria-hidden": "true"
+			},
+			"!"
+		],
+		" "
+	],
+	" ",
+	,
+]]), Lf = /* @__PURE__ */ V([[
+	"div",
+	{
+		id: "secret-alert",
+		role: "region",
+		"aria-labelledby": "secret-alert-title"
+	},
+	[
+		"div",
+		{ class: "secret-folded-line" },
+		[
+			"h3",
+			{
+				class: "secret-folded-head",
+				id: "secret-alert-title"
+			},
+			" "
+		],
+		" ",
+		[
+			"button",
+			{
+				type: "button",
+				class: "link-button"
+			},
+			" "
+		]
+	],
+	" ",
+	,
+]]);
+function Rf(e, t) {
+	E(t, !0);
+	let n = (e, t = v, n = v) => {
+		var r = Nf(), i = I(N(r), 2);
+		{
+			let e = /* @__PURE__ */ k(() => `${t()}-secrets`);
+			Vs(i, {
+				get key() {
+					return B(e);
+				},
+				get columns() {
+					return Ef;
+				},
+				get rows() {
+					return B(s);
+				},
+				rowKey: (e) => e.key,
+				get cells() {
+					return Mf;
+				},
+				labelledby: "secret-alert-title"
+			});
+		}
+		je(2), T(r), L(() => q(r, "hidden", n())), U(e, r);
+	}, r = /* @__PURE__ */ k(() => Q.session), i = /* @__PURE__ */ k(() => B(r)?.secret_accesses ?? []), a = /* @__PURE__ */ k(() => B(r) ? Sf(B(r)) : null), o = /* @__PURE__ */ k(() => B(a) === "warning" || B(a) === "quiet" ? B(a) : null), s = /* @__PURE__ */ k(() => Df(B(i))), c = /* @__PURE__ */ j(!1);
+	var l = H(), u = P(l), d = (e) => {
+		var t = If(), a = N(t), o = I(N(a), 1, !0);
+		T(a);
+		var s = I(a, 2);
+		n(s, () => B(r).session_id, () => !1), T(t), L((e) => W(o, e), [() => Af(B(i))]), U(e, t);
+	}, f = (e) => {
+		var t = Lf(), a = N(t), s = N(a), l = F(s, !0), u = I(s, 2), d = F(u, !0);
+		T(a);
+		var f = I(a, 2);
+		n(f, () => B(r).session_id, () => !B(c)), T(t), L((e) => {
+			si(t, 1, ti([
+				"card",
+				"secret-folded",
+				B(o) === "warning" && "secret-warning"
+			])), W(l, e), q(u, "aria-expanded", B(c)), W(d, B(c) ? "Hide them" : "Show them");
+		}, [() => jf(B(i), B(o))]), yr("click", u, () => M(c, !B(c))), U(e, t);
+	};
+	G(u, (e) => {
+		B(r) && B(a) === "alert" ? e(d) : B(r) && B(o) && e(f, 1);
+	}), U(e, l), D();
+}
+br(["click"]);
+//#endregion
 //#region src/components/SessionWaits.svelte
-var Sf = /* @__PURE__ */ V([[
+var zf = /* @__PURE__ */ V([[
 	"strong",
 	null,
 	" "
-]]), Cf = /* @__PURE__ */ V([[
+]]), Bf = /* @__PURE__ */ V([[
 	"span",
 	null,
 	[
@@ -7717,7 +7964,7 @@ var Sf = /* @__PURE__ */ V([[
 		" "
 	],
 	" "
-]]), wf = /* @__PURE__ */ V([[
+]]), Vf = /* @__PURE__ */ V([[
 	"p",
 	{ class: "wait-line" },
 	[
@@ -7727,24 +7974,24 @@ var Sf = /* @__PURE__ */ V([[
 	],
 	" ",
 	,
-]]), Tf = /* @__PURE__ */ V([["div", {
+]]), Hf = /* @__PURE__ */ V([["div", {
 	class: "card wait-notice",
 	role: "status"
 }]]);
-function Ef(e, t) {
+function Uf(e, t) {
 	E(t, !0);
 	let n = /* @__PURE__ */ k(() => Q.session), r = /* @__PURE__ */ k(() => B(n) ? Xc(B(n), Q.live?.sessions ?? []) : []);
-	var i = Tf();
+	var i = Hf();
 	K(i, 21, () => B(r), (e) => e.session_id, (e, t) => {
-		var n = wf(), r = N(n);
+		var n = Vf(), r = N(n);
 		rl(N(r), { get badge() {
 			return B(t);
 		} }), T(r);
 		var i = I(r, 2), a = (e) => {
-			var n = Sf(), r = F(n);
+			var n = zf(), r = F(n);
 			L((e, t) => W(r, `This session is ${e ?? ""}${t ?? ""}`), [() => B(t).text.charAt(0).toLowerCase(), () => B(t).text.slice(1)]), U(e, n);
 		}, o = (e) => {
-			var n = Cf(), r = N(n), i = F(r, !0), a = I(r);
+			var n = Bf(), r = N(n), i = F(r, !0), a = I(r);
 			T(n), L((e) => {
 				q(r, "href", e), W(i, B(t).title), W(a, `: ${B(t).text ?? ""}`);
 			}, [() => gc(B(t))]), U(e, n);
@@ -7756,32 +8003,32 @@ function Ef(e, t) {
 }
 //#endregion
 //#region src/components/UsageTable.svelte
-var Df = /* @__PURE__ */ V([[
+var Wf = /* @__PURE__ */ V([[
 	"h3",
 	null,
 	" "
-]]), Of = /* @__PURE__ */ V([[
+]]), Gf = /* @__PURE__ */ V([[
 	"h2",
 	null,
 	" "
-]]), kf = /* @__PURE__ */ V([[
+]]), Kf = /* @__PURE__ */ V([[
 	"p",
 	{ class: "note" },
 	" "
-]]), Af = /* @__PURE__ */ V([[
+]]), qf = /* @__PURE__ */ V([[
 	"span",
 	null,
 	,
 	" "
-]]), jf = /* @__PURE__ */ V([[
+]]), Jf = /* @__PURE__ */ V([[
 	"span",
 	{ class: "effort" },
 	" "
-]]), Mf = /* @__PURE__ */ V([[
+]]), Yf = /* @__PURE__ */ V([[
 	"td",
 	{ class: "num" },
 	" "
-]]), Nf = /* @__PURE__ */ V([
+]]), Xf = /* @__PURE__ */ V([
 	[
 		"td",
 		null,
@@ -7789,12 +8036,12 @@ var Df = /* @__PURE__ */ V([[
 	],
 	" ",
 	,
-], 1), Pf = /* @__PURE__ */ V([[
+], 1), Zf = /* @__PURE__ */ V([[
 	"section",
 	{ class: "card" },
 	,
 ]]);
-function Ff(e, t) {
+function Qf(e, t) {
 	E(t, !0);
 	let n = (e) => {
 		var n = H(), o = P(n), c = (e) => {
@@ -7838,12 +8085,12 @@ function Ff(e, t) {
 		}), U(e, n);
 	}, r = (e) => {
 		var n = H(), r = P(n), i = (e) => {
-			var n = Df(), r = F(n, !0);
+			var n = Wf(), r = F(n, !0);
 			L(() => {
 				q(n, "id", `${t.id ?? ""}-title`), W(r, t.title);
 			}), U(e, n);
 		}, a = (e) => {
-			var n = Of(), r = F(n, !0);
+			var n = Gf(), r = F(n, !0);
 			L(() => {
 				q(n, "id", `${t.id ?? ""}-title`), W(r, t.title);
 			}), U(e, n);
@@ -7852,18 +8099,18 @@ function Ff(e, t) {
 			o() ? e(i) : e(a, -1);
 		}), U(e, n);
 	}, i = (e) => {
-		var n = kf(), r = F(n, !0);
+		var n = Kf(), r = F(n, !0);
 		L(() => W(r, t.note)), U(e, n);
 	}, a = (e, t = v) => {
-		var n = Nf(), r = P(n), i = N(r), a = (e) => {
-			var n = Af(), r = N(n);
+		var n = Xf(), r = P(n), i = N(r), a = (e) => {
+			var n = qf(), r = N(n);
 			xs(r, { get fill() {
 				return t().swatch;
 			} });
 			var i = I(r, 1, !0);
 			T(n), L(() => W(i, t().name)), U(e, n);
 		}, o = (e) => {
-			var n = jf(), r = F(n, !0);
+			var n = Jf(), r = F(n, !0);
 			L(() => W(r, t().name)), U(e, n);
 		}, s = (e) => {
 			var n = Dr();
@@ -7872,14 +8119,14 @@ function Ff(e, t) {
 		G(i, (e) => {
 			t().kind === "model" ? e(a) : t().kind === "effort" ? e(o, 1) : e(s, -1);
 		}), T(r), K(I(r, 2), 19, () => B(c), (e) => e.label, (e, n, r) => {
-			var i = Mf(), a = F(i, !0);
+			var i = Yf(), a = F(i, !0);
 			L(() => W(a, t().cells[B(r)])), U(e, i);
 		}), U(e, n);
 	}, o = Ni(t, "inline", 3, !1), s = Ni(t, "pagerKey", 19, () => t.id), c = /* @__PURE__ */ k(() => wd(t.nameLabel).slice(1));
 	var l = H(), u = P(l), d = (e) => {
 		n(e);
 	}, f = (e) => {
-		var r = Pf(), i = N(r);
+		var r = Zf(), i = N(r);
 		n(i), T(r), L(() => q(r, "aria-labelledby", `${t.id ?? ""}-title`)), U(e, r);
 	};
 	G(u, (e) => {
@@ -7888,11 +8135,11 @@ function Ff(e, t) {
 }
 //#endregion
 //#region src/components/SessionView.svelte
-var If = /* @__PURE__ */ V([[
+var $f = /* @__PURE__ */ V([[
 	"div",
 	{ class: "prompt" },
 	" "
-]]), Lf = /* @__PURE__ */ V([[
+]]), ep = /* @__PURE__ */ V([[
 	"div",
 	{
 		class: "kpis session-kpis",
@@ -7900,7 +8147,7 @@ var If = /* @__PURE__ */ V([[
 		"aria-label": "Time and lines changed"
 	},
 	,
-]]), Rf = /* @__PURE__ */ V([[
+]]), tp = /* @__PURE__ */ V([[
 	"section",
 	{
 		id: "drilldown",
@@ -7949,10 +8196,7 @@ var If = /* @__PURE__ */ V([[
 	" ",
 	,
 	" ",
-	["div", {
-		class: "legacy-slot",
-		id: "session-secrets"
-	}],
+	,
 	" ",
 	,
 	" ",
@@ -7993,7 +8237,7 @@ var If = /* @__PURE__ */ V([[
 		id: "session-end"
 	}]
 ]]);
-function zf(e, t) {
+function np(e, t) {
 	E(t, !0);
 	let n = /* @__PURE__ */ k(() => Q.session), r = /* @__PURE__ */ k(() => B(n) ? Ed(B(n).models, B(n).model_effort, Ki(B(n).models.map((e) => e.model))) : []), i = /* @__PURE__ */ k(() => B(n) ? Td(B(n).skills, (e) => e.skill) : []), a = /* @__PURE__ */ k(() => B(n) ? Td(B(n).mcp_servers, (e) => e.mcp_server) : []), o = /* @__PURE__ */ k(() => B(n) ? yu(B(n).api_errors) : []);
 	function s(e) {
@@ -8005,17 +8249,17 @@ function zf(e, t) {
 		let t = /* @__PURE__ */ k(() => B(n).session_id), s = /* @__PURE__ */ k(() => B(n).runtime);
 		var c = H();
 		Hr(P(c), () => B(t), (e) => {
-			var c = Rf(), l = N(c), u = F(N(l), !0);
+			var c = tp(), l = N(c), u = F(N(l), !0);
 			je(4), T(l);
 			var d = I(l, 2), f = (e) => {
-				var t = If(), r = F(t, !0);
+				var t = $f(), r = F(t, !0);
 				L(() => W(r, B(n).prompt)), U(e, t);
 			};
 			G(d, (e) => {
 				B(n).prompt && e(f);
 			});
 			var p = I(d, 2), m = F(p, !0), h = I(p, 2);
-			Ef(h, {});
+			Uf(h, {});
 			var g = I(h, 2);
 			yf(N(g), {
 				get totals() {
@@ -8033,7 +8277,7 @@ function zf(e, t) {
 				}
 			}), T(g);
 			var _ = I(g, 2), v = (e) => {
-				var t = Lf(), r = N(t);
+				var t = ep(), r = N(t);
 				{
 					let e = /* @__PURE__ */ k(() => Sd(B(s).source)), t = /* @__PURE__ */ k(() => Cd({
 						cost: B(n).cost,
@@ -8056,12 +8300,14 @@ function zf(e, t) {
 			G(_, (e) => {
 				B(s) && e(v);
 			});
-			var y = I(_, 4);
-			sf(y, {});
-			var ee = I(y, 4);
+			var y = I(_, 2);
+			Rf(y, {});
+			var ee = I(y, 2);
+			sf(ee, {});
+			var b = I(ee, 4);
 			{
 				let e = /* @__PURE__ */ k(() => $("By model"));
-				Ff(ee, {
+				Qf(b, {
 					inline: !0,
 					id: "session-models",
 					get title() {
@@ -8077,8 +8323,8 @@ function zf(e, t) {
 					}
 				});
 			}
-			var b = I(ee, 2);
-			Pd(b, {
+			var x = I(b, 2);
+			Pd(x, {
 				get agents() {
 					return B(n).agents;
 				},
@@ -8086,10 +8332,10 @@ function zf(e, t) {
 					return `${B(t) ?? ""}-agents`;
 				}
 			});
-			var x = I(b, 4), S = N(x), te = N(S);
+			var S = I(x, 4), te = N(S), ne = N(te);
 			{
 				let e = /* @__PURE__ */ k(() => $("By skill"));
-				Ff(te, {
+				Qf(ne, {
 					inline: !0,
 					id: "session-skills",
 					get title() {
@@ -8105,11 +8351,11 @@ function zf(e, t) {
 					}
 				});
 			}
-			T(S);
-			var ne = I(S, 2), re = N(ne);
+			T(te);
+			var re = I(te, 2), ie = N(re);
 			{
 				let e = /* @__PURE__ */ k(() => $("By MCP server"));
-				Ff(re, {
+				Qf(ie, {
 					inline: !0,
 					id: "session-mcp-servers",
 					get title() {
@@ -8125,11 +8371,11 @@ function zf(e, t) {
 					}
 				});
 			}
-			T(ne), T(x);
-			var ie = I(x, 2);
+			T(re), T(S);
+			var ae = I(S, 2);
 			{
 				let e = /* @__PURE__ */ k(() => $("Rate limits and API errors"));
-				wu(ie, {
+				wu(ae, {
 					id: "session-api-errors",
 					get title() {
 						return B(e);
@@ -8158,12 +8404,12 @@ function zf(e, t) {
 }
 //#endregion
 //#region src/components/SummaryTiles.svelte
-var Bf = /* @__PURE__ */ V([[
+var rp = /* @__PURE__ */ V([[
 	"div",
 	{ class: "empty" },
 	" "
 ]]);
-function Vf(e, t) {
+function ip(e, t) {
 	E(t, !0);
 	let n = /* @__PURE__ */ k(() => Q.summary);
 	var r = H(), i = P(r), a = (e) => {
@@ -8208,7 +8454,7 @@ function Vf(e, t) {
 			t.rows === "kpis" ? e(a) : e(o, -1);
 		}), U(e, r);
 	}, o = (e) => {
-		var t = Bf(), n = F(t, !0);
+		var t = rp(), n = F(t, !0);
 		L(() => W(n, Q.summaryFailed ? "Could not load the summary." : "Loading…")), U(e, t);
 	};
 	G(i, (e) => {
@@ -8217,7 +8463,7 @@ function Vf(e, t) {
 }
 //#endregion
 //#region src/components/UsageTables.svelte
-var Hf = /* @__PURE__ */ V([
+var ap = /* @__PURE__ */ V([
 	[
 		"div",
 		{ class: "grid-2 stack" },
@@ -8236,13 +8482,13 @@ var Hf = /* @__PURE__ */ V([
 		,
 	]
 ], 1);
-function Uf(e, t) {
+function op(e, t) {
 	E(t, !0);
 	let n = /* @__PURE__ */ k(() => Q.summary), r = /* @__PURE__ */ k(() => B(n) ? Td(B(n).agent_type, (e) => e.agent_type) : null), i = /* @__PURE__ */ k(() => B(n) ? Ki([...new Set(B(n).day_model.map((e) => e.model))]) : null), a = /* @__PURE__ */ k(() => B(n) && B(i) ? Ed(B(n).model, B(n).model_effort, B(i)) : null), o = /* @__PURE__ */ k(() => B(n) ? Td(B(n).project, (e) => e.project) : null), s = /* @__PURE__ */ k(() => B(n) ? Td(B(n).skill, (e) => e.skill) : null), c = /* @__PURE__ */ k(() => B(n) ? Td(B(n).mcp_server, (e) => e.mcp_server) : null);
-	var l = Hf(), u = P(l), d = N(u);
+	var l = ap(), u = P(l), d = N(u);
 	{
 		let e = /* @__PURE__ */ k(() => $("By agent type"));
-		Ff(d, {
+		Qf(d, {
 			id: "by-agent",
 			get title() {
 				return B(e);
@@ -8257,7 +8503,7 @@ function Uf(e, t) {
 	var f = I(d, 2);
 	{
 		let e = /* @__PURE__ */ k(() => $("By model"));
-		Ff(f, {
+		Qf(f, {
 			id: "by-model",
 			get title() {
 				return B(e);
@@ -8273,7 +8519,7 @@ function Uf(e, t) {
 	var p = I(u, 2);
 	{
 		let e = /* @__PURE__ */ k(() => $("By project"));
-		Ff(p, {
+		Qf(p, {
 			id: "by-project",
 			get title() {
 				return B(e);
@@ -8288,7 +8534,7 @@ function Uf(e, t) {
 	var m = I(p, 2), h = N(m);
 	{
 		let e = /* @__PURE__ */ k(() => $("By skill"));
-		Ff(h, {
+		Qf(h, {
 			id: "by-skill",
 			get title() {
 				return B(e);
@@ -8304,7 +8550,7 @@ function Uf(e, t) {
 	var g = I(h, 2);
 	{
 		let e = /* @__PURE__ */ k(() => $("By MCP server"));
-		Ff(g, {
+		Qf(g, {
 			id: "by-mcp-server",
 			get title() {
 				return B(e);
@@ -8321,7 +8567,7 @@ function Uf(e, t) {
 }
 //#endregion
 //#region src/lib/banner.svelte.ts
-var Wf = class {
+var sp = class {
 	#e = new vo();
 	#t = /* @__PURE__ */ k(() => [...this.#e.values()].filter((e, t, n) => n.indexOf(e) === t).join("\n"));
 	get text() {
@@ -8333,34 +8579,10 @@ var Wf = class {
 	has(e) {
 		return this.#e.has(e);
 	}
-}, Gf = /* @__PURE__ */ t({
-	secretReach: () => Yf,
-	secretTone: () => Kf,
-	secretVia: () => qf
-});
-function Kf(e) {
-	let t = (e.secret_accesses ?? []).map((e) => e.severity);
-	return t.length ? t.includes("high") ? "alert" : t.includes("medium") ? "warning" : "quiet" : null;
-}
-function qf(e) {
-	return e.via ? `in ${e.via}, which it ran` : null;
-}
-var Jf = {
-	sent: "sent to a service",
-	returned: "into the conversation",
-	empty: "nothing returned",
-	pending: "no result yet"
-};
-function Yf(e) {
-	return e.reach === "error" ? e.sent ? "error, the service may have got it" : "error: blocked or failed" : e.reach === "returned" && e.test ? "into the conversation, likely a test" : Object.hasOwn(Jf, e.reach) ? Jf[e.reach] ?? "" : "no result yet";
-}
-//#endregion
-//#region src/legacy.svelte.ts
-var Xf = [
+}, cp = [
 	ca,
 	Wi,
 	Mc,
-	Gf,
 	Hc,
 	So,
 	Ea,
@@ -8372,8 +8594,8 @@ var Xf = [
 	Gl,
 	$l
 ];
-function Zf(e) {
-	let t = new Wf(), n = e.document.getElementById("error");
+function lp(e) {
+	let t = new sp(), n = e.document.getElementById("error");
 	if (!n?.parentElement) throw Error("The page has no #error placeholder for the banner");
 	let r = ["kpis", "runtime"].map((t) => {
 		let n = e.document.getElementById(t);
@@ -8406,20 +8628,20 @@ function Zf(e) {
 		props: { messages: t }
 	});
 	n.remove();
-	let m = r.map(({ id: e, container: t }) => Pr(Vf, {
+	let m = r.map(({ id: e, container: t }) => Pr(ip, {
 		target: t,
 		props: { rows: e }
-	})), h = Pr(yl, { target: i }), g = Pr(Wl, { target: a }), _ = Pr(fc, { target: o }), v = Pr(jc, { target: s }), y = Pr(Gu, { target: c }), ee = Pr(Uf, { target: l }), b = Pr(td, { target: u }), x = Pr(ou, { target: d }), S = Pr(zf, { target: f });
+	})), h = Pr(yl, { target: i }), g = Pr(Wl, { target: a }), _ = Pr(fc, { target: o }), v = Pr(jc, { target: s }), y = Pr(Gu, { target: c }), ee = Pr(op, { target: l }), b = Pr(td, { target: u }), x = Pr(ou, { target: d }), S = Pr(np, { target: f });
 	return e.showError = (e, n) => {
 		t.show(e, n), At();
-	}, e.hasError = (e) => t.has(e), Object.assign(e, ...Xf), { stop() {
+	}, e.hasError = (e) => t.has(e), Object.assign(e, ...cp), { stop() {
 		Rr(p);
 		for (let e of m) Rr(e);
 		Rr(h), Rr(g), Rr(_), Rr(v), Rr(y), Rr(ee), Rr(b), Rr(x), Rr(S), Reflect.deleteProperty(e, "showError"), Reflect.deleteProperty(e, "hasError");
-		for (let t of Xf.flatMap((e) => Object.keys(e))) Reflect.deleteProperty(e, t);
+		for (let t of cp.flatMap((e) => Object.keys(e))) Reflect.deleteProperty(e, t);
 	} };
 }
 //#endregion
 //#region src/main.ts
-Zf(window);
+lp(window);
 //#endregion

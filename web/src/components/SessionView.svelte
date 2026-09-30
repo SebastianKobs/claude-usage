@@ -2,13 +2,13 @@
 @component
 The session view's frame, read from the page's payload: nothing without an open session. With one it is a card of the
 session's heading (with its close link), prompt and facts, what waits for the user, its tile rows, the gauge with the
-calls above it (`ContextGauge`), and its tables: usage by model, the main thread and subagents, by skill, by MCP server
-and the API errors. The parts that have not moved to components yet (the secret accesses, the context chart, the tools
-and the conversation) are drawn by the old scripts into four empty slots, `#session-secrets`, `#session-top`,
-`#session-mid` and `#session-end`, which stay the same nodes while the session's data is refreshed. Another session
-gets a new view (folds, slots and all), which takes the page over while it is there: the range's filters and summary
-step aside, focus goes to its heading, and closing it (the link or Escape, which clears the address's hash) puts the
-page back.
+calls above it (`ContextGauge`), the secret accesses (`SecretAccesses`, before the gauge), and its tables: usage by
+model, the main thread and subagents, by skill, by MCP server and the API errors. The parts that have not moved to
+components yet (the context chart, the tools and the conversation) are drawn by the old scripts into three empty slots,
+`#session-top`, `#session-mid` and `#session-end`, which stay the same nodes while the session's data is refreshed.
+Another session gets a new view (folds, slots and all), which takes the page over while it is there: the range's
+filters and summary step aside, focus goes to its heading, and closing it (the link or Escape, which clears the
+address's hash) puts the page back.
 -->
 <script lang="ts">
   import { modelSlots } from '../lib/colors';
@@ -25,6 +25,7 @@ page back.
   import EventsTable from './EventsTable.svelte';
   import KpiTiles from './KpiTiles.svelte';
   import RuntimeTiles from './RuntimeTiles.svelte';
+  import SecretAccesses from './SecretAccesses.svelte';
   import SessionWaits from './SessionWaits.svelte';
   import UsageTable from './UsageTable.svelte';
 
@@ -86,7 +87,7 @@ page back.
           />
         </div>
       {/if}
-      <div class="legacy-slot" id="session-secrets"></div>
+      <SecretAccesses />
       <ContextGauge />
       <div class="legacy-slot" id="session-top"></div>
       <UsageTable

@@ -24,7 +24,6 @@ import * as prefs from './lib/prefs.svelte';
 import * as rangeLib from './lib/range';
 import * as rangeState from './lib/range.svelte';
 import * as scroll from './lib/scroll';
-import * as secrets from './lib/secrets';
 import * as tables from './lib/tables';
 import * as themes from './lib/themes';
 
@@ -32,7 +31,6 @@ const MODULES = [
   format,
   colors,
   compact,
-  secrets,
   live,
   tables,
   charts,
@@ -104,7 +102,6 @@ test.each([
   ['formatters', format, 'money'],
   ['colors', colors, 'slotColor'],
   ['compacting helpers', compact, 'payoffTone'],
-  ['secrets helpers', secrets, 'secretTone'],
   ['live helpers', live, 'liveWaitBadge'],
   ['tables helpers', tables, 'pageWindow'],
   ['charts helpers', charts, 'niceMax'],
@@ -144,9 +141,8 @@ test('the colors answer as the old scripts call them', () => {
   expect(window.SLOT_COUNT).toBe(8);
 });
 
-test('the compacting, secrets and live helpers answer as the old scripts call them', () => {
+test('the compacting and live helpers answer as the old scripts call them', () => {
   expect(window.PAYOFF_WORDS.soon).toBe('Soon');
-  expect(window.secretReach({ reach: 'sent', sent: true, test: false })).toBe('sent to a service');
   const waiting = { kind: 'question', tool: 'AskUserQuestion', since: null, agent_type: null } as const;
   expect(window.waitChanged({ session_id: 's', waiting: null }, [{ session_id: 's', waiting }])).toBe(true);
 });
@@ -424,8 +420,7 @@ test('an open session is drawn into its container with the old scripts` slots, a
   window.setPayload({ session: sessionDetail() });
   const card = tilesOf('session-card');
   expect(card.querySelector('section#drilldown')).not.toBeNull();
-  expect(card.querySelectorAll('.legacy-slot')).toHaveLength(4);
-  expect(document.getElementById('session-secrets')).not.toBeNull();
+  expect(card.querySelectorAll('.legacy-slot')).toHaveLength(3);
   expect(document.getElementById('session-top')).not.toBeNull();
   bridged.stop();
   expect(card.children).toHaveLength(0);

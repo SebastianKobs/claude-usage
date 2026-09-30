@@ -12,6 +12,7 @@ import type {
   LiveSession,
   LiveSubagent,
   RuntimeTotals,
+  SecretAccess,
   SessionDetail,
   SessionGauge,
   SessionListItem,
@@ -224,6 +225,25 @@ export function sessionDetail(changes: Partial<SessionDetail> = {}): SessionDeta
     compaction_savings: null,
     transcript: false,
     secret_accesses: [],
+    ...changes,
+  };
+}
+
+/** A call that named a possible secret location: a Bash `cat` of an env file whose result came back. */
+export function secretAccess(changes: Partial<SecretAccess> = {}): SecretAccess {
+  return {
+    time: '2026-09-30T08:30:00.000Z',
+    tool: 'Bash',
+    path: '.env',
+    pattern: '.env',
+    error: false,
+    via: null,
+    sent: false,
+    test: false,
+    reach: 'returned',
+    severity: 'medium',
+    agent_type: 'main',
+    agent_id: null,
     ...changes,
   };
 }

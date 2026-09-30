@@ -104,7 +104,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/colors.ts          the by-model chart's model slots, effort order, shades and hatches, handed over the same way
   src/lib/compact.ts         when compacting pays off (`payoffTone` and its words), which call to compact or delegate
                              applies, a compaction's verdict and their sum; handed over the same way
-  src/lib/secrets.ts         how the secret accesses show: the card's tone, a path's script, how far a call got
+  src/lib/secrets.ts         how the secret accesses show: the card's tone and words, the table's columns and rows (a
+                             path's script, how far a call got; used by the component)
   src/lib/live.ts            the live cards' badges (waiting, secret, compacting now), the live list's words (its
                              window, the past day, the empty list) and what waits for the user
   src/lib/tables.ts          paging (page units, window and text), the sessions list's filter, count, columns and
@@ -159,9 +160,9 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              `RateLimits`, the usage tables: `UsageTable`, `UsageTables`, the sessions card:
                              `SessionsList`, the live sessions: `LiveSessions`, `LiveCard`, `LiveIcon`, the range
                              filter: `RangeFilter`, and the session view's frame: `SessionView` with `SessionWaits`,
-                             `AgentsTable` and `EventsTable`, and the gauge with the calls above it: `ContextGauge`,
-                             `CompactCall`, `DelegateCall`, which leaves four slots for the old scripts), each with
-                             its Testing Library test
+                             `AgentsTable` and `EventsTable`, the secret accesses: `SecretAccesses`, and the gauge with
+                             the calls above it: `ContextGauge`, `CompactCall`, `DelegateCall`, which leaves three
+                             slots for the old scripts), each with its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
@@ -560,13 +561,13 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       or the path it named matches `[secrets] test_patterns`, as a path from the record's `cwd`, which itself
       doesn't count) is `low-medium` instead, sorted after medium; every other reach stays as it is for a test. A
       heuristic: `cat .env && pytest` counts as a test too.
-    - The page shows them under the tiles, before the call to compact (`secretAccesses`), each row's reach in words
+    - The page shows them under the tiles, before the call to compact (`SecretAccesses`), each row's reach in words
       after a mark in `--hint-critical-edge`, `--hint-warning-edge`, `--series-1` (blue, low-medium) or
       `--text-secondary`, the table paged. By
       `secretTone`: with a high row (`alert`) the card is open, edged in `--status-critical`, its heading on the
-      critical wash with a `!` mark; else it is folded to a one-line summary with a Show button (`data-fold`, kept
-      across redraws), edged in `--hint-warning-edge` with a medium row (`warning`), a plain card with only low and
-      low-medium rows (`quiet`); nothing without one.
+      critical wash with a `!` mark; else it is folded to a one-line summary with a Show button (the component's own
+      state, kept across redraws), edged in `--hint-warning-edge` with a medium row (`warning`), a plain card with only
+      low and low-medium rows (`quiet`); nothing without one.
   - `/api/session/<id>/state` (`UsageApp.session_state`) is what a live card shows besides its totals: the main
     thread's gauge (`current`, as in `/api/session`) and how many calls of the transcripts still there named a
     possible secret location, by severity (counts only, never the paths), from the same readers, so a card costs what

@@ -25,38 +25,34 @@ import * as prefs from './lib/prefs.svelte';
 import * as rangeLib from './lib/range';
 import * as rangeState from './lib/range.svelte';
 import * as scroll from './lib/scroll';
-import * as secrets from './lib/secrets';
 import * as tables from './lib/tables';
 import * as themes from './lib/themes';
 
 // Typed from the modules themselves, so what Window declares can't drift from what the old scripts are handed. The
-// formatters are lib/format.ts (numbers, money, durations, days, hours, moments), the colors lib/colors.ts (the
-// chart palette's slots, models and effort shades), compacting lib/compact.ts (when compacting pays off, the call to
-// compact, the delegate hint, the verdict's tone and the compactions' sum), the secrets lib/secrets.ts (the secret
-// access tone, origin and reach words), the live cards lib/live.ts (their badges and what waits) and the tables
-// lib/tables.ts (paging, the sessions filter and count, the Tools table's rows, folds and labels, the conversation's
-// order) and the charts lib/charts.ts (scales and ticks, the time axis, the by-model series and stacks, the rate-limit
-// counts and windows, the cost bars' split), the themes lib/themes.ts (the themes and their wording) and the saved
-// preferences lib/prefs.svelte.ts (the theme, page size and conversation order, the theme's `hype` and footer copy),
-// the paging lib/paging.svelte.ts (the table pagers, mounted for the old scripts, and the page each table is on) and
-// scrolling lib/scroll.ts (keeping the reader's place while a view is redrawn), the page's payload
-// lib/payload.svelte.ts (the summary loaded, or that loading it failed: `setPayload` hands the old scripts' summary to
-// the components and draws at once: its `session` is the open session, null closing the view) and the page's range
-// lib/range.ts (the ranges on offer, the query a range becomes, the day the Daily range shows) and
+// formatters are lib/format.ts (numbers, money, durations, days, hours, moments), the colors lib/colors.ts (the chart
+// palette's slots, models and effort shades), compacting lib/compact.ts (when compacting pays off, the call to compact,
+// the delegate hint, the verdict's tone and the compactions' sum), the live cards lib/live.ts (their badges and what
+// waits) and the tables lib/tables.ts (paging, the sessions filter and count, the Tools table's rows, folds and labels,
+// the conversation's order) and the charts lib/charts.ts (scales and ticks, the time axis, the by-model series and
+// stacks, the rate-limit counts and windows, the cost bars' split), the themes lib/themes.ts (the themes and their
+// wording) and the saved preferences lib/prefs.svelte.ts (the theme, page size and conversation order, the theme's
+// `hype` and footer copy), the paging lib/paging.svelte.ts (the table pagers, mounted for the old scripts, and the page
+// each table is on) and scrolling lib/scroll.ts (keeping the reader's place while a view is redrawn), the page's
+// payload lib/payload.svelte.ts (the summary loaded, or that loading it failed: `setPayload` hands the old scripts'
+// summary to the components and draws at once: its `session` is the open session, null closing the view) and the page's
+// range lib/range.ts (the ranges on offer, the query a range becomes, the day the Daily range shows) and
 // lib/range.svelte.ts (`range`, the days and day shown as reactive state, which the old scripts reload the data on
-// through its `onchange`). `tablePages`,
-// `mountPager`, `payload` and the like reach the old scripts as globals, like everything else here. Their names must
-// stay apart: a shared one would be handed
-// over twice, the second silently winning. The overview's two tile rows, `#kpis` and `#runtime`, the live sessions,
-// `#live-card`, the over-time section, `#trend-card`, the by-model section, `#chart-card`, the cost-per-session
-// section, `#costly-card`, the rate-limits section, `#limits-card`, the usage tables, `#usage-cards`, the sessions
-// list, `#sessions-card`, the range filter, `#filters`, and the session view's frame, `#session-card`, are mounted
-// here from the payload, which `setPayload` sets. The old scripts fill what has not moved into the view's three
-// slots, `#session-top`, `#session-mid` and `#session-end`.
+// through its `onchange`). `tablePages`, `mountPager`, `payload` and the like reach the old scripts as globals, like
+// everything else here. Their names must stay apart: a shared one would be handed over twice, the second silently
+// winning. The overview's two tile rows, `#kpis` and `#runtime`, the live sessions, `#live-card`, the over-time
+// section, `#trend-card`, the by-model section, `#chart-card`, the cost-per-session section, `#costly-card`, the
+// rate-limits section, `#limits-card`, the usage tables, `#usage-cards`, the sessions list, `#sessions-card`, the range
+// filter, `#filters`, and the session view's frame, `#session-card`, are mounted here from the payload, which
+// `setPayload` sets. The old scripts fill what has not moved into the view's three slots, `#session-top`,
+// `#session-mid` and `#session-end`.
 type Formatters = typeof format;
 type Colors = typeof colors;
 type Compacting = typeof compact;
-type Secrets = typeof secrets;
 type Live = typeof live;
 type Tables = typeof tables;
 type Charts = typeof charts;
@@ -73,7 +69,6 @@ const MODULES = [
   format,
   colors,
   compact,
-  secrets,
   live,
   tables,
   charts,
@@ -91,7 +86,6 @@ declare global {
     extends Formatters,
       Colors,
       Compacting,
-      Secrets,
       Live,
       Tables,
       Charts,

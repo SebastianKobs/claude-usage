@@ -4,9 +4,9 @@
 // --- drilldown -----------------------------------------------------------------------------------------------
 
 // The view's frame is the SessionView component (web/src/components/SessionView.svelte), drawn from the payload: its
-// heading and facts, the waits, the tiles, the gauge with the calls above it (ContextGauge), and the model, agent,
-// skill, MCP server and API error tables. It leaves four empty slots, #session-secrets, #session-top, #session-mid and
-// #session-end, for the sections still drawn here.
+// heading and facts, the waits, the tiles, the secret accesses, the gauge with the calls above it (ContextGauge), and
+// the model, agent, skill, MCP server and API error tables. It leaves three empty slots, #session-top, #session-mid
+// and #session-end, for the sections still drawn here.
 // refresh: the same session drawn again with newer numbers, keeping what the reader had open (keptView)
 function renderDrilldown(detail, refresh = false) {
   const kept = refresh && document.getElementById("chat") ? keptView(document.getElementById("drilldown")) : null;
@@ -27,7 +27,6 @@ function renderDrilldown(detail, refresh = false) {
                              kept ? kept.chat : [chatSection(detail)]);
   setPayload({session: detail});
   const panel = document.getElementById("drilldown");
-  fill(document.getElementById("session-secrets"), secretAccesses(detail, key("secrets")));
   fill(document.getElementById("session-top"),
     el("div", {class: "chart-head"}, el("h3", {text: "Context per turn"}),
        el("span", {id: "context-note", class: "muted"}),
@@ -209,62 +208,6 @@ function contextPicker(detail) {
     renderContext(detail);
   });
   return select;
-}
-
-// Every call that named a possible secret location ([secrets] patterns, matched by the server), the most severe
-// first: the path as the call gave it, the pattern, and how far it got. Open as a warning that draws the eye while
-// one sent its input out (secretTone "alert"); else folded behind its heading, edged in the warning color while one
-// returned a result or may still, a plain card while each was blocked or returned nothing; nothing while none named
-// one.
-function secretAccesses(detail, pagerKey) {
-  const accesses = detail.secret_accesses || [];
-  const tone = secretTone(detail);
-  if (!tone) return null;
-  const head = el("tr", {}, el("th", {text: "Time"}), el("th", {text: "Agent"}), el("th", {text: "Tool"}),
-                  el("th", {text: "Path"}), el("th", {text: "Matched", title: "the [secrets] pattern it matched"}),
-                  el("th", {text: "Reached"}));
-  const rows = accesses.map(access => el("tr", {},
-    el("td", {text: when(access.time)}), el("td", {text: access.agent_type}), el("td", {text: access.tool}),
-    el("td", {}, el("span", {class: "secret-path", text: access.path}),
-       secretVia(access) ? el("span", {class: "secret-via", text: secretVia(access)}) : null),
-    el("td", {text: access.pattern}),
-    el("td", {}, el("span", {class: `secret-severity secret-severity-${access.severity || "medium"}`,
-                             "aria-hidden": "true"}),
-       secretReach(access))));
-  const calls = accesses.length === 1 ? "1 call" : `${whole(accesses.length)} calls`;
-  const count = severity => accesses.filter(access => access.severity === severity).length;
-  const body = el("div", {},
-    el("p", {text: "These tool calls named a path that matches a possible secret location. Most severe first: sent " +
-                   "to an MCP server or a network program, then returned into the conversation (and so to the API), " +
-                   "then blocked, failed or empty. Check that each was meant."}),
-    el("div", {class: "table-wrap"}, paged(pagerKey, el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows)))),
-    el("p", {class: "muted", text: "Matched against [secrets] patterns in the config: file tools by their path, " +
-      "commands by their words with the variables they set (quoted text only where it holds a path), and scripts " +
-      "this transcript wrote and then ran by their text. Variables from earlier calls and other scripts are " +
-      "unknown. A result counts whatever it held: a test that only mentions a path returns output too."}));
-  const region = attributes => ({id: "secret-alert", role: "region", "aria-labelledby": "secret-alert-title",
-                                  ...attributes});
-  if (tone === "alert") {
-    return el("div", region({class: "card secret-alert"}),
-      el("h3", {class: "secret-alert-head", id: "secret-alert-title"},
-         el("span", {class: "secret-alert-icon", "aria-hidden": "true", text: "!"}),
-         `Possible secret access: ${calls} (${whole(count("high"))} sent out)`),
-      body);
-  }
-  body.hidden = true;
-  const toggle = foldToggle("secret-accesses", "Show them", open => {
-    body.hidden = !open;
-    toggle.textContent = open ? "Hide them" : "Show them";
-  });
-  const tests = count("low-medium");
-  const summary = tone === "warning"
-    ? `${calls} named a possible secret location, ${whole(count("medium"))} of them returned a result or may still`
-    : tests ? `${calls} named a possible secret location, ${whole(tests)} returned a result only in a likely test`
-      : `${calls} named a possible secret location, none reached anything`;
-  return el("div", region({class: `card secret-folded${tone === "warning" ? " secret-warning" : ""}`}),
-    el("div", {class: "secret-folded-line"},
-       el("h3", {class: "secret-folded-head", id: "secret-alert-title", text: summary}), toggle),
-    body);
 }
 
 // the turn the chart puts a compaction before: the first turn after it

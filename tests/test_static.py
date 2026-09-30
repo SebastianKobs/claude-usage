@@ -347,14 +347,11 @@ class SecretAccessTest(unittest.TestCase):
         self.assertIsNone(run_function("secrets.ts", "secretVia", {"via": None}))
 
     def test_the_warning_comes_after_the_tiles_and_before_the_call_to_compact(self):
-        # the tiles and the call to compact (with the gauge) are the session view's components, which leaves the slot
-        # the warning is drawn into between them
+        # all three are the session view's components
         view = read(COMPONENTS / "SessionView.svelte")
-        self.assertLess(view.index("<RuntimeTiles"), view.index('id="session-secrets"'))
-        self.assertLess(view.index('id="session-secrets"'), view.index("<ContextGauge"))
+        self.assertLess(view.index("<RuntimeTiles"), view.index("<SecretAccesses"))
+        self.assertLess(view.index("<SecretAccesses"), view.index("<ContextGauge"))
         self.assertLess(view.index("<ContextGauge"), view.index('id="session-top"'))
-        render = function_body("drilldown.js", "renderDrilldown")
-        self.assertIn('fill(document.getElementById("session-secrets"), secretAccesses(detail', render)
 
     def test_the_warning_is_edged_in_the_critical_color(self):
         self.assertIn("var(--status-critical)", css_block(read(STATIC / "css" / "common.css"), ".secret-alert"))
@@ -669,7 +666,7 @@ class PagingTest(unittest.TestCase):
         self.assertRegex(module, r"export const PAGE_SIZES = \[10, 25, 50\];")
 
     def test_every_table_is_paged(self):
-        sites = {"tables.js": 1, "drilldown.js": 4, "chartkit.js": 1}
+        sites = {"tables.js": 1, "drilldown.js": 3, "chartkit.js": 1}
         for script, count in sites.items():
             with self.subTest(script=script):
                 self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)
