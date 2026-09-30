@@ -676,7 +676,7 @@ class PagingTest(unittest.TestCase):
         self.assertRegex(module, r"export const PAGE_SIZES = \[10, 25, 50\];")
 
     def test_every_table_is_paged(self):
-        sites = {"tables.js": 7, "drilldown.js": 9, "chartkit.js": 1, "figures.js": 1}
+        sites = {"tables.js": 2, "drilldown.js": 9, "chartkit.js": 1, "figures.js": 1}
         for script, count in sites.items():
             with self.subTest(script=script):
                 self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)

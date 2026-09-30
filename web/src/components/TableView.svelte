@@ -9,7 +9,8 @@ the page are drawn, none is hidden: unlike the old code's tables this one has no
 A table with a `heading` has the pager in a title row with it, right-aligned, where there is a pager (the heading alone,
 without a wrapper, where there is none: a flex row would stop its margin collapsing into the note's); `intro` (a note)
 follows. Without a heading the pager is the wrap's first child. With `empty` and no rows the wrap holds that text
-instead of the table.
+instead of the table. A `labelledby` names the table by the element with that id (the heading's, where it has one),
+and every heading cell has `scope="col"`.
 -->
 <script lang="ts" generics="Row">
   import type { Snippet } from 'svelte';
@@ -29,6 +30,7 @@ instead of the table.
     heading,
     intro,
     empty,
+    labelledby,
   }: {
     /** The pager's key: the page is kept under it, and the controls' ids are made of it (`pager-<key>-size`). */
     key: string;
@@ -52,6 +54,8 @@ instead of the table.
     intro?: Snippet;
     /** What to say instead of the table when there are no rows. */
     empty?: string;
+    /** The id of the element that names the table (its heading), for assistive technology. */
+    labelledby?: string;
   } = $props();
 
   const units = $derived(pageUnits(rows.map((row) => sub?.(row) ?? false)));
@@ -90,11 +94,11 @@ instead of the table.
   {#if rows.length === 0 && empty !== undefined}
     <div class="empty">{empty}</div>
   {:else}
-    <table>
+    <table aria-labelledby={labelledby}>
       <thead>
         <tr>
           {#each columns as column (column.label)}
-            <th class={column.numeric ? 'num' : undefined}>{column.label}</th>
+            <th scope="col" class={column.numeric ? 'num' : undefined}>{column.label}</th>
           {/each}
         </tr>
       </thead>

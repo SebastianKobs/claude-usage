@@ -75,6 +75,25 @@ describe('the table', () => {
   });
 });
 
+describe('the table name', () => {
+  test('every heading cell is a column heading by its scope', () => {
+    render(TableViewFixture, { rows: makeRows(3) });
+    const heads = screen.getAllByRole('columnheader');
+    expect(heads.map((head) => head.getAttribute('scope'))).toEqual(['col', 'col']);
+  });
+
+  test('a labelledby names the table by the element with that id, the heading', () => {
+    render(TableViewFixture, { rows: makeRows(3), withHeading: true, labelledby: 'bench-title' });
+    expect(screen.getByRole('table')).toHaveAttribute('aria-labelledby', 'bench-title');
+    expect(screen.getByRole('table', { name: 'Bench' })).toBeInTheDocument();
+  });
+
+  test('without one the table has no aria-labelledby', () => {
+    render(TableViewFixture, { rows: makeRows(3), withHeading: true });
+    expect(screen.getByRole('table')).not.toHaveAttribute('aria-labelledby');
+  });
+});
+
 describe('group rows', () => {
   test('a group row has the class group-row, the others none', () => {
     render(TableViewFixture, {

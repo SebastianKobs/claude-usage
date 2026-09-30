@@ -19,10 +19,12 @@
     "web/src/components/StatTile.svelte": "5ecd0138f05cfe87e68a69d64ec6a3478e04e1bd1dc141808a5d2e9fd2993b49",
     "web/src/components/SummaryTiles.svelte": "b125eb266c417c3ed3898f5d239bf2cbaebc2b1aa1f025ea5f201aec59637a51",
     "web/src/components/Swatch.svelte": "9fbd95c37c02f0d1ce1c6c27d9cb5efb32167f60456e1037a55d97d1e99e1028",
-    "web/src/components/TableView.svelte": "9a05053df9a538983990a6e4080c0501bc98b15fd0e85d49fd8a3bae96b726a5",
+    "web/src/components/TableView.svelte": "34eb241623278bafc0901508121af7e76ad54ad413834312deb90f97453505ca",
+    "web/src/components/UsageTable.svelte": "14ce2342191aa69f7686610684fdbba43729e118c761cfbaed68473444caf295",
+    "web/src/components/UsageTables.svelte": "cba57c97cff63ab91652f9f52ff246be7e1b1649aaf488c2c2015127fa676ff5",
     "web/src/components/XLabels.svelte": "3fa5052afc89d04d739c86128fb829419fafbfa5d1ec1775ee0279ab073fb3c5",
     "web/src/components/YAxis.svelte": "a45c8f9d24b1dda129393df88eb58ce4bc58ae38f1d9cc0f9292ff53ea410d07",
-    "web/src/legacy.svelte.ts": "201524c41b1e481c11b661cada43fd0820eebfa1085cae8dab31c87daa44bad1",
+    "web/src/legacy.svelte.ts": "4d7e474f3ea6edacd6b8c0726bb74080938d8b203eef706eabc997ad1dc3246f",
     "web/src/lib/banner.svelte.ts": "2bcc2747224c3bc55c4120fd47e17ad383527684826309e01cda94763bbb67e9",
     "web/src/lib/bymodel.ts": "1f1b26f6ad7515c3473fd90709b3fbdfc0410c5fcc7c406b5e62febabc3554cc",
     "web/src/lib/chartkit.ts": "0abc565531d389285a10e0d8017d1bad67f4acec851289b234dc7d382b1b879f",
@@ -43,6 +45,7 @@
     "web/src/lib/themes.ts": "ada0027dc8e18c4eb4227e0a4ed92d929de5d10384b097195b2897b612ed94d1",
     "web/src/lib/tiles.ts": "00e8a9c7419ad33b95ae5f55ec5ebaf5ac1a3476588be3c7f946dd5112c6aa06",
     "web/src/lib/trend.ts": "ae38d2ff93617b24da1d6f5be5edd445513925d2248253f762bbc2537e28ae62",
+    "web/src/lib/usage.ts": "fda8412ff9237fdd59c17f13a039688a56aa643f36f42fcc67f744e6b8ebd0c8",
     "web/src/main.ts": "829705d889cad3440c39035bd31f5c785930c1fd8edc1d34c6db390868e4cbc3",
     "web/svelte.config.js": "3e0d2411358605a176fc80eee6b368d3c2f71fba851cdc4ce4123f193c049337",
     "web/tsconfig.json": "2601049b254d943443bd30ee2824029ad0867d0e385e992840025450b61dc515",
@@ -50,6 +53,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "6d80e4fb7b0647d9b9a3ce6ffb2721afbd1d0e8a403c135068f9b3ac4a09b597",
-    "claude_usage/static/js/app.js": "f4e0fd161ab3bb0a2d63a861389c76871b6650cf48b607293af93f28bb0d7c0d"
+    "claude_usage/static/js/app.js": "545a389da4e132db623c98c79b4bad21f92eca5dc95a7e28127f3b9b771ff60f"
   }
 }

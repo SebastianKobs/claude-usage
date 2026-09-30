@@ -7,7 +7,7 @@ import * as charts from './lib/charts';
 import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
-import { apiErrorEvent, costlySession, summary } from './lib/fixtures';
+import { apiErrorEvent, costlySession, summary, usage } from './lib/fixtures';
 import * as live from './lib/live';
 import * as overview from './lib/overview.svelte';
 import * as paging from './lib/paging.svelte';
@@ -227,6 +227,17 @@ test('the rate-limits section is mounted in its container: a card, drawn from th
   expect(card.querySelectorAll('.legend > span')).toHaveLength(1);
 });
 
+test('the usage tables are mounted in their container: five headings, tables drawn from the payload', () => {
+  const container = tilesOf('usage-cards');
+  expect(container.querySelectorAll('section.card')).toHaveLength(5);
+  expect(container.querySelectorAll('h2')).toHaveLength(5);
+  expect(container.querySelector('table')).toBeNull();
+  window.setPayload({ summary: summary({ project: [{ project: 'shop', ...usage() }] }) });
+  expect(screen.getByRole('table', { name: 'By project' })).toBeInTheDocument();
+  expect(container).toContainElement(screen.getByRole('table', { name: 'By project' }));
+  expect(container.querySelectorAll('table')).toHaveLength(1);
+});
+
 test('a page without the tile containers fails loudly and mounts nothing', () => {
   bridged.stop();
   document.body.replaceChildren(pageBody());
@@ -277,6 +288,23 @@ test('a page without the rate-limits container fails loudly and mounts nothing',
   expect(document.getElementById('error')).not.toBeNull();
   expect(document.getElementById('kpis')?.children).toHaveLength(0);
   expect(document.getElementById('costly-card')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('a page without the usage-tables container fails loudly and mounts nothing', () => {
+  bridged.stop();
+  document.body.replaceChildren(pageBody());
+  document.getElementById('usage-cards')?.remove();
+  expect(() => bridge(window)).toThrow('The page has no #usage-cards container for the usage tables');
+  expect(document.getElementById('error')).not.toBeNull();
+  expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  expect(document.getElementById('limits-card')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('stopping takes the usage tables away too', () => {
+  bridged.stop();
+  expect(tilesOf('usage-cards').children).toHaveLength(0);
   bridged = { stop() {} };
 });
 

@@ -133,6 +133,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/limits.ts          the rate-limits section: the hits per day or hour, the columns' geometry and words, the
                              table view, the 5-hour windows' rows (models under each) and the latest errors' rows (used
                              by the component)
+  src/lib/usage.ts           the usage tables' rows: a name, the shared cells dearest first, and the by-model table's
+                             effort rows under each model with its swatch color (used by the components)
   src/lib/payload.svelte.ts  what the page has loaded, as reactive state (`payload`: the summary, or that loading it
                              failed), which the old scripts fill through `setPayload`
   src/lib/overview.svelte.ts the session view's tile rows, mounted for the old scripts (`mountSessionKpis`,
@@ -140,9 +142,10 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
                              `YAxis`, `XLabels`, `AreaLine`, `PointDot`, and the tiles: `StatTile`, `InputSplit`,
                              `KpiTiles`, `RuntimeTiles`, `SummaryTiles`; `ChartCard`, the section a chart lives in, with
-                             its table-view toggle; `TableView`, a paged table, its pager in an optional heading row;
-                             `OverTime`, `ByModel`, `CostPerSession`, `RateLimits`), each with its Testing Library
-                             test
+                             its table-view toggle; `TableView`, a paged table (`scope` on its headings, named by its
+                             heading), its pager in an optional heading row; `OverTime`, `ByModel`, `CostPerSession`,
+                             `RateLimits`, and the usage tables: `UsageTable`, `UsageTables`), each with its Testing
+                             Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)

@@ -1,4 +1,4 @@
-// The usage tables and the sessions list.
+// The sessions list, and the usage tables of the session view (the overview's are the UsageTables component).
 "use strict";
 
 // --- paging -------------------------------------------------------------------------------------------------
@@ -61,8 +61,6 @@ function placePager(node, pager) {
 
 // --- tables --------------------------------------------------------------------------------------------------
 
-function byCost(left, right) { return (right.cost ?? -1) - (left.cost ?? -1) || right.turns - left.turns; }
-
 function usageHead(nameHeader) {
   return el("tr", {}, el("th", {text: nameHeader}), el("th", {class: "num", text: "Turns"}),
             el("th", {class: "num", text: "Input"}), el("th", {class: "num", text: "Cache read %"}),
@@ -97,21 +95,6 @@ function modelEffortTable(models, modelEfforts, nameCell) {
     }
   }
   return el("table", {}, el("thead", {}, usageHead("Model")), el("tbody", {}, ...body));
-}
-
-function renderTables(summary) {
-  const slots = modelSlots([...new Set(summary.day_model.map(row => row.model))]);
-  document.getElementById("by-agent").replaceChildren(paged("by-agent", usageTable(summary.agent_type,
-    "Agent type", row => row.agent_type)));
-  document.getElementById("by-model").replaceChildren(paged("by-model", modelEffortTable(summary.model,
-    summary.model_effort, row => el("span", {}, el("span", {class: "swatch", style: `background:${slotColor(slots.has(row.model) ? slots.get(row.model) : null)}`}), row.model))));
-  document.getElementById("by-project").replaceChildren(paged("by-project", usageTable(summary.project, "Project",
-    row => row.project)));
-  document.getElementById("by-skill").replaceChildren(paged("by-skill", usageTable(summary.skill, "Skill",
-    row => row.skill, "No turns attributed to a skill in this range.")));
-  document.getElementById("by-mcp-server").replaceChildren(paged("by-mcp-server", usageTable(summary.mcp_server,
-    "MCP server", row => row.mcp_server, "No turns attributed to an MCP server in this range.")));
-  renderSessions(summary.sessions);
 }
 
 // --- the sessions list: every session of the range, filtered by project and words ----------------------------

@@ -27,6 +27,7 @@ text for no rows. Only the tests use it.
     withHeading = false,
     withIntro = false,
     empty,
+    labelledby,
   }: {
     rows: BenchRow[];
     tableKey?: string;
@@ -36,6 +37,7 @@ text for no rows. Only the tests use it.
     withHeading?: boolean;
     withIntro?: boolean;
     empty?: string;
+    labelledby?: string;
   } = $props();
 </script>
 
@@ -51,10 +53,11 @@ text for no rows. Only the tests use it.
   heading={withHeading ? heading : undefined}
   intro={withIntro ? intro : undefined}
   {empty}
+  {labelledby}
 />
 
 {#snippet heading()}
-  <h3>Bench</h3>
+  <h3 id="bench-title">Bench</h3>
 {/snippet}
 
 {#snippet intro()}

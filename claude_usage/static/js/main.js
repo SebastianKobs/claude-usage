@@ -59,7 +59,7 @@ function renderSummary() {
   if (!summary) return;
   setPayload({summary});
   renderDayNav();
-  renderTables(summary);
+  renderSessions(summary.sessions);
   const scope = summary.project_filter ? `project ${summary.project_filter}` : "all projects";
   document.getElementById("scope").textContent = `· ${scope}`;
   document.getElementById("footer").textContent = "Estimated cost at Claude API list prices" +
