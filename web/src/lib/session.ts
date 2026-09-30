@@ -1,8 +1,9 @@
-// The session view's frame: the facts under its heading and the main thread and subagents table, whose workflow runs
-// fold their agents away. Plain functions, so the components only draw them.
+// The session view's frame: the facts under its heading, the main thread and subagents table, whose workflow runs fold
+// their agents away, and the Tools table with its folds. Plain functions, so the components only draw them.
 
 import type { Agent, SessionDetail } from './api.ts';
 import { compact, money, percent, when, whole } from './format.ts';
+import { toolFolds, toolRowClass, toolRowName, toolRowShown, toolTableRows } from './tables.ts';
 
 /** The facts under the heading: project, branch, first to last record and the session's id. */
 export function sessionFacts(
@@ -138,6 +139,96 @@ export function agentRows(agents: readonly Agent[], open: readonly string[]): Ag
     return [
       runRow(entry, members, searches),
       ...(open.includes(entry) ? members.map((member) => agentRow(member, searches, 'member')) : []),
+    ];
+  });
+}
+
+// --- the Tools table -------------------------------------------------------------------------------------------
+
+/** The Tools table's columns: the agent and the tool, then the counts. Some say what they count. */
+export function toolsColumns(): { label: string; numeric?: boolean; title?: string }[] {
+  return [
+    { label: 'Agent' },
+    { label: 'Tool' },
+    { label: 'Calls', numeric: true },
+    { label: 'Errors', numeric: true, title: 'calls whose result was an error' },
+    { label: 'Result characters', numeric: true },
+    { label: 'Median', numeric: true, title: "a result's characters, the median call" },
+    { label: 'p90', numeric: true, title: '…and at the 90th percentile' },
+    { label: 'Input median', numeric: true, title: "the characters of a call's input, which the model wrote" },
+    {
+      label: 'Calls after',
+      numeric: true,
+      title: 'how many later calls carried it in their context, the median call, up to the next compaction',
+    },
+    {
+      label: '~Carried',
+      numeric: true,
+      title: 'what the later calls paid to have its input and result in their context',
+    },
+    { label: '~Input cost', numeric: true, title: 'its input at the output price' },
+  ];
+}
+
+/** How the costs are estimated, while a transcript tells them; nothing once every transcript is gone. */
+export function toolsNote(agents: readonly Pick<Agent, 'tool_kinds'>[]): string | null {
+  if (!agents.some((agent) => agent.tool_kinds?.length)) return null;
+  return (
+    'Bash splits by what a command does, MCP by server. A call’s input and result stay in the context, so every ' +
+    'later call up to the next compaction reads them again: ~Carried estimates what that cost, taking a token as ' +
+    '2.3 characters (measured on real transcripts, a heuristic).'
+  );
+}
+
+/** A row of the Tools table. */
+export interface ToolsRow {
+  /** Unique in the table and the same whatever else shows, so an open fold stays the same row. */
+  key: string;
+  /** The agent's type; nothing on a row under another. */
+  agent: string;
+  /** The name's words and the class that indents it by what it is. */
+  name: { className: string | null; text: string };
+  /** The button that opens what the row splits into, where it does. */
+  fold: { fold: string; label: string; open: boolean } | null;
+  sub: boolean;
+  /** Whether the next row splits from this one. */
+  group: boolean;
+  /** The cells after the name, in `toolsColumns`. */
+  cells: string[];
+}
+
+/**
+ * The Tools table's rows: each agent's tools, Bash and the rest split by kind, detail and options. A row shows while
+ * every fold above it is in `open`; the tools and the kinds always show.
+ */
+export function toolsRows(agents: readonly Agent[], open: readonly string[]): ToolsRow[] {
+  const rows = toolTableRows([...agents]);
+  const { above, folds } = toolFolds(rows);
+  const opened = new Set(open);
+  const foldOf = new Map(folds.map((fold) => [fold.row, fold]));
+  return rows.flatMap((row, index): ToolsRow[] => {
+    if (!toolRowShown(above[index] ?? [], opened)) return [];
+    const fold = foldOf.get(index);
+    return [
+      {
+        key: row.key,
+        agent: row.sub ? '' : row.agent,
+        name: toolRowName(row),
+        fold: fold ? { fold: fold.fold, label: fold.label, open: opened.has(fold.fold) } : null,
+        sub: row.sub,
+        group: toolRowClass(row, rows[index + 1]) === 'group-row',
+        cells: [
+          whole(row.calls),
+          whole(row.errors),
+          compact(row.result_chars),
+          compact(row.result_median),
+          compact(row.result_p90),
+          compact(row.input_median),
+          whole(row.calls_after_median),
+          money(row.carried),
+          money(row.input_cost),
+        ],
+      },
     ];
   });
 }

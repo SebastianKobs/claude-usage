@@ -14,6 +14,7 @@ import {
   secretAccess,
   sessionDetail,
   sessionRuntime,
+  toolKindRow,
   usage,
 } from '../lib/fixtures';
 import { tablePages } from '../lib/paging.svelte';
@@ -74,7 +75,7 @@ function withTurns() {
 const contextHead = () =>
   screen.getByRole('heading', { level: 3, name: 'Context per turn' }).parentElement as HTMLElement;
 
-const TABLES = ['models', 'agents', 'skills', 'mcp-servers', 'api-errors'];
+const TABLES = ['models', 'agents', 'skills', 'mcp-servers', 'api-errors', 'tools'];
 const KEYS = ['abc123', 'other'].flatMap((id) => TABLES.map((name) => `${id}-${name}`));
 
 let scrollTo: ReturnType<typeof vi.fn>;
@@ -433,10 +434,20 @@ describe('the context per turn', () => {
   });
 });
 
+/** The main thread with a Bash call, so that the Tools table has a row. */
+const toolAgents = () => [agent({ tool_kinds: [toolKindRow({ tool: 'Bash', calls: 3 })] })];
+
+/** The wrap of the Tools table, whether it holds the table or the words for none; a note comes before it. */
+function toolsWrap(): Element | null {
+  let node = document.getElementById('session-tools-title')?.nextElementSibling ?? null;
+  while (node && !node.classList.contains('table-wrap')) node = node.nextElementSibling;
+  return node;
+}
+
 describe('the slots for the old scripts', () => {
   const ids = () => [...document.querySelectorAll('.legacy-slot')].map((slot) => slot.id);
 
-  test('are two empty divs, in order between the tables and the end', () => {
+  test('are two empty divs, in order, the tools before the first, the API errors before the last', () => {
     render(SessionView);
     setPayload({ session: fullSession() });
     expect(ids()).toEqual(['session-mid', 'session-end']);
@@ -445,13 +456,26 @@ describe('the slots for the old scripts', () => {
       expect(slot).toBeEmptyDOMElement();
     }
     const mid = document.getElementById('session-mid') as HTMLElement;
-    const agentsTable = screen.getByRole('table', { name: 'Main thread and subagents' });
-    expect(mid.previousElementSibling).toBe(agentsTable.parentElement);
+    expect(mid.previousElementSibling).toBe(toolsWrap());
     expect(mid.nextElementSibling).toHaveClass('grid-2');
     expect(document.getElementById('session-end')?.nextElementSibling).toBeNull();
     expect(document.getElementById('session-end')?.previousElementSibling).toBe(
       screen.getByRole('table', { name: 'Rate limits and API errors' }).parentElement,
     );
+  });
+
+  test('are the same two with a transcript, the tools between the API errors and the end', () => {
+    render(SessionView);
+    setPayload({ session: fullSession({ transcript: true, agents: toolAgents() }) });
+    expect(ids()).toEqual(['session-mid', 'session-end']);
+    for (const slot of document.querySelectorAll('.legacy-slot')) expect(slot).toBeEmptyDOMElement();
+    const mid = document.getElementById('session-mid') as HTMLElement;
+    const agentsTable = screen.getByRole('table', { name: 'Main thread and subagents' });
+    expect(mid.previousElementSibling).toBe(agentsTable.parentElement);
+    expect(mid.nextElementSibling).toHaveClass('grid-2');
+    const end = document.getElementById('session-end') as HTMLElement;
+    expect(end.previousElementSibling).toBe(toolsWrap());
+    expect(end.nextElementSibling).toBeNull();
   });
 
   test('stay the same nodes with what the old scripts put into them across a refresh of the same session', () => {
@@ -479,19 +503,58 @@ describe('the slots for the old scripts', () => {
 });
 
 describe('the tables', () => {
-  test('come in order under their headings: by model, the agents, by skill, by MCP server, the API errors', () => {
+  test('come in order under their headings: by model, agents, tools, by skill, by MCP server, API errors', () => {
     render(SessionView);
-    setPayload({ session: fullSession() });
+    setPayload({ session: fullSession({ agents: toolAgents() }) });
     // the first is the context per turn's, which has no table without a transcript with turns
+    expect(headings(3).slice(1)).toEqual([
+      'By model',
+      'Main thread and subagents',
+      'Tools',
+      'By skill',
+      'By MCP server',
+      'Rate limits and API errors',
+    ]);
+    expect(screen.getAllByRole('table')).toHaveLength(6);
+    for (const name of headings(3).slice(1)) expect(screen.getByRole('table', { name })).toBeInTheDocument();
+  });
+
+  test('come in order with a transcript too, the tools after the API errors', () => {
+    render(SessionView);
+    setPayload({ session: fullSession({ transcript: true, agents: toolAgents() }) });
     expect(headings(3).slice(1)).toEqual([
       'By model',
       'Main thread and subagents',
       'By skill',
       'By MCP server',
       'Rate limits and API errors',
+      'Tools',
     ]);
-    expect(screen.getAllByRole('table')).toHaveLength(5);
-    for (const name of headings(3).slice(1)) expect(screen.getByRole('table', { name })).toBeInTheDocument();
+  });
+
+  test('have the tools between the agents and the slot without a transcript', () => {
+    render(SessionView);
+    setPayload({ session: fullSession({ agents: toolAgents() }) });
+    const tools = screen.getByRole('table', { name: 'Tools' });
+    const agents = screen.getByRole('table', { name: 'Main thread and subagents' });
+    expect(agents.parentElement?.nextElementSibling).toBe(document.getElementById('session-tools-title'));
+    expect(tools.parentElement).toBe(toolsWrap());
+    expect(tools.parentElement?.nextElementSibling).toBe(document.getElementById('session-mid'));
+  });
+
+  test('have the tools after the API errors table and before the end slot with a transcript', () => {
+    render(SessionView);
+    setPayload({ session: fullSession({ transcript: true, agents: toolAgents() }) });
+    const errors = screen.getByRole('table', { name: 'Rate limits and API errors' });
+    const tools = screen.getByRole('table', { name: 'Tools' });
+    expect(errors.parentElement?.nextElementSibling).toBe(document.getElementById('session-tools-title'));
+    expect(tools.parentElement?.nextElementSibling).toBe(document.getElementById('session-end'));
+  });
+
+  test('say there are no tool calls where the transcripts hold none', () => {
+    render(SessionView);
+    setPayload({ session: fullSession() });
+    expect(screen.getByText('No tool calls.')).toBeInTheDocument();
   });
 
   test('are no cards of their own: the session card holds them, the skills and servers side by side', () => {
@@ -612,5 +675,60 @@ describe('a workflow run', () => {
     setPayload({ session: withRun({ session_id: 'other' }) });
     expect(fold()).toHaveAttribute('aria-expanded', 'false');
     expect(agentRowCount()).toBe(2);
+  });
+});
+
+describe('the tools', () => {
+  const withBash = (changes: Partial<SessionDetail> = {}) =>
+    fullSession({
+      agents: [
+        agent({
+          tool_kinds: [
+            toolKindRow({ tool: 'Bash', calls: 9 }),
+            toolKindRow({ tool: 'Bash', kind: 'search', calls: 4 }),
+            toolKindRow({ tool: 'Bash', kind: 'search', detail: 'grep', calls: 3 }),
+          ],
+        }),
+      ],
+      ...changes,
+    });
+  const fold = () => screen.getByRole('button', { name: '1 program' });
+  const toolRowCount = () => within(screen.getByRole('table', { name: 'Tools' })).getAllByRole('row').length - 1;
+
+  test('open what a row splits into with its button, closed at first', async () => {
+    const user = userEvent.setup();
+    render(SessionView);
+    setPayload({ session: withBash() });
+    expect(fold()).toHaveAttribute('aria-expanded', 'false');
+    expect(toolRowCount()).toBe(2);
+    await user.click(fold());
+    expect(toolRowCount()).toBe(3);
+  });
+
+  test('stay open across a refresh of the same session', async () => {
+    const user = userEvent.setup();
+    render(SessionView);
+    setPayload({ session: withBash() });
+    await user.click(fold());
+    const button = fold();
+    setPayload({ session: withBash({ turns: 11 }) });
+    flushSync();
+    expect(fold()).toBe(button);
+    expect(toolRowCount()).toBe(3);
+  });
+
+  test('start closed again for another session, on the first page of their own key', () => {
+    render(SessionView);
+    setPayload({ session: withBash() });
+    setPayload({ session: withBash({ session_id: 'other' }) });
+    expect(fold()).toHaveAttribute('aria-expanded', 'false');
+    expect(toolRowCount()).toBe(2);
+  });
+
+  test('page under the session`s key', () => {
+    const tools = Array.from({ length: 12 }, (_unused, index) => toolKindRow({ tool: `Tool${index}` }));
+    render(SessionView);
+    setPayload({ session: fullSession({ agents: [agent({ tool_kinds: tools })] }) });
+    expect(screen.getByRole('combobox', { name: 'Rows per page' }).id).toBe('pager-abc123-tools-size');
   });
 });

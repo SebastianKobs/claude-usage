@@ -1,6 +1,15 @@
 import { describe, expect, test } from 'vitest';
-import { agent, sessionDetail } from './fixtures.ts';
-import { agentColumns, agentModels, agentRows, hasSearches, sessionFacts } from './session.ts';
+import { agent, sessionDetail, toolKindRow } from './fixtures.ts';
+import {
+  agentColumns,
+  agentModels,
+  agentRows,
+  hasSearches,
+  sessionFacts,
+  toolsColumns,
+  toolsNote,
+  toolsRows,
+} from './session.ts';
 
 describe('sessionFacts', () => {
   test('are the project, the branch, the span and the id, dot-separated', () => {
@@ -159,5 +168,128 @@ describe('agentRows', () => {
   test('list each model of a run once', () => {
     const run = agentRows([inRun('w-1'), inRun('w-2', { models: ['claude-sonnet-5-5', 'claude-haiku-4-5'] })], [])[0]!;
     expect(run.models).toEqual(['claude-sonnet-5-5', 'claude-haiku-4-5']);
+  });
+});
+
+// the main thread's calls: Bash, split by kind, its search kind by program, the program by option set, and Read
+const BASH_CALLS = [
+  toolKindRow({ tool: 'Bash', calls: 9 }),
+  toolKindRow({ tool: 'Bash', kind: 'search', calls: 4 }),
+  toolKindRow({ tool: 'Bash', kind: 'search', detail: 'grep', calls: 3 }),
+  toolKindRow({ tool: 'Bash', kind: 'search', detail: 'grep', options: '-rn', calls: 3 }),
+  toolKindRow({ tool: 'Bash', kind: 'view', calls: 2 }),
+  toolKindRow({ tool: 'Read', calls: 1 }),
+];
+const SEARCH_FOLD = JSON.stringify(['', 'Bash', 'search', null, null]);
+const GREP_FOLD = JSON.stringify(['', 'Bash', 'search', 'grep', null]);
+const mainThread = (tool_kinds = BASH_CALLS) => agent({ agent_id: null, tool_kinds });
+const keys = (open: string[]) => toolsRows([mainThread()], open).map((row) => row.key);
+
+describe('toolsColumns', () => {
+  test('name the agent and the tool, then the counts right-aligned', () => {
+    const columns = toolsColumns();
+    expect(columns.map((column) => column.label)).toEqual([
+      'Agent', 'Tool', 'Calls', 'Errors', 'Result characters', 'Median', 'p90', 'Input median', 'Calls after',
+      '~Carried', '~Input cost',
+    ]);
+    expect(columns.filter((column) => !column.numeric).map((column) => column.label)).toEqual(['Agent', 'Tool']);
+  });
+
+  test('say what the estimates count', () => {
+    const titles = Object.fromEntries(toolsColumns().map((column) => [column.label, column.title]));
+    expect(titles['Errors']).toMatch(/result was an error/);
+    expect(titles['Calls after']).toMatch(/up to the next compaction/);
+    expect(titles['~Carried']).toMatch(/later calls paid/);
+    expect(titles['~Input cost']).toMatch(/output price/);
+    expect(titles['Calls']).toBeUndefined();
+  });
+});
+
+describe('toolsNote', () => {
+  test('explains the estimates while a transcript gives them', () => {
+    expect(toolsNote([mainThread()])).toMatch(/^Bash splits by what a command does.*2\.3 characters/);
+  });
+
+  test('is left out once every transcript is gone or held no calls', () => {
+    expect(toolsNote([agent({ tool_kinds: null }), mainThread([])])).toBeNull();
+    expect(toolsNote([])).toBeNull();
+  });
+
+  test('is there where any one agent has its transcript', () => {
+    expect(toolsNote([agent({ tool_kinds: null }), mainThread()])).not.toBeNull();
+  });
+});
+
+describe('toolsRows', () => {
+  test('show the tools and the kinds, and keep what splits further folded', () => {
+    expect(keys([])).toEqual([
+      JSON.stringify(['', 'Bash', null, null, null]),
+      JSON.stringify(['', 'Bash', 'search', null, null]),
+      JSON.stringify(['', 'Bash', 'view', null, null]),
+      JSON.stringify(['', 'Read', null, null, null]),
+    ]);
+  });
+
+  test('open a fold to show the rows directly under it, the options under a detail only with both open', () => {
+    expect(keys([SEARCH_FOLD])).toHaveLength(5);
+    expect(keys([GREP_FOLD])).toHaveLength(4);
+    expect(keys([SEARCH_FOLD, GREP_FOLD])).toHaveLength(6);
+  });
+
+  test('keep a row under its key however many rows show, so an open fold stays the same row', () => {
+    const closed = toolsRows([mainThread()], []).find((row) => row.key === SEARCH_FOLD);
+    const opened = toolsRows([mainThread()], [SEARCH_FOLD]).find((row) => row.key === SEARCH_FOLD);
+    expect(closed?.fold).toEqual({ fold: SEARCH_FOLD, label: '1 program', open: false });
+    expect(opened?.fold).toEqual({ fold: SEARCH_FOLD, label: '1 program', open: true });
+  });
+
+  test('carry a fold only on the rows that split, in words of what they split into', () => {
+    const rows = toolsRows([mainThread()], [SEARCH_FOLD, GREP_FOLD]);
+    expect(rows.map((row) => row.fold?.label ?? null)).toEqual([null, '1 program', '1 option set', null, null, null]);
+  });
+
+  test('say the agent on a top row and nothing on a sub-row', () => {
+    const rows = toolsRows([mainThread()], []);
+    expect(rows.map((row) => row.agent)).toEqual(['main', '', '', 'main']);
+    expect(rows.map((row) => row.sub)).toEqual([false, true, true, false]);
+  });
+
+  test('group a row that the next one splits from', () => {
+    const rows = toolsRows([mainThread()], []);
+    expect(rows.map((row) => row.group)).toEqual([true, false, false, false]);
+  });
+
+  test('name each row by what it is and format its cells', () => {
+    const [bash, search] = toolsRows([mainThread()], []);
+    expect(bash?.name).toEqual({ className: null, text: 'Bash' });
+    expect(search?.name).toEqual({ className: 'tool-kind', text: 'search' });
+    expect(bash?.cells).toEqual(['9', '1', '90', '30', '50', '12', '4.5', '$0.01', '$0.00']);
+  });
+
+  test('a stored row, once the transcript is gone, has the calls and characters only', () => {
+    const gone = agent({ tool_kinds: null, tools: [{ tool: 'Bash', calls: 3, result_chars: 450 }] });
+    expect(toolsRows([gone], [])).toEqual([
+      {
+        key: JSON.stringify(['', 'Bash', 'stored']),
+        agent: 'main',
+        name: { className: null, text: 'Bash' },
+        fold: null,
+        sub: false,
+        group: false,
+        cells: ['3', '–', '450', '–', '–', '–', '–', '–', '–'],
+      },
+    ]);
+  });
+
+  test('keep each agent’s rows apart by the agent’s id', () => {
+    const explorer = agent({ agent_id: 'a1', agent_type: 'Explore', tool_kinds: BASH_CALLS });
+    const rows = toolsRows([mainThread(), explorer], []);
+    expect(new Set(rows.map((row) => row.key)).size).toBe(8);
+    expect(rows.filter((row) => row.agent === 'Explore')).toHaveLength(2);
+  });
+
+  test('are none without calls', () => {
+    expect(toolsRows([], [])).toEqual([]);
+    expect(toolsRows([mainThread([])], [])).toEqual([]);
   });
 });

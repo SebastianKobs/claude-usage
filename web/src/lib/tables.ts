@@ -1,8 +1,7 @@
 // What the dashboard's tables and lists decide before they draw: paging, the sessions list's filter and count, the
-// Tools table's rows with their folds and labels, the conversation's order, and where the conversation sits in a
-// session's view. Plain functions with no state. Every row a keyed `{#each}` will draw has its key chosen here: a
-// tool row's `key`, a conversation entry's from its place in the transcript, a session's `session_id`, a project's
-// name, never a position in what is shown.
+// Tools table's rows with their folds and labels, and the conversation's order. Plain functions with no state. Every
+// row a keyed `{#each}` will draw has its key chosen here: a tool row's `key`, a conversation entry's from its place
+// in the transcript, a session's `session_id`, a project's name, never a position in what is shown.
 
 import type { Agent, ChatEntry, SessionListItem, Usage } from './api.ts';
 import { inputTotal } from './charts.ts';
@@ -321,12 +320,6 @@ export function chatRows<T extends Pick<ChatEntry, 'message_id' | 'timestamp' | 
 ): { key: string; entry: T }[] {
   const position = new Map(entries.map((entry, index) => [entry, index]));
   return orderedEntries(entries, oldest).map((entry) => ({ key: entryKey(entry, position.get(entry) ?? 0), entry }));
-}
-
-/** The conversation takes the Tools table's place while the session's transcript exists, the tools at the end then;
- *  without it the conversation, which can only say it is gone, stays last. */
-export function toolsAndChat<T>(transcript: boolean, tools: T, chat: T): T[] {
-  return transcript ? [chat, tools] : [tools, chat];
 }
 
 // --- usage tables ---------------------------------------------------------------------------------------------

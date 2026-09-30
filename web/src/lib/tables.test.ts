@@ -24,7 +24,6 @@ import {
   toolRowClass,
   toolRowName,
   toolRowShown,
-  toolsAndChat,
   toolTableRows,
   USAGE_COLUMNS,
   usageCells,
@@ -447,11 +446,6 @@ test('the keys of a conversation are all different', () => {
   const same = Array.from({ length: 4 }, () => ({ kind: 'text', message_id: null, timestamp: 't' }));
   const keys = chatRows(same as unknown as Parameters<typeof chatRows>[0], false).map((row) => row.key);
   expect(new Set(keys).size).toBe(4);
-});
-
-test('the conversation takes the tools’ place while its transcript exists', () => {
-  expect(toolsAndChat(true, 'tools', 'chat')).toEqual(['chat', 'tools']);
-  expect(toolsAndChat(false, 'tools', 'chat')).toEqual(['tools', 'chat']);
 });
 
 test('usage rows come dearest first, the busier one first among equals, an unpriced row last', () => {

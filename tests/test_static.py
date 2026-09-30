@@ -586,21 +586,6 @@ class ChatOrderTest(unittest.TestCase):
         self.assertEqual(run_function("tables.ts", "orderedEntries", entries, True), entries)
 
 
-class SessionSectionsTest(unittest.TestCase):
-    @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_the_conversation_takes_the_tools_place_while_its_transcript_exists(self):
-        self.assertEqual(run_function("tables.ts", "toolsAndChat", True, ["tools"], ["chat"]),
-                         [["chat"], ["tools"]])
-
-    @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_without_a_transcript_the_tools_stay_and_the_conversation_comes_last(self):
-        self.assertEqual(run_function("tables.ts", "toolsAndChat", False, ["tools"], ["chat"]),
-                         [["tools"], ["chat"]])
-
-    def test_the_session_view_places_them_by_it(self):
-        self.assertIn("toolsAndChat(detail.transcript", read(STATIC / "js" / "drilldown.js"))
-
-
 class CompactionTotalTest(unittest.TestCase):
     @staticmethod
     def row(verdict, net):
@@ -667,7 +652,7 @@ class PagingTest(unittest.TestCase):
         self.assertRegex(module, r"export const PAGE_SIZES = \[10, 25, 50\];")
 
     def test_every_table_is_paged(self):
-        sites = {"tables.js": 1, "drilldown.js": 1, "chartkit.js": 1}
+        sites = {"tables.js": 1, "chartkit.js": 1}
         for script, count in sites.items():
             with self.subTest(script=script):
                 self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)

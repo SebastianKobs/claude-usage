@@ -29,13 +29,14 @@
     "web/src/components/RateLimits.svelte": "e570b8d43ce44c6ef63e56e7ea6a825252f68c80dddef150036587c9211b4435",
     "web/src/components/RuntimeTiles.svelte": "6acbc1390e855f37291433650391daabaea907d2e9448f7dad8a4bb9baa4498c",
     "web/src/components/SecretAccesses.svelte": "049c2a856dfe68daf10821cfeecb9ffb530c22b2624cd99ff13487014cb403a3",
-    "web/src/components/SessionView.svelte": "69b662e72e2051327cd6f81268fa9bb8d94105bab2fcb945e484cc9f833c4c27",
+    "web/src/components/SessionView.svelte": "9dcf51c643a293f898e1d634eee657643ce1538a511de29eafd5054ef628ae87",
     "web/src/components/SessionWaits.svelte": "1827dcee2ee2317e012cc04c72be5851a7513590bdd991a4eee2580522b057ec",
     "web/src/components/SessionsList.svelte": "8fcc1f7ab32615344d834b4f5d35c1c69437defd1f770fb2e13140239564f51d",
     "web/src/components/StatTile.svelte": "5ecd0138f05cfe87e68a69d64ec6a3478e04e1bd1dc141808a5d2e9fd2993b49",
     "web/src/components/SummaryTiles.svelte": "b125eb266c417c3ed3898f5d239bf2cbaebc2b1aa1f025ea5f201aec59637a51",
     "web/src/components/Swatch.svelte": "9fbd95c37c02f0d1ce1c6c27d9cb5efb32167f60456e1037a55d97d1e99e1028",
     "web/src/components/TableView.svelte": "9767551863c0d9f00e84cde02a9e190a1371b9a5745b726e3e7ed3171fd8fa59",
+    "web/src/components/ToolsTable.svelte": "972f369dc6ff24ebeec338e39926560d798b339834febfd68786f4b33e26ebc8",
     "web/src/components/UsageTable.svelte": "c7742bdb36e255765abb946c56ea90957bfa07ab6a4bbe3d8c66633a91fe175e",
     "web/src/components/UsageTables.svelte": "cba57c97cff63ab91652f9f52ff246be7e1b1649aaf488c2c2015127fa676ff5",
     "web/src/components/XLabels.svelte": "3fa5052afc89d04d739c86128fb829419fafbfa5d1ec1775ee0279ab073fb3c5",
@@ -62,8 +63,8 @@
     "web/src/lib/range.ts": "8e396db74a4cd66bd8c859bebdf11e7ff9b1fb6c4b40b26fd529e70658b30b84",
     "web/src/lib/scroll.ts": "00e72d7195bb2b1906b7a53b20600025a52fe3b5d7fa984cde9912426a07942f",
     "web/src/lib/secrets.ts": "5214e06f859fc50793f34e874017364d70c65a14d85ac6f2d762b0e9c56d1ae7",
-    "web/src/lib/session.ts": "d3600fa8e49dcf76e302536a293964fa67e6774c4efb8ea6af54349f65a5ba88",
-    "web/src/lib/tables.ts": "7cba049adc9a960b720928a6aee831e70b6ca2bc1a475b865e67c45a327a5bbc",
+    "web/src/lib/session.ts": "b58370b998e31e977bd45f7cd6b012b1b3a148e6dec851b5ef332db328a82652",
+    "web/src/lib/tables.ts": "7e60176447c2b9e6768382714eb977430cd8ac7a85dd00396a9b321ac1d73039",
     "web/src/lib/themes.ts": "ada0027dc8e18c4eb4227e0a4ed92d929de5d10384b097195b2897b612ed94d1",
     "web/src/lib/tiles.ts": "00e8a9c7419ad33b95ae5f55ec5ebaf5ac1a3476588be3c7f946dd5112c6aa06",
     "web/src/lib/trend.ts": "ae38d2ff93617b24da1d6f5be5edd445513925d2248253f762bbc2537e28ae62",
@@ -75,6 +76,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "6d80e4fb7b0647d9b9a3ce6ffb2721afbd1d0e8a403c135068f9b3ac4a09b597",
-    "claude_usage/static/js/app.js": "81d16bb41e6a5b8fc5e0d1da117de3ce116a384ee68e39f5bbbb49c0a1302f93"
+    "claude_usage/static/js/app.js": "da9ba9666e146739dddd9c6a921e14817a2a7e432d85b419e7c74924d40211db"
   }
 }

@@ -110,8 +110,9 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/live.ts            the live cards' badges (waiting, secret, compacting now), the live list's words (its
                              window, the past day, the empty list) and what waits for the user
   src/lib/tables.ts          paging (page units, window and text), the sessions list's filter, count, columns and
-                             cells, the Tools table's rows with their keys, folds and labels, the conversation's
-                             order and keys, and the usage tables' cells and order
+                             cells, the Tools table's rows with their keys, folds and labels (`toolsRows` in
+                             session.ts draws from them), the conversation's order and keys, and the usage tables'
+                             cells and order
   src/lib/charts.ts          the charts' maths: scales and ticks, where a point or column falls, the time axis, the
                              by-model series and stacks, the rate-limit counts and windows, the cost bars' split
   src/lib/themes.ts          the themes and the gimmick themes' wording (`test_static.py` reads its labels): which theme
@@ -146,7 +147,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/range.svelte.ts    the range shown (`range`: the days and the Daily range's day, reactive, the choice saved as
                              a preference), which the old scripts load from and reload through `range.onchange`
   src/lib/session.ts         the session view's frame: the facts under its heading, the main thread and subagents
-                             table's columns and rows (a workflow run's agents under one row, its fold)
+                             table's columns and rows (a workflow run's agents under one row, its fold), the Tools
+                             table's columns, note and rows (the rows of a closed fold left out)
   src/lib/gauge.ts           the gauge's words: the meter or the compaction, the exact and estimated notes, the call to
                              compact, the hint to delegate (used by the components)
   src/lib/context.ts         the context per turn: the picker's choices, the chart's geometry (stacked areas, hint
@@ -164,10 +166,11 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              `RateLimits`, the usage tables: `UsageTable`, `UsageTables`, the sessions card:
                              `SessionsList`, the live sessions: `LiveSessions`, `LiveCard`, `LiveIcon`, the range
                              filter: `RangeFilter`, and the session view's frame: `SessionView` with `SessionWaits`,
-                             `AgentsTable` and `EventsTable`, the secret accesses: `SecretAccesses`, and the gauge with
-                             the calls above it: `ContextGauge`, `CompactCall`, `DelegateCall`, the context per turn:
-                             `ContextPerTurn` with `ContextChart` and `ContextDetails`, which leaves two slots for the
-                             old scripts), each with its Testing Library test
+                             `AgentsTable`, `ToolsTable` and `EventsTable`, the secret accesses: `SecretAccesses`, and
+                             the gauge with the calls above it: `ContextGauge`, `CompactCall`, `DelegateCall`, the
+                             context per turn: `ContextPerTurn` with `ContextChart` and `ContextDetails`, which
+                             leaves two slots for the conversation, drawn by the old scripts), each with its
+                             Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
@@ -718,8 +721,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - An open session polls too: every 5 s while it is `live` (a transcript changed within `live_minutes`, or waiting
     for the user), else every 60 s, which notices a resumed session. A changed one is drawn in place
     (`renderDrilldown(detail, true)`):
-    the conversation's nodes move into the new view, and the table view, the folds open (a workflow run's agents,
-    an inline script's interpreters: `data-fold`), focus and the element at the top of the window are kept. A conversation shown is read again and drawn only if it changed,
+    the conversation's nodes move into the new view, and the components keep their own state (the table view, the
+    folds open: a workflow run's agents, an inline script's interpreters in the Tools table), focus and the element at
+    the top of the window are kept. A conversation shown is read again and drawn only if it changed,
     keeping its open entries (by time, kind and position) and, once scrolled into, the entry at the top. It reads
     the transcript itself, so a reply the scan hasn't reached yet may show plain xhigh until the next change.
   - The range buttons stop at `retention_days` (`RangeFilter`, `visibleRanges`): the summary cuts a longer `days` to it
@@ -772,7 +776,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     turned up for oldest first, the transcript's order; it draws the loaded conversation again. Close (`closeChat`)
     empties it, drops a load under way and stops its refresh, and returns focus to "Show conversation".
   - While the main transcript exists (`transcript` in `/api/session`), the conversation takes the Tools table's
-    place, after the agents, and the tools go last (`toolsAndChat`); without it the conversation stays last.
+    place, after the agents, and the tools go last (`SessionView` puts `ToolsTable` after the API errors, the old
+    scripts the conversation into `#session-mid`); without it the tools stay there and the conversation, which can only
+    say it is gone, comes last (`#session-end`).
   - Tables page (`paged(key, table)` in `tables.js`, every table and chart table view): past 10 groups of rows (a
     sub-row, an effort level or a workflow run's agent, stays with the row above it) a pager goes right-aligned into
     the row of the table's heading (`placePager`; above the table where there is none, like a chart's table view): 10,

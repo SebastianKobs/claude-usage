@@ -3026,8 +3026,8 @@ var So = /* @__PURE__ */ t({
 	PAGE_SIZES: () => Co,
 	SESSION_COLUMNS: () => Ao,
 	TOOL_KINDS: () => No,
-	USAGE_COLUMNS: () => Yo,
-	byCost: () => Jo,
+	USAGE_COLUMNS: () => Jo,
+	byCost: () => qo,
 	chatRows: () => Ko,
 	detailNoun: () => zo,
 	emptyDetail: () => Io,
@@ -3047,8 +3047,7 @@ var So = /* @__PURE__ */ t({
 	toolRowName: () => Vo,
 	toolRowShown: () => Uo,
 	toolTableRows: () => Po,
-	toolsAndChat: () => qo,
-	usageCells: () => Xo
+	usageCells: () => Yo
 }), Co = [
 	10,
 	25,
@@ -3273,13 +3272,10 @@ function Ko(e, t) {
 		entry: e
 	}));
 }
-function qo(e, t, n) {
-	return e ? [n, t] : [t, n];
-}
-function Jo(e, t) {
+function qo(e, t) {
 	return (t.cost ?? -1) - (e.cost ?? -1) || t.turns - e.turns;
 }
-var Yo = [
+var Jo = [
 	{
 		label: "Turns",
 		numeric: !0
@@ -3301,7 +3297,7 @@ var Yo = [
 		numeric: !0
 	}
 ];
-function Xo(e) {
+function Yo(e) {
 	let t = Da(e);
 	return [
 		Y(e.turns),
@@ -3313,18 +3309,18 @@ function Xo(e) {
 }
 //#endregion
 //#region src/lib/themes.ts
-var Zo = /* @__PURE__ */ t({
-	THEMES: () => Qo,
-	themeFooter: () => is,
-	themeLabel: () => rs,
-	themeName: () => ts
-}), Qo = [
+var Xo = /* @__PURE__ */ t({
+	THEMES: () => Zo,
+	themeFooter: () => rs,
+	themeLabel: () => ns,
+	themeName: () => es
+}), Zo = [
 	"light",
 	"dark",
 	"hacker",
 	"startup",
 	"rgb"
-], $o = { techbro: "rgb" }, es = {
+], Qo = { techbro: "rgb" }, $o = {
 	hacker: {
 		"Claude usage": "claude-usage --watch",
 		"Estimated cost": "burn_rate",
@@ -3422,103 +3418,103 @@ var Zo = /* @__PURE__ */ t({
 		footer: " GG. RGB adds +15% performance."
 	}
 };
-function ts(e) {
+function es(e) {
 	if (e == null) return null;
-	let t = (Object.hasOwn($o, e) ? $o[e] : e) ?? e;
-	return Qo.includes(t) ? t : null;
+	let t = (Object.hasOwn(Qo, e) ? Qo[e] : e) ?? e;
+	return Zo.includes(t) ? t : null;
 }
-function ns(e) {
-	return e !== null && Object.hasOwn(es, e) ? es[e] ?? {} : {};
+function ts(e) {
+	return e !== null && Object.hasOwn($o, e) ? $o[e] ?? {} : {};
 }
-function rs(e, t) {
-	let n = ns(e);
+function ns(e, t) {
+	let n = ts(e);
 	return Object.hasOwn(n, t) ? n[t] ?? t : t;
 }
-function is(e) {
-	return ns(e).footer ?? "";
+function rs(e) {
+	return ts(e).footer ?? "";
 }
 //#endregion
 //#region src/lib/prefs.svelte.ts
-var as = /* @__PURE__ */ t({
-	Preferences: () => ls,
-	footerCopy: () => ds,
+var is = /* @__PURE__ */ t({
+	Preferences: () => cs,
+	footerCopy: () => us,
 	hype: () => $,
-	preferences: () => us,
-	readPreference: () => os,
-	savePreference: () => ss,
-	savedOption: () => cs
+	preferences: () => ls,
+	readPreference: () => as,
+	savePreference: () => os,
+	savedOption: () => ss
 });
-function os(e) {
+function as(e) {
 	try {
 		return localStorage.getItem(`claude-usage.${e}`);
 	} catch {
 		return null;
 	}
 }
-function ss(e, t) {
+function os(e, t) {
 	try {
 		localStorage.setItem(`claude-usage.${e}`, String(t));
 	} catch {}
 }
-function cs(e, t) {
-	let n = os(e);
+function ss(e, t) {
+	let n = as(e);
 	return n !== null && t.includes(n) ? n : null;
 }
-var ls = class {
-	#e = /* @__PURE__ */ j(Jt(ts(os("theme"))));
-	#t = /* @__PURE__ */ j(Jt(Do(os("page_size"), Co, 25)));
-	#n = /* @__PURE__ */ j(os("chat-oldest-first") === "true");
+var cs = class {
+	#e = /* @__PURE__ */ j(Jt(es(as("theme"))));
+	#t = /* @__PURE__ */ j(Jt(Do(as("page_size"), Co, 25)));
+	#n = /* @__PURE__ */ j(as("chat-oldest-first") === "true");
 	get theme() {
 		return B(this.#e);
 	}
 	set theme(e) {
-		let t = ts(e);
-		M(this.#e, t, !0), ss("theme", t ?? "auto");
+		let t = es(e);
+		M(this.#e, t, !0), os("theme", t ?? "auto");
 	}
 	get pageSize() {
 		return B(this.#t);
 	}
 	set pageSize(e) {
-		Co.includes(e) && (M(this.#t, e, !0), ss("page_size", String(e)));
+		Co.includes(e) && (M(this.#t, e, !0), os("page_size", String(e)));
 	}
 	get oldestFirst() {
 		return B(this.#n);
 	}
 	set oldestFirst(e) {
-		M(this.#n, e, !0), ss("chat-oldest-first", String(e));
+		M(this.#n, e, !0), os("chat-oldest-first", String(e));
 	}
-}, us = new ls();
+}, ls = new cs();
 function $(e) {
-	return rs(us.theme, e);
+	return ns(ls.theme, e);
 }
-function ds() {
-	return is(us.theme);
+function us() {
+	return rs(ls.theme);
 }
 //#endregion
 //#region src/components/ChartTooltip.svelte
-var fs = /* @__PURE__ */ V([[
+var ds = /* @__PURE__ */ V([[
 	"div",
 	{ class: "tooltip" },
 	,
 ]]);
-function ps(e, t) {
+function fs(e, t) {
 	E(t, !0);
 	let n = Ni(t, "top", 3, 8);
 	function r(e) {
 		let r = e.parentElement?.clientWidth ?? 0;
 		e.style.left = `${Vi(t.anchor, e.offsetWidth, r)}px`, e.style.top = `${n()}px`;
 	}
-	var i = fs();
+	var i = ds();
 	Br(N(i), () => t.children), T(i), Qr(i, () => r), U(e, i), D();
 }
 //#endregion
 //#region src/components/Chart.svelte
-var ms = /* @__PURE__ */ V([["rect", {
+var ps = /* @__PURE__ */ V([["rect", {
 	class: "hit",
 	tabindex: "0",
 	role: "slider",
 	"aria-valuemin": "1"
-}]], 4), hs = /* @__PURE__ */ V([[
+}]], 4), ms = /* @__PURE__ */ V([[
 	"svg",
 	null,
 	[
@@ -3529,7 +3525,7 @@ var ms = /* @__PURE__ */ V([["rect", {
 	],
 	,
 ], ,], 5);
-function gs(e, t) {
+function hs(e, t) {
 	E(t, !0);
 	let n = /* @__PURE__ */ k(() => (t.cursor?.count ?? 0) - 1), r = /* @__PURE__ */ j(null), i = /* @__PURE__ */ k(() => B(r) === null ? B(n) : Math.min(B(r), B(n))), a = /* @__PURE__ */ j(null), o = /* @__PURE__ */ k(() => B(a) === null || B(n) < 0 ? null : Math.min(B(a), B(n))), s = /* @__PURE__ */ k(() => t.cursor?.area(t.width));
 	function c(e) {
@@ -3544,7 +3540,7 @@ function gs(e, t) {
 		let n = Bi(e.key, B(i), t.cursor.count);
 		n !== null && (c(n), e.preventDefault());
 	}
-	var d = hs(), f = P(d), p = N(f), m = N(p);
+	var d = ms(), f = P(d), p = N(f), m = N(p);
 	Br(m, () => t.plot, () => t.width);
 	var h = I(m), g = (e) => {
 		var n = H();
@@ -3554,7 +3550,7 @@ function gs(e, t) {
 		B(o) !== null && e(g);
 	}), T(p);
 	var _ = I(p), y = (e) => {
-		var n = ms();
+		var n = ps();
 		L((e, r) => {
 			q(n, "x", B(s).x), q(n, "y", B(s).y), q(n, "width", e), q(n, "height", B(s).height), q(n, "aria-label", t.cursor.label), q(n, "aria-valuemax", t.cursor.count), q(n, "aria-valuenow", B(i) + 1), q(n, "aria-valuetext", r);
 		}, [() => Math.max(1, B(s).width), () => t.cursor.valueText(B(i))]), yr("pointermove", n, l), vr("focus", n, () => c(B(i))), yr("keydown", n, u), vr("pointerleave", n, () => M(a, null)), vr("blur", n, () => M(a, null)), U(e, n);
@@ -3565,7 +3561,7 @@ function gs(e, t) {
 	var ee = I(f), b = (e) => {
 		{
 			let n = /* @__PURE__ */ k(() => t.cursor.tipX(t.width, B(o)) * Ri(t.containerWidth, t.width));
-			ps(e, {
+			fs(e, {
 				get anchor() {
 					return B(n);
 				},
@@ -3589,11 +3585,11 @@ function gs(e, t) {
 br(["pointermove", "keydown"]);
 //#endregion
 //#region src/components/ChartCard.svelte
-var _s = /* @__PURE__ */ V([[
+var gs = /* @__PURE__ */ V([[
 	"span",
 	{ class: "muted" },
 	" "
-]]), vs = /* @__PURE__ */ V([[
+]]), _s = /* @__PURE__ */ V([[
 	"section",
 	{ class: "card" },
 	[
@@ -3626,10 +3622,10 @@ var _s = /* @__PURE__ */ V([[
 	" ",
 	,
 ]]);
-function ys(e, t) {
+function vs(e, t) {
 	let n = /* @__PURE__ */ j(!1);
-	var r = vs(), i = N(r), a = N(i), o = F(a, !0), s = I(a, 2), c = (e) => {
-		var n = _s(), r = F(n, !0);
+	var r = _s(), i = N(r), a = N(i), o = F(a, !0), s = I(a, 2), c = (e) => {
+		var n = gs(), r = F(n, !0);
 		L(() => W(r, t.note)), U(e, n);
 	};
 	G(s, (e) => {
@@ -3656,19 +3652,19 @@ function ys(e, t) {
 br(["click"]);
 //#endregion
 //#region src/components/Swatch.svelte
-var bs = /* @__PURE__ */ V([["span", { class: "swatch" }]]);
-function xs(e, t) {
-	var n = bs();
+var ys = /* @__PURE__ */ V([["span", { class: "swatch" }]]);
+function bs(e, t) {
+	var n = ys();
 	let r;
 	L(() => r = li(n, "", r, { background: t.fill })), U(e, n);
 }
 //#endregion
 //#region src/lib/scroll.ts
-var Ss = /* @__PURE__ */ t({
-	keepScroll: () => ws,
-	scrollAnchor: () => Cs
+var xs = /* @__PURE__ */ t({
+	keepScroll: () => Cs,
+	scrollAnchor: () => Ss
 });
-function Cs(e) {
+function Ss(e) {
 	for (let t of e) {
 		let e = t.getBoundingClientRect();
 		if (e.bottom > 0) return {
@@ -3678,16 +3674,16 @@ function Cs(e) {
 	}
 	return null;
 }
-function ws(e, t) {
+function Cs(e, t) {
 	e && t && t.isConnected && window.scrollBy(0, t.getBoundingClientRect().top - e.top);
 }
 //#endregion
 //#region src/components/Pager.svelte
-var Ts = /* @__PURE__ */ V([[
+var ws = /* @__PURE__ */ V([[
 	"option",
 	null,
 	" "
-]]), Es = /* @__PURE__ */ V([[
+]]), Ts = /* @__PURE__ */ V([[
 	"div",
 	{
 		class: "pager",
@@ -3717,20 +3713,20 @@ var Ts = /* @__PURE__ */ V([[
 		"Next ›"
 	]
 ]]);
-function Ds(e, t) {
+function Es(e, t) {
 	E(t, !0);
-	let n = /* @__PURE__ */ k(() => (t.units.at(-1) ?? -1) + 1), r = /* @__PURE__ */ k(() => js(t.key, B(n))), i = /* @__PURE__ */ k(() => `${t.noun.charAt(0).toUpperCase()}${t.noun.slice(1)}`);
+	let n = /* @__PURE__ */ k(() => (t.units.at(-1) ?? -1) + 1), r = /* @__PURE__ */ k(() => As(t.key, B(n))), i = /* @__PURE__ */ k(() => `${t.noun.charAt(0).toUpperCase()}${t.noun.slice(1)}`);
 	function a() {
-		As.first(t.key) !== B(r).first && As.set(t.key, B(r).first);
+		ks.first(t.key) !== B(r).first && ks.set(t.key, B(r).first);
 	}
 	a();
 	function o(e, r) {
-		let i = e.closest(".pager"), a = Cs(i ? [i] : []);
-		As.set(t.key, To(B(n), us.pageSize, r).first), At(), ws(a, i);
+		let i = e.closest(".pager"), a = Ss(i ? [i] : []);
+		ks.set(t.key, To(B(n), ls.pageSize, r).first), At(), Cs(a, i);
 	}
 	function s(e, t) {
-		let n = e.closest(".pager"), r = Cs(n ? [n] : []);
-		us.pageSize = t, At(), ws(r, n);
+		let n = e.closest(".pager"), r = Ss(n ? [n] : []);
+		ls.pageSize = t, At(), Cs(r, n);
 	}
 	function c() {
 		let { first: e, last: n } = B(r);
@@ -3739,9 +3735,9 @@ function Ds(e, t) {
 			a !== void 0 && r.classList.toggle("off-page", a < e || a >= n);
 		});
 	}
-	var l = Es(), u = N(l);
+	var l = Ts(), u = N(l);
 	K(u, 20, () => Co, (e) => e, (e, n) => {
-		var r = Ts(), i = F(r), a = {};
+		var r = ws(), i = F(r), a = {};
 		L(() => {
 			W(i, `${n ?? ""} ${t.noun ?? ""}`), a !== (a = n) && (r.value = (r.__value = a) ?? "");
 		}), U(e, r);
@@ -3750,19 +3746,19 @@ function Ds(e, t) {
 	pi(u);
 	var f = I(u, 2), p = I(f, 2), m = F(p, !0), h = I(p, 2);
 	T(l), Qr(l, () => c), L((e) => {
-		q(u, "id", `pager-${t.key ?? ""}-size`), q(u, "aria-label", `${B(i) ?? ""} per page`), d !== (d = us.pageSize) && (u.value = (u.__value = d) ?? "", fi(u, d)), q(f, "id", `pager-${t.key ?? ""}-previous`), f.disabled = B(r).page === 0, W(m, e), q(h, "id", `pager-${t.key ?? ""}-next`), h.disabled = B(r).page === B(r).pages - 1;
+		q(u, "id", `pager-${t.key ?? ""}-size`), q(u, "aria-label", `${B(i) ?? ""} per page`), d !== (d = ls.pageSize) && (u.value = (u.__value = d) ?? "", fi(u, d)), q(f, "id", `pager-${t.key ?? ""}-previous`), f.disabled = B(r).page === 0, W(m, e), q(h, "id", `pager-${t.key ?? ""}-next`), h.disabled = B(r).page === B(r).pages - 1;
 	}, [() => Eo(B(r), B(n), t.noun)]), yr("change", u, (e) => s(e.currentTarget, Number(e.currentTarget.value))), yr("click", f, (e) => o(e.currentTarget, B(r).page - 1)), yr("click", h, (e) => o(e.currentTarget, B(r).page + 1)), U(e, l), D();
 }
 br(["change", "click"]);
 //#endregion
 //#region src/lib/paging.svelte.ts
-var Os = /* @__PURE__ */ t({
-	TablePages: () => ks,
-	mountPager: () => Ns,
-	releaseDetachedPagers: () => Ps,
-	shownWindow: () => js,
-	tablePages: () => As
-}), ks = class {
+var Ds = /* @__PURE__ */ t({
+	TablePages: () => Os,
+	mountPager: () => Ms,
+	releaseDetachedPagers: () => Ns,
+	shownWindow: () => As,
+	tablePages: () => ks
+}), Os = class {
 	#e = new vo();
 	first(e) {
 		return this.#e.get(e) ?? 0;
@@ -3773,48 +3769,48 @@ var Os = /* @__PURE__ */ t({
 	forget(e) {
 		this.#e.delete(e);
 	}
-}, As = new ks();
-function js(e, t) {
-	return To(t, us.pageSize, Math.floor(As.first(e) / us.pageSize));
+}, ks = new Os();
+function As(e, t) {
+	return To(t, ls.pageSize, Math.floor(ks.first(e) / ls.pageSize));
 }
-var Ms = /* @__PURE__ */ new Set();
-function Ns(e) {
-	let t = document.createElement("div"), n = Pr(Ds, {
+var js = /* @__PURE__ */ new Set();
+function Ms(e) {
+	let t = document.createElement("div"), n = Pr(Es, {
 		target: t,
 		props: e
 	});
 	At();
 	let r = t.firstElementChild;
 	if (!(r instanceof HTMLElement)) throw Error("The pager drew no element");
-	return Ms.add({
+	return js.add({
 		component: n,
 		root: r
 	}), r;
 }
-function Ps() {
-	for (let e of [...Ms]) e.root.isConnected || (Ms.delete(e), Rr(e.component));
+function Ns() {
+	for (let e of [...js]) e.root.isConnected || (js.delete(e), Rr(e.component));
 }
 //#endregion
 //#region src/components/TableView.svelte
-var Fs = /* @__PURE__ */ V([[
+var Ps = /* @__PURE__ */ V([[
 	"div",
 	{ class: "title-row" },
 	,
 	" ",
 	,
-]]), Is = /* @__PURE__ */ V([[
+]]), Fs = /* @__PURE__ */ V([[
 	"div",
 	{ class: "empty" },
 	" "
-]]), Ls = /* @__PURE__ */ V([[
+]]), Is = /* @__PURE__ */ V([[
 	"th",
 	{ scope: "col" },
 	" "
-]]), Rs = /* @__PURE__ */ V([[
+]]), Ls = /* @__PURE__ */ V([[
 	"tr",
 	null,
 	,
-]]), zs = /* @__PURE__ */ V([[
+]]), Rs = /* @__PURE__ */ V([[
 	"table",
 	null,
 	[
@@ -3823,7 +3819,7 @@ var Fs = /* @__PURE__ */ V([[
 		["tr"]
 	],
 	["tbody"]
-]]), Bs = /* @__PURE__ */ V([
+]]), zs = /* @__PURE__ */ V([
 	,
 	,
 	" ",
@@ -3837,11 +3833,11 @@ var Fs = /* @__PURE__ */ V([[
 		,
 	]
 ], 1);
-function Vs(e, t) {
+function Bs(e, t) {
 	E(t, !0);
 	let n = (e) => {
 		var n = H(), o = P(n), s = (e) => {
-			Ds(e, {
+			Es(e, {
 				get key() {
 					return t.key;
 				},
@@ -3856,13 +3852,13 @@ function Vs(e, t) {
 		G(o, (e) => {
 			B(a) > Co[0] && e(s);
 		}), U(e, n);
-	}, r = Ni(t, "noun", 3, "rows"), i = /* @__PURE__ */ k(() => wo(t.rows.map((e) => t.sub?.(e) ?? !1))), a = /* @__PURE__ */ k(() => (B(i).at(-1) ?? -1) + 1), o = /* @__PURE__ */ k(() => js(t.key, B(a))), s = /* @__PURE__ */ k(() => t.rows.filter((e, t) => {
+	}, r = Ni(t, "noun", 3, "rows"), i = /* @__PURE__ */ k(() => wo(t.rows.map((e) => t.sub?.(e) ?? !1))), a = /* @__PURE__ */ k(() => (B(i).at(-1) ?? -1) + 1), o = /* @__PURE__ */ k(() => As(t.key, B(a))), s = /* @__PURE__ */ k(() => t.rows.filter((e, t) => {
 		let n = B(i)[t] ?? 0;
 		return n >= B(o).first && n < B(o).last;
 	}));
-	var c = Bs(), l = P(c), u = (e) => {
+	var c = zs(), l = P(c), u = (e) => {
 		var r = H(), i = P(r), o = (e) => {
-			var r = Fs(), i = N(r);
+			var r = Ps(), i = N(r);
 			Br(i, () => t.heading);
 			var a = I(i, 2);
 			n(a), T(r), U(e, r);
@@ -3886,19 +3882,19 @@ function Vs(e, t) {
 		t.heading || e(m);
 	});
 	var h = I(p, 2), g = (e) => {
-		var n = Is(), r = F(n, !0);
+		var n = Fs(), r = F(n, !0);
 		L(() => W(r, t.empty)), U(e, n);
 	}, _ = (e) => {
-		var n = zs(), r = N(n), i = N(r);
+		var n = Rs(), r = N(n), i = N(r);
 		K(i, 21, () => t.columns, (e) => e.label, (e, t) => {
-			var n = Ls(), r = F(n, !0);
+			var n = Is(), r = F(n, !0);
 			L(() => {
 				si(n, 1, ti(B(t).numeric ? "num" : void 0)), q(n, "title", B(t).title), W(r, B(t).label);
 			}), U(e, n);
 		}), T(i), T(r);
 		var a = I(r);
 		K(a, 21, () => B(s), (e) => t.rowKey(e), (e, n) => {
-			var r = Rs();
+			var r = Ls();
 			Br(N(r), () => t.cells, () => B(n)), T(r), L((e) => si(r, 1, e), [() => ti([t.sub?.(B(n)) ? "sub-row" : t.group?.(B(n)) ? "group-row" : void 0, t.rowClass?.(B(n))])]), U(e, r);
 		}), T(a), T(n), L(() => q(n, "aria-labelledby", t.labelledby)), U(e, n);
 	};
@@ -3908,7 +3904,7 @@ function Vs(e, t) {
 }
 //#endregion
 //#region src/components/XLabels.svelte
-var Hs = /* @__PURE__ */ V([[
+var Vs = /* @__PURE__ */ V([[
 	"text",
 	{
 		"text-anchor": "middle",
@@ -3916,11 +3912,11 @@ var Hs = /* @__PURE__ */ V([[
 	},
 	" "
 ]], 4);
-function Us(e, t) {
+function Hs(e, t) {
 	E(t, !0);
 	var n = H();
 	K(P(n), 16, () => Hi(t.count, t.most), (e) => e, (e, n) => {
-		var r = Hs(), i = F(r, !0);
+		var r = Vs(), i = F(r, !0);
 		L((e, n) => {
 			q(r, "x", e), q(r, "y", t.y), W(i, n);
 		}, [() => t.xOf(n), () => t.text(n)]), U(e, r);
@@ -3928,7 +3924,7 @@ function Us(e, t) {
 }
 //#endregion
 //#region src/components/YAxis.svelte
-var Ws = /* @__PURE__ */ V([["line", { "stroke-width": "1" }], [
+var Us = /* @__PURE__ */ V([["line", { "stroke-width": "1" }], [
 	"text",
 	{
 		"text-anchor": "end",
@@ -3936,12 +3932,12 @@ var Ws = /* @__PURE__ */ V([["line", { "stroke-width": "1" }], [
 	},
 	" "
 ]], 5);
-function Gs(e, t) {
+function Ws(e, t) {
 	E(t, !0);
 	var n = H();
 	K(P(n), 18, () => t.values, (e) => e, (e, n, r) => {
 		let i = /* @__PURE__ */ k(() => Ui(t.yOf(n)));
-		var a = Ws(), o = P(a), s = I(o), c = F(s, !0);
+		var a = Us(), o = P(a), s = I(o), c = F(s, !0);
 		L((e) => {
 			q(o, "x1", t.left), q(o, "x2", t.right), q(o, "y1", B(i)), q(o, "y2", B(i)), q(o, "stroke", B(r) === 0 ? "var(--axis)" : "var(--grid)"), q(s, "x", t.left - 8), q(s, "y", B(i) + 4), W(c, e);
 		}, [() => t.format(n)]), U(e, a);
@@ -3949,20 +3945,20 @@ function Gs(e, t) {
 }
 //#endregion
 //#region src/components/ByModel.svelte
-var Ks = /* @__PURE__ */ V([[
+var Gs = /* @__PURE__ */ V([[
 	"button",
 	{ type: "button" },
 	" "
-]]), qs = /* @__PURE__ */ V([["div", {
+]]), Ks = /* @__PURE__ */ V([["div", {
 	class: "segmented",
 	role: "group",
 	"aria-label": "Metric"
-}]]), Js = /* @__PURE__ */ V([[
+}]]), qs = /* @__PURE__ */ V([[
 	"span",
 	null,
 	,
 	" "
-]]), Ys = /* @__PURE__ */ V([[
+]]), Js = /* @__PURE__ */ V([[
 	"span",
 	{ class: "legend-group" },
 	[
@@ -3972,11 +3968,11 @@ var Ks = /* @__PURE__ */ V([[
 	],
 	" ",
 	,
-]]), Xs = /* @__PURE__ */ V([[
+]]), Ys = /* @__PURE__ */ V([[
 	"div",
 	{ class: "legend" },
 	,
-]]), Zs = /* @__PURE__ */ V([[
+]]), Xs = /* @__PURE__ */ V([[
 	"pattern",
 	{
 		width: "6",
@@ -3991,27 +3987,27 @@ var Ks = /* @__PURE__ */ V([[
 		width: "2",
 		height: "6"
 	}]
-]], 4), Qs = /* @__PURE__ */ V([["defs"]], 4), $s = /* @__PURE__ */ V([["path"]], 4), ec = /* @__PURE__ */ V([[
+]], 4), Zs = /* @__PURE__ */ V([["defs"]], 4), Qs = /* @__PURE__ */ V([["path"]], 4), $s = /* @__PURE__ */ V([[
 	"text",
 	{
 		class: "value-text",
 		"text-anchor": "middle"
 	},
 	" "
-]], 4), tc = /* @__PURE__ */ V([
+]], 4), ec = /* @__PURE__ */ V([
 	,
 	,
 	,
-], 5), nc = /* @__PURE__ */ V([
+], 5), tc = /* @__PURE__ */ V([
 	,
 	,
 	,
 	,
 	,
-], 5), rc = /* @__PURE__ */ V([["rect", {
+], 5), nc = /* @__PURE__ */ V([["rect", {
 	class: "column-mark",
 	y: "0"
-}]], 4), ic = /* @__PURE__ */ V([[
+}]], 4), rc = /* @__PURE__ */ V([[
 	"div",
 	{ class: "tip-line tip-effort" },
 	[
@@ -4026,7 +4022,7 @@ var Ks = /* @__PURE__ */ V([[
 		{ class: "tip-value" },
 		" "
 	]
-]]), ac = /* @__PURE__ */ V([
+]]), ic = /* @__PURE__ */ V([
 	[
 		"div",
 		{ class: "tip-line tip-model" },
@@ -4043,11 +4039,11 @@ var Ks = /* @__PURE__ */ V([[
 	],
 	" ",
 	,
-], 1), oc = /* @__PURE__ */ V([[
+], 1), ac = /* @__PURE__ */ V([[
 	"div",
 	{ class: "name" },
 	"No usage"
-]]), sc = /* @__PURE__ */ V([[
+]]), oc = /* @__PURE__ */ V([[
 	"div",
 	{ class: "tip-line tip-total" },
 	[
@@ -4060,7 +4056,7 @@ var Ks = /* @__PURE__ */ V([[
 		{ class: "tip-value" },
 		" "
 	]
-]]), cc = /* @__PURE__ */ V([
+]]), sc = /* @__PURE__ */ V([
 	[
 		"div",
 		{ class: "when" },
@@ -4070,15 +4066,15 @@ var Ks = /* @__PURE__ */ V([[
 	,
 	" ",
 	,
-], 1), lc = /* @__PURE__ */ V([[
+], 1), cc = /* @__PURE__ */ V([[
 	"div",
 	{ class: "chart" },
 	,
-]]), uc = /* @__PURE__ */ V([[
+]]), lc = /* @__PURE__ */ V([[
 	"td",
 	{ class: "num" },
 	" "
-]]), dc = /* @__PURE__ */ V([
+]]), uc = /* @__PURE__ */ V([
 	[
 		"td",
 		null,
@@ -4087,27 +4083,27 @@ var Ks = /* @__PURE__ */ V([[
 	" ",
 	,
 ], 1);
-function fc(e, t) {
+function dc(e, t) {
 	E(t, !0);
 	let n = (e) => {
-		var t = qs();
+		var t = Ks();
 		K(t, 20, () => no, (e) => e, (e, t) => {
-			var n = Ks(), r = F(n, !0);
+			var n = Gs(), r = F(n, !0);
 			L(() => {
 				q(n, "aria-pressed", B(s) === t), W(r, to[t].label);
 			}), yr("click", n, () => _(t)), U(e, n);
 		}), T(t), U(e, t);
 	}, r = (e) => {
-		var t = Xs(), n = N(t), r = (e) => {
+		var t = Ys(), n = N(t), r = (e) => {
 			var t = H();
 			K(P(t), 17, () => ho(B(c).series), (e) => e.model, (e, t) => {
-				var n = Ys(), r = N(n), i = F(r, !0);
+				var n = Js(), r = N(n), i = F(r, !0);
 				K(I(r, 2), 17, () => B(t).entries, ({ entry: e, text: t }) => e.key, (e, t) => {
 					let n = () => B(t).entry, r = () => B(t).text;
-					var i = Js(), a = N(i);
+					var i = qs(), a = N(i);
 					{
 						let e = /* @__PURE__ */ k(() => sa(n().color, n().hatch, n().turn));
-						xs(a, { get fill() {
+						bs(a, { get fill() {
 							return B(e);
 						} });
 					}
@@ -4120,14 +4116,14 @@ function fc(e, t) {
 			B(c) && e(r);
 		}), T(t), U(e, t);
 	}, i = (e) => {
-		var t = lc(), n = N(t), r = (e) => {
+		var t = cc(), n = N(t), r = (e) => {
 			let t = (e, t = v) => {
 				let n = /* @__PURE__ */ k(() => oo(t(), B(a).length)), r = /* @__PURE__ */ k(() => Ia(B(c).totals));
-				var s = nc(), l = P(s), d = (e) => {
-					var t = Qs();
+				var s = tc(), l = P(s), d = (e) => {
+					var t = Zs();
 					K(t, 21, () => B(u).patterns, ({ id: e, entry: t }) => e, (e, t) => {
 						let n = () => B(t).id, r = () => B(t).entry;
-						var i = Zs(), a = N(i), o = I(a);
+						var i = Xs(), a = N(i), o = I(a);
 						T(i), L(() => {
 							q(i, "id", n()), q(i, "patternTransform", `rotate(${r().turn ?? ""})`), q(a, "fill", r().color), q(o, "fill", r().hatch);
 						}), U(e, i);
@@ -4139,7 +4135,7 @@ function fc(e, t) {
 				var p = I(l);
 				{
 					let e = /* @__PURE__ */ k(() => ka(B(f), 4));
-					Gs(p, {
+					Ws(p, {
 						get left() {
 							return 56;
 						},
@@ -4158,7 +4154,7 @@ function fc(e, t) {
 				var m = I(p);
 				{
 					let e = /* @__PURE__ */ k(() => 238);
-					Us(m, {
+					Hs(m, {
 						get count() {
 							return B(a).length;
 						},
@@ -4171,17 +4167,17 @@ function fc(e, t) {
 				}
 				K(I(m), 18, () => B(a), (e) => e, (e, i, s) => {
 					let l = /* @__PURE__ */ k(() => co(t(), B(a).length, B(s)));
-					var d = tc(), p = P(d);
+					var d = ec(), p = P(d);
 					K(p, 17, () => lo(B(c).series, i, B(f)), ({ entry: e, segment: t }) => e.key, (e, t) => {
 						let r = () => B(t).entry, i = () => B(t).segment;
-						var a = $s();
+						var a = Qs();
 						L((e, t) => {
 							q(a, "d", e), q(a, "fill", t);
 						}, [() => Fa(B(l), i().y, B(n).barWidth, i().height, i().top), () => B(u).fill(r())]), U(e, a);
 					});
 					var m = I(p), h = (e) => {
 						let t = /* @__PURE__ */ k(() => B(c).totals[B(s)] ?? 0);
-						var r = ec(), i = F(r, !0);
+						var r = $s(), i = F(r, !0);
 						L((e) => {
 							q(r, "x", B(l) + B(n).barWidth / 2), q(r, "y", 220 - 220 * B(t) / B(f) - 6), W(i, e);
 						}, [() => B(o)(B(t))]), U(e, r);
@@ -4192,21 +4188,21 @@ function fc(e, t) {
 				}), U(e, s);
 			}, n = (e, t = v, n = v) => {
 				let r = /* @__PURE__ */ k(() => oo(t(), B(a).length).band);
-				var i = rc();
+				var i = nc();
 				L(() => {
 					q(i, "x", 56 + B(r) * n()), q(i, "width", B(r)), q(i, "height", 220);
 				}), U(e, i);
 			}, r = (e, t = v) => {
 				let n = /* @__PURE__ */ k(() => B(a)[t()] ?? ""), r = /* @__PURE__ */ k(() => go(B(c).series, B(n)));
-				var s = cc(), l = P(s), u = F(l, !0), d = I(l, 2);
+				var s = sc(), l = P(s), u = F(l, !0), d = I(l, 2);
 				K(d, 17, () => B(r), (e) => e.model, (e, t) => {
-					var n = ac(), r = P(n), i = N(r), a = F(i, !0), s = F(I(i), !0);
+					var n = ic(), r = P(n), i = N(r), a = F(i, !0), s = F(I(i), !0);
 					T(r), K(I(r, 2), 17, () => B(t).efforts, ({ entry: e, text: t, value: n }) => e.key, (e, t) => {
 						let n = () => B(t).entry, r = () => B(t).text, i = () => B(t).value;
-						var a = ic(), s = N(a), c = N(s);
+						var a = rc(), s = N(a), c = N(s);
 						{
 							let e = /* @__PURE__ */ k(() => sa(n().color, n().hatch, n().turn));
-							xs(c, { get fill() {
+							bs(c, { get fill() {
 								return B(e);
 							} });
 						}
@@ -4220,10 +4216,10 @@ function fc(e, t) {
 						W(a, B(t).model), W(s, e);
 					}, [() => B(o)(B(t).value)]), U(e, n);
 				}, (e) => {
-					U(e, oc());
+					U(e, ac());
 				});
 				var f = I(d, 2), p = (e) => {
-					var n = sc(), r = F(I(N(n)), !0);
+					var n = oc(), r = F(I(N(n)), !0);
 					T(n), L((e) => W(r, e), [() => B(o)(B(c).totals[t()] ?? 0)]), U(e, n);
 				};
 				G(f, (e) => {
@@ -4232,7 +4228,7 @@ function fc(e, t) {
 			}, i = /* @__PURE__ */ k(() => B(c).buckets), a = /* @__PURE__ */ k(() => B(i).keys), o = /* @__PURE__ */ k(() => B(c).metric.format);
 			{
 				let i = /* @__PURE__ */ k(() => fo(B(c).metric, B(l)));
-				gs(e, {
+				hs(e, {
 					get height() {
 						return io;
 					},
@@ -4266,9 +4262,9 @@ function fc(e, t) {
 	}, a = (e) => {
 		var t = H(), n = P(t), r = (e) => {
 			let t = (e, t = v) => {
-				var r = dc(), i = P(r), a = F(i, !0);
+				var r = uc(), i = P(r), a = F(i, !0);
 				K(I(i, 2), 18, () => B(n).others, (e) => e, (e, n, r) => {
-					var i = uc(), a = F(i, !0);
+					var i = lc(), a = F(i, !0);
 					L(() => W(a, t().cells[B(r) + 1])), U(e, i);
 				}), L(() => W(a, t().cells[0])), U(e, r);
 			}, n = /* @__PURE__ */ k(() => {
@@ -4283,7 +4279,7 @@ function fc(e, t) {
 					label: e,
 					numeric: !0
 				}))]);
-				Vs(e, {
+				Bs(e, {
 					key: "chart-table",
 					get columns() {
 						return B(r);
@@ -4301,7 +4297,7 @@ function fc(e, t) {
 		G(n, (e) => {
 			B(p) && e(r);
 		}), U(e, t);
-	}, o = /* @__PURE__ */ k(() => Q.summary), s = /* @__PURE__ */ j(Jt(ro(os("metric")))), c = /* @__PURE__ */ k(() => B(o) ? ao(B(o), B(s)) : null), l = /* @__PURE__ */ k(() => B(c)?.buckets.unit ?? "day"), u = /* @__PURE__ */ k(() => B(c) ? uo(B(c).series) : null), d = /* @__PURE__ */ k(() => B(o) ? B(l) === "hour" ? $("Per hour, by model and effort") : $("Per day, by model and effort") : $("Per day, by model")), f = /* @__PURE__ */ k(() => Oa(Math.max(...B(c)?.totals ?? [], 0))), p = /* @__PURE__ */ k(() => B(c) ? _o(B(c)) : null), m = /* @__PURE__ */ j(0), h = /* @__PURE__ */ k(() => Li(B(m))), g = /* @__PURE__ */ k(() => B(c) ? {
+	}, o = /* @__PURE__ */ k(() => Q.summary), s = /* @__PURE__ */ j(Jt(ro(as("metric")))), c = /* @__PURE__ */ k(() => B(o) ? ao(B(o), B(s)) : null), l = /* @__PURE__ */ k(() => B(c)?.buckets.unit ?? "day"), u = /* @__PURE__ */ k(() => B(c) ? uo(B(c).series) : null), d = /* @__PURE__ */ k(() => B(o) ? B(l) === "hour" ? $("Per hour, by model and effort") : $("Per day, by model and effort") : $("Per day, by model")), f = /* @__PURE__ */ k(() => Oa(Math.max(...B(c)?.totals ?? [], 0))), p = /* @__PURE__ */ k(() => B(c) ? _o(B(c)) : null), m = /* @__PURE__ */ j(0), h = /* @__PURE__ */ k(() => Li(B(m))), g = /* @__PURE__ */ k(() => B(c) ? {
 		count: B(c).buckets.keys.length,
 		label: po(B(c).metric, B(l)),
 		valueText: (e) => mo(B(c), e),
@@ -4315,9 +4311,9 @@ function fc(e, t) {
 		tipX: (e, t) => 56 + oo(e, B(c).buckets.keys.length).band * (t + .5)
 	} : null);
 	function _(e) {
-		M(s, e, !0), ss("metric", e);
+		M(s, e, !0), os("metric", e);
 	}
-	ys(e, {
+	vs(e, {
 		id: "chart",
 		get title() {
 			return B(d);
@@ -4339,7 +4335,7 @@ function fc(e, t) {
 br(["click"]);
 //#endregion
 //#region src/lib/costly.ts
-var pc = [{
+var fc = [{
 	label: "Cache reads",
 	color: "var(--split-soft)",
 	value: (e) => Qa(e).cacheRead
@@ -4349,26 +4345,26 @@ var pc = [{
 	note: "new input, cache writes, output and web searches",
 	value: (e) => Qa(e).rest
 }];
-function mc(e) {
+function pc(e) {
 	return e.note ? `${e.label} (${e.note})` : e.label;
 }
-function hc(e) {
+function mc(e) {
 	return e.title || "Untitled session";
 }
-function gc(e) {
+function hc(e) {
 	return `#session/${encodeURIComponent(e.session_id)}`;
 }
-function _c(e) {
+function gc(e) {
 	let t = $a(e);
 	return e.map((e) => {
-		let n = hc(e), r = pc.map((t) => ({
+		let n = mc(e), r = fc.map((t) => ({
 			part: t,
 			amount: t.value(e)
 		})), i = r.map(({ part: e, amount: t }) => `${e.label} ${X(t)}`).join(", ");
 		return {
 			session: e,
 			title: n,
-			href: gc(e),
+			href: hc(e),
 			detail: `${e.project} · ${Y(e.turns)} turns · avg context ${J(e.context_avg)}`,
 			share: eo(e.cost, t),
 			cost: X(e.cost),
@@ -4377,7 +4373,7 @@ function _c(e) {
 		};
 	});
 }
-function vc(e) {
+function _c(e) {
 	let { session: t } = e;
 	return {
 		title: e.title,
@@ -4391,7 +4387,7 @@ function vc(e) {
 		context: `${Y(t.turns)} turns · context avg ${J(t.context_avg)}, peak ${J(t.context_peak)}`
 	};
 }
-function yc(e) {
+function vc(e) {
 	return {
 		head: [
 			{ label: "Session" },
@@ -4407,7 +4403,7 @@ function yc(e) {
 				label: "Peak context",
 				numeric: !0
 			},
-			...pc.map((e) => ({
+			...fc.map((e) => ({
 				label: e.label,
 				numeric: !0
 			})),
@@ -4423,7 +4419,7 @@ function yc(e) {
 				Y(e.turns),
 				J(e.context_avg),
 				J(e.context_peak),
-				...pc.map((t) => X(t.value(e))),
+				...fc.map((t) => X(t.value(e))),
 				X(e.cost)
 			]
 		}))
@@ -4431,16 +4427,16 @@ function yc(e) {
 }
 //#endregion
 //#region src/components/CostPerSession.svelte
-var bc = /* @__PURE__ */ V([[
+var yc = /* @__PURE__ */ V([[
 	"span",
 	null,
 	,
 	" "
-]]), xc = /* @__PURE__ */ V([[
+]]), bc = /* @__PURE__ */ V([[
 	"div",
 	{ class: "legend" },
 	,
-]]), Sc = /* @__PURE__ */ V([["span"]]), Cc = /* @__PURE__ */ V([[
+]]), xc = /* @__PURE__ */ V([["span"]]), Sc = /* @__PURE__ */ V([[
 	"a",
 	{ class: "bar-row" },
 	[
@@ -4469,7 +4465,7 @@ var bc = /* @__PURE__ */ V([[
 		{ class: "bar-value" },
 		" "
 	]
-]]), wc = /* @__PURE__ */ V([[
+]]), Cc = /* @__PURE__ */ V([[
 	"div",
 	{ class: "row" },
 	,
@@ -4483,7 +4479,7 @@ var bc = /* @__PURE__ */ V([[
 		{ class: "name" },
 		" "
 	]
-]]), Tc = /* @__PURE__ */ V([
+]]), wc = /* @__PURE__ */ V([
 	[
 		"div",
 		{ class: "when" },
@@ -4513,23 +4509,23 @@ var bc = /* @__PURE__ */ V([[
 		{ class: "name" },
 		" "
 	]
-], 1), Ec = /* @__PURE__ */ V([
+], 1), Tc = /* @__PURE__ */ V([
 	["div", { class: "bars" }],
 	" ",
 	,
-], 1), Dc = /* @__PURE__ */ V([[
+], 1), Ec = /* @__PURE__ */ V([[
 	"div",
 	{ class: "empty" },
 	"No sessions in this range."
-]]), Oc = /* @__PURE__ */ V([[
+]]), Dc = /* @__PURE__ */ V([[
 	"div",
 	{ class: "chart" },
 	,
-]]), kc = /* @__PURE__ */ V([[
+]]), Oc = /* @__PURE__ */ V([[
 	"td",
 	{ class: "num" },
 	" "
-]]), Ac = /* @__PURE__ */ V([
+]]), kc = /* @__PURE__ */ V([
 	[
 		"td",
 		null,
@@ -4547,36 +4543,36 @@ var bc = /* @__PURE__ */ V([[
 	" ",
 	,
 ], 1);
-function jc(e, t) {
+function Ac(e, t) {
 	E(t, !0);
 	let n = (e) => {
-		var t = xc(), n = N(t), r = (e) => {
+		var t = bc(), n = N(t), r = (e) => {
 			var t = H();
-			K(P(t), 17, () => pc, (e) => e.label, (e, t) => {
-				var n = bc(), r = N(n);
-				xs(r, { get fill() {
+			K(P(t), 17, () => fc, (e) => e.label, (e, t) => {
+				var n = yc(), r = N(n);
+				bs(r, { get fill() {
 					return B(t).color;
 				} });
 				var i = I(r, 1, !0);
-				T(n), L((e) => W(i, e), [() => mc(B(t))]), U(e, n);
+				T(n), L((e) => W(i, e), [() => pc(B(t))]), U(e, n);
 			}), U(e, t);
 		};
 		G(n, (e) => {
 			B(a) && e(r);
 		}), T(t), U(e, t);
 	}, r = (e) => {
-		var t = Oc(), n = N(t), r = (e) => {
+		var t = Dc(), n = N(t), r = (e) => {
 			var t = H(), n = P(t), r = (e) => {
-				var t = Ec(), n = P(t);
+				var t = Tc(), n = P(t);
 				K(n, 21, () => B(s), (e) => e.session.session_id, (e, t) => {
-					var n = Cc(), r = N(n), i = N(r), a = F(i, !0), o = F(I(i), !0);
+					var n = Sc(), r = N(n), i = N(r), a = F(i, !0), o = F(I(i), !0);
 					T(r);
 					var s = I(r, 2), c = N(s);
 					let l;
 					K(c, 21, () => B(t).parts, ({ part: e, amount: t }) => e.label, (e, t) => {
 						let n = () => B(t).part, r = () => B(t).amount;
 						var i = H(), a = P(i), o = (e) => {
-							var t = Sc();
+							var t = xc();
 							let i;
 							L(() => i = li(t, "", i, {
 								"flex-grow": r(),
@@ -4593,7 +4589,7 @@ function jc(e, t) {
 					}, [() => `${B(t).share.toFixed(2) ?? ""}%`]), yr("pointermove", n, (e) => p(e, B(t).session.session_id)), vr("focus", n, (e) => p(e, B(t).session.session_id)), vr("pointerleave", n, m), vr("blur", n, m), U(e, n);
 				}), T(n);
 				var r = I(n, 2), i = (e) => {
-					ps(e, {
+					fs(e, {
 						get anchor() {
 							return B(u).anchor;
 						},
@@ -4601,10 +4597,10 @@ function jc(e, t) {
 							return B(u).top;
 						},
 						children: (e, t) => {
-							var n = Tc(), r = P(n), i = F(r, !0), a = I(r, 2);
+							var n = wc(), r = P(n), i = F(r, !0), a = I(r, 2);
 							K(a, 17, () => B(f).parts, (e) => e.label, (e, t) => {
-								var n = wc(), r = N(n);
-								xs(r, { get fill() {
+								var n = Cc(), r = N(n);
+								bs(r, { get fill() {
 									return B(t).color;
 								} });
 								var i = I(r), a = F(i, !0), o = F(I(i));
@@ -4613,7 +4609,7 @@ function jc(e, t) {
 								}), U(e, n);
 							});
 							var o = I(a, 2), s = N(o);
-							xs(s, { fill: null });
+							bs(s, { fill: null });
 							var c = F(I(s), !0);
 							je(), T(o);
 							var l = F(I(o, 2), !0);
@@ -4628,7 +4624,7 @@ function jc(e, t) {
 					B(u) && B(f) && e(i);
 				}), U(e, t);
 			}, i = (e) => {
-				U(e, Dc());
+				U(e, Ec());
 			};
 			G(n, (e) => {
 				B(s).length ? e(r) : e(i, -1);
@@ -4640,15 +4636,15 @@ function jc(e, t) {
 	}, i = (e) => {
 		var t = H(), n = P(t), r = (e) => {
 			let t = (e, t = v) => {
-				var r = Ac(), i = P(r), a = N(i), o = F(a, !0), s = F(I(a), !0);
+				var r = kc(), i = P(r), a = N(i), o = F(a, !0), s = F(I(a), !0);
 				T(i), K(I(i, 2), 19, () => B(n), (e) => e.label, (e, n, r) => {
-					var i = kc(), a = F(i, !0);
+					var i = Oc(), a = F(i, !0);
 					L(() => W(a, t().cells[B(r)])), U(e, i);
 				}), L((e, n) => {
 					q(a, "href", e), W(o, n), W(s, t().session.project);
-				}, [() => gc(t().session), () => hc(t().session)]), U(e, r);
+				}, [() => hc(t().session), () => mc(t().session)]), U(e, r);
 			}, n = /* @__PURE__ */ k(() => B(c).head.slice(1));
-			Vs(e, {
+			Bs(e, {
 				key: "costly-table",
 				get columns() {
 					return B(c).head;
@@ -4665,7 +4661,7 @@ function jc(e, t) {
 		G(n, (e) => {
 			B(a) && e(r);
 		}), U(e, t);
-	}, a = /* @__PURE__ */ k(() => Q.summary), o = /* @__PURE__ */ k(() => B(a)?.costly_sessions ?? []), s = /* @__PURE__ */ k(() => _c(B(o))), c = /* @__PURE__ */ k(() => yc(B(o))), l = /* @__PURE__ */ k(() => $("Cost per session")), u = /* @__PURE__ */ j(null), d = /* @__PURE__ */ k(() => B(u) ? B(s).find((e) => e.session.session_id === B(u)?.id) : void 0), f = /* @__PURE__ */ k(() => B(d) ? vc(B(d)) : null);
+	}, a = /* @__PURE__ */ k(() => Q.summary), o = /* @__PURE__ */ k(() => B(a)?.costly_sessions ?? []), s = /* @__PURE__ */ k(() => gc(B(o))), c = /* @__PURE__ */ k(() => vc(B(o))), l = /* @__PURE__ */ k(() => $("Cost per session")), u = /* @__PURE__ */ j(null), d = /* @__PURE__ */ k(() => B(u) ? B(s).find((e) => e.session.session_id === B(u)?.id) : void 0), f = /* @__PURE__ */ k(() => B(d) ? _c(B(d)) : null);
 	function p(e, t) {
 		let n = e.currentTarget, r = n.closest(".chart")?.getBoundingClientRect();
 		if (!r) return;
@@ -4679,7 +4675,7 @@ function jc(e, t) {
 	function m() {
 		M(u, null);
 	}
-	ys(e, {
+	vs(e, {
 		id: "costly",
 		get title() {
 			return B(l);
@@ -4699,36 +4695,36 @@ function jc(e, t) {
 br(["pointermove"]);
 //#endregion
 //#region src/lib/compact.ts
-var Mc = /* @__PURE__ */ t({
-	COMPACTION_VERDICTS: () => Uc,
-	PAYOFF_WORDS: () => Nc,
-	REBUILD_CAUSES: () => Hc,
-	VERSUS_KEEPING_NOTE: () => Wc,
-	breakevenCall: () => qc,
-	breakevenText: () => Jc,
-	compactCallKind: () => Rc,
-	compactionTotal: () => Vc,
-	delegateCallShown: () => zc,
-	oneTimeText: () => Yc,
-	oneTimeTitle: () => Xc,
-	payoffAhead: () => Ic,
-	payoffText: () => Lc,
-	payoffTone: () => Fc,
-	spread: () => Pc,
-	verdictText: () => Gc,
-	verdictTitle: () => Zc,
-	verdictTone: () => Bc,
-	verdictWords: () => Kc
-}), Nc = {
+var jc = /* @__PURE__ */ t({
+	COMPACTION_VERDICTS: () => Hc,
+	PAYOFF_WORDS: () => Mc,
+	REBUILD_CAUSES: () => Vc,
+	VERSUS_KEEPING_NOTE: () => Uc,
+	breakevenCall: () => Kc,
+	breakevenText: () => qc,
+	compactCallKind: () => Lc,
+	compactionTotal: () => Bc,
+	delegateCallShown: () => Rc,
+	oneTimeText: () => Jc,
+	oneTimeTitle: () => Yc,
+	payoffAhead: () => Fc,
+	payoffText: () => Ic,
+	payoffTone: () => Pc,
+	spread: () => Nc,
+	verdictText: () => Wc,
+	verdictTitle: () => Xc,
+	verdictTone: () => zc,
+	verdictWords: () => Gc
+}), Mc = {
 	soon: "Soon",
 	close: "Close",
 	later: "Not yet",
 	unlikely: "Likely too late"
 };
-function Pc(e, t) {
+function Nc(e, t) {
 	return e === t ? "" : ` (${e}–${t})`;
 }
-function Fc(e, t) {
+function Pc(e, t) {
 	let n = e.calls_ahead, r = e.breakeven_calls;
 	if (t) {
 		if (e.cold_saving >= 0) return "soon";
@@ -4736,36 +4732,36 @@ function Fc(e, t) {
 	}
 	return r !== null && n != null && r <= n ? r <= n / 2 ? "soon" : "close" : (e.pays_later_in ?? null) === null ? r === null ? "unlikely" : n == null ? null : "unlikely" : "later";
 }
-function Ic(e, t, n) {
+function Fc(e, t, n) {
 	if (!e || t.calls_ahead === null || t.calls_ahead === void 0) return null;
 	if (e === "later") {
 		let e = t.pays_later_in === 1 ? "1 reply" : `${Y(t.pays_later_in)} replies`;
-		return `${Nc.later}: growing at its recent pace, the context reaches about ${J(t.pays_later_at)} in ${e}, and compacting then would pay off within the replies still ahead on average.`;
+		return `${Mc.later}: growing at its recent pace, the context reaches about ${J(t.pays_later_at)} in ${e}, and compacting then would pay off within the replies still ahead on average.`;
 	}
 	if ((n ? t.cold_saving >= 0 ? null : t.breakeven_cold : t.breakeven_calls) === null) return null;
 	let r = Y(Math.round(t.calls_ahead));
-	return `${Nc[e]}: ` + (t.ahead_from === "longer" ? `after your past compactions, a stretch this long went on for about ${r} more replies on average.` : `after your past compactions you went on for about ${r} replies on average.`);
+	return `${Mc[e]}: ` + (t.ahead_from === "longer" ? `after your past compactions, a stretch this long went on for about ${r} more replies on average.` : `after your past compactions you went on for about ${r} replies on average.`);
 }
-function Lc(e, t) {
+function Ic(e, t) {
 	let n = (e.pays_later_in ?? null) === null ? "would never pay off" : "would not pay off yet";
 	if (t) return e.breakeven_cold === null ? `${n}: the context is below what compacting leaves` : e.cold_saving >= 0 ? `pays off at once (about ${X(e.cold_saving)}), since the next reply sends it all anyway` : `would pay off after about ${Y(e.breakeven_cold)} replies`;
 	let r = (e) => e === null ? "never" : Y(e);
-	return e.breakeven_calls === null ? e.breakeven_low === null ? `${n}: the context is below what compacting leaves` : `would likely not pay off (at best after about ${Y(e.breakeven_low)} replies)` : `would pay off after about ${Y(e.breakeven_calls)} replies` + Pc(r(e.breakeven_low), r(e.breakeven_high));
+	return e.breakeven_calls === null ? e.breakeven_low === null ? `${n}: the context is below what compacting leaves` : `would likely not pay off (at best after about ${Y(e.breakeven_low)} replies)` : `would pay off after about ${Y(e.breakeven_calls)} replies` + Nc(r(e.breakeven_low), r(e.breakeven_high));
 }
-function Rc(e, t) {
+function Lc(e, t) {
 	let n = e.live ? e.current : null, r = n ? n.compact_now : null;
 	if (!n || !r) return null;
 	let i = n.context >= n.hint_tokens ? "threshold" : null, a = r.estimate, o = r.cache_warm_until;
 	return a && o !== null && Date.parse(o) < Date.parse(t) && a.cold_saving >= 0 ? "cold" : i;
 }
-function zc(e) {
+function Rc(e) {
 	let t = e.live ? e.current : null, n = t ? t.exploration : null, r = t && t.compact_now ? t.compact_now.estimate : null;
 	return !n || !r || r.calls_ahead === null || r.calls_ahead === void 0 ? !1 : n.tokens >= e.delegate_hint_tokens && r.calls_ahead >= e.delegate_calls_ahead;
 }
-function Bc(e) {
+function zc(e) {
 	return e.verdict === "saved" ? "gain" : e.verdict === "cost_more" || e.verdict === "open" && (e.net ?? 0) < 0 ? "loss" : null;
 }
-function Vc(e) {
+function Bc(e) {
 	let t = e.map((e) => e.versus_keeping).filter((e) => e !== null && e.verdict !== "forced");
 	if (!t.length) return null;
 	let n = t.map((e) => e.net).filter((e) => e !== null);
@@ -4775,69 +4771,69 @@ function Vc(e) {
 		unknown: t.length - n.length
 	};
 }
-var Hc = {
+var Vc = {
 	model: "the model changed",
 	idle: "the cache expired while idle",
 	prefix: "something early in the context changed"
-}, Uc = {
+}, Hc = {
 	saved: "saved",
 	cost_more: "cost more",
 	even: "about even",
 	forced: "forced: keeping would have auto-compacted",
 	open: "not paid off by the last call",
 	unknown: "unknown without an output speed or duration"
-}, Wc = "Compared with keeping the context: the same later calls, each reading the dropped tokens again from the cache, at API list prices. ~ marks the summary call's output, estimated from its duration at your output speed; ▲ + (saved, green) holds even at your fastest, ▼ − (cost more, red) even without the summary, or so far for the stretch still running. Re-reading files after compacting isn't counted.";
-function Gc(e) {
+}, Uc = "Compared with keeping the context: the same later calls, each reading the dropped tokens again from the cache, at API list prices. ~ marks the summary call's output, estimated from its duration at your output speed; ▲ + (saved, green) holds even at your fastest, ▼ − (cost more, red) even without the summary, or so far for the stretch still running. Re-reading files after compacting isn't counted.";
+function Wc(e) {
 	let { verdict: t, net: n, net_high: r } = e;
-	return t === "saved" ? `▲ +${X(n)}` : t === "cost_more" ? n === null ? `▼ −${X(-r)} or more` : `▼ −${X(-n)}` : t === "open" && n !== null ? n < 0 ? `▼ −${X(-n)} so far` : "about even so far" : t === "unknown" && r > 0 ? `saved at most ${X(r)}, the summary call unknown` : Uc[t];
+	return t === "saved" ? `▲ +${X(n)}` : t === "cost_more" ? n === null ? `▼ −${X(-r)} or more` : `▼ −${X(-n)}` : t === "open" && n !== null ? n < 0 ? `▼ −${X(-n)} so far` : "about even so far" : t === "unknown" && r > 0 ? `saved at most ${X(r)}, the summary call unknown` : Hc[t];
 }
-function Kc(e) {
-	let t = Bc(e);
+function Gc(e) {
+	let t = zc(e);
 	return t === "gain" ? "Saved against keeping the context" : e.verdict === "open" ? "Not paid off by the last call: cost more than keeping the context so far" : t === "loss" ? "Cost more than keeping the context" : null;
 }
-function qc(e) {
+function Kc(e) {
 	return e.verdict === "forced" ? null : e.breakeven_call === null ? "never" : `${e.breakeven_at_least ? "≥ " : ""}call ${Y(e.breakeven_call)}`;
 }
-function Jc(e) {
-	let t = qc(e);
+function qc(e) {
+	let t = Kc(e);
 	return t === null ? null : t === "never" ? "never pays off" : e.breakeven_at_least ? `pays off at call ${Y(e.breakeven_call)} or later` : (e.breakeven_call ?? 0) > e.calls_after ? `would pay off at ${t}` : `paid off at ${t}`;
 }
-function Yc(e) {
+function Jc(e) {
 	return e.one_time === null ? `≥ ${X(e.call_low + e.rewrite)}` : `~${X(e.one_time)}`;
 }
-function Xc(e) {
+function Yc(e) {
 	let t = e.summary_tokens === null ? "its summary unknown" : `a summary of about ${J(e.summary_tokens)} tokens, at most ${J(e.summary_high)}`, n = e.cache_warm ? "warm" : "cold";
 	return `The summary call ${e.call_cost === null ? "" : `~${X(e.call_cost)} `}(${t}; input ${X(e.call_low)}, cache ${n}) and rewriting the next call's context ` + X(e.rewrite);
 }
-function Zc(e) {
+function Xc(e) {
 	let t = [];
 	return e.rework_margin !== null && t.push(`Re-reading about ${J(e.rework_margin)} tokens after compacting would cancel the saving`), e.capped_at !== null && t.push(`The kept session would have auto-compacted at call ${Y(e.capped_at)}`), t.join(". ") || null;
 }
 //#endregion
 //#region src/lib/live.ts
-var Qc = /* @__PURE__ */ t({
-	liveCompactBadge: () => il,
-	liveEmpty: () => tl,
-	livePastDay: () => $c,
-	liveSecretBadge: () => rl,
-	liveStateBadges: () => al,
-	liveWaitBadge: () => nl,
-	liveWindow: () => el,
-	sessionWaits: () => ol,
-	waitChanged: () => sl
+var Zc = /* @__PURE__ */ t({
+	liveCompactBadge: () => rl,
+	liveEmpty: () => el,
+	livePastDay: () => Qc,
+	liveSecretBadge: () => nl,
+	liveStateBadges: () => il,
+	liveWaitBadge: () => tl,
+	liveWindow: () => $c,
+	sessionWaits: () => al,
+	waitChanged: () => ol
 });
-function $c(e, t) {
+function Qc(e, t) {
 	return e.days === 1 && e.until && e.until !== t ? e.until : null;
 }
-function el(e, t) {
-	let n = $c(e, t), r = e.agent_minutes > e.minutes ? ` (${e.agent_minutes} min while agents work)` : "", i = e.sessions.some((e) => e.waiting) ? " or waiting for you" : "", a = n ? `, active on ${xa(n)}` : "";
+function $c(e, t) {
+	let n = Qc(e, t), r = e.agent_minutes > e.minutes ? ` (${e.agent_minutes} min while agents work)` : "", i = e.sessions.some((e) => e.waiting) ? " or waiting for you" : "", a = n ? `, active on ${xa(n)}` : "";
 	return `· changed in the last ${e.minutes} min${r}${i}${a}`;
 }
-function tl(e, t) {
-	let n = $c(e, t);
+function el(e, t) {
+	let n = Qc(e, t);
 	return n ? `No live session was active on ${xa(n)}.` : `No session active in the last ${e.minutes} minutes.`;
 }
-function nl(e) {
+function tl(e) {
 	if (!e) return null;
 	let t = ` since ${Z(e.since)}`;
 	if (e.kind === "permission") {
@@ -4854,7 +4850,7 @@ function nl(e) {
 		text: `Waiting for ${e.tool === "ExitPlanMode" ? "you to approve the plan" : "your answer"}${t}`
 	};
 }
-function rl(e) {
+function nl(e) {
 	let t = e.high ?? 0, n = e.medium ?? 0;
 	if (!t && !n) return null;
 	let r = (e) => e === 1 ? "1 call" : `${Y(e)} calls`, i = t ? `${r(t)} sent out${n ? `, ${Y(n)} more returned a result or may still` : ""}` : `${r(n)} returned a result or may still`;
@@ -4864,7 +4860,7 @@ function rl(e) {
 		text: `Possible secret access: ${i}`
 	};
 }
-function il(e, t) {
+function rl(e, t) {
 	let n = e ? e.compact_now : null;
 	if (!e || !n) return null;
 	let r = e.context >= e.hint_tokens ? `Past your ${J(e.hint_tokens)} compact hint.` : null, i = r ? ["hint"] : [], a = () => r ? {
@@ -4874,13 +4870,13 @@ function il(e, t) {
 		states: i
 	} : null, o = n.estimate;
 	if (!o) return a();
-	let s = n.cache_warm_until, c = s !== null && Date.parse(s) < Date.parse(t), l = Fc(o, c), u = (e, t) => ({
+	let s = n.cache_warm_until, c = s !== null && Date.parse(s) < Date.parse(t), l = Pc(o, c), u = (e, t) => ({
 		kind: "compact",
 		tone: l,
 		text: [t, r].filter(Boolean).join(" "),
 		states: [e, ...i]
 	});
-	if (Rc({
+	if (Lc({
 		live: !0,
 		current: e
 	}, t) === "cold") return u("cold", `Compacting now saves ~${X(o.cold_saving)} at once: the cache has expired.`);
@@ -4889,19 +4885,19 @@ function il(e, t) {
 	if (f === null && (d === null || p === null || d > p)) return a();
 	if (d === null) return c || o.breakeven_low === null ? a() : u("unlikely", "Compacting now would likely not pay off.");
 	let m = `pays off after ~${Y(d)} replies`;
-	return !l || f === null ? u("pays", `Compacting now ${m}.`) : u(l, `${Nc[l]}: compacting now ${m}, ~${Y(Math.round(f))} ahead on average.`);
+	return !l || f === null ? u("pays", `Compacting now ${m}.`) : u(l, `${Mc[l]}: compacting now ${m}, ~${Y(Math.round(f))} ahead on average.`);
+}
+function il(e, t) {
+	return [nl(e.secrets), rl(e.current, t)].filter((e) => e !== null);
 }
 function al(e, t) {
-	return [rl(e.secrets), il(e.current, t)].filter((e) => e !== null);
-}
-function ol(e, t) {
-	let n = nl(e.waiting), r = n ? [{
+	let n = tl(e.waiting), r = n ? [{
 		...n,
 		session_id: e.session_id,
 		title: null
 	}] : [], i = [];
 	for (let n of t) {
-		let t = n.session_id === e.session_id ? null : nl(n.waiting);
+		let t = n.session_id === e.session_id ? null : tl(n.waiting);
 		t && i.push({
 			...t,
 			session_id: n.session_id,
@@ -4910,13 +4906,13 @@ function ol(e, t) {
 	}
 	return [...r, ...i];
 }
-function sl(e, t) {
+function ol(e, t) {
 	let n = t.find((t) => t.session_id === e.session_id);
 	return n !== void 0 && JSON.stringify(n.waiting ?? null) !== JSON.stringify(e.waiting ?? null);
 }
 //#endregion
 //#region src/components/LiveIcon.svelte
-var cl = /* @__PURE__ */ V([
+var sl = /* @__PURE__ */ V([
 	["path", {
 		d: "M8 10.5V7.8a4 4 0 0 1 8 0v2.7",
 		fill: "none",
@@ -4947,7 +4943,7 @@ var cl = /* @__PURE__ */ V([
 		"stroke-width": "1.6",
 		"stroke-linecap": "round"
 	}]
-], 5), ll = /* @__PURE__ */ V([
+], 5), cl = /* @__PURE__ */ V([
 	["path", {
 		d: "M5 3.5h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8.2L6 20.5v-4H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z",
 		fill: "none",
@@ -4968,7 +4964,7 @@ var cl = /* @__PURE__ */ V([
 		r: "1",
 		fill: "currentColor"
 	}]
-], 5), ul = /* @__PURE__ */ V([
+], 5), ll = /* @__PURE__ */ V([
 	["path", {
 		d: "M7.2 9.6 8.6 4.4c.2-.8 1-1.2 1.8-1l1.6.4 1.6-.4c.8-.2 1.6.2 1.8 1l1.4 5.2z",
 		fill: "currentColor"
@@ -5004,7 +5000,7 @@ var cl = /* @__PURE__ */ V([
 		fill: "currentColor",
 		"fill-rule": "evenodd"
 	}]
-], 5), dl = /* @__PURE__ */ V([
+], 5), ul = /* @__PURE__ */ V([
 	["rect", {
 		x: "3.5",
 		y: "2.5",
@@ -5035,7 +5031,7 @@ var cl = /* @__PURE__ */ V([
 		d: "M6 19h12v-4.2l-2 1.3-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3z",
 		fill: "currentColor"
 	}]
-], 5), fl = /* @__PURE__ */ V([[
+], 5), dl = /* @__PURE__ */ V([[
 	"span",
 	{ role: "img" },
 	[
@@ -5048,19 +5044,19 @@ var cl = /* @__PURE__ */ V([
 		,
 	]
 ]]);
-function pl(e, t) {
+function fl(e, t) {
 	E(t, !0);
-	var n = fl(), r = N(n), i = N(r), a = (e) => {
-		var t = cl();
+	var n = dl(), r = N(n), i = N(r), a = (e) => {
+		var t = sl();
 		je(3), U(e, t);
 	}, o = (e) => {
-		var t = ll();
+		var t = cl();
 		je(2), U(e, t);
 	}, s = (e) => {
-		var t = ul();
+		var t = ll();
 		je(5), U(e, t);
 	}, c = (e) => {
-		var t = dl();
+		var t = ul();
 		je(3), U(e, t);
 	};
 	G(i, (e) => {
@@ -5075,7 +5071,7 @@ function pl(e, t) {
 }
 //#endregion
 //#region src/components/LiveCard.svelte
-var ml = /* @__PURE__ */ V([[
+var pl = /* @__PURE__ */ V([[
 	"div",
 	null,
 	[
@@ -5088,7 +5084,7 @@ var ml = /* @__PURE__ */ V([[
 		null,
 		" "
 	]
-]]), hl = /* @__PURE__ */ V([[
+]]), ml = /* @__PURE__ */ V([[
 	"li",
 	null,
 	[
@@ -5107,11 +5103,11 @@ var ml = /* @__PURE__ */ V([[
 		{ class: "sub muted" },
 		" "
 	]
-]]), gl = /* @__PURE__ */ V([["ul"]]), _l = /* @__PURE__ */ V([[
+]]), hl = /* @__PURE__ */ V([["ul"]]), gl = /* @__PURE__ */ V([[
 	"div",
 	{ class: "note" },
 	"No subagent running"
-]]), vl = /* @__PURE__ */ V([[
+]]), _l = /* @__PURE__ */ V([[
 	"div",
 	{ class: "live-card" },
 	[
@@ -5146,9 +5142,9 @@ var ml = /* @__PURE__ */ V([[
 	" ",
 	,
 ]]);
-function yl(e, t) {
+function vl(e, t) {
 	E(t, !0);
-	let n = /* @__PURE__ */ k(() => nl(t.session.waiting)), r = /* @__PURE__ */ k(() => t.sessionState ? al(t.sessionState, new Date(t.now).toISOString()) : []), i = /* @__PURE__ */ k(() => [
+	let n = /* @__PURE__ */ k(() => tl(t.session.waiting)), r = /* @__PURE__ */ k(() => t.sessionState ? il(t.sessionState, new Date(t.now).toISOString()) : []), i = /* @__PURE__ */ k(() => [
 		{
 			label: "Turns",
 			value: Y(t.session.turns)
@@ -5166,10 +5162,10 @@ function yl(e, t) {
 			value: X(t.session.cost)
 		}
 	]);
-	var a = vl(), o = N(a), s = N(o), c = I(N(s)), l = F(c, !0);
+	var a = _l(), o = N(a), s = N(o), c = I(N(s)), l = F(c, !0);
 	T(s);
 	var u = I(s, 2), d = (e) => {
-		pl(e, { get badge() {
+		fl(e, { get badge() {
 			return B(n);
 		} });
 	};
@@ -5178,21 +5174,21 @@ function yl(e, t) {
 	});
 	var f = I(u, 2);
 	K(f, 21, () => B(r), (e) => e.kind, (e, t) => {
-		pl(e, { get badge() {
+		fl(e, { get badge() {
 			return B(t);
 		} });
 	}), T(f), T(o);
 	var p = I(o, 2), m = F(p), h = I(p, 2);
 	K(h, 21, () => B(i), (e) => e.label, (e, t) => {
-		var n = ml(), r = N(n), i = F(r, !0), a = F(I(r), !0);
+		var n = pl(), r = N(n), i = F(r, !0), a = F(I(r), !0);
 		T(n), L(() => {
 			W(i, B(t).label), W(a, B(t).value);
 		}), U(e, n);
 	}), T(h);
 	var g = I(h, 2), _ = (e) => {
-		var n = gl();
+		var n = hl();
 		K(n, 21, () => t.session.subagents, (e) => e.agent_id, (e, n) => {
-			var r = hl(), i = N(r), a = F(i, !0), o = I(i, 2), s = F(o, !0), c = F(I(o));
+			var r = ml(), i = N(r), a = F(i, !0), o = I(i, 2), s = F(o, !0), c = F(I(o));
 			T(r), L((e, t, r) => {
 				W(a, B(n).agent_type), W(s, B(n).description || ""), W(c, `${(B(n).model || "–") ?? ""} · ${e ?? ""} turns · context ${t ?? ""} · ${r ?? ""}`);
 			}, [
@@ -5202,21 +5198,21 @@ function yl(e, t) {
 			]), U(e, r);
 		}), T(n), U(e, n);
 	}, v = (e) => {
-		U(e, _l());
+		U(e, gl());
 	};
 	G(g, (e) => {
 		t.session.subagents.length ? e(_) : e(v, -1);
 	}), T(a), L((e, n, r) => {
 		q(c, "href", e), W(l, n), W(m, `${t.session.project ?? ""}${t.session.git_branch ? ` · ${t.session.git_branch}` : ""} · ${r ?? ""}`);
 	}, [
-		() => gc(t.session),
 		() => hc(t.session),
+		() => mc(t.session),
 		() => Ta(t.session.last_activity, t.now)
 	]), U(e, a), D();
 }
 //#endregion
 //#region src/components/LiveSessions.svelte
-var bl = /* @__PURE__ */ V([[
+var yl = /* @__PURE__ */ V([[
 	"h2",
 	{ id: "live-title" },
 	[
@@ -5230,36 +5226,36 @@ var bl = /* @__PURE__ */ V([[
 		{ class: "muted" },
 		" "
 	]
-]]), xl = /* @__PURE__ */ V([[
+]]), bl = /* @__PURE__ */ V([[
 	"div",
 	{ class: "title-row" },
 	,
 	" ",
 	,
-]]), Sl = /* @__PURE__ */ V([[
+]]), xl = /* @__PURE__ */ V([[
 	"div",
 	{ class: "empty" },
+	" "
+]]), Sl = /* @__PURE__ */ V([[
+	"div",
+	{ class: "note" },
 	" "
 ]]), Cl = /* @__PURE__ */ V([[
 	"div",
 	{ class: "note" },
 	" "
-]]), wl = /* @__PURE__ */ V([[
-	"div",
-	{ class: "note" },
-	" "
-]]), Tl = /* @__PURE__ */ V([["div", { class: "live-grid" }]]), El = /* @__PURE__ */ V([[
+]]), wl = /* @__PURE__ */ V([["div", { class: "live-grid" }]]), Tl = /* @__PURE__ */ V([[
 	"div",
 	{ class: "empty" },
 	" "
-]]), Dl = /* @__PURE__ */ V([
+]]), El = /* @__PURE__ */ V([
 	,
 	,
 	" ",
 	,
 	" ",
 	,
-], 1), Ol = /* @__PURE__ */ V([[
+], 1), Dl = /* @__PURE__ */ V([[
 	"section",
 	{
 		class: "card",
@@ -5273,17 +5269,17 @@ var bl = /* @__PURE__ */ V([[
 		,
 	]
 ]]);
-function kl(e, t) {
+function Ol(e, t) {
 	E(t, !0);
 	let n = (e) => {
-		var t = bl(), n = N(t), r = F(n, !0), a = F(I(n, 2), !0);
+		var t = yl(), n = N(t), r = F(n, !0), a = F(I(n, 2), !0);
 		T(t), L((e, t) => {
 			W(r, e), W(a, t);
-		}, [() => $("Live sessions"), () => B(i) ? el(B(i), B(o)) : ""]), U(e, t);
-	}, r = "live", i = /* @__PURE__ */ k(() => Q.live), a = /* @__PURE__ */ k(() => Q.liveAt ?? Date.now()), o = /* @__PURE__ */ k(() => ya(new Date(B(a)))), s = /* @__PURE__ */ k(() => B(i)?.sessions ?? []), c = /* @__PURE__ */ k(() => wo(B(s).map(() => !1))), l = /* @__PURE__ */ k(() => B(s).length), u = /* @__PURE__ */ k(() => js(r, B(l))), d = /* @__PURE__ */ k(() => B(s).slice(B(u).first, B(u).last)), f = /* @__PURE__ */ k(() => B(l) > Co[0]);
-	var p = Ol(), m = N(p), h = (e) => {
-		var t = xl(), i = N(t);
-		n(i), Ds(I(i, 2), {
+		}, [() => $("Live sessions"), () => B(i) ? $c(B(i), B(o)) : ""]), U(e, t);
+	}, r = "live", i = /* @__PURE__ */ k(() => Q.live), a = /* @__PURE__ */ k(() => Q.liveAt ?? Date.now()), o = /* @__PURE__ */ k(() => ya(new Date(B(a)))), s = /* @__PURE__ */ k(() => B(i)?.sessions ?? []), c = /* @__PURE__ */ k(() => wo(B(s).map(() => !1))), l = /* @__PURE__ */ k(() => B(s).length), u = /* @__PURE__ */ k(() => As(r, B(l))), d = /* @__PURE__ */ k(() => B(s).slice(B(u).first, B(u).last)), f = /* @__PURE__ */ k(() => B(l) > Co[0]);
+	var p = Dl(), m = N(p), h = (e) => {
+		var t = bl(), i = N(t);
+		n(i), Es(I(i, 2), {
 			key: r,
 			noun: "sessions",
 			get units() {
@@ -5297,29 +5293,29 @@ function kl(e, t) {
 		B(f) ? e(h) : e(g, -1);
 	});
 	var _ = I(m, 2), v = N(_), y = (e) => {
-		var t = Sl(), n = F(t, !0);
+		var t = xl(), n = F(t, !0);
 		L(() => W(n, Q.liveFailed ? "Could not load the live sessions." : "Loading…")), U(e, t);
 	}, ee = (e) => {
-		var t = Dl(), n = P(t), r = (e) => {
-			var t = Cl(), n = F(t);
+		var t = El(), n = P(t), r = (e) => {
+			var t = Sl(), n = F(t);
 			L(() => W(n, `Permission prompts can't show here: ${B(i).prompts_unavailable ?? ""}.`)), U(e, t);
 		};
 		G(n, (e) => {
 			B(i).prompts_unavailable && e(r);
 		});
 		var s = I(n, 2), c = (e) => {
-			var t = wl(), n = F(t);
+			var t = Cl(), n = F(t);
 			L(() => W(n, `Desktop notifications can't show: ${B(i).notifications_unavailable ?? ""}.`)), U(e, t);
 		};
 		G(s, (e) => {
 			B(i).notifications_unavailable && e(c);
 		});
 		var l = I(s, 2), u = (e) => {
-			var t = Tl();
+			var t = wl();
 			K(t, 21, () => B(d), (e) => e.session_id, (e, t) => {
 				{
 					let n = /* @__PURE__ */ k(() => Q.liveState(B(t).session_id));
-					yl(e, {
+					vl(e, {
 						get session() {
 							return B(t);
 						},
@@ -5333,8 +5329,8 @@ function kl(e, t) {
 				}
 			}), T(t), U(e, t);
 		}, f = (e) => {
-			var t = El(), n = F(t, !0);
-			L((e) => W(n, e), [() => tl(B(i), B(o))]), U(e, t);
+			var t = Tl(), n = F(t, !0);
+			L((e) => W(n, e), [() => el(B(i), B(o))]), U(e, t);
 		};
 		G(l, (e) => {
 			B(d).length ? e(u) : e(f, -1);
@@ -5346,7 +5342,7 @@ function kl(e, t) {
 }
 //#endregion
 //#region src/lib/trend.ts
-var Al = [
+var kl = [
 	{
 		label: "Estimated cost",
 		slot: 0,
@@ -5366,62 +5362,62 @@ var Al = [
 		format: J
 	}
 ];
-function jl(e) {
+function Al(e) {
 	let t = e * 116 + 22;
 	return {
 		top: t,
 		bottom: t + 76
 	};
 }
-function Ml() {
-	return jl(Al.length - 1).bottom + 28;
+function jl() {
+	return Al(kl.length - 1).bottom + 28;
 }
-function Nl(e, t = /* @__PURE__ */ new Date()) {
+function Ml(e, t = /* @__PURE__ */ new Date()) {
 	let n = Ra(e, t), r = Ba(n.unit === "hour" ? e.hour_model : e.day_model, n.keyOf);
 	return {
 		buckets: n,
 		totals: n.keys.map((e) => r.get(e) ?? za)
 	};
 }
-function Pl(e, t) {
+function Nl(e, t) {
 	return e.totals.map((e) => t.value(e));
 }
-function Fl(e) {
+function Pl(e) {
 	return `estimated cost, input and output tokens per ${e}`;
 }
-function Il(e) {
+function Fl(e) {
 	return `Estimated cost, input tokens and output tokens per ${e}; table view available`;
 }
-function Ll(e) {
+function Il(e) {
 	return `Estimated cost, input and output tokens per ${e}; arrow keys step through them`;
 }
-function Rl(e, t) {
-	let n = e.totals[t] ?? za, r = Al.map((e) => `${e.label} ${e.format(e.value(n))}`).join(", ");
+function Ll(e, t) {
+	let n = e.totals[t] ?? za, r = kl.map((e) => `${e.label} ${e.format(e.value(n))}`).join(", ");
 	return `${e.buckets.long(e.buckets.keys[t] ?? "")}: ${r}`;
 }
-function zl(e) {
+function Rl(e) {
 	let t = e.buckets.keys.map((t, n) => ({
 		key: t,
-		cells: [e.buckets.short(t), ...Al.map((t) => t.format(t.value(e.totals[n] ?? za)))]
+		cells: [e.buckets.short(t), ...kl.map((t) => t.format(t.value(e.totals[n] ?? za)))]
 	})).reverse();
 	return {
-		head: [e.buckets.heading, ...Al.map((e) => e.label)],
+		head: [e.buckets.heading, ...kl.map((e) => e.label)],
 		rows: t
 	};
 }
 //#endregion
 //#region src/components/AreaLine.svelte
-var Bl = /* @__PURE__ */ V([["path", { "fill-opacity": "0.1" }], ["path", {
+var zl = /* @__PURE__ */ V([["path", { "fill-opacity": "0.1" }], ["path", {
 	fill: "none",
 	"stroke-width": "2",
 	"stroke-linejoin": "round",
 	"stroke-linecap": "round"
 }]], 5);
-function Vl(e, t) {
+function Bl(e, t) {
 	E(t, !0);
 	let n = /* @__PURE__ */ k(() => t.values.map((e, n) => `${t.xOf(n).toFixed(1)},${t.yOf(e).toFixed(1)}`).join("L")), r = /* @__PURE__ */ k(() => `M${t.xOf(0)},${t.bottom}L${B(n)}L${t.xOf(t.values.length - 1)},${t.bottom}Z`);
 	var i = H(), a = P(i), o = (e) => {
-		var i = Bl(), a = P(i), o = I(a);
+		var i = zl(), a = P(i), o = I(a);
 		L(() => {
 			q(a, "d", B(r)), q(a, "fill", t.color), q(o, "d", `M${B(n) ?? ""}`), q(o, "stroke", t.color);
 		}), U(e, i);
@@ -5432,26 +5428,26 @@ function Vl(e, t) {
 }
 //#endregion
 //#region src/components/PointDot.svelte
-var Hl = /* @__PURE__ */ V([["circle", {
+var Vl = /* @__PURE__ */ V([["circle", {
 	r: "4",
 	stroke: "var(--surface)",
 	"stroke-width": "2"
 }]], 4);
-function Ul(e, t) {
-	var n = Hl();
+function Hl(e, t) {
+	var n = Vl();
 	L(() => {
 		q(n, "cx", t.x), q(n, "cy", t.y), q(n, "fill", t.color);
 	}), U(e, n);
 }
 //#endregion
 //#region src/components/OverTime.svelte
-var Wl = (e, t = v) => {
-	var n = $l(), r = P(n), i = F(r, !0);
-	K(I(r, 2), 19, () => Al, (e) => e.label, (e, n, r) => {
-		var i = Ql(), a = F(i, !0);
+var Ul = (e, t = v) => {
+	var n = Ql(), r = P(n), i = F(r, !0);
+	K(I(r, 2), 19, () => kl, (e) => e.label, (e, n, r) => {
+		var i = Zl(), a = F(i, !0);
 		L(() => W(a, t().cells[B(r) + 1])), U(e, i);
 	}), L(() => W(i, t().cells[0])), U(e, n);
-}, Gl = /* @__PURE__ */ V([
+}, Wl = /* @__PURE__ */ V([
 	,
 	,
 	[
@@ -5459,7 +5455,7 @@ var Wl = (e, t = v) => {
 		{ class: "value-text" },
 		" "
 	]
-], 5), Kl = /* @__PURE__ */ V([
+], 5), Gl = /* @__PURE__ */ V([
 	["line", {
 		"stroke-width": "2",
 		"stroke-linecap": "round"
@@ -5472,11 +5468,11 @@ var Wl = (e, t = v) => {
 	,
 	,
 	,
-], 5), ql = /* @__PURE__ */ V([
+], 5), Kl = /* @__PURE__ */ V([
 	,
 	,
 	,
-], 5), Jl = /* @__PURE__ */ V([["line", { class: "crosshair" }], ,], 5), Yl = /* @__PURE__ */ V([[
+], 5), ql = /* @__PURE__ */ V([["line", { class: "crosshair" }], ,], 5), Jl = /* @__PURE__ */ V([[
 	"div",
 	{ class: "row" },
 	["span", { class: "key" }],
@@ -5492,7 +5488,7 @@ var Wl = (e, t = v) => {
 		{ class: "name" },
 		" "
 	]
-]]), Xl = /* @__PURE__ */ V([
+]]), Yl = /* @__PURE__ */ V([
 	[
 		"div",
 		{ class: "when" },
@@ -5500,15 +5496,15 @@ var Wl = (e, t = v) => {
 	],
 	" ",
 	,
-], 1), Zl = /* @__PURE__ */ V([[
+], 1), Xl = /* @__PURE__ */ V([[
 	"div",
 	{ class: "chart" },
 	,
-]]), Ql = /* @__PURE__ */ V([[
+]]), Zl = /* @__PURE__ */ V([[
 	"td",
 	{ class: "num" },
 	" "
-]]), $l = /* @__PURE__ */ V([
+]]), Ql = /* @__PURE__ */ V([
 	[
 		"td",
 		null,
@@ -5517,19 +5513,19 @@ var Wl = (e, t = v) => {
 	" ",
 	,
 ], 1);
-function eu(e, t) {
+function $l(e, t) {
 	E(t, !0);
 	let n = (e) => {
-		var t = Zl(), n = N(t), r = (e) => {
+		var t = Xl(), n = N(t), r = (e) => {
 			let t = (e, t = v) => {
 				let n = /* @__PURE__ */ k(() => t() - 64), r = /* @__PURE__ */ k(() => ja(B(s).length, 56, B(n)));
-				var a = ql(), o = P(a);
+				var a = Kl(), o = P(a);
 				K(o, 17, () => B(d), ({ panel: e, top: t, bottom: n, color: r, values: i, max: a, yOf: o }) => e.label, (e, t) => {
 					let i = () => B(t).panel, a = () => B(t).top, o = () => B(t).bottom, s = () => B(t).color, c = () => B(t).values, l = () => B(t).max, u = () => B(t).yOf;
-					var d = Kl(), f = P(d), p = I(f), m = F(p, !0), h = I(p);
+					var d = Gl(), f = P(d), p = I(f), m = F(p, !0), h = I(p);
 					{
 						let e = /* @__PURE__ */ k(() => ka(l(), 2));
-						Gs(h, {
+						Ws(h, {
 							get left() {
 								return 56;
 							},
@@ -5548,7 +5544,7 @@ function eu(e, t) {
 						});
 					}
 					var g = I(h);
-					Vl(g, {
+					Bl(g, {
 						get values() {
 							return c();
 						},
@@ -5567,10 +5563,10 @@ function eu(e, t) {
 					});
 					var _ = I(g), v = (e) => {
 						let t = /* @__PURE__ */ k(() => c().length - 1), n = /* @__PURE__ */ k(() => c()[B(t)] ?? 0);
-						var a = Gl(), o = P(a);
+						var a = Wl(), o = P(a);
 						{
 							let e = /* @__PURE__ */ k(() => B(r)(B(t))), i = /* @__PURE__ */ k(() => u()(B(n)));
-							Ul(o, {
+							Hl(o, {
 								get x() {
 									return B(e);
 								},
@@ -5600,7 +5596,7 @@ function eu(e, t) {
 				var c = I(o);
 				{
 					let e = /* @__PURE__ */ k(() => u + 18);
-					Us(c, {
+					Hs(c, {
 						get count() {
 							return B(s).length;
 						},
@@ -5616,12 +5612,12 @@ function eu(e, t) {
 				U(e, a);
 			}, n = (e, t = v, n = v) => {
 				let r = /* @__PURE__ */ k(() => ja(B(s).length, 56, t() - 64));
-				var i = Jl(), a = P(i);
+				var i = ql(), a = P(i);
 				K(I(a), 17, () => B(d), ({ panel: e, color: t, values: n, yOf: r }) => e.label, (e, t) => {
 					let i = () => B(t).color, a = () => B(t).values, o = () => B(t).yOf;
 					{
 						let t = /* @__PURE__ */ k(() => B(r)(n())), s = /* @__PURE__ */ k(() => o()(a()[n()] ?? 0));
-						Ul(e, {
+						Hl(e, {
 							get x() {
 								return B(t);
 							},
@@ -5637,10 +5633,10 @@ function eu(e, t) {
 					q(a, "x1", e), q(a, "x2", t), q(a, "y1", 18), q(a, "y2", u);
 				}, [() => B(r)(n()), () => B(r)(n())]), U(e, i);
 			}, r = (e, t = v) => {
-				var n = Xl(), r = P(n), a = F(r, !0);
+				var n = Yl(), r = P(n), a = F(r, !0);
 				K(I(r, 2), 17, () => B(d), ({ panel: e, color: t, values: n }) => e.label, (e, n) => {
 					let r = () => B(n).panel, i = () => B(n).color, a = () => B(n).values;
-					var o = Yl(), s = N(o);
+					var o = Jl(), s = N(o);
 					let c;
 					var l = I(s, 2), u = F(l, !0), d = F(I(l, 2), !0);
 					T(o), L((e) => {
@@ -5649,8 +5645,8 @@ function eu(e, t) {
 				}), L((e) => W(a, e), [() => B(i).long(B(s)[t()] ?? "")]), U(e, n);
 			}, i = /* @__PURE__ */ k(() => B(a).buckets), s = /* @__PURE__ */ k(() => B(i).keys);
 			{
-				let i = /* @__PURE__ */ k(Ml), a = /* @__PURE__ */ k(() => Il(B(o)));
-				gs(e, {
+				let i = /* @__PURE__ */ k(jl), a = /* @__PURE__ */ k(() => Fl(B(o)));
+				hs(e, {
 					get height() {
 						return B(i);
 					},
@@ -5695,7 +5691,7 @@ function eu(e, t) {
 					label: e,
 					numeric: !0
 				}))]);
-				Vs(e, {
+				Bs(e, {
 					key: "trend-table",
 					get columns() {
 						return B(n);
@@ -5705,7 +5701,7 @@ function eu(e, t) {
 					},
 					rowKey: (e) => e.key,
 					get cells() {
-						return Wl;
+						return Ul;
 					}
 				});
 			}
@@ -5713,8 +5709,8 @@ function eu(e, t) {
 		G(n, (e) => {
 			B(s) && e(r);
 		}), U(e, t);
-	}, i = /* @__PURE__ */ k(() => Q.summary), a = /* @__PURE__ */ k(() => B(i) ? Nl(B(i)) : null), o = /* @__PURE__ */ k(() => B(a)?.buckets.unit ?? "day"), s = /* @__PURE__ */ k(() => B(a) ? zl(B(a)) : null), c = /* @__PURE__ */ j(0), l = /* @__PURE__ */ k(() => Li(B(c))), u = jl(Al.length - 1).bottom, d = /* @__PURE__ */ k(() => B(a) ? Al.map((e, t) => {
-		let { top: n, bottom: r } = jl(t), i = Pl(B(a), e), o = Oa(Math.max(...i, 0));
+	}, i = /* @__PURE__ */ k(() => Q.summary), a = /* @__PURE__ */ k(() => B(i) ? Ml(B(i)) : null), o = /* @__PURE__ */ k(() => B(a)?.buckets.unit ?? "day"), s = /* @__PURE__ */ k(() => B(a) ? Rl(B(a)) : null), c = /* @__PURE__ */ j(0), l = /* @__PURE__ */ k(() => Li(B(c))), u = Al(kl.length - 1).bottom, d = /* @__PURE__ */ k(() => B(a) ? kl.map((e, t) => {
+		let { top: n, bottom: r } = Al(t), i = Nl(B(a), e), o = Oa(Math.max(...i, 0));
 		return {
 			panel: e,
 			top: n,
@@ -5726,8 +5722,8 @@ function eu(e, t) {
 		};
 	}) : []), f = /* @__PURE__ */ k(() => B(a) ? {
 		count: B(a).buckets.keys.length,
-		label: Ll(B(o)),
-		valueText: (e) => Rl(B(a), e),
+		label: Il(B(o)),
+		valueText: (e) => Ll(B(a), e),
 		area: (e) => ({
 			x: 56,
 			y: 0,
@@ -5738,8 +5734,8 @@ function eu(e, t) {
 		tipX: (e, t) => ja(B(a).buckets.keys.length, 56, e - 64)(t)
 	} : null);
 	{
-		let t = /* @__PURE__ */ k(() => $("Over time")), i = /* @__PURE__ */ k(() => Fl(B(o)));
-		ys(e, {
+		let t = /* @__PURE__ */ k(() => $("Over time")), i = /* @__PURE__ */ k(() => Pl(B(o)));
+		vs(e, {
 			id: "trend",
 			get title() {
 				return B(t);
@@ -5759,15 +5755,15 @@ function eu(e, t) {
 }
 //#endregion
 //#region src/lib/range.ts
-var tu = /* @__PURE__ */ t({
-	RANGES: () => nu,
-	dayLabel: () => su,
-	dayStep: () => cu,
-	rangeDays: () => ru,
-	rangeQuery: () => au,
-	shownDay: () => ou,
-	visibleRanges: () => iu
-}), nu = [
+var eu = /* @__PURE__ */ t({
+	RANGES: () => tu,
+	dayLabel: () => ou,
+	dayStep: () => su,
+	rangeDays: () => nu,
+	rangeQuery: () => iu,
+	shownDay: () => au,
+	visibleRanges: () => ru
+}), tu = [
 	{
 		days: 1,
 		label: "Daily"
@@ -5789,37 +5785,37 @@ var tu = /* @__PURE__ */ t({
 		label: "1 year"
 	}
 ];
+function nu(e) {
+	return tu.some((t) => t.days === e) ? e : null;
+}
 function ru(e) {
-	return nu.some((t) => t.days === e) ? e : null;
+	return e ? tu.filter((t) => t.days <= e) : tu;
 }
-function iu(e) {
-	return e ? nu.filter((t) => t.days <= e) : nu;
-}
-function au(e, t) {
+function iu(e, t) {
 	return `days=${e}` + (e === 1 && t !== null ? `&until=${t}` : "");
 }
-function ou(e, t, n) {
+function au(e, t, n) {
 	let r = t ?? n;
 	return e && e.days === 1 && e.until === r ? e : null;
 }
-function su(e) {
+function ou(e) {
 	return e === null ? "Today" : xa(e);
 }
-function cu(e, t, n) {
+function su(e, t, n) {
 	let r = e?.[t];
 	if (r) return r === n ? null : r;
 }
 //#endregion
 //#region src/lib/range.svelte.ts
-var lu = /* @__PURE__ */ t({
-	RangeState: () => du,
-	range: () => fu
+var cu = /* @__PURE__ */ t({
+	RangeState: () => uu,
+	range: () => du
 });
-function uu() {
-	return ru(Number(os("days"))) ?? 30;
+function lu() {
+	return nu(Number(as("days"))) ?? 30;
 }
-var du = class {
-	#e = /* @__PURE__ */ j(Jt(uu()));
+var uu = class {
+	#e = /* @__PURE__ */ j(Jt(lu()));
 	#t = /* @__PURE__ */ j(null);
 	onchange = null;
 	get days() {
@@ -5829,19 +5825,19 @@ var du = class {
 		return B(this.#t);
 	}
 	select(e) {
-		ru(e) !== null && (M(this.#e, e, !0), M(this.#t, null), ss("days", e), this.onchange?.());
+		nu(e) !== null && (M(this.#e, e, !0), M(this.#t, null), os("days", e), this.onchange?.());
 	}
 	step(e, t) {
-		let n = ya(/* @__PURE__ */ new Date()), r = cu(ou(t, B(this.#t), n), e, n);
+		let n = ya(/* @__PURE__ */ new Date()), r = su(au(t, B(this.#t), n), e, n);
 		r !== void 0 && (M(this.#t, r, !0), this.onchange?.());
 	}
 	fit(e) {
-		e.days >= B(this.#e) || (M(this.#e, e.days, !0), ss("days", e.days));
+		e.days >= B(this.#e) || (M(this.#e, e.days, !0), os("days", e.days));
 	}
 	reset() {
-		M(this.#e, uu(), !0), M(this.#t, null), this.onchange = null;
+		M(this.#e, lu(), !0), M(this.#t, null), this.onchange = null;
 	}
-}, fu = new du(), pu = /* @__PURE__ */ V([[
+}, du = new uu(), fu = /* @__PURE__ */ V([[
 	"div",
 	{
 		class: "day-nav",
@@ -5871,7 +5867,7 @@ var du = class {
 		},
 		"›"
 	]
-]]), mu = /* @__PURE__ */ V([
+]]), pu = /* @__PURE__ */ V([
 	[
 		"button",
 		{ type: "button" },
@@ -5879,7 +5875,7 @@ var du = class {
 	],
 	" ",
 	,
-], 1), hu = /* @__PURE__ */ V([
+], 1), mu = /* @__PURE__ */ V([
 	[
 		"span",
 		{ class: "label" },
@@ -5888,27 +5884,27 @@ var du = class {
 	" ",
 	["div", { class: "segmented" }]
 ], 1);
-function gu(e, t) {
+function hu(e, t) {
 	E(t, !0);
-	let n = /* @__PURE__ */ k(() => iu(Q.summary?.retention_days)), r = /* @__PURE__ */ k(() => ou(Q.summary, fu.day, ya(/* @__PURE__ */ new Date())));
-	var i = hu(), a = I(P(i), 2);
+	let n = /* @__PURE__ */ k(() => ru(Q.summary?.retention_days)), r = /* @__PURE__ */ k(() => au(Q.summary, du.day, ya(/* @__PURE__ */ new Date())));
+	var i = mu(), a = I(P(i), 2);
 	K(a, 21, () => B(n), (e) => e.days, (e, t) => {
-		var n = mu(), i = P(n), a = F(i, !0), o = I(i, 2), s = (e) => {
-			var t = pu(), n = N(t), i = I(n, 2), a = F(i, !0), o = I(i, 2);
+		var n = pu(), i = P(n), a = F(i, !0), o = I(i, 2), s = (e) => {
+			var t = fu(), n = N(t), i = I(n, 2), a = F(i, !0), o = I(i, 2);
 			T(t), L((e) => {
 				n.disabled = !B(r)?.previous_day, W(a, e), o.disabled = !B(r)?.next_day;
-			}, [() => su(fu.day)]), yr("click", n, () => fu.step("previous_day", Q.summary)), yr("click", o, () => fu.step("next_day", Q.summary)), U(e, t);
+			}, [() => ou(du.day)]), yr("click", n, () => du.step("previous_day", Q.summary)), yr("click", o, () => du.step("next_day", Q.summary)), U(e, t);
 		};
 		G(o, (e) => {
-			B(t).days === 1 && fu.days === 1 && e(s);
+			B(t).days === 1 && du.days === 1 && e(s);
 		}), L(() => {
-			q(i, "aria-pressed", fu.days === B(t).days), W(a, B(t).label);
-		}), yr("click", i, () => fu.select(B(t).days)), U(e, n);
+			q(i, "aria-pressed", du.days === B(t).days), W(a, B(t).label);
+		}), yr("click", i, () => du.select(B(t).days)), U(e, n);
 	}), T(a), U(e, i), D();
 }
 br(["click"]);
-var _u = 148, vu = "var(--status-critical)";
-function yu(e, t = /* @__PURE__ */ new Date()) {
+var gu = 148, _u = "var(--status-critical)";
+function vu(e, t = /* @__PURE__ */ new Date()) {
 	let n = Ra(e, t), r = Ya(n.unit === "hour" ? e.api_errors.hour : e.api_errors.day, n.keyOf), i = n.keys.map((e) => r(e).limits), a = n.keys.map((e) => r(e).other), o = i.reduce((e, t) => e + t, 0), s = Ia(i);
 	return {
 		buckets: n,
@@ -5920,7 +5916,7 @@ function yu(e, t = /* @__PURE__ */ new Date()) {
 		empty: !i.some(Boolean) && !a.some(Boolean)
 	};
 }
-function bu(e, t, n, r, i) {
+function yu(e, t, n, r, i) {
 	let { band: a, barWidth: o } = oo(e, t), s = 120 * r / i;
 	return {
 		x: 56 + a * n + (a - o) / 2,
@@ -5929,26 +5925,26 @@ function bu(e, t, n, r, i) {
 		height: s
 	};
 }
-function xu(e) {
+function bu(e) {
 	return `rate-limit hits per ${e}; other API errors are in the tooltip, the table view and the list`;
 }
-function Su(e, t) {
+function xu(e, t) {
 	return `Rate-limit hits per ${e}: ${Y(t)} in the range; table view available`;
 }
-function Cu(e) {
+function Su(e) {
 	return `Rate-limit hits per ${e}; arrow keys step through them`;
 }
-function wu(e, t) {
+function Cu(e, t) {
 	return `${e.buckets.long(e.buckets.keys[t] ?? "")}: ${Y(e.limits[t])} rate-limit hits, ${Y(e.others[t])} other API errors`;
 }
-function Tu(e, t) {
+function wu(e, t) {
 	return {
 		when: e.buckets.long(e.buckets.keys[t] ?? ""),
 		limits: Y(e.limits[t]),
 		others: Y(e.others[t])
 	};
 }
-function Eu(e) {
+function Tu(e) {
 	let { buckets: t } = e;
 	return {
 		head: [
@@ -5972,7 +5968,7 @@ function Eu(e) {
 		})).reverse()
 	};
 }
-var Du = [
+var Eu = [
 	{ label: "Window" },
 	{
 		label: "Hit after",
@@ -6003,7 +5999,7 @@ var Du = [
 		numeric: !0
 	}
 ];
-function Ou(e, t) {
+function Du(e, t) {
 	return e.flatMap((e) => {
 		let n = `${e.limit_type} ${e.resets_at}`;
 		return [{
@@ -6013,25 +6009,25 @@ function Ou(e, t) {
 			cells: [
 				_a(Xa(e)),
 				Y(e.hits),
-				...Xo(e.used)
+				...Yo(e.used)
 			],
 			sub: !1,
 			group: e.models.length > 0
-		}, ...e.models.slice().sort(Jo).map((e) => ({
+		}, ...e.models.slice().sort(qo).map((e) => ({
 			key: `${n} ${e.model}`,
 			kind: "model",
 			name: e.model,
 			cells: [
 				"",
 				"",
-				...Xo(e)
+				...Yo(e)
 			],
 			sub: !0,
 			group: !1
 		}))];
 	});
 }
-function ku(e) {
+function Ou(e) {
 	return e.map((e) => ({
 		key: e.record_id,
 		when: Z(e.ts),
@@ -6039,14 +6035,14 @@ function ku(e) {
 		quota: qa(e.limit_type),
 		resets: Z(e.resets_at),
 		session: {
-			href: gc(e),
-			name: hc(e),
+			href: hc(e),
+			name: mc(e),
 			project: e.project
 		},
 		agent: e.agent_type
 	}));
 }
-function Au(e) {
+function ku(e) {
 	return [
 		{ label: "When" },
 		{ label: "Error" },
@@ -6058,11 +6054,11 @@ function Au(e) {
 }
 //#endregion
 //#region src/components/EventsTable.svelte
-var ju = /* @__PURE__ */ V([[
+var Au = /* @__PURE__ */ V([[
 	"h3",
 	null,
 	" "
-]]), Mu = /* @__PURE__ */ V([[
+]]), ju = /* @__PURE__ */ V([[
 	"td",
 	null,
 	[
@@ -6075,7 +6071,7 @@ var ju = /* @__PURE__ */ V([[
 		{ class: "sub" },
 		" "
 	]
-]]), Nu = /* @__PURE__ */ V([
+]]), Mu = /* @__PURE__ */ V([
 	[
 		"td",
 		{ class: "num" },
@@ -6108,16 +6104,16 @@ var ju = /* @__PURE__ */ V([[
 		" "
 	]
 ], 1);
-function Pu(e, t) {
+function Nu(e, t) {
 	E(t, !0);
 	let n = (e) => {
-		var n = ju(), r = F(n, !0);
+		var n = Au(), r = F(n, !0);
 		L(() => {
 			q(n, "id", `${t.id ?? ""}-title`), W(r, t.title);
 		}), U(e, n);
 	}, r = (e, t = v) => {
-		var n = Nu(), r = P(n), a = F(r, !0), o = I(r, 2), s = F(o, !0), c = I(o, 2), l = F(c, !0), u = I(c, 2), d = F(u, !0), f = I(u, 2), p = (e) => {
-			var n = Mu(), r = N(n), i = F(r, !0), a = F(I(r), !0);
+		var n = Mu(), r = P(n), a = F(r, !0), o = I(r, 2), s = F(o, !0), c = I(o, 2), l = F(c, !0), u = I(c, 2), d = F(u, !0), f = I(u, 2), p = (e) => {
+			var n = ju(), r = N(n), i = F(r, !0), a = F(I(r), !0);
 			T(n), L(() => {
 				q(r, "href", t().session.href), W(i, t().session.name), W(a, t().session.project);
 			}), U(e, n);
@@ -6131,8 +6127,8 @@ function Pu(e, t) {
 		}), U(e, n);
 	}, i = Ni(t, "withSession", 3, !0);
 	{
-		let a = /* @__PURE__ */ k(() => Au(i()));
-		Vs(e, {
+		let a = /* @__PURE__ */ k(() => ku(i()));
+		Bs(e, {
 			get key() {
 				return t.pagerKey;
 			},
@@ -6161,44 +6157,44 @@ function Pu(e, t) {
 }
 //#endregion
 //#region src/components/RateLimits.svelte
-var Fu = (e) => {
-	var t = Xu(), n = F(t, !0);
+var Pu = (e) => {
+	var t = Yu(), n = F(t, !0);
 	L((e) => W(n, e), [() => $("5-hour windows that hit the limit")]), U(e, t);
-}, Iu = (e) => {
-	U(e, Zu());
-}, Lu = /* @__PURE__ */ V([[
+}, Fu = (e) => {
+	U(e, Xu());
+}, Iu = /* @__PURE__ */ V([[
 	"span",
 	null,
 	,
 	" "
-]]), Ru = /* @__PURE__ */ V([[
+]]), Lu = /* @__PURE__ */ V([[
 	"div",
 	{ class: "legend" },
 	,
-]]), zu = /* @__PURE__ */ V([[
+]]), Ru = /* @__PURE__ */ V([[
 	"div",
 	{ class: "empty" },
 	"No rate limits or API errors in this range."
-]]), Bu = /* @__PURE__ */ V([["path"]], 4), Vu = /* @__PURE__ */ V([[
+]]), zu = /* @__PURE__ */ V([["path"]], 4), Bu = /* @__PURE__ */ V([[
 	"text",
 	{
 		class: "value-text",
 		"text-anchor": "middle"
 	},
 	" "
-]], 4), Hu = /* @__PURE__ */ V([
+]], 4), Vu = /* @__PURE__ */ V([
 	,
 	,
 	,
-], 5), Uu = /* @__PURE__ */ V([
+], 5), Hu = /* @__PURE__ */ V([
 	,
 	,
 	,
 	,
-], 5), Wu = /* @__PURE__ */ V([["rect", {
+], 5), Uu = /* @__PURE__ */ V([["rect", {
 	class: "column-mark",
 	y: "0"
-}]], 4), Gu = /* @__PURE__ */ V([
+}]], 4), Wu = /* @__PURE__ */ V([
 	[
 		"div",
 		{ class: "when" },
@@ -6236,15 +6232,15 @@ var Fu = (e) => {
 			"other API errors"
 		]
 	]
-], 1), Ku = /* @__PURE__ */ V([[
+], 1), Gu = /* @__PURE__ */ V([[
 	"div",
 	{ class: "chart" },
 	,
-]]), qu = /* @__PURE__ */ V([[
+]]), Ku = /* @__PURE__ */ V([[
 	"td",
 	{ class: "num" },
 	" "
-]]), Ju = /* @__PURE__ */ V([
+]]), qu = /* @__PURE__ */ V([
 	[
 		"td",
 		null,
@@ -6252,28 +6248,28 @@ var Fu = (e) => {
 	],
 	" ",
 	,
-], 1), Yu = /* @__PURE__ */ V([
+], 1), Ju = /* @__PURE__ */ V([
 	,
 	,
 	" ",
 	,
-], 1), Xu = /* @__PURE__ */ V([[
+], 1), Yu = /* @__PURE__ */ V([[
 	"h3",
 	null,
 	" "
-]]), Zu = /* @__PURE__ */ V([[
+]]), Xu = /* @__PURE__ */ V([[
 	"p",
 	{ class: "note" },
 	"what each window used from its start (its reset less 5 hours) up to its first hit, as the transcripts here show it;\n    the limit also counts what you use elsewhere"
-]]), Qu = /* @__PURE__ */ V([[
+]]), Zu = /* @__PURE__ */ V([[
 	"span",
 	{ class: "window-model" },
 	" "
-]]), $u = /* @__PURE__ */ V([[
+]]), Qu = /* @__PURE__ */ V([[
 	"td",
 	{ class: "num" },
 	" "
-]]), ed = /* @__PURE__ */ V([
+]]), $u = /* @__PURE__ */ V([
 	[
 		"td",
 		null,
@@ -6282,13 +6278,13 @@ var Fu = (e) => {
 	" ",
 	,
 ], 1);
-function td(e, t) {
+function ed(e, t) {
 	E(t, !0);
 	let n = (e) => {
-		var t = Ru(), n = N(t), r = (e) => {
-			var t = Lu(), n = N(t);
-			xs(n, { get fill() {
-				return vu;
+		var t = Lu(), n = N(t), r = (e) => {
+			var t = Iu(), n = N(t);
+			bs(n, { get fill() {
+				return _u;
 			} });
 			var r = I(n);
 			T(t), L(() => W(r, "⚠ Rate-limit hit")), U(e, t);
@@ -6297,16 +6293,16 @@ function td(e, t) {
 			B(c) && e(r);
 		}), T(t), U(e, t);
 	}, r = (e) => {
-		var t = Ku(), n = N(t), r = (e) => {
+		var t = Gu(), n = N(t), r = (e) => {
 			var t = H(), n = P(t), r = (e) => {
-				U(e, zu());
+				U(e, Ru());
 			}, i = (e) => {
 				let t = (e, t = v) => {
 					let n = /* @__PURE__ */ k(() => oo(t(), B(a).length));
-					var r = Uu(), o = P(r);
+					var r = Hu(), o = P(r);
 					{
 						let e = /* @__PURE__ */ k(() => ka(B(c).top, 2));
-						Gs(o, {
+						Ws(o, {
 							get left() {
 								return 56;
 							},
@@ -6325,7 +6321,7 @@ function td(e, t) {
 					var s = I(o);
 					{
 						let e = /* @__PURE__ */ k(() => 138);
-						Us(s, {
+						Hs(s, {
 							get count() {
 								return B(a).length;
 							},
@@ -6337,18 +6333,18 @@ function td(e, t) {
 						});
 					}
 					K(I(s), 18, () => B(a), (e) => e, (e, n, r) => {
-						let i = /* @__PURE__ */ k(() => B(c).limits[B(r)] ?? 0), o = /* @__PURE__ */ k(() => bu(t(), B(a).length, B(r), B(i), B(c).top));
-						var s = Hu(), l = P(s), u = (e) => {
-							var t = Bu();
+						let i = /* @__PURE__ */ k(() => B(c).limits[B(r)] ?? 0), o = /* @__PURE__ */ k(() => yu(t(), B(a).length, B(r), B(i), B(c).top));
+						var s = Vu(), l = P(s), u = (e) => {
+							var t = zu();
 							L((e) => {
-								q(t, "d", e), q(t, "fill", vu);
+								q(t, "d", e), q(t, "fill", _u);
 							}, [() => Fa(B(o).x, B(o).y, B(o).width, B(o).height, !0)]), U(e, t);
 						};
 						G(l, (e) => {
 							B(o).height > 0 && e(u);
 						});
 						var d = I(l), f = (e) => {
-							var t = Vu(), n = F(t, !0);
+							var t = Bu(), n = F(t, !0);
 							L((e) => {
 								q(t, "x", B(o).x + B(o).width / 2), q(t, "y", B(o).y - 6), W(n, e);
 							}, [() => Y(B(i))]), U(e, t);
@@ -6359,30 +6355,30 @@ function td(e, t) {
 					}), U(e, r);
 				}, n = (e, t = v, n = v) => {
 					let r = /* @__PURE__ */ k(() => oo(t(), B(a).length).band);
-					var i = Wu();
+					var i = Uu();
 					L(() => {
 						q(i, "x", 56 + B(r) * n()), q(i, "width", B(r)), q(i, "height", 120);
 					}), U(e, i);
 				}, r = (e, t = v) => {
-					let n = /* @__PURE__ */ k(() => Tu(B(c), t()));
-					var r = Gu(), i = P(r), a = F(i, !0), o = I(i, 2), s = N(o);
-					xs(s, { get fill() {
-						return vu;
+					let n = /* @__PURE__ */ k(() => wu(B(c), t()));
+					var r = Wu(), i = P(r), a = F(i, !0), o = I(i, 2), s = N(o);
+					bs(s, { get fill() {
+						return _u;
 					} });
 					var l = I(s), u = F(l, !0), d = F(I(l));
 					T(o);
 					var f = I(o, 2), p = N(f);
-					xs(p, { fill: null });
+					bs(p, { fill: null });
 					var m = F(I(p), !0);
 					je(), T(f), L(() => {
 						W(a, B(n).when), W(u, B(n).limits), W(d, "⚠ rate-limit hits"), W(m, B(n).others);
 					}), U(e, r);
 				}, i = /* @__PURE__ */ k(() => B(c).buckets), a = /* @__PURE__ */ k(() => B(i).keys);
 				{
-					let i = /* @__PURE__ */ k(() => Su(B(l), B(c).total));
-					gs(e, {
+					let i = /* @__PURE__ */ k(() => xu(B(l), B(c).total));
+					hs(e, {
 						get height() {
-							return _u;
+							return gu;
 						},
 						get label() {
 							return B(i);
@@ -6418,13 +6414,13 @@ function td(e, t) {
 	}, i = (e) => {
 		var t = H(), n = P(t), r = (e) => {
 			let t = (e, t = v) => {
-				var r = Ju(), i = P(r), a = F(i, !0);
+				var r = qu(), i = P(r), a = F(i, !0);
 				K(I(i, 2), 19, () => B(n), (e) => e.label, (e, n, r) => {
-					var i = qu(), a = F(i, !0);
+					var i = Ku(), a = F(i, !0);
 					L(() => W(a, t().cells[B(r) + 1])), U(e, i);
 				}), L(() => W(a, t().cells[0])), U(e, r);
 			}, n = /* @__PURE__ */ k(() => B(d).head.slice(1));
-			Vs(e, {
+			Bs(e, {
 				key: "limits-table",
 				get columns() {
 					return B(d).head;
@@ -6443,11 +6439,11 @@ function td(e, t) {
 		}), U(e, t);
 	}, a = (e) => {
 		var t = H(), n = P(t), r = (e) => {
-			var t = Yu(), n = P(t);
-			Vs(n, {
+			var t = Ju(), n = P(t);
+			Bs(n, {
 				key: "limit-windows",
 				get columns() {
-					return Du;
+					return Eu;
 				},
 				get rows() {
 					return B(f);
@@ -6459,17 +6455,17 @@ function td(e, t) {
 				sub: (e) => e.sub,
 				group: (e) => e.group,
 				get heading() {
-					return Fu;
+					return Pu;
 				},
 				get intro() {
-					return Iu;
+					return Fu;
 				},
 				empty: "No 5-hour window hit its limit in this range."
 			});
 			var r = I(n, 2);
 			{
 				let e = /* @__PURE__ */ k(() => $("Latest API errors"));
-				Pu(r, {
+				Nu(r, {
 					id: "limit-events",
 					get title() {
 						return B(e);
@@ -6487,8 +6483,8 @@ function td(e, t) {
 			B(s) && e(r);
 		}), U(e, t);
 	}, o = (e, t = v) => {
-		var n = ed(), r = P(n), i = N(r), a = (e) => {
-			var n = Qu(), r = F(n, !0);
+		var n = $u(), r = P(n), i = N(r), a = (e) => {
+			var n = Zu(), r = F(n, !0);
 			L(() => W(r, t().name)), U(e, n);
 		}, o = (e) => {
 			var n = Dr();
@@ -6497,13 +6493,13 @@ function td(e, t) {
 		G(i, (e) => {
 			t().kind === "model" ? e(a) : e(o, -1);
 		}), T(r), K(I(r, 2), 19, () => m, (e) => e.label, (e, n, r) => {
-			var i = $u(), a = F(i, !0);
+			var i = Qu(), a = F(i, !0);
 			L(() => W(a, t().cells[B(r)])), U(e, i);
 		}), U(e, n);
-	}, s = /* @__PURE__ */ k(() => Q.summary), c = /* @__PURE__ */ k(() => B(s) ? yu(B(s)) : null), l = /* @__PURE__ */ k(() => B(c)?.buckets.unit ?? "day"), u = /* @__PURE__ */ k(() => $("Rate limits")), d = /* @__PURE__ */ k(() => B(c) ? Eu(B(c)) : null), f = /* @__PURE__ */ k(() => B(s) ? Ou(B(s).api_errors.windows) : []), p = /* @__PURE__ */ k(() => B(s) ? ku(B(s).api_errors.events) : []), m = Du.slice(1), h = /* @__PURE__ */ j(0), g = /* @__PURE__ */ k(() => Li(B(h))), _ = /* @__PURE__ */ k(() => B(c) ? {
+	}, s = /* @__PURE__ */ k(() => Q.summary), c = /* @__PURE__ */ k(() => B(s) ? vu(B(s)) : null), l = /* @__PURE__ */ k(() => B(c)?.buckets.unit ?? "day"), u = /* @__PURE__ */ k(() => $("Rate limits")), d = /* @__PURE__ */ k(() => B(c) ? Tu(B(c)) : null), f = /* @__PURE__ */ k(() => B(s) ? Du(B(s).api_errors.windows) : []), p = /* @__PURE__ */ k(() => B(s) ? Ou(B(s).api_errors.events) : []), m = Eu.slice(1), h = /* @__PURE__ */ j(0), g = /* @__PURE__ */ k(() => Li(B(h))), _ = /* @__PURE__ */ k(() => B(c) ? {
 		count: B(c).buckets.keys.length,
-		label: Cu(B(l)),
-		valueText: (e) => wu(B(c), e),
+		label: Su(B(l)),
+		valueText: (e) => Cu(B(c), e),
 		area: (e) => ({
 			x: 56,
 			y: 0,
@@ -6514,8 +6510,8 @@ function td(e, t) {
 		tipX: (e, t) => 56 + oo(e, B(c).buckets.keys.length).band * (t + .5)
 	} : null);
 	{
-		let t = /* @__PURE__ */ k(() => B(c) ? xu(B(l)) : void 0);
-		ys(e, {
+		let t = /* @__PURE__ */ k(() => B(c) ? bu(B(l)) : void 0);
+		vs(e, {
 			id: "limits",
 			get title() {
 				return B(u);
@@ -6541,19 +6537,19 @@ function td(e, t) {
 }
 //#endregion
 //#region src/components/SessionsList.svelte
-var nd = (e) => {
-	var t = id(), n = F(N(t), !0);
+var td = (e) => {
+	var t = rd(), n = F(N(t), !0);
 	je(2), T(t), L((e) => W(n, e), [() => $("Sessions")]), U(e, t);
-}, rd = (e, t = v) => {
+}, nd = (e, t = v) => {
 	let n = /* @__PURE__ */ k(() => jo(t()));
-	var r = cd(), i = P(r), a = F(i, !0), o = I(i, 2), s = N(o), c = F(s, !0), l = F(I(s), !0);
+	var r = sd(), i = P(r), a = F(i, !0), o = I(i, 2), s = N(o), c = F(s, !0), l = F(I(s), !0);
 	T(o), K(I(o, 2), 17, () => B(n).slice(1), Ur, (e, t) => {
-		var n = sd(), r = F(n, !0);
+		var n = od(), r = F(n, !0);
 		L(() => W(r, B(t))), U(e, n);
 	}), L((e, r) => {
 		W(a, B(n)[0]), q(s, "href", e), W(c, r), W(l, t().project);
-	}, [() => gc(t()), () => hc(t())]), U(e, r);
-}, id = /* @__PURE__ */ V([[
+	}, [() => hc(t()), () => mc(t())]), U(e, r);
+}, rd = /* @__PURE__ */ V([[
 	"h2",
 	{ id: "sessions-title" },
 	[
@@ -6567,11 +6563,11 @@ var nd = (e) => {
 		{ class: "muted" },
 		"what each used in the range"
 	]
-]]), ad = /* @__PURE__ */ V([[
+]]), id = /* @__PURE__ */ V([[
 	"option",
 	null,
 	" "
-]]), od = /* @__PURE__ */ V([[
+]]), ad = /* @__PURE__ */ V([[
 	"div",
 	{
 		class: "table-filters",
@@ -6610,11 +6606,11 @@ var nd = (e) => {
 		},
 		" "
 	]
-]]), sd = /* @__PURE__ */ V([[
+]]), od = /* @__PURE__ */ V([[
 	"td",
 	{ class: "num" },
 	" "
-]]), cd = /* @__PURE__ */ V([
+]]), sd = /* @__PURE__ */ V([
 	[
 		"td",
 		{ class: "num" },
@@ -6637,12 +6633,12 @@ var nd = (e) => {
 	],
 	" ",
 	,
-], 1), ld = /* @__PURE__ */ V([
+], 1), cd = /* @__PURE__ */ V([
 	,
 	,
 	" ",
 	,
-], 1), ud = /* @__PURE__ */ V([[
+], 1), ld = /* @__PURE__ */ V([[
 	"section",
 	{
 		class: "card",
@@ -6650,12 +6646,12 @@ var nd = (e) => {
 	},
 	,
 ]]);
-function dd(e, t) {
+function ud(e, t) {
 	E(t, !0);
 	let n = (e) => {
-		var t = od(), n = N(t), o = N(n);
+		var t = ad(), n = N(t), o = N(n);
 		o.value = o.__value = "", K(I(o), 17, () => B(c), (e) => e.project, (e, t) => {
-			var n = ad(), r = F(n), i = {};
+			var n = id(), r = F(n), i = {};
 			L((e) => {
 				W(r, `${B(t).project ?? ""} (${e ?? ""})`), i !== (i = B(t).project) && (n.value = (n.__value = i) ?? "");
 			}, [() => Y(B(t).count)]), U(e, n);
@@ -6664,15 +6660,15 @@ function dd(e, t) {
 		xi(s);
 		var u = F(I(s, 2), !0);
 		T(t), L(() => W(u, B(l))), mi(n, () => B(i), (e) => {
-			M(i, e, !0), As.forget(r);
+			M(i, e, !0), ks.forget(r);
 		}), Ei(s, () => B(a), (e) => {
-			M(a, e, !0), As.forget(r);
+			M(a, e, !0), ks.forget(r);
 		}), U(e, t);
 	}, r = "sessions", i = /* @__PURE__ */ j(""), a = /* @__PURE__ */ j(""), o = /* @__PURE__ */ k(() => Q.summary?.sessions ?? null), s = /* @__PURE__ */ k(() => B(o) ? B(o).filter((e) => Oo(e, B(i), B(a))) : []), c = /* @__PURE__ */ k(() => ko(B(o) ?? [], B(i))), l = /* @__PURE__ */ k(() => B(o) ? Mo(B(s).length, B(o).length) : "");
-	var u = ud(), d = N(u), f = (e) => {
+	var u = ld(), d = N(u), f = (e) => {
 		{
 			let t = /* @__PURE__ */ k(() => B(o).length ? "No sessions match the filter." : "No sessions in this range.");
-			Vs(e, {
+			Bs(e, {
 				key: r,
 				get columns() {
 					return Ao;
@@ -6682,10 +6678,10 @@ function dd(e, t) {
 				},
 				rowKey: (e) => e.session_id,
 				get cells() {
-					return rd;
+					return nd;
 				},
 				get heading() {
-					return nd;
+					return td;
 				},
 				get intro() {
 					return n;
@@ -6697,8 +6693,8 @@ function dd(e, t) {
 			});
 		}
 	}, p = (e) => {
-		var t = ld(), r = P(t);
-		nd(r);
+		var t = cd(), r = P(t);
+		td(r);
 		var i = I(r, 2);
 		n(i), U(e, t);
 	};
@@ -6708,7 +6704,7 @@ function dd(e, t) {
 }
 //#endregion
 //#region src/lib/opening.ts
-function fd() {
+function dd() {
 	let e = document.activeElement, t = e && e !== document.body ? e : null;
 	return {
 		href: t?.getAttribute("href") ?? null,
@@ -6716,32 +6712,32 @@ function fd() {
 		scroll: window.scrollY
 	};
 }
-function pd(e) {
+function fd(e) {
 	return e.element?.isConnected ? e.element : e.href === null ? null : [...document.querySelectorAll("a[href]")].find((t) => t.getAttribute("href") === e.href) ?? null;
 }
-function md(e) {
+function pd(e) {
 	return (t) => {
-		let n = fd(), r = [];
+		let n = dd(), r = [];
 		for (let t of e.hide) {
 			let e = document.getElementById(t);
 			e && (e.hidden = !0, r.push(e));
 		}
 		return t.scrollIntoView({ block: "start" }), t.querySelector(e.focus)?.focus({ preventScroll: !0 }), () => {
 			for (let e of r) e.hidden = !1;
-			window.scrollTo(0, n.scroll), pd(n)?.focus({ preventScroll: !0 });
+			window.scrollTo(0, n.scroll), fd(n)?.focus({ preventScroll: !0 });
 		};
 	};
 }
 //#endregion
 //#region src/lib/session.ts
-function hd(e) {
+function md(e) {
 	let t = e.git_branch ? ` · ${e.git_branch}` : "";
 	return `${e.project}${t} · ${Z(e.first_ts)} – ${Z(e.last_ts)} · ${e.session_id}`;
 }
-function gd(e) {
+function hd(e) {
 	return e.some((e) => e.web_searches);
 }
-function _d(e) {
+function gd(e) {
 	return [
 		{ label: "Agent" },
 		{ label: "Model" },
@@ -6780,13 +6776,13 @@ function _d(e) {
 		}
 	];
 }
-function vd(e) {
+function _d(e) {
 	return e.models.length ? e.models.map((t) => {
 		let n = e.model_efforts.filter((e) => e.model === t).map((e) => e.effort);
 		return n.length ? `${t} · ${n.join(", ")}` : t;
 	}) : ["–"];
 }
-function yd(e, t) {
+function vd(e, t) {
 	return [
 		Y(e.turns),
 		`${J(e.context_first)} → ${J(e.context_last)}`,
@@ -6798,19 +6794,19 @@ function yd(e, t) {
 		X(e.cost)
 	];
 }
-function bd(e, t, n) {
+function yd(e, t, n) {
 	let r = e.workflow_phase ? ` · ${e.workflow_phase}` : "";
 	return {
 		key: e.agent_id ?? "main",
 		kind: n,
 		name: e.agent_type,
 		detail: `${e.description || ""}${r}`,
-		models: vd(e),
+		models: _d(e),
 		fold: null,
-		cells: yd(e, t)
+		cells: vd(e, t)
 	};
 }
-function xd(e, t, n) {
+function bd(e, t, n) {
 	let r = (e) => t.reduce((t, n) => t + (n[e] || 0), 0), i = t.map((e) => e.cost).filter((e) => e !== null), a = t[0];
 	return {
 		key: `run:${e}`,
@@ -6834,43 +6830,125 @@ function xd(e, t, n) {
 		]
 	};
 }
-function Sd(e, t) {
-	let n = gd(e), r = /* @__PURE__ */ new Map(), i = [];
+function xd(e, t) {
+	let n = hd(e), r = /* @__PURE__ */ new Map(), i = [];
 	for (let t of e) t.workflow_run === null ? i.push(t) : r.has(t.workflow_run) ? r.get(t.workflow_run).push(t) : (r.set(t.workflow_run, [t]), i.push(t.workflow_run));
 	return i.flatMap((e) => {
-		if (typeof e != "string") return [bd(e, n, "agent")];
+		if (typeof e != "string") return [yd(e, n, "agent")];
 		let i = r.get(e);
-		return [xd(e, i, n), ...t.includes(e) ? i.map((e) => bd(e, n, "member")) : []];
+		return [bd(e, i, n), ...t.includes(e) ? i.map((e) => yd(e, n, "member")) : []];
+	});
+}
+function Sd() {
+	return [
+		{ label: "Agent" },
+		{ label: "Tool" },
+		{
+			label: "Calls",
+			numeric: !0
+		},
+		{
+			label: "Errors",
+			numeric: !0,
+			title: "calls whose result was an error"
+		},
+		{
+			label: "Result characters",
+			numeric: !0
+		},
+		{
+			label: "Median",
+			numeric: !0,
+			title: "a result's characters, the median call"
+		},
+		{
+			label: "p90",
+			numeric: !0,
+			title: "…and at the 90th percentile"
+		},
+		{
+			label: "Input median",
+			numeric: !0,
+			title: "the characters of a call's input, which the model wrote"
+		},
+		{
+			label: "Calls after",
+			numeric: !0,
+			title: "how many later calls carried it in their context, the median call, up to the next compaction"
+		},
+		{
+			label: "~Carried",
+			numeric: !0,
+			title: "what the later calls paid to have its input and result in their context"
+		},
+		{
+			label: "~Input cost",
+			numeric: !0,
+			title: "its input at the output price"
+		}
+	];
+}
+function Cd(e) {
+	return e.some((e) => e.tool_kinds?.length) ? "Bash splits by what a command does, MCP by server. A call’s input and result stay in the context, so every later call up to the next compaction reads them again: ~Carried estimates what that cost, taking a token as 2.3 characters (measured on real transcripts, a heuristic)." : null;
+}
+function wd(e, t) {
+	let n = Po([...e]), { above: r, folds: i } = Ho(n), a = new Set(t), o = new Map(i.map((e) => [e.row, e]));
+	return n.flatMap((e, t) => {
+		if (!Uo(r[t] ?? [], a)) return [];
+		let i = o.get(t);
+		return [{
+			key: e.key,
+			agent: e.sub ? "" : e.agent,
+			name: Vo(e),
+			fold: i ? {
+				fold: i.fold,
+				label: i.label,
+				open: a.has(i.fold)
+			} : null,
+			sub: e.sub,
+			group: Bo(e, n[t + 1]) === "group-row",
+			cells: [
+				Y(e.calls),
+				Y(e.errors),
+				J(e.result_chars),
+				J(e.result_median),
+				J(e.result_p90),
+				J(e.input_median),
+				Y(e.calls_after_median),
+				X(e.carried),
+				X(e.input_cost)
+			]
+		}];
 	});
 }
 //#endregion
 //#region src/lib/tiles.ts
-function Cd(e, t = ya(/* @__PURE__ */ new Date()), n) {
+function Td(e, t = ya(/* @__PURE__ */ new Date()), n) {
 	let r = e.history_since, i = r && r > e.since ? ` (history since ${ba(r, n)})` : "";
 	return e.days === 1 ? e.until === t ? "today" : xa(e.until, n) : `last ${e.days} days${i}`;
 }
-function wd(e) {
+function Ed(e) {
 	let t = [e.unpriced_turns ? `${Y(e.unpriced_turns)} turns of models without a price are not included` : "at API list prices"];
 	return e.web_searches && t.push(`incl. ${Y(e.web_searches)} web searches, ${X(e.cost_parts.web_search)}`), t.join(" · ");
 }
-var Td = "Each main-thread compaction against keeping its context, over its stretch up to the next one, summed; a stretch not paid off yet as it stands, forced compactions left out. ~: the summary call is estimated.";
-function Ed(e) {
+var Dd = "Each main-thread compaction against keeping its context, over its stretch up to the next one, summed; a stretch not paid off yet as it stands, forced compactions left out. ~: the summary call is estimated.";
+function Od(e) {
 	let t = e.compactions === 1 ? "1 compaction" : `${Y(e.compactions)} compactions`, n = e.unknown ? `${Y(e.unknown)} without an estimate` : null;
 	if (!e.compactions) return {
-		title: Td,
+		title: Dd,
 		verdict: null,
 		amount: null,
 		count: `Compacting: ${n}`
 	};
 	let r = e.net >= 0;
 	return {
-		title: Td,
+		title: Dd,
 		verdict: r ? "gain" : "loss",
 		amount: r ? `▲ compacting saved ~${X(e.net)} so far` : `▼ compacting cost ~${X(-e.net)} more so far`,
 		count: `(${[t, n].filter(Boolean).join(", ")})`
 	};
 }
-function Dd(e) {
+function kd(e) {
 	let t = e.cost_parts;
 	return [{
 		label: "Processed",
@@ -6886,14 +6964,14 @@ function Dd(e) {
 		note: "Cache reads, billed at a tenth of the input price and not processed again"
 	}];
 }
-function Od(e, t) {
+function Ad(e, t) {
 	let n = Da(t);
 	return e.map((e) => `${e.label} ${ga(e.tokens, n)}`).join(", ");
 }
-function kd(e, t) {
+function jd(e, t) {
 	return e?.turns ? `median context ${J(e.median)} per turn (p90 ${J(e.p90)})` + (t ? ` · compact hint at ${J(t)}` : "") : null;
 }
-function Ad(e, t, n, r) {
+function Md(e, t, n, r) {
 	let i = e.api_ms_without_retries === null ? null : e.api_ms - e.api_ms_without_retries, a = "no time lost to retries";
 	return i === null ? a = "retries are not in the transcripts" : i > 0 && (a = `${_a(i)} of it retries`), {
 		session: `wall-clock, ${t}`,
@@ -6902,39 +6980,39 @@ function Ad(e, t, n, r) {
 		lines: n === null ? "no lines changed" : `${X(n)} per 100 lines changed`
 	};
 }
-function jd(e) {
+function Nd(e) {
 	return `${Y(e)} ${e === 1 ? "session" : "sessions"} that ended in the range`;
 }
-function Md(e) {
+function Pd(e) {
 	return e === "cost_record" ? "from its cost record" : "estimated from the transcripts";
 }
-function Nd(e) {
+function Fd(e) {
 	let t = e.runtime.lines_added + e.runtime.lines_removed;
 	return e.cost === null || t === 0 ? null : e.cost / t * 100;
 }
 //#endregion
 //#region src/lib/usage.ts
-function Pd(e) {
-	return [{ label: e }, ...Yo];
+function Id(e) {
+	return [{ label: e }, ...Jo];
 }
-function Fd(e, t) {
-	return e.slice().sort(Jo).map((e) => ({
+function Ld(e, t) {
+	return e.slice().sort(qo).map((e) => ({
 		key: t(e),
 		name: t(e),
 		kind: "plain",
 		swatch: null,
-		cells: Xo(e),
+		cells: Yo(e),
 		sub: !1,
 		group: !1
 	}));
 }
-function Id(e, t, n) {
-	return e.slice().sort(Jo).flatMap((e) => [{
+function Rd(e, t, n) {
+	return e.slice().sort(qo).flatMap((e) => [{
 		key: e.model,
 		name: e.model,
 		kind: "model",
 		swatch: na(n.get(e.model) ?? null),
-		cells: Xo(e),
+		cells: Yo(e),
 		sub: !1,
 		group: !0
 	}, ...t.filter((t) => t.model === e.model && t.effort !== null).sort((e, t) => Ji(e.effort ?? "") - Ji(t.effort ?? "") || (e.effort ?? "").localeCompare(t.effort ?? "")).map((t) => ({
@@ -6942,20 +7020,20 @@ function Id(e, t, n) {
 		name: Xi(t.effort),
 		kind: "effort",
 		swatch: null,
-		cells: Xo(t),
+		cells: Yo(t),
 		sub: !0,
 		group: !1
 	}))]);
 }
 //#endregion
 //#region src/components/AgentsTable.svelte
-var Ld = (e) => {
-	U(e, Rd());
-}, Rd = /* @__PURE__ */ V([[
+var zd = (e) => {
+	U(e, Bd());
+}, Bd = /* @__PURE__ */ V([[
 	"h3",
 	{ id: "session-agents-title" },
 	"Main thread and subagents"
-]]), zd = /* @__PURE__ */ V([[
+]]), Vd = /* @__PURE__ */ V([[
 	"span",
 	{ class: "sub" },
 	[
@@ -6966,19 +7044,19 @@ var Ld = (e) => {
 		},
 		" "
 	]
-]]), Bd = /* @__PURE__ */ V([[
+]]), Hd = /* @__PURE__ */ V([[
 	"span",
 	{ class: "sub" },
 	" "
-]]), Vd = /* @__PURE__ */ V([[
+]]), Ud = /* @__PURE__ */ V([[
 	"div",
 	null,
 	" "
-]]), Hd = /* @__PURE__ */ V([[
+]]), Wd = /* @__PURE__ */ V([[
 	"td",
 	{ class: "num" },
 	" "
-]]), Ud = /* @__PURE__ */ V([
+]]), Gd = /* @__PURE__ */ V([
 	[
 		"td",
 		null,
@@ -6995,17 +7073,17 @@ var Ld = (e) => {
 	" ",
 	,
 ], 1);
-function Wd(e, t) {
+function Kd(e, t) {
 	E(t, !0);
 	let n = (e, t = v) => {
-		var n = Ud(), i = P(n), a = N(i), s = F(a, !0), c = I(a, 2), l = (e) => {
+		var n = Gd(), i = P(n), a = N(i), s = F(a, !0), c = I(a, 2), l = (e) => {
 			let n = /* @__PURE__ */ k(() => t().fold), i = /* @__PURE__ */ k(() => B(r).includes(B(n).run));
-			var a = zd(), s = N(a), c = F(s, !0);
+			var a = Vd(), s = N(a), c = F(s, !0);
 			T(a), L(() => {
 				q(s, "aria-expanded", B(i)), W(c, B(n).label);
 			}), yr("click", s, () => o(B(n).run)), U(e, a);
 		}, u = (e) => {
-			var n = Bd(), r = F(n, !0);
+			var n = Hd(), r = F(n, !0);
 			L(() => W(r, t().detail)), U(e, n);
 		};
 		G(c, (e) => {
@@ -7013,17 +7091,17 @@ function Wd(e, t) {
 		}), T(i);
 		var d = I(i, 2);
 		K(d, 20, () => t().models, (e) => e, (e, t) => {
-			var n = Vd(), r = F(n, !0);
+			var n = Ud(), r = F(n, !0);
 			L(() => W(r, t)), U(e, n);
 		}), T(d), K(I(d, 2), 17, () => t().cells, Ur, (e, t) => {
-			var n = Hd(), r = F(n, !0);
+			var n = Wd(), r = F(n, !0);
 			L(() => W(r, B(t))), U(e, n);
 		}), L(() => W(s, t().name)), U(e, n);
-	}, r = /* @__PURE__ */ j(Jt([])), i = /* @__PURE__ */ k(() => _d(gd(t.agents))), a = /* @__PURE__ */ k(() => Sd(t.agents, B(r)));
+	}, r = /* @__PURE__ */ j(Jt([])), i = /* @__PURE__ */ k(() => gd(hd(t.agents))), a = /* @__PURE__ */ k(() => xd(t.agents, B(r)));
 	function o(e) {
 		M(r, B(r).includes(e) ? B(r).filter((t) => t !== e) : [...B(r), e], !0);
 	}
-	Vs(e, {
+	Bs(e, {
 		get key() {
 			return t.pagerKey;
 		},
@@ -7041,7 +7119,7 @@ function Wd(e, t) {
 		group: (e) => e.kind === "run",
 		rowClass: (e) => e.kind === "member" ? "workflow-member" : void 0,
 		get heading() {
-			return Ld;
+			return zd;
 		},
 		labelledby: "session-agents-title"
 	}), D();
@@ -7049,15 +7127,15 @@ function Wd(e, t) {
 br(["click"]);
 //#endregion
 //#region src/lib/clock.svelte.ts
-var Gd = 2 ** 31 - 1, Kd = 1e3;
-function qd(e) {
+var qd = 2 ** 31 - 1, Jd = 1e3;
+function Yd(e) {
 	let t = (/* @__PURE__ */ new Date()).toISOString(), n = Ar((n) => {
 		t = (/* @__PURE__ */ new Date()).toISOString();
 		let r = e === null ? NaN : Date.parse(e) - Date.now();
-		if (!(r > 0 && r <= Gd)) return;
+		if (!(r > 0 && r <= qd)) return;
 		let i = setTimeout(() => {
 			t = (/* @__PURE__ */ new Date()).toISOString(), n();
-		}, r + Kd);
+		}, r + Jd);
 		return () => clearTimeout(i);
 	});
 	return {
@@ -7071,20 +7149,20 @@ function qd(e) {
 }
 //#endregion
 //#region src/lib/gauge.ts
-function Jd(e) {
+function Xd(e) {
 	return `Before it, the context was ${J(e.context)} of ${J(e.auto_compact)}. The next reply shows the new one: the summary, with the system prompt, tools and CLAUDE.md sent again.`;
 }
-function Yd(e) {
+function Zd(e) {
 	return `${(e * 100).toFixed(1)}%`;
 }
-function Xd(e) {
+function Qd(e) {
 	let t = `Latest context, main thread · ${e.model}`;
 	if (e.compacted) return {
 		kind: "compacted",
 		label: t,
 		value: "Compacted",
 		secondary: `at ${Z(e.compacted)}, no reply since`,
-		note: Jd(e)
+		note: Xd(e)
 	};
 	let n = e.hint_tokens < e.auto_compact ? e.hint_tokens / e.auto_compact : null, r = e.last_compaction ? `since the last compaction (${Z(e.last_compaction)})` : "since the session started", i = e.mean_step === null ? "too few turns for an estimate" : e.turns_left === null ? `${ha(e.mean_step)} per turn, not growing` : `about ${Y(e.turns_left)} turns left at ${ha(e.mean_step)} per turn (mean of the last 10)`;
 	return {
@@ -7095,8 +7173,8 @@ function Xd(e) {
 		meterLabel: `Latest context ${J(e.context)} of the auto-compact point ${J(e.auto_compact)}`,
 		max: e.auto_compact,
 		now: e.context,
-		fill: Yd(Math.min(1, e.context / e.auto_compact)),
-		hintAt: n === null ? null : Yd(n),
+		fill: Zd(Math.min(1, e.context / e.auto_compact)),
+		hintAt: n === null ? null : Zd(n),
 		note: [
 			`${J(e.headroom)} until auto-compact`,
 			n === null ? null : `the mark is the compact hint at ${J(e.hint_tokens)}, a heuristic`,
@@ -7105,7 +7183,7 @@ function Xd(e) {
 		].filter(Boolean).join(" · ")
 	};
 }
-function Zd(e, t) {
+function $d(e, t) {
 	let n = e.cache_warm_until, r = n === null ? null : t ? `The cache has likely expired (${Z(n)}): the next reply sends it all at the full price, ${X(e.keep_across_break)} more.` : `The cache stays warm until ${Z(n)} (${e.cache_ttl_minutes} min after the last request); after that, the next reply costs ${X(e.keep_across_break)} more.`, i = [`Every reply sends the whole conversation again: ${J(e.before)}, ${X(e.reread_cost)} each time from the cache.`, r].filter(Boolean).join(" "), a = e.estimate;
 	if (!a) {
 		let t = e.stored_compactions;
@@ -7118,23 +7196,23 @@ function Zd(e, t) {
 	return {
 		exact: i,
 		missing: null,
-		estimate: Qd(e, a, t)
+		estimate: ef(e, a, t)
 	};
 }
-function Qd(e, t, n) {
-	let r = e.cache_warm_until, i = `${Y(t.compactions)} stored ${t.compactions === 1 ? "compaction" : "compactions"}`, a = Y(t.calls_after_low), o = Y(t.calls_after_high), s = t.calls_after_low === null ? "" : `, which were followed by ${a === o ? a : `${a}–${o}`} replies until the next one`, c = Fc(t, n), l = [Ic(c, t, n), `Learnt from your ${i}${s}.`];
+function ef(e, t, n) {
+	let r = e.cache_warm_until, i = `${Y(t.compactions)} stored ${t.compactions === 1 ? "compaction" : "compactions"}`, a = Y(t.calls_after_low), o = Y(t.calls_after_high), s = t.calls_after_low === null ? "" : `, which were followed by ${a === o ? a : `${a}–${o}`} replies until the next one`, c = Pc(t, n), l = [Fc(c, t, n), `Learnt from your ${i}${s}.`];
 	return t.before_break !== null && !n && r !== null && l.push(`Compacting before a break past ${Z(r)} saves about ${X(t.before_break)} at once.`), {
-		lead: `If you compacted now, it would shrink to about ${J(t.after)}${Pc(J(t.after_low), J(t.after_high))}. ` + (n ? "Compacting " : `That costs ~${X(t.one_time)} once and `),
+		lead: `If you compacted now, it would shrink to about ${J(t.after)}${Nc(J(t.after_low), J(t.after_high))}. ` + (n ? "Compacting " : `That costs ~${X(t.one_time)} once and `),
 		tone: c,
-		phrase: Lc(t, n),
+		phrase: Ic(t, n),
 		rest: `. ${l.filter(Boolean).join(" ")}`
 	};
 }
-function $d(e, t) {
+function tf(e, t) {
 	let n = e.estimate, r = [t ? `The cache has expired, so the next reply sends your whole conversation (${J(e.before)}) again at the full price.` : `Every reply sends your whole conversation again: ${J(e.before)}, ~${X(e.reread_cost)} each time from the cache.`];
-	return n && r.push(`Compacting would shrink it to about ${J(n.after)}` + (t ? ` and ${Lc(n, !0)}.` : `. That costs ~${X(n.one_time)} once and ${Lc(n, !1)}.`)), r;
+	return n && r.push(`Compacting would shrink it to about ${J(n.after)}` + (t ? ` and ${Ic(n, !0)}.` : `. That costs ~${X(n.one_time)} once and ${Ic(n, !1)}.`)), r;
 }
-function ef(e, t, n) {
+function nf(e, t, n) {
 	let r = e.compact_now;
 	if (!r) return null;
 	let i = r.estimate, a = r.cache_warm_until;
@@ -7142,13 +7220,13 @@ function ef(e, t, n) {
 		title: "⚠ The cache has expired: compacting now saves money",
 		lines: [`The cache has expired, so the next reply sends your whole conversation (${J(r.before)}) again at the full price. Compacting would shrink it to about ${J(i.after)}. Doing it now saves about ${X(i.cold_saving)} at once.`]
 	} : null;
-	let o = $d(r, n);
+	let o = tf(r, n);
 	return !n && i && i.before_break !== null && i.before_break > 0 && a !== null && o.push(`Taking a break past ${Z(a)}? Compact before it: the cache expires then, and compacting first saves about ${X(i.before_break)} at the next reply.`), o.push("How many replies still follow can't be predicted, so past your own threshold ([chat] compact_hint_tokens) this shows whatever the estimate says."), {
 		title: `⚠ Your context is past your ${J(e.hint_tokens)} compact hint`,
 		lines: o
 	};
 }
-function tf(e) {
+function rf(e) {
 	let t = e.exploration, n = e.compact_now?.estimate;
 	if (!t || !n || n.calls_ahead === null) return null;
 	let r = Y(Math.round(n.calls_ahead));
@@ -7160,16 +7238,16 @@ function tf(e) {
 }
 //#endregion
 //#region src/components/CompactCall.svelte
-var nf = /* @__PURE__ */ V([[
+var af = /* @__PURE__ */ V([[
 	"p",
 	null,
 	" "
-]]), rf = /* @__PURE__ */ V(["Copy it from here: ", ["input", {
+]]), of = /* @__PURE__ */ V(["Copy it from here: ", ["input", {
 	type: "text",
 	readonly: "",
 	"aria-label": "The command to copy",
 	class: "compact-call-field"
-}]], 1), af = /* @__PURE__ */ V([[
+}]], 1), sf = /* @__PURE__ */ V([[
 	"div",
 	{
 		class: "card compact-call",
@@ -7207,7 +7285,7 @@ var nf = /* @__PURE__ */ V([[
 		]
 	]
 ]]);
-function of(e, t) {
+function cf(e, t) {
 	E(t, !0);
 	let n = "/compact", r = /* @__PURE__ */ j("no");
 	async function i() {
@@ -7220,15 +7298,15 @@ function of(e, t) {
 	function a(e) {
 		e.select();
 	}
-	var o = af(), s = N(o), c = F(s, !0), l = I(s, 2);
+	var o = sf(), s = N(o), c = F(s, !0), l = I(s, 2);
 	K(l, 16, () => t.call.lines, (e) => e, (e, t) => {
-		var n = nf(), r = F(n, !0);
+		var n = af(), r = F(n, !0);
 		L(() => W(r, t)), U(e, n);
 	});
 	var u = I(l, 2), d = N(u), f = I(d, 2), p = N(f), m = (e) => {
 		U(e, Dr("Copied: paste it into Claude Code."));
 	}, h = (e) => {
-		var t = rf(), r = I(P(t));
+		var t = of(), r = I(P(t));
 		xi(r), Si(r, n), Qr(r, () => a), U(e, t);
 	};
 	G(p, (e) => {
@@ -7238,11 +7316,11 @@ function of(e, t) {
 br(["click"]);
 //#endregion
 //#region src/components/DelegateCall.svelte
-var sf = /* @__PURE__ */ V([[
+var lf = /* @__PURE__ */ V([[
 	"p",
 	null,
 	" "
-]]), cf = /* @__PURE__ */ V([[
+]]), uf = /* @__PURE__ */ V([[
 	"div",
 	{
 		class: "card delegate-call",
@@ -7264,11 +7342,11 @@ var sf = /* @__PURE__ */ V([[
 		" "
 	]
 ]]);
-function lf(e, t) {
+function df(e, t) {
 	E(t, !0);
-	var n = cf(), r = N(n), i = F(r, !0), a = I(r, 2);
+	var n = uf(), r = N(n), i = F(r, !0), a = I(r, 2);
 	K(a, 16, () => t.call.lines, (e) => e, (e, t) => {
-		var n = sf(), r = F(n, !0);
+		var n = lf(), r = F(n, !0);
 		L(() => W(r, t)), U(e, n);
 	});
 	var o = F(I(a, 2), !0);
@@ -7278,7 +7356,7 @@ function lf(e, t) {
 }
 //#endregion
 //#region src/components/ContextGauge.svelte
-var uf = /* @__PURE__ */ V([["span", { class: "gauge-hint" }]]), df = /* @__PURE__ */ V([[
+var ff = /* @__PURE__ */ V([["span", { class: "gauge-hint" }]]), pf = /* @__PURE__ */ V([[
 	"div",
 	{
 		class: "gauge",
@@ -7288,7 +7366,7 @@ var uf = /* @__PURE__ */ V([["span", { class: "gauge-hint" }]]), df = /* @__PURE
 	["span", { class: "gauge-fill" }],
 	" ",
 	,
-]]), ff = /* @__PURE__ */ V([["span", { "aria-hidden": "true" }]]), pf = /* @__PURE__ */ V([[
+]]), mf = /* @__PURE__ */ V([["span", { "aria-hidden": "true" }]]), hf = /* @__PURE__ */ V([[
 	"p",
 	{ class: "compact-estimate" },
 	" ",
@@ -7299,11 +7377,11 @@ var uf = /* @__PURE__ */ V([["span", { class: "gauge-hint" }]]), df = /* @__PURE
 		" "
 	],
 	" "
-]]), mf = /* @__PURE__ */ V([[
+]]), gf = /* @__PURE__ */ V([[
 	"div",
 	{ class: "note" },
 	" "
-]]), hf = /* @__PURE__ */ V([
+]]), _f = /* @__PURE__ */ V([
 	[
 		"div",
 		{ class: "note" },
@@ -7311,7 +7389,7 @@ var uf = /* @__PURE__ */ V([["span", { class: "gauge-hint" }]]), df = /* @__PURE
 	],
 	" ",
 	,
-], 1), gf = /* @__PURE__ */ V([
+], 1), vf = /* @__PURE__ */ V([
 	,
 	,
 	" ",
@@ -7351,12 +7429,12 @@ var uf = /* @__PURE__ */ V([["span", { class: "gauge-hint" }]]), df = /* @__PURE
 		,
 	]
 ], 1);
-function _f(e, t) {
+function yf(e, t) {
 	E(t, !0);
-	let n = /* @__PURE__ */ k(() => Q.session), r = /* @__PURE__ */ k(() => B(n)?.current ?? null), i = /* @__PURE__ */ k(() => B(r)?.compact_now?.cache_warm_until ?? null), a = /* @__PURE__ */ k(() => qd(B(i))), o = /* @__PURE__ */ k(() => B(n) ? Rc(B(n), B(a).now) : null), s = /* @__PURE__ */ k(() => B(r) && B(o) ? ef(B(r), B(o), B(a).expired) : null), c = /* @__PURE__ */ k(() => B(n) && B(r) && zc(B(n)) ? tf(B(r)) : null), l = /* @__PURE__ */ k(() => B(r) ? Xd(B(r)) : null), u = /* @__PURE__ */ k(() => B(l)?.kind === "meter" && B(r)?.compact_now ? Zd(B(r).compact_now, B(a).expired) : null);
+	let n = /* @__PURE__ */ k(() => Q.session), r = /* @__PURE__ */ k(() => B(n)?.current ?? null), i = /* @__PURE__ */ k(() => B(r)?.compact_now?.cache_warm_until ?? null), a = /* @__PURE__ */ k(() => Yd(B(i))), o = /* @__PURE__ */ k(() => B(n) ? Lc(B(n), B(a).now) : null), s = /* @__PURE__ */ k(() => B(r) && B(o) ? nf(B(r), B(o), B(a).expired) : null), c = /* @__PURE__ */ k(() => B(n) && B(r) && Rc(B(n)) ? rf(B(r)) : null), l = /* @__PURE__ */ k(() => B(r) ? Qd(B(r)) : null), u = /* @__PURE__ */ k(() => B(l)?.kind === "meter" && B(r)?.compact_now ? $d(B(r).compact_now, B(a).expired) : null);
 	var d = H(), f = P(d), p = (e) => {
-		var t = gf(), n = P(t), r = (e) => {
-			of(e, { get call() {
+		var t = vf(), n = P(t), r = (e) => {
+			cf(e, { get call() {
 				return B(s);
 			} });
 		};
@@ -7364,7 +7442,7 @@ function _f(e, t) {
 			B(s) && e(r);
 		});
 		var i = I(n, 2), a = (e) => {
-			lf(e, { get call() {
+			df(e, { get call() {
 				return B(c);
 			} });
 		};
@@ -7374,10 +7452,10 @@ function _f(e, t) {
 		var o = I(i, 2), d = N(o), f = F(d, !0), p = I(d, 2), m = N(p), h = F(I(m), !0);
 		T(p);
 		var g = I(p, 2), _ = (e) => {
-			var t = df(), n = N(t);
+			var t = pf(), n = N(t);
 			let r;
 			var i = I(n, 2), a = (e) => {
-				var t = uf();
+				var t = ff();
 				let n;
 				L(() => n = li(t, "", n, { left: B(l).hintAt })), U(e, t);
 			};
@@ -7391,10 +7469,10 @@ function _f(e, t) {
 			B(l).kind === "meter" && e(_);
 		});
 		var v = I(g, 2), y = F(v, !0), ee = I(v, 2), b = (e) => {
-			var t = hf(), n = P(t), r = F(n, !0), i = I(n, 2), a = (e) => {
+			var t = _f(), n = P(t), r = F(n, !0), i = I(n, 2), a = (e) => {
 				let t = /* @__PURE__ */ k(() => B(u).estimate);
-				var n = pf(), r = N(n, !0), i = I(r), a = (e) => {
-					var n = ff();
+				var n = hf(), r = N(n, !0), i = I(r), a = (e) => {
+					var n = mf();
 					L(() => si(n, 1, `payoff-mark payoff-${B(t).tone ?? ""}`)), U(e, n);
 				};
 				G(i, (e) => {
@@ -7405,7 +7483,7 @@ function _f(e, t) {
 					W(r, B(t).lead), W(s, B(t).phrase), W(c, B(t).rest);
 				}), U(e, n);
 			}, o = (e) => {
-				var t = mf(), n = F(t, !0);
+				var t = gf(), n = F(t, !0);
 				L(() => W(n, B(u).missing)), U(e, t);
 			};
 			G(i, (e) => {
@@ -7422,7 +7500,7 @@ function _f(e, t) {
 		B(l) && e(p);
 	}), U(e, d), D();
 }
-var vf = [
+var bf = [
 	{
 		field: "cache_read",
 		label: "Cache read",
@@ -7438,31 +7516,31 @@ var vf = [
 		label: "New input",
 		color: "var(--context-new)"
 	}
-], yf = {
+], xf = {
 	manual: "/compact",
 	auto: "auto-compact"
-}, bf = "No turns with usage.", xf = "No turn grew the context.", Sf = "No compactions.", Cf = `${Wc} Each compaction is compared over its own stretch, up to the next one; the Estimated cost tile adds up the main thread's.`;
-function wf(e) {
+}, Sf = "No turns with usage.", Cf = "No turn grew the context.", wf = "No compactions.", Tf = `${Uc} Each compaction is compared over its own stretch, up to the next one; the Estimated cost tile adds up the main thread's.`;
+function Ef(e) {
 	return e.agent_id ?? "main";
 }
-function Tf(e) {
+function Df(e) {
 	return e.agent_id === null ? "main thread" : e.description ? `${e.agent_type} · ${e.description}` : e.agent_type;
 }
-function Ef(e) {
+function Of(e) {
 	return e.filter((e) => e.context_per_turn.length);
 }
-function Df(e, t) {
-	let n = Ef(e);
-	return n.find((e) => wf(e) === t) ?? n[0] ?? null;
+function kf(e, t) {
+	let n = Of(e);
+	return n.find((e) => Ef(e) === t) ?? n[0] ?? null;
 }
-function Of(e) {
-	let t = Ef(e);
+function Af(e) {
+	let t = Of(e);
 	if (t.length < 2) return [];
 	let n = [], r = /* @__PURE__ */ new Map();
 	for (let e of t) {
 		let t = {
-			value: wf(e),
-			label: Tf(e)
+			value: Ef(e),
+			label: Df(e)
 		};
 		if (e.workflow_run === null) {
 			n.push({
@@ -7481,26 +7559,26 @@ function Of(e) {
 	}
 	return n;
 }
-function kf(e, t) {
-	return `${e}-${t ? wf(t) : "none"}`;
-}
-function Af(e) {
-	return e ? `${Tf(e)}: every turn sends its whole context again` : "";
-}
 function jf(e, t) {
-	let n = t.map((e) => e.context), r = n[n.length - 1] ?? 0;
-	return `Context per turn of the ${Tf(e)}, by cache read, cache write and new input: ${t.length} turns, peak ${J(Math.max(...n))}, last ${J(r)}; table view available`;
+	return `${e}-${t ? Ef(t) : "none"}`;
 }
-var Mf = 206;
-function Nf(e) {
+function Mf(e) {
+	return e ? `${Df(e)}: every turn sends its whole context again` : "";
+}
+function Nf(e, t) {
+	let n = t.map((e) => e.context), r = n[n.length - 1] ?? 0;
+	return `Context per turn of the ${Df(e)}, by cache read, cache write and new input: ${t.length} turns, peak ${J(Math.max(...n))}, last ${J(r)}; table view available`;
+}
+var Pf = 206;
+function Ff(e) {
 	return Oa(Math.max(0, ...e.map((e) => e.context)));
 }
-function Pf(e) {
+function If(e) {
 	return (t) => 178 - 160 * t / e;
 }
-function Ff(e, t, n) {
+function Lf(e, t, n) {
 	let r = e.map(() => 0);
-	return vf.map((i) => {
+	return bf.map((i) => {
 		let a = r.map((t, n) => t + (e[n]?.[i.field] ?? 0)), o = (e, r) => `${t(r).toFixed(1)},${n(e).toFixed(1)}`, s = a.map(o), c = r.map(o).reverse(), l = r;
 		if (r = a, e.length === 1) {
 			let e = n(a[0] ?? 0);
@@ -7521,31 +7599,31 @@ function Ff(e, t, n) {
 		};
 	});
 }
-function If(e, t, n) {
+function Rf(e, t, n) {
 	return !e || e > t ? null : {
 		y: Math.round(n(e)) + .5,
 		text: `hint ${J(e)}`
 	};
 }
-function Lf(e, t) {
+function zf(e, t) {
 	if (!t.ts) return -1;
 	let n = Date.parse(t.ts);
 	return e.findIndex((e) => e.ts && Date.parse(e.ts) > n);
 }
-function Rf(e, t, n) {
+function Bf(e, t, n) {
 	let r = [], i = -Infinity;
 	return e.forEach((e, a) => {
-		let o = Lf(t, e);
+		let o = zf(t, e);
 		if (o < 0) return;
 		let s = o > 0 ? (n(o - 1) + n(o)) / 2 : n(0), c = s - i >= 44;
 		c && (i = s), r.push({
 			key: String(a),
 			x: s,
-			label: c ? yf[e.trigger ?? ""] ?? "compaction" : null
+			label: c ? xf[e.trigger ?? ""] ?? "compaction" : null
 		});
 	}), r;
 }
-function zf(e, t, n, r) {
+function Vf(e, t, n, r) {
 	let i = e.length - 1, a = Ia(e);
 	return (a === i ? [i] : [a, i]).map((a) => {
 		let o = a === i, s = e[a] ?? 0, c = r.some((e) => e >= t(a) && e - t(a) < 44);
@@ -7558,37 +7636,37 @@ function zf(e, t, n, r) {
 		};
 	});
 }
-function Bf(e, t) {
+function Hf(e, t) {
 	let n = e[t], r = n?.effort ? ` · effort ${n.effort}` : "";
 	return `Turn ${Y(t + 1)} of ${Y(e.length)} · ${Z(n?.ts ?? null)}${r}`;
 }
-function Vf(e) {
+function Uf(e) {
 	let t = [];
 	if (e.growth !== null && t.push(`grew ${ha(e.growth)} beyond the last reply`), e.rebuild) {
 		let n = e.rebuild.extra_cost === null ? "" : `, +${X(e.rebuild.extra_cost)}`;
-		t.push(`cache rebuilt: ${Hc[e.rebuild.cause]} (${J(e.rebuild.lost)}${n})`);
+		t.push(`cache rebuilt: ${Vc[e.rebuild.cause]} (${J(e.rebuild.lost)}${n})`);
 	}
 	return t;
 }
-function Hf(e) {
+function Wf(e) {
 	return [
 		`context ${J(e.context)}`,
-		...vf.map((t) => `${t.label.toLowerCase()} ${J(e[t.field])}`),
-		...Vf(e)
+		...bf.map((t) => `${t.label.toLowerCase()} ${J(e[t.field])}`),
+		...Uf(e)
 	];
 }
-function Uf(e, t) {
+function Gf(e, t) {
 	let n = e[t];
-	return n ? `${Bf(e, t)}: ${Hf(n).join(", ")}` : "";
+	return n ? `${Hf(e, t)}: ${Wf(n).join(", ")}` : "";
 }
-var Wf = [
+var Kf = [
 	{
 		label: "Turn",
 		numeric: !0
 	},
 	{ label: "Time" },
 	{ label: "Effort" },
-	...vf.map((e) => ({
+	...bf.map((e) => ({
 		label: e.label,
 		numeric: !0
 	})),
@@ -7602,7 +7680,7 @@ var Wf = [
 	},
 	{ label: "Cache rebuild" }
 ];
-function Gf(e) {
+function qf(e) {
 	let t = /* @__PURE__ */ new Map();
 	return e.map((e, n) => {
 		let r = t.get(e.message_id) ?? 0;
@@ -7612,7 +7690,7 @@ function Gf(e) {
 				Y(n + 1),
 				Z(e.ts),
 				e.effort || "–",
-				...vf.map((t) => Y(e[t.field])),
+				...bf.map((t) => Y(e[t.field])),
 				Y(e.context),
 				e.growth === null ? "–" : ha(e.growth),
 				e.rebuild ? `${e.rebuild.cause} · ${J(e.rebuild.lost)}` : "–"
@@ -7620,8 +7698,8 @@ function Gf(e) {
 		};
 	});
 }
-function Kf(e) {
-	let { overhead: t, rebuilds: n } = e, r = Object.entries(yf).map(([t, n]) => [n, e.compactions.filter((e) => e.trigger === t).length]).filter(([, e]) => e).map(([e, t]) => `${Y(t)} ${e}`), i = e.context_per_turn.map((e) => e.growth).filter((e) => e !== null), a = i.length ? i.reduce((e, t) => e + t, 0) / i.length : null;
+function Jf(e) {
+	let { overhead: t, rebuilds: n } = e, r = Object.entries(xf).map(([t, n]) => [n, e.compactions.filter((e) => e.trigger === t).length]).filter(([, e]) => e).map(([e, t]) => `${Y(t)} ${e}`), i = e.context_per_turn.map((e) => e.growth).filter((e) => e !== null), a = i.length ? i.reduce((e, t) => e + t, 0) / i.length : null;
 	return [
 		{
 			label: "Fixed overhead",
@@ -7645,7 +7723,7 @@ function Kf(e) {
 		}
 	];
 }
-function qf(e) {
+function Yf(e) {
 	let t = /* @__PURE__ */ new Map();
 	for (let n of e) {
 		let e = t.get(n.tool) ?? {
@@ -7656,7 +7734,7 @@ function qf(e) {
 	}
 	return [...t].map(([e, t]) => `${e}${t.calls > 1 ? ` ×${t.calls}` : ""} ${J(t.chars)}`).join(", ");
 }
-var Jf = [
+var Xf = [
 	{
 		label: "Turn",
 		numeric: !0
@@ -7668,7 +7746,7 @@ var Jf = [
 	},
 	{ label: "Tools the call before ran (result characters)" }
 ];
-function Yf(e) {
+function Zf(e) {
 	let t = new Map(e.context_per_turn.map((e, t) => [e.message_id, t + 1]));
 	return e.top_growth.map((e) => ({
 		key: e.message_id,
@@ -7676,11 +7754,11 @@ function Yf(e) {
 			Y(t.get(e.message_id) ?? null),
 			Z(e.ts),
 			J(e.growth),
-			e.tools.length ? qf(e.tools) : "none: a prompt or attachments"
+			e.tools.length ? Yf(e.tools) : "none: a prompt or attachments"
 		]
 	}));
 }
-function Xf(e) {
+function Qf(e) {
 	if (!e || !e.compactions) return null;
 	let t = e.net >= 0;
 	return {
@@ -7689,10 +7767,10 @@ function Xf(e) {
 		text: t ? `▲ saved ~${X(e.net)} so far` : `▼ cost ~${X(-e.net)} more so far`
 	};
 }
-function Zf(e) {
-	return Xf(Vc(e));
+function $f(e) {
+	return Qf(Bc(e));
 }
-var Qf = [
+var ep = [
 	{ label: "Time" },
 	{ label: "Trigger" },
 	{
@@ -7725,7 +7803,7 @@ var Qf = [
 	},
 	{ label: "Versus keeping" }
 ];
-function $f(e) {
+function tp(e) {
 	let t = /* @__PURE__ */ new Map();
 	return e.map((e) => {
 		let n = `${e.ts}|${e.trigger}`, r = t.get(n) ?? 0;
@@ -7737,18 +7815,18 @@ function $f(e) {
 		return {
 			key: r ? `${n}#${r}` : n,
 			time: Z(e.ts),
-			trigger: yf[e.trigger ?? ""] || e.trigger || "–",
+			trigger: xf[e.trigger ?? ""] || e.trigger || "–",
 			before: J(e.pre_tokens),
 			after: a,
 			took: _a(e.duration_ms),
 			versus: i ? {
 				each: i.difference > 0 ? `−${J(i.difference)} · ${X(i.saving_per_call)}` : `+${J(Math.abs(i.difference))} · nothing saved`,
 				oneTime: {
-					text: Yc(i),
-					title: Xc(i)
+					text: Jc(i),
+					title: Yc(i)
 				},
 				paysOff: {
-					text: qc(i) ?? "–",
+					text: Kc(i) ?? "–",
 					title: (i.breakeven_call ?? 0) > i.calls_after ? "projected past the last call" : null
 				},
 				callsAfter: {
@@ -7756,10 +7834,10 @@ function $f(e) {
 					title: i.last_stretch ? "up to the last call" : "up to the next compaction"
 				},
 				verdict: {
-					text: Gc(i),
-					tone: Bc(i),
-					words: Kc(i),
-					title: Zc(i)
+					text: Wc(i),
+					tone: zc(i),
+					words: Gc(i),
+					title: Xc(i)
 				}
 			} : null
 		};
@@ -7767,27 +7845,27 @@ function $f(e) {
 }
 //#endregion
 //#region src/components/ContextChart.svelte
-var ep = /* @__PURE__ */ V([["path"], ["path", {
+var np = /* @__PURE__ */ V([["path"], ["path", {
 	fill: "none",
 	stroke: "var(--surface)",
 	"stroke-width": "2",
 	"stroke-linejoin": "round"
-}]], 5), tp = /* @__PURE__ */ V([["rect"]], 4), np = /* @__PURE__ */ V([["line", { class: "reference-line" }], [
+}]], 5), rp = /* @__PURE__ */ V([["rect"]], 4), ip = /* @__PURE__ */ V([["line", { class: "reference-line" }], [
 	"text",
 	{ class: "axis-text" },
 	" "
-]], 5), rp = /* @__PURE__ */ V([[
+]], 5), ap = /* @__PURE__ */ V([[
 	"text",
 	{
 		"text-anchor": "middle",
 		class: "axis-text"
 	},
 	" "
-]], 4), ip = /* @__PURE__ */ V([["line", { class: "compaction-rule" }], ,], 5), ap = /* @__PURE__ */ V([[
+]], 4), op = /* @__PURE__ */ V([["line", { class: "compaction-rule" }], ,], 5), sp = /* @__PURE__ */ V([[
 	"text",
 	{ class: "value-text" },
 	" "
-]], 4), op = /* @__PURE__ */ V([
+]], 4), cp = /* @__PURE__ */ V([
 	,
 	,
 	,
@@ -7796,7 +7874,7 @@ var ep = /* @__PURE__ */ V([["path"], ["path", {
 	,
 	,
 	,
-], 5), sp = /* @__PURE__ */ V([["line", { class: "crosshair" }], ,], 5), cp = /* @__PURE__ */ V([[
+], 5), lp = /* @__PURE__ */ V([["line", { class: "crosshair" }], ,], 5), up = /* @__PURE__ */ V([[
 	"div",
 	{ class: "row" },
 	,
@@ -7812,11 +7890,11 @@ var ep = /* @__PURE__ */ V([["path"], ["path", {
 		{ class: "name" },
 		" "
 	]
-]]), lp = /* @__PURE__ */ V([[
+]]), dp = /* @__PURE__ */ V([[
 	"div",
 	{ class: "name" },
 	" "
-]]), up = /* @__PURE__ */ V([
+]]), fp = /* @__PURE__ */ V([
 	[
 		"div",
 		{ class: "when" },
@@ -7845,14 +7923,14 @@ var ep = /* @__PURE__ */ V([["path"], ["path", {
 	" ",
 	,
 ], 1);
-function dp(e, t) {
+function pp(e, t) {
 	E(t, !0);
 	let n = (e, n = v) => {
-		let r = /* @__PURE__ */ k(() => n() - 64), i = /* @__PURE__ */ k(() => ja(t.turns.length, 56, B(r))), a = /* @__PURE__ */ k(() => If(t.hintTokens, B(o), B(s))), l = /* @__PURE__ */ k(() => Rf(t.compactions, t.turns, B(i)));
-		var u = op(), d = P(u);
+		let r = /* @__PURE__ */ k(() => n() - 64), i = /* @__PURE__ */ k(() => ja(t.turns.length, 56, B(r))), a = /* @__PURE__ */ k(() => Rf(t.hintTokens, B(o), B(s))), l = /* @__PURE__ */ k(() => Bf(t.compactions, t.turns, B(i)));
+		var u = cp(), d = P(u);
 		{
 			let e = /* @__PURE__ */ k(() => ka(B(o), 4));
-			Gs(d, {
+			Ws(d, {
 				get left() {
 					return 56;
 				},
@@ -7871,14 +7949,14 @@ function dp(e, t) {
 			});
 		}
 		var f = I(d);
-		K(f, 17, () => Ff(t.turns, B(i), B(s)), (e) => e.part.field, (e, t) => {
+		K(f, 17, () => Lf(t.turns, B(i), B(s)), (e) => e.part.field, (e, t) => {
 			var n = H(), r = P(n), i = (e) => {
-				var n = ep(), r = P(n), i = I(r);
+				var n = np(), r = P(n), i = I(r);
 				L(() => {
 					q(r, "d", B(t).area), q(r, "fill", B(t).part.color), q(i, "d", B(t).edge);
 				}), U(e, n);
 			}, a = (e) => {
-				var n = tp();
+				var n = rp();
 				L(() => {
 					q(n, "x", B(t).x), q(n, "y", B(t).y), q(n, "width", B(t).width), q(n, "height", B(t).height), q(n, "fill", B(t).part.color);
 				}), U(e, n);
@@ -7888,7 +7966,7 @@ function dp(e, t) {
 			}), U(e, n);
 		});
 		var p = I(f), m = I(p), h = (e) => {
-			var t = np(), n = P(t), i = I(n), o = F(i, !0);
+			var t = ip(), n = P(t), i = I(n), o = F(i, !0);
 			L(() => {
 				q(n, "x1", 56), q(n, "x2", B(r)), q(n, "y1", B(a).y), q(n, "y2", B(a).y), q(i, "x", B(r) + 6), q(i, "y", B(a).y + 4), W(o, B(a).text);
 			}), U(e, t);
@@ -7898,8 +7976,8 @@ function dp(e, t) {
 		});
 		var g = I(m);
 		K(g, 17, () => B(l), (e) => e.key, (e, t) => {
-			var n = ip(), r = P(n), i = I(r), a = (e) => {
-				var n = rp(), r = F(n, !0);
+			var n = op(), r = P(n), i = I(r), a = (e) => {
+				var n = ap(), r = F(n, !0);
 				L(() => {
 					q(n, "x", B(t).x), q(n, "y", 10), W(r, B(t).label);
 				}), U(e, n);
@@ -7911,8 +7989,8 @@ function dp(e, t) {
 			}), U(e, n);
 		});
 		var _ = I(g);
-		K(_, 17, () => zf(B(c), B(i), B(s), B(l).map((e) => e.x)), (e) => e.key, (e, t) => {
-			var n = ap(), r = F(n, !0);
+		K(_, 17, () => Vf(B(c), B(i), B(s), B(l).map((e) => e.x)), (e) => e.key, (e, t) => {
+			var n = sp(), r = F(n, !0);
 			L(() => {
 				q(n, "x", B(t).x), q(n, "y", B(t).y), q(n, "text-anchor", B(t).anchor), W(r, B(t).text);
 			}), U(e, n);
@@ -7920,7 +7998,7 @@ function dp(e, t) {
 		var y = I(_);
 		{
 			let e = /* @__PURE__ */ k(() => 196);
-			Us(y, {
+			Hs(y, {
 				get count() {
 					return t.turns.length;
 				},
@@ -7939,10 +8017,10 @@ function dp(e, t) {
 		}, [() => B(i)(0), () => B(i)(t.turns.length - 1)]), U(e, u);
 	}, r = (e, n = v, r = v) => {
 		let i = /* @__PURE__ */ k(() => ja(t.turns.length, 56, n() - 64)(r()));
-		var a = sp(), o = P(a), l = I(o);
+		var a = lp(), o = P(a), l = I(o);
 		{
 			let e = /* @__PURE__ */ k(() => B(s)(B(c)[r()] ?? 0));
-			Ul(l, {
+			Hl(l, {
 				get x() {
 					return B(i);
 				},
@@ -7958,10 +8036,10 @@ function dp(e, t) {
 	}, i = (e, n = v) => {
 		let r = /* @__PURE__ */ k(() => t.turns[n()]);
 		var i = H(), a = P(i), o = (e) => {
-			var i = up(), a = P(i), o = F(a, !0), s = I(a, 2);
-			K(s, 17, () => vf.toReversed(), (e) => e.field, (e, t) => {
-				var n = cp(), i = N(n);
-				xs(i, { get fill() {
+			var i = fp(), a = P(i), o = F(a, !0), s = I(a, 2);
+			K(s, 17, () => bf.toReversed(), (e) => e.field, (e, t) => {
+				var n = up(), i = N(n);
+				bs(i, { get fill() {
 					return B(t).color;
 				} });
 				var a = I(i, 2), o = F(a, !0), s = F(I(a, 2), !0);
@@ -7970,20 +8048,20 @@ function dp(e, t) {
 				}, [() => J(B(r)[B(t).field])]), U(e, n);
 			});
 			var c = I(s, 2), l = F(I(N(c), 2), !0);
-			je(2), T(c), K(I(c, 2), 16, () => Vf(B(r)), (e) => e, (e, t) => {
-				var n = lp(), r = F(n, !0);
+			je(2), T(c), K(I(c, 2), 16, () => Uf(B(r)), (e) => e, (e, t) => {
+				var n = dp(), r = F(n, !0);
 				L(() => W(r, t)), U(e, n);
 			}), L((e, t) => {
 				W(o, e), W(l, t);
-			}, [() => Bf(t.turns, n()), () => J(B(r).context)]), U(e, i);
+			}, [() => Hf(t.turns, n()), () => J(B(r).context)]), U(e, i);
 		};
 		G(a, (e) => {
 			B(r) && e(o);
 		}), U(e, i);
-	}, a = /* @__PURE__ */ k(() => Li(t.containerWidth)), o = /* @__PURE__ */ k(() => Nf(t.turns)), s = /* @__PURE__ */ k(() => Pf(B(o))), c = /* @__PURE__ */ k(() => t.turns.map((e) => e.context)), l = /* @__PURE__ */ k(() => ({
+	}, a = /* @__PURE__ */ k(() => Li(t.containerWidth)), o = /* @__PURE__ */ k(() => Ff(t.turns)), s = /* @__PURE__ */ k(() => If(B(o))), c = /* @__PURE__ */ k(() => t.turns.map((e) => e.context)), l = /* @__PURE__ */ k(() => ({
 		count: t.turns.length,
 		label: "Context per turn by part; arrow keys step through the turns",
-		valueText: (e) => Uf(t.turns, e),
+		valueText: (e) => Gf(t.turns, e),
 		area: (e) => ({
 			x: 56,
 			y: 0,
@@ -7993,9 +8071,9 @@ function dp(e, t) {
 		indexAt: (e) => Ma(56, e - 64, t.turns.length),
 		tipX: (e, n) => ja(t.turns.length, 56, e - 64)(n)
 	}));
-	gs(e, {
+	hs(e, {
 		get height() {
-			return Mf;
+			return Pf;
 		},
 		get label() {
 			return t.label;
@@ -8022,11 +8100,11 @@ function dp(e, t) {
 }
 //#endregion
 //#region src/components/StatTile.svelte
-var fp = /* @__PURE__ */ V([[
+var mp = /* @__PURE__ */ V([[
 	"div",
 	{ class: "note" },
 	" "
-]]), pp = /* @__PURE__ */ V([[
+]]), hp = /* @__PURE__ */ V([[
 	"div",
 	{ class: "card" },
 	[
@@ -8043,11 +8121,11 @@ var fp = /* @__PURE__ */ V([[
 	" ",
 	,
 ]]);
-function mp(e, t) {
+function gp(e, t) {
 	E(t, !0);
 	let n = Ni(t, "note", 3, null), r = Ni(t, "themedNote", 3, !1);
-	var i = pp(), a = N(i), o = F(a, !0), s = I(a, 2), c = F(s, !0), l = I(s, 2), u = (e) => {
-		var t = fp(), i = F(t, !0);
+	var i = hp(), a = N(i), o = F(a, !0), s = I(a, 2), c = F(s, !0), l = I(s, 2), u = (e) => {
+		var t = mp(), i = F(t, !0);
 		L((e) => W(i, e), [() => r() ? $(n()) : n()]), U(e, t);
 	};
 	G(l, (e) => {
@@ -8058,49 +8136,49 @@ function mp(e, t) {
 }
 //#endregion
 //#region src/components/ContextDetails.svelte
-var hp = (e) => {
-	U(e, vp());
-}, gp = (e, t = v) => {
+var _p = (e) => {
+	U(e, bp());
+}, vp = (e, t = v) => {
 	var n = H();
-	K(P(n), 19, () => Jf, (e) => e.label, (e, n, r) => {
-		var i = yp(), a = F(i, !0);
+	K(P(n), 19, () => Xf, (e) => e.label, (e, n, r) => {
+		var i = xp(), a = F(i, !0);
 		L(() => {
 			si(i, 1, ti(B(n).numeric ? "num" : void 0)), W(a, t().cells[B(r)]);
 		}), U(e, i);
 	}), U(e, n);
-}, _p = (e, t = v) => {
-	var n = wp(), r = P(n), i = F(r, !0), a = I(r, 2), o = F(a, !0), s = I(a, 2), c = F(s, !0), l = I(s, 2), u = F(l, !0), d = I(l, 2), f = F(d, !0), p = I(d, 2), m = (e) => {
+}, yp = (e, t = v) => {
+	var n = Ep(), r = P(n), i = F(r, !0), a = I(r, 2), o = F(a, !0), s = I(a, 2), c = F(s, !0), l = I(s, 2), u = F(l, !0), d = I(l, 2), f = F(d, !0), p = I(d, 2), m = (e) => {
 		let n = /* @__PURE__ */ k(() => t().versus);
-		var r = Sp(), i = P(r), a = F(i, !0), o = I(i, 2), s = F(o, !0), c = I(o, 2), l = F(c, !0), u = I(c, 2), d = F(u, !0), f = I(u, 2), p = N(f), m = F(p, !0);
+		var r = wp(), i = P(r), a = F(i, !0), o = I(i, 2), s = F(o, !0), c = I(o, 2), l = F(c, !0), u = I(c, 2), d = F(u, !0), f = I(u, 2), p = N(f), m = F(p, !0);
 		T(f), L(() => {
 			W(a, B(n).each), q(o, "title", B(n).oneTime.title), W(s, B(n).oneTime.text), q(c, "title", B(n).paysOff.title), W(l, B(n).paysOff.text), q(u, "title", B(n).callsAfter.title), W(d, B(n).callsAfter.text), q(f, "title", B(n).verdict.title), si(p, 1, ti(B(n).verdict.tone ? `verdict-${B(n).verdict.tone}` : void 0)), q(p, "title", B(n).verdict.words), W(m, B(n).verdict.text);
 		}), U(e, r);
 	}, h = (e) => {
-		U(e, Cp());
+		U(e, Tp());
 	};
 	G(p, (e) => {
 		t().versus ? e(m) : e(h, -1);
 	}), L(() => {
 		W(i, t().time), W(o, t().trigger), W(c, t().before), q(l, "title", t().after.title), W(u, t().after.text), W(f, t().took);
 	}), U(e, n);
-}, vp = /* @__PURE__ */ V([[
+}, bp = /* @__PURE__ */ V([[
 	"h3",
 	null,
 	"Biggest growth steps"
-]]), yp = /* @__PURE__ */ V([[
+]]), xp = /* @__PURE__ */ V([[
 	"td",
 	null,
 	" "
-]]), bp = /* @__PURE__ */ V([[
+]]), Sp = /* @__PURE__ */ V([[
 	"span",
 	null,
 	" "
-]]), xp = /* @__PURE__ */ V([[
+]]), Cp = /* @__PURE__ */ V([[
 	"h3",
 	null,
 	"Compactions",
 	,
-]]), Sp = /* @__PURE__ */ V([
+]]), wp = /* @__PURE__ */ V([
 	[
 		"td",
 		{ class: "num" },
@@ -8134,14 +8212,14 @@ var hp = (e) => {
 			" "
 		]
 	]
-], 1), Cp = /* @__PURE__ */ V([[
+], 1), Tp = /* @__PURE__ */ V([[
 	"td",
 	{
 		colspan: "5",
 		class: "muted"
 	},
 	"no call after it, or no price for its model"
-]]), wp = /* @__PURE__ */ V([
+]]), Ep = /* @__PURE__ */ V([
 	[
 		"td",
 		null,
@@ -8173,11 +8251,11 @@ var hp = (e) => {
 	],
 	" ",
 	,
-], 1), Tp = /* @__PURE__ */ V([[
+], 1), Dp = /* @__PURE__ */ V([[
 	"div",
 	{ class: "note" },
 	" "
-]]), Ep = /* @__PURE__ */ V([
+]]), Op = /* @__PURE__ */ V([
 	["div", { class: "kpis session-kpis" }],
 	" ",
 	,
@@ -8186,11 +8264,11 @@ var hp = (e) => {
 	" ",
 	,
 ], 1);
-function Dp(e, t) {
+function kp(e, t) {
 	E(t, !0);
 	let n = (e) => {
-		var t = xp(), n = I(N(t)), r = (e) => {
-			var t = bp(), n = F(t, !0);
+		var t = Cp(), n = I(N(t)), r = (e) => {
+			var t = Sp(), n = F(t, !0);
 			L(() => {
 				si(t, 1, `compaction-total verdict-${B(a).tone ?? ""}`), q(t, "title", B(a).title), W(n, B(a).text);
 			}), U(e, t);
@@ -8198,10 +8276,10 @@ function Dp(e, t) {
 		G(n, (e) => {
 			B(a) && e(r);
 		}), T(t), U(e, t);
-	}, r = /* @__PURE__ */ k(() => Yf(t.agent)), i = /* @__PURE__ */ k(() => $f(t.agent.compactions)), a = /* @__PURE__ */ k(() => Zf(t.agent.compactions));
-	var o = Ep(), s = P(o);
-	K(s, 21, () => Kf(t.agent), (e) => e.label, (e, t) => {
-		mp(e, {
+	}, r = /* @__PURE__ */ k(() => Zf(t.agent)), i = /* @__PURE__ */ k(() => tp(t.agent.compactions)), a = /* @__PURE__ */ k(() => $f(t.agent.compactions));
+	var o = Op(), s = P(o);
+	K(s, 21, () => Jf(t.agent), (e) => e.label, (e, t) => {
+		gp(e, {
 			get label() {
 				return B(t).label;
 			},
@@ -8214,52 +8292,52 @@ function Dp(e, t) {
 		});
 	}), T(s);
 	var c = I(s, 2);
-	Vs(c, {
+	Bs(c, {
 		get key() {
 			return `${t.key ?? ""}-growth`;
 		},
 		get columns() {
-			return Jf;
+			return Xf;
 		},
 		get rows() {
 			return B(r);
 		},
 		rowKey: (e) => e.key,
 		get cells() {
-			return gp;
+			return vp;
 		},
 		get heading() {
-			return hp;
+			return _p;
 		},
 		get empty() {
-			return xf;
+			return Cf;
 		}
 	});
 	var l = I(c, 2);
-	Vs(l, {
+	Bs(l, {
 		get key() {
 			return `${t.key ?? ""}-compactions`;
 		},
 		get columns() {
-			return Qf;
+			return ep;
 		},
 		get rows() {
 			return B(i);
 		},
 		rowKey: (e) => e.key,
 		get cells() {
-			return _p;
+			return yp;
 		},
 		get heading() {
 			return n;
 		},
 		get empty() {
-			return Sf;
+			return wf;
 		}
 	});
 	var u = I(l, 2), d = (e) => {
-		var t = Tp(), n = F(t, !0);
-		L(() => W(n, Cf)), U(e, t);
+		var t = Dp(), n = F(t, !0);
+		L(() => W(n, Tf)), U(e, t);
 	};
 	G(u, (e) => {
 		B(i).length && e(d);
@@ -8267,39 +8345,39 @@ function Dp(e, t) {
 }
 //#endregion
 //#region src/components/ContextPerTurn.svelte
-var Op = (e, t = v) => {
+var Ap = (e, t = v) => {
 	var n = H();
-	K(P(n), 19, () => Wf, (e) => e.label, (e, n, r) => {
-		var i = kp(), a = F(i, !0);
+	K(P(n), 19, () => Kf, (e) => e.label, (e, n, r) => {
+		var i = jp(), a = F(i, !0);
 		L(() => {
 			si(i, 1, ti(B(n).numeric ? "num" : void 0)), W(a, t().cells[B(r)]);
 		}), U(e, i);
 	}), U(e, n);
-}, kp = /* @__PURE__ */ V([[
+}, jp = /* @__PURE__ */ V([[
 	"td",
 	null,
 	" "
-]]), Ap = /* @__PURE__ */ V([[
+]]), Mp = /* @__PURE__ */ V([[
 	"option",
 	null,
 	" "
-]]), jp = /* @__PURE__ */ V([["optgroup"]]), Mp = /* @__PURE__ */ V([[
+]]), Np = /* @__PURE__ */ V([["optgroup"]]), Pp = /* @__PURE__ */ V([[
 	"option",
 	null,
 	" "
-]]), Np = /* @__PURE__ */ V([["select", {
+]]), Fp = /* @__PURE__ */ V([["select", {
 	id: "context-agent",
 	"aria-label": "Transcript the context section shows"
-}]]), Pp = /* @__PURE__ */ V([[
+}]]), Ip = /* @__PURE__ */ V([[
 	"span",
 	null,
 	,
 	" "
-]]), Fp = /* @__PURE__ */ V([[
+]]), Lp = /* @__PURE__ */ V([[
 	"div",
 	{ class: "empty" },
 	" "
-]]), Ip = /* @__PURE__ */ V([
+]]), Rp = /* @__PURE__ */ V([
 	[
 		"div",
 		{ class: "chart-head" },
@@ -8362,23 +8440,23 @@ var Op = (e, t = v) => {
 		,
 	]
 ], 1);
-function Lp(e, t) {
+function zp(e, t) {
 	E(t, !0);
-	let n = /* @__PURE__ */ k(() => Q.session), r = /* @__PURE__ */ j("main"), i = /* @__PURE__ */ j(!1), a = /* @__PURE__ */ j(0), o = /* @__PURE__ */ k(() => B(n) ? Df(B(n).agents, B(r)) : null), s = /* @__PURE__ */ k(() => B(o)?.context_per_turn ?? []), c = /* @__PURE__ */ k(() => B(n) ? Of(B(n).agents) : []), l = /* @__PURE__ */ k(() => B(n) ? kf(B(n).session_id, B(o)) : ""), u = /* @__PURE__ */ k(() => Gf(B(s)));
+	let n = /* @__PURE__ */ k(() => Q.session), r = /* @__PURE__ */ j("main"), i = /* @__PURE__ */ j(!1), a = /* @__PURE__ */ j(0), o = /* @__PURE__ */ k(() => B(n) ? kf(B(n).agents, B(r)) : null), s = /* @__PURE__ */ k(() => B(o)?.context_per_turn ?? []), c = /* @__PURE__ */ k(() => B(n) ? Af(B(n).agents) : []), l = /* @__PURE__ */ k(() => B(n) ? jf(B(n).session_id, B(o)) : ""), u = /* @__PURE__ */ k(() => qf(B(s)));
 	var d = H(), f = P(d), p = (e) => {
-		var t = Ip(), d = P(t), f = I(N(d), 2), p = F(f, !0), m = I(f, 4), h = (e) => {
-			var t = Np();
+		var t = Rp(), d = P(t), f = I(N(d), 2), p = F(f, !0), m = I(f, 4), h = (e) => {
+			var t = Fp();
 			K(t, 21, () => B(c), (e) => e.kind === "group" ? `group:${e.key}` : e.value, (e, t) => {
 				var n = H(), r = P(n), i = (e) => {
-					var n = jp();
+					var n = Np();
 					K(n, 21, () => B(t).options, (e) => e.value, (e, t) => {
-						var n = Ap(), r = F(n, !0), i = {};
+						var n = Mp(), r = F(n, !0), i = {};
 						L(() => {
 							W(r, B(t).label), i !== (i = B(t).value) && (n.value = (n.__value = i) ?? "");
 						}), U(e, n);
 					}), T(n), L(() => q(n, "label", B(t).label)), U(e, n);
 				}, a = (e) => {
-					var n = Mp(), r = F(n, !0), i = {};
+					var n = Pp(), r = F(n, !0), i = {};
 					L(() => {
 						W(r, B(t).label), i !== (i = B(t).value) && (n.value = (n.__value = i) ?? "");
 					}), U(e, n);
@@ -8386,7 +8464,7 @@ function Lp(e, t) {
 				G(r, (e) => {
 					B(t).kind === "group" ? e(i) : e(a, -1);
 				}), U(e, n);
-			}), T(t), pi(t), mi(t, () => B(o) ? wf(B(o)) : B(r), (e) => M(r, e, !0)), U(e, t);
+			}), T(t), pi(t), mi(t, () => B(o) ? Ef(B(o)) : B(r), (e) => M(r, e, !0)), U(e, t);
 		};
 		G(m, (e) => {
 			B(c).length && e(h);
@@ -8394,9 +8472,9 @@ function Lp(e, t) {
 		var g = I(m, 2);
 		T(d);
 		var _ = I(d, 2);
-		K(N(_), 17, () => vf.toReversed(), (e) => e.field, (e, t) => {
-			var n = Pp(), r = N(n);
-			xs(r, { get fill() {
+		K(N(_), 17, () => bf.toReversed(), (e) => e.field, (e, t) => {
+			var n = Ip(), r = N(n);
+			bs(r, { get fill() {
 				return B(t).color;
 			} });
 			var i = I(r, 1, !0);
@@ -8404,8 +8482,8 @@ function Lp(e, t) {
 		}), je(2), T(_);
 		var v = I(_, 2), y = N(v), ee = (e) => {
 			{
-				let t = /* @__PURE__ */ k(() => jf(B(o), B(s)));
-				dp(e, {
+				let t = /* @__PURE__ */ k(() => Nf(B(o), B(s)));
+				pp(e, {
 					get turns() {
 						return B(s);
 					},
@@ -8424,30 +8502,30 @@ function Lp(e, t) {
 				});
 			}
 		}, b = (e) => {
-			var t = Fp(), n = F(t, !0);
-			L(() => W(n, bf)), U(e, t);
+			var t = Lp(), n = F(t, !0);
+			L(() => W(n, Sf)), U(e, t);
 		};
 		G(y, (e) => {
 			B(o) && B(s).length ? e(ee) : e(b, -1);
 		}), T(v);
 		var x = I(v, 2), S = (e) => {
-			Vs(e, {
+			Bs(e, {
 				id: "context-table",
 				get key() {
 					return `${B(l) ?? ""}-turns`;
 				},
 				get columns() {
-					return Wf;
+					return Kf;
 				},
 				get rows() {
 					return B(u);
 				},
 				rowKey: (e) => e.key,
 				get cells() {
-					return Op;
+					return Ap;
 				},
 				get empty() {
-					return bf;
+					return Sf;
 				}
 			});
 		};
@@ -8455,7 +8533,7 @@ function Lp(e, t) {
 			B(i) && e(S);
 		});
 		var te = I(x, 2), ne = N(te), re = (e) => {
-			Dp(e, {
+			kp(e, {
 				get agent() {
 					return B(o);
 				},
@@ -8468,7 +8546,7 @@ function Lp(e, t) {
 			B(o) && e(re);
 		}), T(te), L((e) => {
 			W(p, e), q(g, "aria-pressed", B(i));
-		}, [() => Af(B(o))]), yr("click", g, () => M(i, !B(i))), Ai(v, "clientWidth", (e) => M(a, e)), U(e, t);
+		}, [() => Mf(B(o))]), yr("click", g, () => M(i, !B(i))), Ai(v, "clientWidth", (e) => M(a, e)), U(e, t);
 	};
 	G(f, (e) => {
 		B(n) && e(p);
@@ -8477,7 +8555,7 @@ function Lp(e, t) {
 br(["click"]);
 //#endregion
 //#region src/components/InputSplit.svelte
-var Rp = /* @__PURE__ */ V([["span"]]), zp = /* @__PURE__ */ V([[
+var Bp = /* @__PURE__ */ V([["span"]]), Vp = /* @__PURE__ */ V([[
 	"div",
 	{ class: "split-row" },
 	,
@@ -8505,11 +8583,11 @@ var Rp = /* @__PURE__ */ V([["span"]]), zp = /* @__PURE__ */ V([[
 		{ class: "split-number" },
 		" "
 	]
-]]), Bp = /* @__PURE__ */ V([[
+]]), Hp = /* @__PURE__ */ V([[
 	"div",
 	{ class: "note" },
 	" "
-]]), Vp = /* @__PURE__ */ V([[
+]]), Up = /* @__PURE__ */ V([[
 	"div",
 	{ class: "card" },
 	[
@@ -8533,12 +8611,12 @@ var Rp = /* @__PURE__ */ V([["span"]]), zp = /* @__PURE__ */ V([[
 	" ",
 	,
 ]]);
-function Hp(e, t) {
+function Wp(e, t) {
 	E(t, !0);
-	let n = /* @__PURE__ */ k(() => Da(t.totals)), r = /* @__PURE__ */ k(() => Dd(t.totals)), i = /* @__PURE__ */ k(() => kd(t.context, t.hintTokens));
-	var a = Vp(), o = N(a), s = F(o, !0), c = I(o, 2), l = F(c, !0), u = I(c, 2);
+	let n = /* @__PURE__ */ k(() => Da(t.totals)), r = /* @__PURE__ */ k(() => kd(t.totals)), i = /* @__PURE__ */ k(() => jd(t.context, t.hintTokens));
+	var a = Up(), o = N(a), s = F(o, !0), c = I(o, 2), l = F(c, !0), u = I(c, 2);
 	K(u, 21, () => B(r).filter((e) => e.tokens > 0), (e) => e.label, (e, t) => {
-		var n = Rp();
+		var n = Bp();
 		let r;
 		L(() => r = li(n, "", r, {
 			"flex-grow": B(t).tokens,
@@ -8547,8 +8625,8 @@ function Hp(e, t) {
 	}), T(u);
 	var d = I(u, 2);
 	K(d, 17, () => B(r), (e) => e.label, (e, t) => {
-		var r = zp(), i = N(r);
-		xs(i, { get fill() {
+		var r = Vp(), i = N(r);
+		bs(i, { get fill() {
 			return B(t).color;
 		} });
 		var a = I(i, 2), o = F(a, !0), s = I(a, 2), c = F(s, !0), l = I(s, 2), u = F(l, !0), d = F(I(l, 2), !0);
@@ -8562,7 +8640,7 @@ function Hp(e, t) {
 		]), U(e, r);
 	});
 	var f = I(d, 2), p = (e) => {
-		var t = Bp();
+		var t = Hp();
 		q(t, "title", "The context a main-thread turn reads: new input, cache writes and reads. The conversation hints at compacting from the threshold on ([chat] compact_hint_tokens).");
 		var n = F(t, !0);
 		L(() => W(n, B(i))), U(e, t);
@@ -8574,12 +8652,12 @@ function Hp(e, t) {
 	}, [
 		() => $("Input tokens"),
 		() => J(B(n)),
-		() => Od(B(r), t.totals)
+		() => Ad(B(r), t.totals)
 	]), U(e, a), D();
 }
 //#endregion
 //#region src/components/KpiTiles.svelte
-var Up = /* @__PURE__ */ V([
+var Gp = /* @__PURE__ */ V([
 	[
 		"div",
 		null,
@@ -8591,11 +8669,11 @@ var Up = /* @__PURE__ */ V([
 		null,
 		" "
 	]
-], 1), Wp = /* @__PURE__ */ V([[
+], 1), Kp = /* @__PURE__ */ V([[
 	"div",
 	{ class: "note" },
 	,
-]]), Gp = /* @__PURE__ */ V([
+]]), qp = /* @__PURE__ */ V([
 	[
 		"div",
 		{ class: "card" },
@@ -8631,14 +8709,14 @@ var Up = /* @__PURE__ */ V([
 	" ",
 	,
 ], 1);
-function Kp(e, t) {
+function Jp(e, t) {
 	E(t, !0);
-	let n = /* @__PURE__ */ k(() => t.savings ? Ed(t.savings) : null);
-	var r = Gp(), i = P(r), a = N(i), o = N(a), s = F(o, !0), c = I(o);
+	let n = /* @__PURE__ */ k(() => t.savings ? Od(t.savings) : null);
+	var r = qp(), i = P(r), a = N(i), o = N(a), s = F(o, !0), c = I(o);
 	T(a);
 	var l = I(a, 2), u = F(l, !0), d = I(l, 2), f = F(d, !0), p = I(d, 2), m = (e) => {
-		var t = Wp(), r = N(t), i = (e) => {
-			var t = Up(), r = P(t), i = F(r, !0), a = F(I(r, 2), !0);
+		var t = Kp(), r = N(t), i = (e) => {
+			var t = Gp(), r = P(t), i = F(r, !0), a = F(I(r, 2), !0);
 			L(() => {
 				si(r, 1, ti(B(n).verdict === "gain" ? "verdict-gain" : "verdict-loss")), W(i, B(n).amount), W(a, B(n).count);
 			}), U(e, t);
@@ -8654,7 +8732,7 @@ function Kp(e, t) {
 		B(n) && e(m);
 	}), T(i);
 	var h = I(i, 2);
-	Hp(h, {
+	Wp(h, {
 		get totals() {
 			return t.totals;
 		},
@@ -8668,7 +8746,7 @@ function Kp(e, t) {
 	var g = I(h, 2);
 	{
 		let e = /* @__PURE__ */ k(() => Y(t.totals.turns));
-		mp(g, {
+		gp(g, {
 			label: "Turns",
 			get value() {
 				return B(e);
@@ -8680,7 +8758,7 @@ function Kp(e, t) {
 	var _ = I(g, 2);
 	{
 		let e = /* @__PURE__ */ k(() => J(t.totals.output)), n = /* @__PURE__ */ k(() => X(t.totals.cost_parts.output));
-		mp(_, {
+		gp(_, {
 			label: "Output tokens",
 			get value() {
 				return B(e);
@@ -8695,12 +8773,12 @@ function Kp(e, t) {
 	}, [
 		() => $("Estimated cost"),
 		() => X(t.totals.cost),
-		() => wd(t.totals)
+		() => Ed(t.totals)
 	]), U(e, r), D();
 }
 //#endregion
 //#region src/components/RuntimeTiles.svelte
-var qp = /* @__PURE__ */ V([
+var Yp = /* @__PURE__ */ V([
 	,
 	,
 	" ",
@@ -8710,13 +8788,13 @@ var qp = /* @__PURE__ */ V([
 	" ",
 	,
 ], 1);
-function Jp(e, t) {
+function Xp(e, t) {
 	E(t, !0);
-	let n = /* @__PURE__ */ k(() => "source" in t.runtime && t.runtime.source === "transcripts"), r = /* @__PURE__ */ k(() => Ad(t.runtime, t.from, t.costPer100Lines, B(n)));
-	var i = qp(), a = P(i);
+	let n = /* @__PURE__ */ k(() => "source" in t.runtime && t.runtime.source === "transcripts"), r = /* @__PURE__ */ k(() => Md(t.runtime, t.from, t.costPer100Lines, B(n)));
+	var i = Yp(), a = P(i);
 	{
 		let e = /* @__PURE__ */ k(() => _a(t.runtime.duration_ms));
-		mp(a, {
+		gp(a, {
 			label: "Session time",
 			get value() {
 				return B(e);
@@ -8729,7 +8807,7 @@ function Jp(e, t) {
 	var o = I(a, 2);
 	{
 		let e = /* @__PURE__ */ k(() => _a(t.runtime.api_ms));
-		mp(o, {
+		gp(o, {
 			label: "Waiting on the API",
 			get value() {
 				return B(e);
@@ -8742,7 +8820,7 @@ function Jp(e, t) {
 	var s = I(o, 2);
 	{
 		let e = /* @__PURE__ */ k(() => _a(t.runtime.tool_ms));
-		mp(s, {
+		gp(s, {
 			label: "Running tools",
 			get value() {
 				return B(e);
@@ -8755,7 +8833,7 @@ function Jp(e, t) {
 	var c = I(s, 2);
 	{
 		let e = /* @__PURE__ */ k(() => `+${Y(t.runtime.lines_added)} / −${Y(t.runtime.lines_removed)}`);
-		mp(c, {
+		gp(c, {
 			label: "Lines changed",
 			get value() {
 				return B(e);
@@ -8769,23 +8847,23 @@ function Jp(e, t) {
 }
 //#endregion
 //#region src/lib/secrets.ts
-function Yp(e) {
+function Zp(e) {
 	let t = (e.secret_accesses ?? []).map((e) => e.severity);
 	return t.length ? t.includes("high") ? "alert" : t.includes("medium") ? "warning" : "quiet" : null;
 }
-function Xp(e) {
+function Qp(e) {
 	return e.via ? `in ${e.via}, which it ran` : null;
 }
-var Zp = {
+var $p = {
 	sent: "sent to a service",
 	returned: "into the conversation",
 	empty: "nothing returned",
 	pending: "no result yet"
 };
-function Qp(e) {
-	return e.reach === "error" ? e.sent ? "error, the service may have got it" : "error: blocked or failed" : e.reach === "returned" && e.test ? "into the conversation, likely a test" : Object.hasOwn(Zp, e.reach) ? Zp[e.reach] ?? "" : "no result yet";
+function em(e) {
+	return e.reach === "error" ? e.sent ? "error, the service may have got it" : "error: blocked or failed" : e.reach === "returned" && e.test ? "into the conversation, likely a test" : Object.hasOwn($p, e.reach) ? $p[e.reach] ?? "" : "no result yet";
 }
-var $p = [
+var tm = [
 	{ label: "Time" },
 	{ label: "Agent" },
 	{ label: "Tool" },
@@ -8796,7 +8874,7 @@ var $p = [
 	},
 	{ label: "Reached" }
 ];
-function em(e) {
+function nm(e) {
 	let t = /* @__PURE__ */ new Map();
 	return e.map((e) => {
 		let n = [
@@ -8812,33 +8890,33 @@ function em(e) {
 			agent: e.agent_type,
 			tool: e.tool,
 			path: e.path,
-			via: Xp(e),
+			via: Qp(e),
 			pattern: e.pattern,
 			severity: e.severity || "medium",
-			reach: Qp(e)
+			reach: em(e)
 		};
 	});
 }
-function tm(e) {
+function rm(e) {
 	return e.length === 1 ? "1 call" : `${Y(e.length)} calls`;
 }
-function nm(e, t) {
+function im(e, t) {
 	return e.filter((e) => e.severity === t).length;
 }
-function rm(e) {
-	return `Possible secret access: ${tm(e)} (${Y(nm(e, "high"))} sent out)`;
+function am(e) {
+	return `Possible secret access: ${rm(e)} (${Y(im(e, "high"))} sent out)`;
 }
-function im(e, t) {
-	let n = `${tm(e)} named a possible secret location`;
-	if (t === "warning") return `${n}, ${Y(nm(e, "medium"))} of them returned a result or may still`;
-	let r = nm(e, "low-medium");
+function om(e, t) {
+	let n = `${rm(e)} named a possible secret location`;
+	if (t === "warning") return `${n}, ${Y(im(e, "medium"))} of them returned a result or may still`;
+	let r = im(e, "low-medium");
 	return r ? `${n}, ${Y(r)} returned a result only in a likely test` : `${n}, none reached anything`;
 }
 //#endregion
 //#region src/components/SecretAccesses.svelte
-var am = (e, t = v) => {
-	var n = cm(), r = P(n), i = F(r, !0), a = I(r, 2), o = F(a, !0), s = I(a, 2), c = F(s, !0), l = I(s, 2), u = N(l), d = F(u, !0), f = I(u), p = (e) => {
-		var n = sm(), r = F(n, !0);
+var sm = (e, t = v) => {
+	var n = um(), r = P(n), i = F(r, !0), a = I(r, 2), o = F(a, !0), s = I(a, 2), c = F(s, !0), l = I(s, 2), u = N(l), d = F(u, !0), f = I(u), p = (e) => {
+		var n = lm(), r = F(n, !0);
 		L(() => W(r, t().via)), U(e, n);
 	};
 	G(f, (e) => {
@@ -8848,7 +8926,7 @@ var am = (e, t = v) => {
 	T(g), L(() => {
 		W(i, t().time), W(o, t().agent), W(c, t().tool), W(d, t().path), W(h, t().pattern), si(_, 1, `secret-severity secret-severity-${t().severity ?? ""}`), W(y, t().reach);
 	}), U(e, n);
-}, om = /* @__PURE__ */ V([[
+}, cm = /* @__PURE__ */ V([[
 	"div",
 	null,
 	[
@@ -8864,11 +8942,11 @@ var am = (e, t = v) => {
 		{ class: "muted" },
 		"Matched against [secrets] patterns in the config: file tools by their path, commands by their words with the\n      variables they set (quoted text only where it holds a path), and scripts this transcript wrote and then ran by\n      their text. Variables from earlier calls and other scripts are unknown. A result counts whatever it held: a test\n      that only mentions a path returns output too."
 	]
-]]), sm = /* @__PURE__ */ V([[
+]]), lm = /* @__PURE__ */ V([[
 	"span",
 	{ class: "secret-via" },
 	" "
-]]), cm = /* @__PURE__ */ V([
+]]), um = /* @__PURE__ */ V([
 	[
 		"td",
 		null,
@@ -8910,7 +8988,7 @@ var am = (e, t = v) => {
 		["span", { "aria-hidden": "true" }],
 		" "
 	]
-], 1), lm = /* @__PURE__ */ V([[
+], 1), dm = /* @__PURE__ */ V([[
 	"div",
 	{
 		id: "secret-alert",
@@ -8936,7 +9014,7 @@ var am = (e, t = v) => {
 	],
 	" ",
 	,
-]]), um = /* @__PURE__ */ V([[
+]]), fm = /* @__PURE__ */ V([[
 	"div",
 	{
 		id: "secret-alert",
@@ -8967,38 +9045,38 @@ var am = (e, t = v) => {
 	" ",
 	,
 ]]);
-function dm(e, t) {
+function pm(e, t) {
 	E(t, !0);
 	let n = (e, t = v, n = v) => {
-		var r = om(), i = I(N(r), 2);
+		var r = cm(), i = I(N(r), 2);
 		{
 			let e = /* @__PURE__ */ k(() => `${t()}-secrets`);
-			Vs(i, {
+			Bs(i, {
 				get key() {
 					return B(e);
 				},
 				get columns() {
-					return $p;
+					return tm;
 				},
 				get rows() {
 					return B(s);
 				},
 				rowKey: (e) => e.key,
 				get cells() {
-					return am;
+					return sm;
 				},
 				labelledby: "secret-alert-title"
 			});
 		}
 		je(2), T(r), L(() => q(r, "hidden", n())), U(e, r);
-	}, r = /* @__PURE__ */ k(() => Q.session), i = /* @__PURE__ */ k(() => B(r)?.secret_accesses ?? []), a = /* @__PURE__ */ k(() => B(r) ? Yp(B(r)) : null), o = /* @__PURE__ */ k(() => B(a) === "warning" || B(a) === "quiet" ? B(a) : null), s = /* @__PURE__ */ k(() => em(B(i))), c = /* @__PURE__ */ j(!1);
+	}, r = /* @__PURE__ */ k(() => Q.session), i = /* @__PURE__ */ k(() => B(r)?.secret_accesses ?? []), a = /* @__PURE__ */ k(() => B(r) ? Zp(B(r)) : null), o = /* @__PURE__ */ k(() => B(a) === "warning" || B(a) === "quiet" ? B(a) : null), s = /* @__PURE__ */ k(() => nm(B(i))), c = /* @__PURE__ */ j(!1);
 	var l = H(), u = P(l), d = (e) => {
-		var t = lm(), a = N(t), o = I(N(a), 1, !0);
+		var t = dm(), a = N(t), o = I(N(a), 1, !0);
 		T(a);
 		var s = I(a, 2);
-		n(s, () => B(r).session_id, () => !1), T(t), L((e) => W(o, e), [() => rm(B(i))]), U(e, t);
+		n(s, () => B(r).session_id, () => !1), T(t), L((e) => W(o, e), [() => am(B(i))]), U(e, t);
 	}, f = (e) => {
-		var t = um(), a = N(t), s = N(a), l = F(s, !0), u = I(s, 2), d = F(u, !0);
+		var t = fm(), a = N(t), s = N(a), l = F(s, !0), u = I(s, 2), d = F(u, !0);
 		T(a);
 		var f = I(a, 2);
 		n(f, () => B(r).session_id, () => !B(c)), T(t), L((e) => {
@@ -9007,7 +9085,7 @@ function dm(e, t) {
 				"secret-folded",
 				B(o) === "warning" && "secret-warning"
 			])), W(l, e), q(u, "aria-expanded", B(c)), W(d, B(c) ? "Hide them" : "Show them");
-		}, [() => im(B(i), B(o))]), yr("click", u, () => M(c, !B(c))), U(e, t);
+		}, [() => om(B(i), B(o))]), yr("click", u, () => M(c, !B(c))), U(e, t);
 	};
 	G(u, (e) => {
 		B(r) && B(a) === "alert" ? e(d) : B(r) && B(o) && e(f, 1);
@@ -9016,11 +9094,11 @@ function dm(e, t) {
 br(["click"]);
 //#endregion
 //#region src/components/SessionWaits.svelte
-var fm = /* @__PURE__ */ V([[
+var mm = /* @__PURE__ */ V([[
 	"strong",
 	null,
 	" "
-]]), pm = /* @__PURE__ */ V([[
+]]), hm = /* @__PURE__ */ V([[
 	"span",
 	null,
 	[
@@ -9029,7 +9107,7 @@ var fm = /* @__PURE__ */ V([[
 		" "
 	],
 	" "
-]]), mm = /* @__PURE__ */ V([[
+]]), gm = /* @__PURE__ */ V([[
 	"p",
 	{ class: "wait-line" },
 	[
@@ -9039,27 +9117,27 @@ var fm = /* @__PURE__ */ V([[
 	],
 	" ",
 	,
-]]), hm = /* @__PURE__ */ V([["div", {
+]]), _m = /* @__PURE__ */ V([["div", {
 	class: "card wait-notice",
 	role: "status"
 }]]);
-function gm(e, t) {
+function vm(e, t) {
 	E(t, !0);
-	let n = /* @__PURE__ */ k(() => Q.session), r = /* @__PURE__ */ k(() => B(n) ? ol(B(n), Q.live?.sessions ?? []) : []);
-	var i = hm();
+	let n = /* @__PURE__ */ k(() => Q.session), r = /* @__PURE__ */ k(() => B(n) ? al(B(n), Q.live?.sessions ?? []) : []);
+	var i = _m();
 	K(i, 21, () => B(r), (e) => e.session_id, (e, t) => {
-		var n = mm(), r = N(n);
-		pl(N(r), { get badge() {
+		var n = gm(), r = N(n);
+		fl(N(r), { get badge() {
 			return B(t);
 		} }), T(r);
 		var i = I(r, 2), a = (e) => {
-			var n = fm(), r = F(n);
+			var n = mm(), r = F(n);
 			L((e, t) => W(r, `This session is ${e ?? ""}${t ?? ""}`), [() => B(t).text.charAt(0).toLowerCase(), () => B(t).text.slice(1)]), U(e, n);
 		}, o = (e) => {
-			var n = pm(), r = N(n), i = F(r, !0), a = I(r);
+			var n = hm(), r = N(n), i = F(r, !0), a = I(r);
 			T(n), L((e) => {
 				q(r, "href", e), W(i, B(t).title), W(a, `: ${B(t).text ?? ""}`);
-			}, [() => gc(B(t))]), U(e, n);
+			}, [() => hc(B(t))]), U(e, n);
 		};
 		G(i, (e) => {
 			B(t).title === null ? e(a) : e(o, -1);
@@ -9067,33 +9145,132 @@ function gm(e, t) {
 	}), T(i), L(() => q(i, "hidden", B(r).length === 0)), U(e, i), D();
 }
 //#endregion
+//#region src/components/ToolsTable.svelte
+var ym = (e) => {
+	U(e, bm());
+}, bm = /* @__PURE__ */ V([[
+	"h3",
+	{ id: "session-tools-title" },
+	"Tools"
+]]), xm = /* @__PURE__ */ V([[
+	"div",
+	{ class: "note" },
+	" "
+]]), Sm = /* @__PURE__ */ V([[
+	"button",
+	{
+		type: "button",
+		class: "link-button"
+	},
+	" "
+], ")"], 1), Cm = /* @__PURE__ */ V([[
+	"td",
+	{ class: "num" },
+	" "
+]]), wm = /* @__PURE__ */ V([
+	[
+		"td",
+		null,
+		" "
+	],
+	" ",
+	[
+		"td",
+		null,
+		[
+			"span",
+			null,
+			" ",
+			,
+		]
+	],
+	" ",
+	,
+], 1);
+function Tm(e, t) {
+	E(t, !0);
+	let n = (e) => {
+		var t = xm(), n = F(t, !0);
+		L(() => W(n, B(s))), U(e, t);
+	}, r = (e, t = v) => {
+		var n = wm(), r = P(n), i = F(r, !0), a = I(r, 2), o = N(a), s = N(o, !0), l = I(s), u = (e) => {
+			let n = /* @__PURE__ */ k(() => t().fold);
+			var r = Sm(), i = P(r), a = F(i, !0);
+			je(), L(() => {
+				q(i, "aria-expanded", B(n).open), W(a, B(n).label);
+			}), yr("click", i, () => c(B(n).fold)), U(e, r);
+		};
+		G(l, (e) => {
+			t().fold && e(u);
+		}), T(o), T(a), K(I(a, 2), 17, () => t().cells, Ur, (e, t) => {
+			var n = Cm(), r = F(n, !0);
+			L(() => W(r, B(t))), U(e, n);
+		}), L(() => {
+			W(i, t().agent), si(o, 1, ti(t().name.className)), W(s, t().fold ? `${t().name.text} (` : t().name.text);
+		}), U(e, n);
+	}, i = /* @__PURE__ */ j(Jt([])), a = Sd(), o = /* @__PURE__ */ k(() => wd(t.agents, B(i))), s = /* @__PURE__ */ k(() => Cd(t.agents));
+	function c(e) {
+		M(i, B(i).includes(e) ? B(i).filter((t) => t !== e) : [...B(i), e], !0);
+	}
+	{
+		let i = /* @__PURE__ */ k(() => B(s) === null ? void 0 : n);
+		Bs(e, {
+			get key() {
+				return t.pagerKey;
+			},
+			get columns() {
+				return a;
+			},
+			get rows() {
+				return B(o);
+			},
+			rowKey: (e) => e.key,
+			get cells() {
+				return r;
+			},
+			sub: (e) => e.sub,
+			group: (e) => e.group,
+			get heading() {
+				return ym;
+			},
+			get intro() {
+				return B(i);
+			},
+			empty: "No tool calls.",
+			labelledby: "session-tools-title"
+		});
+	}
+	D();
+}
+br(["click"]);
+//#endregion
 //#region src/components/UsageTable.svelte
-var _m = /* @__PURE__ */ V([[
+var Em = /* @__PURE__ */ V([[
 	"h3",
 	null,
 	" "
-]]), vm = /* @__PURE__ */ V([[
+]]), Dm = /* @__PURE__ */ V([[
 	"h2",
 	null,
 	" "
-]]), ym = /* @__PURE__ */ V([[
+]]), Om = /* @__PURE__ */ V([[
 	"p",
 	{ class: "note" },
 	" "
-]]), bm = /* @__PURE__ */ V([[
+]]), km = /* @__PURE__ */ V([[
 	"span",
 	null,
 	,
 	" "
-]]), xm = /* @__PURE__ */ V([[
+]]), Am = /* @__PURE__ */ V([[
 	"span",
 	{ class: "effort" },
 	" "
-]]), Sm = /* @__PURE__ */ V([[
+]]), jm = /* @__PURE__ */ V([[
 	"td",
 	{ class: "num" },
 	" "
-]]), Cm = /* @__PURE__ */ V([
+]]), Mm = /* @__PURE__ */ V([
 	[
 		"td",
 		null,
@@ -9101,18 +9278,18 @@ var _m = /* @__PURE__ */ V([[
 	],
 	" ",
 	,
-], 1), wm = /* @__PURE__ */ V([[
+], 1), Nm = /* @__PURE__ */ V([[
 	"section",
 	{ class: "card" },
 	,
 ]]);
-function Tm(e, t) {
+function Pm(e, t) {
 	E(t, !0);
 	let n = (e) => {
 		var n = H(), o = P(n), c = (e) => {
 			{
-				let n = /* @__PURE__ */ k(() => Pd(t.nameLabel)), o = /* @__PURE__ */ k(() => t.note === void 0 ? void 0 : i);
-				Vs(e, {
+				let n = /* @__PURE__ */ k(() => Id(t.nameLabel)), o = /* @__PURE__ */ k(() => t.note === void 0 ? void 0 : i);
+				Bs(e, {
 					get key() {
 						return s();
 					},
@@ -9150,12 +9327,12 @@ function Tm(e, t) {
 		}), U(e, n);
 	}, r = (e) => {
 		var n = H(), r = P(n), i = (e) => {
-			var n = _m(), r = F(n, !0);
+			var n = Em(), r = F(n, !0);
 			L(() => {
 				q(n, "id", `${t.id ?? ""}-title`), W(r, t.title);
 			}), U(e, n);
 		}, a = (e) => {
-			var n = vm(), r = F(n, !0);
+			var n = Dm(), r = F(n, !0);
 			L(() => {
 				q(n, "id", `${t.id ?? ""}-title`), W(r, t.title);
 			}), U(e, n);
@@ -9164,18 +9341,18 @@ function Tm(e, t) {
 			o() ? e(i) : e(a, -1);
 		}), U(e, n);
 	}, i = (e) => {
-		var n = ym(), r = F(n, !0);
+		var n = Om(), r = F(n, !0);
 		L(() => W(r, t.note)), U(e, n);
 	}, a = (e, t = v) => {
-		var n = Cm(), r = P(n), i = N(r), a = (e) => {
-			var n = bm(), r = N(n);
-			xs(r, { get fill() {
+		var n = Mm(), r = P(n), i = N(r), a = (e) => {
+			var n = km(), r = N(n);
+			bs(r, { get fill() {
 				return t().swatch;
 			} });
 			var i = I(r, 1, !0);
 			T(n), L(() => W(i, t().name)), U(e, n);
 		}, o = (e) => {
-			var n = xm(), r = F(n, !0);
+			var n = Am(), r = F(n, !0);
 			L(() => W(r, t().name)), U(e, n);
 		}, s = (e) => {
 			var n = Dr();
@@ -9184,14 +9361,14 @@ function Tm(e, t) {
 		G(i, (e) => {
 			t().kind === "model" ? e(a) : t().kind === "effort" ? e(o, 1) : e(s, -1);
 		}), T(r), K(I(r, 2), 19, () => B(c), (e) => e.label, (e, n, r) => {
-			var i = Sm(), a = F(i, !0);
+			var i = jm(), a = F(i, !0);
 			L(() => W(a, t().cells[B(r)])), U(e, i);
 		}), U(e, n);
-	}, o = Ni(t, "inline", 3, !1), s = Ni(t, "pagerKey", 19, () => t.id), c = /* @__PURE__ */ k(() => Pd(t.nameLabel).slice(1));
+	}, o = Ni(t, "inline", 3, !1), s = Ni(t, "pagerKey", 19, () => t.id), c = /* @__PURE__ */ k(() => Id(t.nameLabel).slice(1));
 	var l = H(), u = P(l), d = (e) => {
 		n(e);
 	}, f = (e) => {
-		var r = wm(), i = N(r);
+		var r = Nm(), i = N(r);
 		n(i), T(r), L(() => q(r, "aria-labelledby", `${t.id ?? ""}-title`)), U(e, r);
 	};
 	G(u, (e) => {
@@ -9200,11 +9377,11 @@ function Tm(e, t) {
 }
 //#endregion
 //#region src/components/SessionView.svelte
-var Em = /* @__PURE__ */ V([[
+var Fm = /* @__PURE__ */ V([[
 	"div",
 	{ class: "prompt" },
 	" "
-]]), Dm = /* @__PURE__ */ V([[
+]]), Im = /* @__PURE__ */ V([[
 	"div",
 	{
 		class: "kpis session-kpis",
@@ -9212,7 +9389,7 @@ var Em = /* @__PURE__ */ V([[
 		"aria-label": "Time and lines changed"
 	},
 	,
-]]), Om = /* @__PURE__ */ V([[
+]]), Lm = /* @__PURE__ */ V([[
 	"section",
 	{
 		id: "drilldown",
@@ -9271,6 +9448,8 @@ var Em = /* @__PURE__ */ V([[
 	" ",
 	,
 	" ",
+	,
+	" ",
 	["div", {
 		class: "legacy-slot",
 		id: "session-mid"
@@ -9294,14 +9473,16 @@ var Em = /* @__PURE__ */ V([[
 	" ",
 	,
 	" ",
+	,
+	" ",
 	["div", {
 		class: "legacy-slot",
 		id: "session-end"
 	}]
 ]]);
-function km(e, t) {
+function Rm(e, t) {
 	E(t, !0);
-	let n = /* @__PURE__ */ k(() => Q.session), r = /* @__PURE__ */ k(() => B(n) ? Id(B(n).models, B(n).model_effort, Ki(B(n).models.map((e) => e.model))) : []), i = /* @__PURE__ */ k(() => B(n) ? Fd(B(n).skills, (e) => e.skill) : []), a = /* @__PURE__ */ k(() => B(n) ? Fd(B(n).mcp_servers, (e) => e.mcp_server) : []), o = /* @__PURE__ */ k(() => B(n) ? ku(B(n).api_errors) : []);
+	let n = /* @__PURE__ */ k(() => Q.session), r = /* @__PURE__ */ k(() => B(n) ? Rd(B(n).models, B(n).model_effort, Ki(B(n).models.map((e) => e.model))) : []), i = /* @__PURE__ */ k(() => B(n) ? Ld(B(n).skills, (e) => e.skill) : []), a = /* @__PURE__ */ k(() => B(n) ? Ld(B(n).mcp_servers, (e) => e.mcp_server) : []), o = /* @__PURE__ */ k(() => B(n) ? Ou(B(n).api_errors) : []);
 	function s(e) {
 		B(n) && e.key === "Escape" && !e.defaultPrevented && (location.hash = "");
 	}
@@ -9311,19 +9492,19 @@ function km(e, t) {
 		let t = /* @__PURE__ */ k(() => B(n).session_id), s = /* @__PURE__ */ k(() => B(n).runtime);
 		var c = H();
 		Hr(P(c), () => B(t), (e) => {
-			var c = Om(), l = N(c), u = F(N(l), !0);
+			var c = Lm(), l = N(c), u = F(N(l), !0);
 			je(4), T(l);
 			var d = I(l, 2), f = (e) => {
-				var t = Em(), r = F(t, !0);
+				var t = Fm(), r = F(t, !0);
 				L(() => W(r, B(n).prompt)), U(e, t);
 			};
 			G(d, (e) => {
 				B(n).prompt && e(f);
 			});
 			var p = I(d, 2), m = F(p, !0), h = I(p, 2);
-			gm(h, {});
+			vm(h, {});
 			var g = I(h, 2);
-			Kp(N(g), {
+			Jp(N(g), {
 				get totals() {
 					return B(n);
 				},
@@ -9339,13 +9520,13 @@ function km(e, t) {
 				}
 			}), T(g);
 			var _ = I(g, 2), v = (e) => {
-				var t = Dm(), r = N(t);
+				var t = Im(), r = N(t);
 				{
-					let e = /* @__PURE__ */ k(() => Md(B(s).source)), t = /* @__PURE__ */ k(() => Nd({
+					let e = /* @__PURE__ */ k(() => Pd(B(s).source)), t = /* @__PURE__ */ k(() => Fd({
 						cost: B(n).cost,
 						runtime: B(s)
 					}));
-					Jp(r, {
+					Xp(r, {
 						get runtime() {
 							return B(s);
 						},
@@ -9363,15 +9544,15 @@ function km(e, t) {
 				B(s) && e(v);
 			});
 			var y = I(_, 2);
-			dm(y, {});
+			pm(y, {});
 			var ee = I(y, 2);
-			_f(ee, {});
+			yf(ee, {});
 			var b = I(ee, 2);
-			Lp(b, {});
+			zp(b, {});
 			var x = I(b, 2);
 			{
 				let e = /* @__PURE__ */ k(() => $("By model"));
-				Tm(x, {
+				Pm(x, {
 					inline: !0,
 					id: "session-models",
 					get title() {
@@ -9388,7 +9569,7 @@ function km(e, t) {
 				});
 			}
 			var S = I(x, 2);
-			Wd(S, {
+			Kd(S, {
 				get agents() {
 					return B(n).agents;
 				},
@@ -9396,10 +9577,23 @@ function km(e, t) {
 					return `${B(t) ?? ""}-agents`;
 				}
 			});
-			var te = I(S, 4), ne = N(te), re = N(ne);
+			var te = I(S, 2), ne = (e) => {
+				Tm(e, {
+					get agents() {
+						return B(n).agents;
+					},
+					get pagerKey() {
+						return `${B(t) ?? ""}-tools`;
+					}
+				});
+			};
+			G(te, (e) => {
+				B(n).transcript || e(ne);
+			});
+			var re = I(te, 4), ie = N(re), ae = N(ie);
 			{
 				let e = /* @__PURE__ */ k(() => $("By skill"));
-				Tm(re, {
+				Pm(ae, {
 					inline: !0,
 					id: "session-skills",
 					get title() {
@@ -9415,11 +9609,11 @@ function km(e, t) {
 					}
 				});
 			}
-			T(ne);
-			var ie = I(ne, 2), ae = N(ie);
+			T(ie);
+			var oe = I(ie, 2), se = N(oe);
 			{
 				let e = /* @__PURE__ */ k(() => $("By MCP server"));
-				Tm(ae, {
+				Pm(se, {
 					inline: !0,
 					id: "session-mcp-servers",
 					get title() {
@@ -9435,11 +9629,11 @@ function km(e, t) {
 					}
 				});
 			}
-			T(ie), T(te);
-			var oe = I(te, 2);
+			T(oe), T(re);
+			var ce = I(re, 2);
 			{
 				let e = /* @__PURE__ */ k(() => $("Rate limits and API errors"));
-				Pu(oe, {
+				Nu(ce, {
 					id: "session-api-errors",
 					get title() {
 						return B(e);
@@ -9454,12 +9648,24 @@ function km(e, t) {
 					withSession: !1
 				});
 			}
-			je(2), T(c), Qr(c, () => md({
+			var le = I(ce, 2), ue = (e) => {
+				Tm(e, {
+					get agents() {
+						return B(n).agents;
+					},
+					get pagerKey() {
+						return `${B(t) ?? ""}-tools`;
+					}
+				});
+			};
+			G(le, (e) => {
+				B(n).transcript && e(ue);
+			}), je(2), T(c), Qr(c, () => pd({
 				hide: ["filters", "summary"],
 				focus: "#drilldown-title"
 			})), L((e, t) => {
 				W(u, e), W(m, t);
-			}, [() => hc(B(n)), () => hd(B(n))]), U(e, c);
+			}, [() => mc(B(n)), () => md(B(n))]), U(e, c);
 		}), U(e, c);
 	};
 	G(l, (e) => {
@@ -9468,19 +9674,19 @@ function km(e, t) {
 }
 //#endregion
 //#region src/components/SummaryTiles.svelte
-var Am = /* @__PURE__ */ V([[
+var zm = /* @__PURE__ */ V([[
 	"div",
 	{ class: "empty" },
 	" "
 ]]);
-function jm(e, t) {
+function Bm(e, t) {
 	E(t, !0);
 	let n = /* @__PURE__ */ k(() => Q.summary);
 	var r = H(), i = P(r), a = (e) => {
 		var r = H(), i = P(r), a = (e) => {
 			{
-				let t = /* @__PURE__ */ k(() => Cd(B(n)));
-				Kp(e, {
+				let t = /* @__PURE__ */ k(() => Td(B(n)));
+				Jp(e, {
 					get totals() {
 						return B(n).totals;
 					},
@@ -9500,8 +9706,8 @@ function jm(e, t) {
 			}
 		}, o = (e) => {
 			{
-				let t = /* @__PURE__ */ k(() => jd(B(n).runtime.sessions));
-				Jp(e, {
+				let t = /* @__PURE__ */ k(() => Nd(B(n).runtime.sessions));
+				Xp(e, {
 					get runtime() {
 						return B(n).runtime;
 					},
@@ -9518,7 +9724,7 @@ function jm(e, t) {
 			t.rows === "kpis" ? e(a) : e(o, -1);
 		}), U(e, r);
 	}, o = (e) => {
-		var t = Am(), n = F(t, !0);
+		var t = zm(), n = F(t, !0);
 		L(() => W(n, Q.summaryFailed ? "Could not load the summary." : "Loading…")), U(e, t);
 	};
 	G(i, (e) => {
@@ -9527,7 +9733,7 @@ function jm(e, t) {
 }
 //#endregion
 //#region src/components/UsageTables.svelte
-var Mm = /* @__PURE__ */ V([
+var Vm = /* @__PURE__ */ V([
 	[
 		"div",
 		{ class: "grid-2 stack" },
@@ -9546,13 +9752,13 @@ var Mm = /* @__PURE__ */ V([
 		,
 	]
 ], 1);
-function Nm(e, t) {
+function Hm(e, t) {
 	E(t, !0);
-	let n = /* @__PURE__ */ k(() => Q.summary), r = /* @__PURE__ */ k(() => B(n) ? Fd(B(n).agent_type, (e) => e.agent_type) : null), i = /* @__PURE__ */ k(() => B(n) ? Ki([...new Set(B(n).day_model.map((e) => e.model))]) : null), a = /* @__PURE__ */ k(() => B(n) && B(i) ? Id(B(n).model, B(n).model_effort, B(i)) : null), o = /* @__PURE__ */ k(() => B(n) ? Fd(B(n).project, (e) => e.project) : null), s = /* @__PURE__ */ k(() => B(n) ? Fd(B(n).skill, (e) => e.skill) : null), c = /* @__PURE__ */ k(() => B(n) ? Fd(B(n).mcp_server, (e) => e.mcp_server) : null);
-	var l = Mm(), u = P(l), d = N(u);
+	let n = /* @__PURE__ */ k(() => Q.summary), r = /* @__PURE__ */ k(() => B(n) ? Ld(B(n).agent_type, (e) => e.agent_type) : null), i = /* @__PURE__ */ k(() => B(n) ? Ki([...new Set(B(n).day_model.map((e) => e.model))]) : null), a = /* @__PURE__ */ k(() => B(n) && B(i) ? Rd(B(n).model, B(n).model_effort, B(i)) : null), o = /* @__PURE__ */ k(() => B(n) ? Ld(B(n).project, (e) => e.project) : null), s = /* @__PURE__ */ k(() => B(n) ? Ld(B(n).skill, (e) => e.skill) : null), c = /* @__PURE__ */ k(() => B(n) ? Ld(B(n).mcp_server, (e) => e.mcp_server) : null);
+	var l = Vm(), u = P(l), d = N(u);
 	{
 		let e = /* @__PURE__ */ k(() => $("By agent type"));
-		Tm(d, {
+		Pm(d, {
 			id: "by-agent",
 			get title() {
 				return B(e);
@@ -9567,7 +9773,7 @@ function Nm(e, t) {
 	var f = I(d, 2);
 	{
 		let e = /* @__PURE__ */ k(() => $("By model"));
-		Tm(f, {
+		Pm(f, {
 			id: "by-model",
 			get title() {
 				return B(e);
@@ -9583,7 +9789,7 @@ function Nm(e, t) {
 	var p = I(u, 2);
 	{
 		let e = /* @__PURE__ */ k(() => $("By project"));
-		Tm(p, {
+		Pm(p, {
 			id: "by-project",
 			get title() {
 				return B(e);
@@ -9598,7 +9804,7 @@ function Nm(e, t) {
 	var m = I(p, 2), h = N(m);
 	{
 		let e = /* @__PURE__ */ k(() => $("By skill"));
-		Tm(h, {
+		Pm(h, {
 			id: "by-skill",
 			get title() {
 				return B(e);
@@ -9614,7 +9820,7 @@ function Nm(e, t) {
 	var g = I(h, 2);
 	{
 		let e = /* @__PURE__ */ k(() => $("By MCP server"));
-		Tm(g, {
+		Pm(g, {
 			id: "by-mcp-server",
 			get title() {
 				return B(e);
@@ -9631,7 +9837,7 @@ function Nm(e, t) {
 }
 //#endregion
 //#region src/lib/banner.svelte.ts
-var Pm = class {
+var Um = class {
 	#e = new vo();
 	#t = /* @__PURE__ */ k(() => [...this.#e.values()].filter((e, t, n) => n.indexOf(e) === t).join("\n"));
 	get text() {
@@ -9643,23 +9849,23 @@ var Pm = class {
 	has(e) {
 		return this.#e.has(e);
 	}
-}, Fm = [
+}, Wm = [
 	ca,
 	Wi,
-	Mc,
-	Qc,
+	jc,
+	Zc,
 	So,
 	Ea,
-	Zo,
-	as,
-	Os,
-	Ss,
+	Xo,
+	is,
+	Ds,
+	xs,
 	yo,
-	tu,
-	lu
+	eu,
+	cu
 ];
-function Im(e) {
-	let t = new Pm(), n = e.document.getElementById("error");
+function Gm(e) {
+	let t = new Um(), n = e.document.getElementById("error");
 	if (!n?.parentElement) throw Error("The page has no #error placeholder for the banner");
 	let r = ["kpis", "runtime"].map((t) => {
 		let n = e.document.getElementById(t);
@@ -9692,20 +9898,20 @@ function Im(e) {
 		props: { messages: t }
 	});
 	n.remove();
-	let m = r.map(({ id: e, container: t }) => Pr(jm, {
+	let m = r.map(({ id: e, container: t }) => Pr(Bm, {
 		target: t,
 		props: { rows: e }
-	})), h = Pr(kl, { target: i }), g = Pr(eu, { target: a }), _ = Pr(fc, { target: o }), v = Pr(jc, { target: s }), y = Pr(td, { target: c }), ee = Pr(Nm, { target: l }), b = Pr(dd, { target: u }), x = Pr(gu, { target: d }), S = Pr(km, { target: f });
+	})), h = Pr(Ol, { target: i }), g = Pr($l, { target: a }), _ = Pr(dc, { target: o }), v = Pr(Ac, { target: s }), y = Pr(ed, { target: c }), ee = Pr(Hm, { target: l }), b = Pr(ud, { target: u }), x = Pr(hu, { target: d }), S = Pr(Rm, { target: f });
 	return e.showError = (e, n) => {
 		t.show(e, n), At();
-	}, e.hasError = (e) => t.has(e), Object.assign(e, ...Fm), { stop() {
+	}, e.hasError = (e) => t.has(e), Object.assign(e, ...Wm), { stop() {
 		Rr(p);
 		for (let e of m) Rr(e);
 		Rr(h), Rr(g), Rr(_), Rr(v), Rr(y), Rr(ee), Rr(b), Rr(x), Rr(S), Reflect.deleteProperty(e, "showError"), Reflect.deleteProperty(e, "hasError");
-		for (let t of Fm.flatMap((e) => Object.keys(e))) Reflect.deleteProperty(e, t);
+		for (let t of Wm.flatMap((e) => Object.keys(e))) Reflect.deleteProperty(e, t);
 	} };
 }
 //#endregion
 //#region src/main.ts
-Im(window);
+Gm(window);
 //#endregion

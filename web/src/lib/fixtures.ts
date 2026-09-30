@@ -20,6 +20,7 @@ import type {
   SessionListItem,
   SessionRuntime,
   Summary,
+  ToolKindRow,
   Usage,
   VersusKeeping,
 } from './api';
@@ -167,6 +168,26 @@ export function summary(changes: Partial<Summary> = {}): Summary {
     scan_errors: [],
     sessions: [],
     costly_sessions: [],
+    ...changes,
+  };
+}
+
+/** A Bash call row of the Tools table: 4 calls, one of them an error, results of 90 characters in all. */
+export function toolKindRow(changes: Partial<ToolKindRow> = {}): ToolKindRow {
+  return {
+    tool: 'Read',
+    kind: null,
+    detail: null,
+    options: null,
+    calls: 4,
+    errors: 1,
+    result_chars: 90,
+    result_median: 30,
+    result_p90: 50,
+    input_median: 12,
+    calls_after_median: 4.5,
+    carried: 0.01,
+    input_cost: 0.002,
     ...changes,
   };
 }
