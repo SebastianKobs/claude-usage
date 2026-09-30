@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { bridge, type Bridge } from './legacy.svelte';
+import * as colors from './lib/colors';
 import * as format from './lib/format';
 
 // a path, not a URL: the simulated DOM's URL class isn't node's
@@ -56,10 +57,13 @@ test('hasError tells whether a source is failing', () => {
   expect(window.hasError('summary')).toBe(false);
 });
 
-test("the old scripts' formatters are the module's functions", () => {
-  const names = Object.keys(format) as (keyof typeof format)[];
-  expect(names).toContain('money');
-  for (const name of names) expect(window[name], name).toBe(format[name]);
+test.each([
+  ['formatters', format, 'money'],
+  ['colors', colors, 'slotColor'],
+])("the old scripts' %s are the module's exports", (_kind, module, sample) => {
+  const names = Object.keys(module) as (keyof typeof module & keyof Window)[];
+  expect(names).toContain(sample);
+  for (const name of names) expect(window[name], name).toBe(module[name]);
 });
 
 test('the formatters answer as the old scripts call them', () => {
@@ -68,11 +72,17 @@ test('the formatters answer as the old scripts call them', () => {
   expect(window.ago(null)).toBe('–');
 });
 
+test('the colors answer as the old scripts call them', () => {
+  expect(window.slotColor(0)).toBe('var(--series-1)');
+  expect(window.effortName('high')).toBe('effort high');
+  expect(window.SLOT_COUNT).toBe(8);
+});
+
 test('stopping takes the banner and the globals away', () => {
   bridged.stop();
   expect(screen.queryByRole('alert')).toBeNull();
   expect('showError' in window).toBe(false);
   expect('hasError' in window).toBe(false);
-  for (const name of Object.keys(format)) expect(name in window, name).toBe(false);
+  for (const name of [...Object.keys(format), ...Object.keys(colors)]) expect(name in window, name).toBe(false);
   bridged = { stop() {} };
 });

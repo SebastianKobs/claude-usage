@@ -17,6 +17,7 @@ STATIC = Path(server.__file__).resolve().parent / "static"
 BUNDLE = STATIC / "js" / "app.js"                       # built from web/ (make build), not written by hand
 OWN_SCRIPTS = sorted(path for path in (STATIC / "js").glob("*.js") if path != BUNDLE)
 FORMAT = ROOT / "web" / "src" / "lib" / "format.ts"     # the formatters, moved out of util.js
+COLORS = ROOT / "web" / "src" / "lib" / "colors.ts"     # the model colors and effort levels, moved out of util.js
 STYLESHEETS = sorted((STATIC / "css").rglob("*.css"))
 GIMMICK_THEMES = ("hacker", "startup", "rgb")
 # variables a gimmick theme defines for its own file only
@@ -51,14 +52,26 @@ def definition(script, name):
     return source.group(0)
 
 
+MODULES = {"format.ts": FORMAT, "colors.ts": COLORS}     # what moved out of the old scripts, as TypeScript
+
+
 def run_function(script, name, *arguments, uses=()):
-    """Calls a script's top-level function in node, with the page's functions and constants it uses named in uses
-    ("script.js:name"), which must use nothing else of the page; its result. A use named "format.ts:name" is that
-    function of web/src/lib/format.ts, which node runs as it is (skipped where node can't read TypeScript)."""
-    moved = [use.split(":")[1] for use in uses if use.startswith("format.ts:")]
-    helpers = [definition(*use.split(":")) for use in uses if not use.startswith("format.ts:")]
-    imports = [f"import {{ {', '.join(moved)} }} from {json.dumps(FORMAT.as_uri())};"] if moved else []
-    program = "\n".join([*imports, *helpers, definition(script, name),
+    """Calls a top-level function of a script in node, with the page's functions and constants it uses named in uses
+    ("script.js:name"), which must use nothing else of the page; its result. The script, or a use, may be a module of
+    web/src/lib (MODULES): its function is imported as it is, which node runs as TypeScript (skipped where it can't)."""
+    imported = {}
+    helpers = []
+    for source, function in [use.split(":") for use in uses]:
+        if source in MODULES:
+            imported.setdefault(source, []).append(function)
+        else:
+            helpers.append(definition(source, function))
+    if script in MODULES:
+        imported.setdefault(script, []).append(name)
+    imports = [f"import {{ {', '.join(names)} }} from {json.dumps(MODULES[source].as_uri())};"
+               for source, names in imported.items()]
+    tested = [] if script in MODULES else [definition(script, name)]
+    program = "\n".join([*imports, *helpers, *tested,
                          f"process.stdout.write(JSON.stringify({name}(...{json.dumps(arguments)})));"])
     result = subprocess.run(["node", "--input-type=module", "-e", program], capture_output=True, text=True,
                             timeout=30)
@@ -70,8 +83,9 @@ def run_function(script, name, *arguments, uses=()):
 
 
 def object_keys(script, name):
-    """The keys of a script's `const name = {…}` object literal."""
-    body = re.search(rf"const {name} = \{{(.*?)\}};", read(STATIC / "js" / script), re.DOTALL).group(1)
+    """The keys of a script's `const name = {…}` object literal (a type annotation before the = is fine)."""
+    source = read(script if isinstance(script, Path) else STATIC / "js" / script)
+    body = re.search(rf"const {name}\b[^=]*= \{{(.*?)\}};", source, re.DOTALL).group(1)
     return set(re.findall(r"(\w+):", body))
 
 
@@ -93,28 +107,30 @@ class ScriptTest(unittest.TestCase):
         self.assertEqual(re.findall(r'field: "(\w+)"', body), ["cache_read", "cache_write", "new_input"])
 
     def test_the_page_orders_effort_levels_like_the_report(self):
-        body = re.search(r"const EFFORT_ORDER = \[(.*?)\];", read(STATIC / "js" / "util.js")).group(1)
-        self.assertEqual(tuple(re.findall(r'"(\w+)"', body)), queries.EFFORT_ORDER)
+        body = re.search(r"const EFFORT_ORDER[^=]*= \[(.*?)\];", read(COLORS)).group(1)
+        self.assertEqual(tuple(re.findall(r"'(\w+)'", body)), queries.EFFORT_ORDER)
 
     def test_every_hatched_effort_level_has_a_shade(self):
-        self.assertLessEqual(object_keys("util.js", "HATCH_SHADES"), object_keys("util.js", "EFFORT_SHADES"))
-        self.assertIn(store.ULTRACODE, object_keys("util.js", "HATCH_SHADES"))
+        self.assertLessEqual(object_keys(COLORS, "HATCH_SHADES"), object_keys(COLORS, "EFFORT_SHADES"))
+        self.assertIn(store.ULTRACODE, object_keys(COLORS, "HATCH_SHADES"))
 
     def test_every_hatched_effort_level_has_an_angle_of_its_own(self):
-        body = re.search(r"const HATCH_TURNS = \{(.*?)\};", read(STATIC / "js" / "util.js")).group(1)
+        body = re.search(r"const HATCH_TURNS[^=]*= \{(.*?)\};", read(COLORS)).group(1)
         turns_by_level = dict(re.findall(r"(\w+): (-?\d+)", body))
-        self.assertEqual(set(turns_by_level), object_keys("util.js", "HATCH_SHADES"))
+        self.assertEqual(set(turns_by_level), object_keys(COLORS, "HATCH_SHADES"))
         self.assertEqual(len(set(turns_by_level.values())), len(turns_by_level))
 
     def test_the_page_knows_the_background_effort_level(self):
-        self.assertIn(f'const BACKGROUND_EFFORT = "{store.BACKGROUND_EFFORT}";', read(STATIC / "js" / "util.js"))
-        self.assertIn(store.BACKGROUND_EFFORT, object_keys("util.js", "HATCH_SHADES"))
+        self.assertIn(f"const BACKGROUND_EFFORT = '{store.BACKGROUND_EFFORT}';", read(COLORS))
+        self.assertIn(store.BACKGROUND_EFFORT, object_keys(COLORS, "HATCH_SHADES"))
+        self.assertIn(store.BACKGROUND_EFFORT, object_keys(COLORS, "EFFORT_SHADES"))
 
+    @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_swatch_hatch_runs_like_the_columns(self):
         # the columns' pattern turns vertical lines by the angle; the swatch's gradient runs across them
-        self.assertIn("135deg", run_function("util.js", "swatchFill", "red", "blue", 45))
-        self.assertIn("45deg", run_function("util.js", "swatchFill", "red", "blue", -45))
-        self.assertEqual(run_function("util.js", "swatchFill", "red", None, None), "red")
+        self.assertIn("135deg", run_function("colors.ts", "swatchFill", "red", "blue", 45))
+        self.assertIn("45deg", run_function("colors.ts", "swatchFill", "red", "blue", -45))
+        self.assertEqual(run_function("colors.ts", "swatchFill", "red", None, None), "red")
 
     def test_html_is_inserted_only_by_the_two_sanitized_paths_in_chat_js(self):
         uses = {path.name: len(re.findall(r"\binnerHTML\b", read(path))) for path in OWN_SCRIPTS}
@@ -1198,7 +1214,7 @@ class StyleTest(unittest.TestCase):
         # light.css and common.css apply in every theme; the others only override
         defaults = set(re.findall(r"(--[\w-]+):", read(STATIC / "css" / "themes" / "light.css")
                                   + read(STATIC / "css" / "common.css")))
-        sources = STYLESHEETS + OWN_SCRIPTS
+        sources = STYLESHEETS + OWN_SCRIPTS + [COLORS]
         used = {name for path in sources for name in re.findall(r"var\((--[\w-]+)", read(path))}
         # a --series-N or --shade-step-N built in a script counts for every slot
         used = {name for name in used if not name.endswith("-")}

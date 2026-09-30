@@ -101,6 +101,7 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              so a field added in server.py or queries.py is added there too
   src/lib/format.ts          number, money, duration, day, hour and moment formatting, handed to the classic scripts
                              as globals; test_static.py's node tests import it as it is (node runs TypeScript)
+  src/lib/colors.ts          the by-model chart's model slots, effort order, shades and hatches, handed over the same way
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)

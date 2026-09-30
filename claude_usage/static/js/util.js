@@ -1,5 +1,6 @@
-// DOM builders, fetching, and the model colors. The number, date and time formatting (compact, money, duration,
-// when, ago, …) comes from the bundle (web/src/lib/format.ts, handed over by web/src/legacy.svelte.ts).
+// DOM builders and fetching. The number, date and time formatting (compact, money, duration, when, ago, …) and the
+// model colors (modelSlots, effortShade, swatchFill, …) come from the bundle (web/src/lib/format.ts and colors.ts,
+// handed over by web/src/legacy.svelte.ts).
 "use strict";
 
 // --- helpers -------------------------------------------------------------------------------------------------
@@ -88,62 +89,3 @@ function showScanErrors(payload) {
   const more = found.length > 1 ? ` (and ${found.length - 1} more, see the server's log)` : "";
   showError("scan", found.length ? `Scan: ${found[0]}${more}` : "");
 }
-
-// --- colors --------------------------------------------------------------------------------------------------
-
-function modelSlots(models) {
-  const slots = new Map();
-  const ordered = [...KNOWN_MODELS.filter(model => models.includes(model)),
-                   ...models.filter(model => !KNOWN_MODELS.includes(model)).sort()];
-  for (const model of KNOWN_MODELS) {
-    if (models.includes(model)) slots.set(model, KNOWN_MODELS.indexOf(model));
-  }
-  const free = [...Array(SLOT_COUNT).keys()].filter(slot => ![...slots.values()].includes(slot));
-  for (const model of ordered) {
-    if (slots.has(model)) continue;
-    slots.set(model, free.length ? free.shift() : null);        // null: folded into "Other"
-  }
-  return slots;
-}
-// effort levels from least to most, ultracode (xhigh with its workflows) last; others sort after them by name
-const EFFORT_ORDER = ["low", "medium", "high", "xhigh", "max", "ultracode"];
-function effortRank(effort) {
-  const rank = EFFORT_ORDER.indexOf(effort);
-  return rank === -1 ? EFFORT_ORDER.length : rank;
-}
-// the effort level of background usage (store.BACKGROUND_EFFORT): calls no transcript shows, so no level is known
-const BACKGROUND_EFFORT = "background";
-// an effort level as the tables and the series' keys name it ("effort high"), and as the legend and the tooltip do
-// under their model ("high")
-function effortName(effort) {
-  if (effort === BACKGROUND_EFFORT) return "background calls";
-  return effort ? `effort ${effort}` : "no effort level";
-}
-function effortLabel(effort) {
-  if (effort === BACKGROUND_EFFORT) return "background calls";
-  return effort ?? "no effort level";
-}
-// A model's color, shaded by effort level: the model's own color for low, none or an unknown level, then one step
-// further from the surface each for medium, high and max (xhigh shares max's shade). Each slot's step is sized for
-// the same lightness gap (--shade-step-*, validated per theme); the legend, tooltip and table name every level.
-// Ultracode shares max's shade too, hatched at 45° with lines one step further (tone on tone), so it needs no color
-// of its own. Background usage wears the model's own color, hatched the other way (135°) with lines one step further.
-const EFFORT_SHADES = {background: 0, medium: 1, high: 2, xhigh: 3, max: 3, ultracode: 3};
-const HATCH_SHADES = {background: 1, ultracode: 4};
-// how far a hatch turns its vertical lines, in degrees (clockwise on screen): 45 draws "/", -45 draws "\"
-const HATCH_TURNS = {background: -45, ultracode: 45};
-function effortShade(slot, effort) { return shade(slot, EFFORT_SHADES[effort] || 0); }
-// the color of the effort level's hatch lines, or null for a level without a hatch
-function effortHatch(slot, effort) { return HATCH_SHADES[effort] ? shade(slot, HATCH_SHADES[effort]) : null; }
-function hatchTurn(effort) { return HATCH_TURNS[effort] ?? null; }
-function shade(slot, step) {
-  const name = slot === null ? "other" : slot + 1;
-  if (step === 0) return slotColor(slot);
-  return `color-mix(in oklab, var(--series-${name}), var(--shade-ink) calc(var(--shade-step-${name}) * ${step}))`;
-}
-// a swatch's background: a series' color, with its hatch where it has one, its lines turned like the columns' (a
-// gradient runs across its stripes, so 90° further)
-function swatchFill(color, hatch, turn) {
-  return hatch ? `repeating-linear-gradient(${90 + turn}deg, ${hatch} 0 1.5px, ${color} 1.5px 4px)` : color;
-}
-function slotColor(slot) { return slot === null ? "var(--series-other)" : `var(--series-${slot + 1})`; }

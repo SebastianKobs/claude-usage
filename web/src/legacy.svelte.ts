@@ -4,13 +4,18 @@
 import { flushSync, mount, unmount } from 'svelte';
 import Banner from './components/Banner.svelte';
 import { BannerMessages } from './lib/banner.svelte';
+import * as colors from './lib/colors';
 import * as format from './lib/format';
 
-// Typed from the module itself, so what Window declares can't drift from what the old scripts are handed.
+// Typed from the modules themselves, so what Window declares can't drift from what the old scripts are handed. The
+// formatters are lib/format.ts (numbers, money, durations, days, hours, moments), the colors lib/colors.ts (the
+// chart palette's slots, models and effort shades). Their names must stay apart: a shared one would be handed
+// over twice, the second silently winning.
 type Formatters = typeof format;
+type Colors = typeof colors;
 
 declare global {
-  interface Window extends Formatters {
+  interface Window extends Formatters, Colors {
     /** Sets a source's banner message (empty removes it), drawn at once. */
     showError(source: string, message: string): void;
     /** Whether a source has a banner message now. */
@@ -40,9 +45,9 @@ export function bridge(target: Window): Bridge {
     flushSync();
   };
   target.hasError = (source: string): boolean => messages.has(source);
-  // Every export, so a function added to lib/format.ts reaches the old scripts without touching the bridge. Handed
-  // over as they are: the old scripts call them with their own arguments, never as an array callback.
-  Object.assign(target, format);
+  // Every export, so a function added to lib/format.ts or lib/colors.ts reaches the old scripts without touching the
+  // bridge. Handed over as they are: the old scripts call them with their own arguments, never as an array callback.
+  Object.assign(target, format, colors);
 
   return {
     stop(): void {
@@ -50,7 +55,7 @@ export function bridge(target: Window): Bridge {
       // Reflect, since the Window interface declares them always there, which a plain delete refuses.
       Reflect.deleteProperty(target, 'showError');
       Reflect.deleteProperty(target, 'hasError');
-      for (const name of Object.keys(format)) Reflect.deleteProperty(target, name);
+      for (const name of [...Object.keys(format), ...Object.keys(colors)]) Reflect.deleteProperty(target, name);
     },
   };
 }

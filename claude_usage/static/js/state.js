@@ -10,10 +10,6 @@ const BAR_MAX = 24;
 const GAP = 2;
 const MODEL_GAP = 4;                                      // between two models in a column, wider than between shades
 const CORNER = 4;
-const SLOT_COUNT = 8;
-// Fixed slots so a model keeps its color whatever the range: known ids first, others after in name order.
-const KNOWN_MODELS = ["claude-opus-5-5", "claude-sonnet-5", "claude-opus-5", "claude-haiku-4-5",
-                      "claude-fable-5-1", "claude-opus-4-8", "claude-fable-5", "claude-sonnet-4-6"];
 const METRICS = {
   cost: {label: "Estimated cost", value: row => row.cost || 0, format: money},
   output: {label: "Output tokens", value: row => row.output, format: compact},
