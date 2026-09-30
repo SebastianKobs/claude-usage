@@ -102,6 +102,18 @@ describe('row classes', () => {
   });
 });
 
+describe('the wrap`s id', () => {
+  test('is set where given', () => {
+    const { container } = render(TableViewFixture, { rows: makeRows(3), id: 'bench-table' });
+    expect(container.firstElementChild).toHaveAttribute('id', 'bench-table');
+  });
+
+  test('is not there without one', () => {
+    const { container } = render(TableViewFixture, { rows: makeRows(3) });
+    expect(container.firstElementChild).not.toHaveAttribute('id');
+  });
+});
+
 describe('the table name', () => {
   test('every heading cell is a column heading by its scope', () => {
     render(TableViewFixture, { rows: makeRows(3) });

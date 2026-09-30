@@ -215,10 +215,6 @@ function setup() {
   });
   window.addEventListener("hashchange", loadSession);
   document.addEventListener("visibilitychange", pollWhileVisible);
-  const resize = new ResizeObserver(() => {
-    if (state.session) renderContext(state.session);
-  });
-  resize.observe(document.getElementById("session-card"));
 
   loadSession();
   pollWhileVisible();

@@ -420,8 +420,9 @@ test('an open session is drawn into its container with the old scripts` slots, a
   window.setPayload({ session: sessionDetail() });
   const card = tilesOf('session-card');
   expect(card.querySelector('section#drilldown')).not.toBeNull();
-  expect(card.querySelectorAll('.legacy-slot')).toHaveLength(3);
-  expect(document.getElementById('session-top')).not.toBeNull();
+  expect(card.querySelectorAll('.legacy-slot')).toHaveLength(2);
+  expect(document.getElementById('session-mid')).not.toBeNull();
+  expect(document.getElementById('session-end')).not.toBeNull();
   bridged.stop();
   expect(card.children).toHaveLength(0);
   bridged = { stop() {} };

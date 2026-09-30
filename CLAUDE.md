@@ -103,7 +103,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              as globals; test_static.py's node tests import it as it is (node runs TypeScript)
   src/lib/colors.ts          the by-model chart's model slots, effort order, shades and hatches, handed over the same way
   src/lib/compact.ts         when compacting pays off (`payoffTone` and its words), which call to compact or delegate
-                             applies, a compaction's verdict and their sum; handed over the same way
+                             applies, a compaction's verdict (its words, break-even and one-time cost, the rebuild
+                             causes) and their sum; handed over the same way
   src/lib/secrets.ts         how the secret accesses show: the card's tone and words, the table's columns and rows (a
                              path's script, how far a call got; used by the component)
   src/lib/live.ts            the live cards' badges (waiting, secret, compacting now), the live list's words (its
@@ -148,6 +149,9 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              table's columns and rows (a workflow run's agents under one row, its fold)
   src/lib/gauge.ts           the gauge's words: the meter or the compaction, the exact and estimated notes, the call to
                              compact, the hint to delegate (used by the components)
+  src/lib/context.ts         the context per turn: the picker's choices, the chart's geometry (stacked areas, hint
+                             line, compaction rules, the two direct labels), a turn's words, the table views' rows, the
+                             tiles and the compactions' rows and total (used by the components)
   src/lib/clock.svelte.ts    the cache's expiry as a reactive clock (`cacheClock`, `createSubscriber`, its timer
                              cleared when nothing reads it), which draws the gauge again when the cache runs out
   src/lib/opening.ts         opening and closing the session view (`opening`, an attachment): the page's other sections
@@ -161,8 +165,9 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              `SessionsList`, the live sessions: `LiveSessions`, `LiveCard`, `LiveIcon`, the range
                              filter: `RangeFilter`, and the session view's frame: `SessionView` with `SessionWaits`,
                              `AgentsTable` and `EventsTable`, the secret accesses: `SecretAccesses`, and the gauge with
-                             the calls above it: `ContextGauge`, `CompactCall`, `DelegateCall`, which leaves three
-                             slots for the old scripts), each with its Testing Library test
+                             the calls above it: `ContextGauge`, `CompactCall`, `DelegateCall`, the context per turn:
+                             `ContextPerTurn` with `ContextChart` and `ContextDetails`, which leaves two slots for the
+                             old scripts), each with its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
@@ -434,7 +439,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     (`turns.savings_total`: a stretch not paid off yet as it stands, forced compactions left out, those without a
     summary estimate counted, not summed). The Estimated cost tile shows it as a gain or loss, in the overview
     (`compaction_savings` in `/api/summary`, the compactions of the range's days) and the session view. The compactions
-    table's heading shows the same total for the transcript picked (`compactionTotal`, summed on the page).
+    table's heading shows the same total for the transcript picked (`compactionTotal`, summed on the page by
+    `compactionsTotal`).
 - **Pricing:**
   - The longest model-id prefix wins, and a `[1m]` suffix is ignored.
   - Fast mode multiplies every category, cache included.
@@ -723,13 +729,14 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - The session view (`SessionView`) takes focus on open; Escape or Close returns focus and scroll to the link that
     opened it (`opening`).
   - The gauge (`ContextGauge`, `current`) is a meter with the compact hint marked, or the compaction where no reply
-    followed it. The session view's context section (`drilldown.js`): the context per turn stacked as cache read,
+    followed it. The session view's context section (`ContextPerTurn`): the context per turn stacked as cache read,
     cache write and new input (`--context-read/-write/-new`,
     blue 400/550/700 in light and 500/350/200 in dark, validated as ordinal ramps), a dashed rule per compaction
     labelled by trigger where it fits, the compact hint as a reference line when the plot reaches it. A picker
     (only with subagents) switches the chart, its table view, the tiles (overhead, rebuilds, compactions, mean
     growth), the biggest growth steps and the compactions to one transcript; another session starts at the main
-    thread.
+    thread (the picked transcript and the table view are the component's own state, which the view's key restarts
+    and a refresh of the same session keeps).
   - Under the gauge the exact parts are a muted note; the estimate (`compact-estimate`) is full-size text in
     `--text-secondary` under a `--border` hairline, its pay-off phrase bold in `--text-primary` after a mark by
     `payoffTone` against `calls_ahead`: `soon` within half of them (`--gain-text`), `close` within them

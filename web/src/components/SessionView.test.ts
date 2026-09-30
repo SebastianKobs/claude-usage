@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
@@ -6,6 +7,7 @@ import type { SecretAccess, SessionDetail, Waiting } from '../lib/api';
 import {
   agent,
   apiErrorEvent,
+  contextTurn,
   gauge,
   live,
   liveSession,
@@ -52,12 +54,42 @@ function fullSession(changes: Partial<SessionDetail> = {}): SessionDetail {
   });
 }
 
+/** The transcript picker's name. */
+const PICKER = 'Transcript the context section shows';
+
+/** The main thread and a helper, each with a turn, so that there is something to pick between. */
+function withTurns() {
+  return [
+    agent({ context_per_turn: [contextTurn({ message_id: 'm-1' })] }),
+    agent({
+      agent_id: 'a-1',
+      agent_type: 'Explore',
+      description: 'Find the callers',
+      context_per_turn: [contextTurn({ message_id: 'm-2' })],
+    }),
+  ];
+}
+
+/** The section's heading row, the first thing of the context per turn. */
+const contextHead = () =>
+  screen.getByRole('heading', { level: 3, name: 'Context per turn' }).parentElement as HTMLElement;
+
 const TABLES = ['models', 'agents', 'skills', 'mcp-servers', 'api-errors'];
 const KEYS = ['abc123', 'other'].flatMap((id) => TABLES.map((name) => `${id}-${name}`));
 
 let scrollTo: ReturnType<typeof vi.fn>;
 
+/** jsdom has no ResizeObserver, which the context chart's container is measured with. */
+class IdleResizeObserver {
+  observe(): void {}
+
+  unobserve(): void {}
+
+  disconnect(): void {}
+}
+
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', IdleResizeObserver);
   localStorage.clear();
   preferences.pageSize = 25;
   scrollTo = vi.fn();
@@ -70,6 +102,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   payload.reset();
   for (const key of KEYS) tablePages.forget(key);
   preferences.theme = null;
@@ -333,38 +366,84 @@ describe('the secret accesses', () => {
 });
 
 describe('the gauge', () => {
-  test('follows the tile rows and comes before the `#session-top` slot', () => {
+  test('follows the tile rows and comes before the context per turn', () => {
     render(SessionView);
     setPayload({ session: fullSession({ live: true, current: gauge() }) });
     const gaugeCard = document.getElementById('current-gauge') as HTMLElement;
     const group = screen.getByRole('group', { name: 'Time and lines changed' });
     expect(gaugeCard.previousElementSibling).toBe(group);
-    expect(gaugeCard.nextElementSibling).toBe(document.getElementById('session-top'));
+    expect(gaugeCard.nextElementSibling).toBe(contextHead());
   });
 
-  test('leaves nothing between the tile rows and the slot for a session without a gauge', () => {
+  test('leaves nothing between the tile rows and the context per turn for a session without a gauge', () => {
     render(SessionView);
     setPayload({ session: fullSession() });
     expect(document.getElementById('current-gauge')).toBeNull();
     const group = screen.getByRole('group', { name: 'Time and lines changed' });
-    expect(group.nextElementSibling).toBe(document.getElementById('session-top'));
+    expect(group.nextElementSibling).toBe(contextHead());
+  });
+});
+
+describe('the context per turn', () => {
+  test('is a section of its own between the gauge and the By model table, its details closing it', () => {
+    render(SessionView);
+    setPayload({ session: fullSession() });
+    const head = contextHead();
+    expect(head.nextElementSibling).toHaveClass('legend');
+    expect(head.nextElementSibling?.nextElementSibling).toBe(document.getElementById('context-chart'));
+    const details = document.getElementById('context-details') as HTMLElement;
+    expect(details.nextElementSibling).toBe(document.getElementById('session-models-title'));
+  });
+
+  test('is not there without a session', () => {
+    render(SessionView);
+    expect(document.getElementById('context-chart')).toBeNull();
+  });
+
+  test('starts at the main thread again in another session', async () => {
+    const user = userEvent.setup();
+    render(SessionView);
+    setPayload({ session: fullSession({ agents: withTurns() }) });
+    await user.selectOptions(screen.getByRole('combobox', { name: PICKER }), 'a-1');
+    expect(screen.getByRole('combobox', { name: PICKER })).toHaveValue('a-1');
+    setPayload({ session: fullSession({ session_id: 'other', agents: withTurns() }) });
+    expect(screen.getByRole('combobox', { name: PICKER })).toHaveValue('main');
+    expect(document.getElementById('context-note')).toHaveTextContent(/^main thread: /);
+  });
+
+  test('keeps the transcript picked and the table view through a refresh of the same session', async () => {
+    const user = userEvent.setup();
+    render(SessionView);
+    setPayload({ session: fullSession({ agents: withTurns() }) });
+    await user.selectOptions(screen.getByRole('combobox', { name: PICKER }), 'a-1');
+    await user.click(screen.getByRole('button', { name: 'Table view' }));
+    const nodes = [
+      screen.getByRole('combobox', { name: PICKER }),
+      document.getElementById('context-chart'),
+      document.getElementById('context-table'),
+    ];
+    setPayload({ session: fullSession({ turns: 11, agents: withTurns() }) });
+    expect([
+      screen.getByRole('combobox', { name: PICKER }),
+      document.getElementById('context-chart'),
+      document.getElementById('context-table'),
+    ]).toEqual(nodes);
+    expect(screen.getByRole('combobox', { name: PICKER })).toHaveValue('a-1');
+    expect(document.getElementById('context-table-toggle')).toHaveAttribute('aria-pressed', 'true');
   });
 });
 
 describe('the slots for the old scripts', () => {
   const ids = () => [...document.querySelectorAll('.legacy-slot')].map((slot) => slot.id);
 
-  test('are three empty divs, in order between the tile rows, the tables and the end', () => {
+  test('are two empty divs, in order between the tables and the end', () => {
     render(SessionView);
     setPayload({ session: fullSession() });
-    expect(ids()).toEqual(['session-top', 'session-mid', 'session-end']);
+    expect(ids()).toEqual(['session-mid', 'session-end']);
     for (const slot of document.querySelectorAll('.legacy-slot')) {
       expect(slot.tagName).toBe('DIV');
       expect(slot).toBeEmptyDOMElement();
     }
-    const top = document.getElementById('session-top') as HTMLElement;
-    expect(top.previousElementSibling).toBe(screen.getByRole('group', { name: 'Time and lines changed' }));
-    expect(top.nextElementSibling).toBe(document.getElementById('session-models-title'));
     const mid = document.getElementById('session-mid') as HTMLElement;
     const agentsTable = screen.getByRole('table', { name: 'Main thread and subagents' });
     expect(mid.previousElementSibling).toBe(agentsTable.parentElement);
@@ -403,7 +482,8 @@ describe('the tables', () => {
   test('come in order under their headings: by model, the agents, by skill, by MCP server, the API errors', () => {
     render(SessionView);
     setPayload({ session: fullSession() });
-    expect(headings(3)).toEqual([
+    // the first is the context per turn's, which has no table without a transcript with turns
+    expect(headings(3).slice(1)).toEqual([
       'By model',
       'Main thread and subagents',
       'By skill',
@@ -411,7 +491,7 @@ describe('the tables', () => {
       'Rate limits and API errors',
     ]);
     expect(screen.getAllByRole('table')).toHaveLength(5);
-    for (const name of headings(3)) expect(screen.getByRole('table', { name })).toBeInTheDocument();
+    for (const name of headings(3).slice(1)) expect(screen.getByRole('table', { name })).toBeInTheDocument();
   });
 
   test('are no cards of their own: the session card holds them, the skills and servers side by side', () => {
@@ -462,8 +542,9 @@ describe('the tables', () => {
     preferences.theme = 'hacker';
     render(SessionView);
     setPayload({ session: fullSession() });
-    expect(headings(3)[0]).not.toBe('By model');
-    expect(headings(3)[1]).toBe('Main thread and subagents');
+    expect(headings(3)[0]).toBe('Context per turn');
+    expect(headings(3)[1]).not.toBe('By model');
+    expect(headings(3)[2]).toBe('Main thread and subagents');
   });
 
   test('page under the session`s keys, so another session starts at the first page', async () => {

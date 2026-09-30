@@ -11,7 +11,8 @@ A table with a `heading` has the pager in a title row with it, right-aligned, wh
 without a wrapper, where there is none: a flex row would stop its margin collapsing into the note's); `intro` (a note)
 follows. Without a heading the pager is the wrap's first child. With `empty` and no rows the wrap holds that text
 instead of the table. A `labelledby` names the table by the element with that id (the heading's, where it has one),
-and every heading cell has `scope="col"`.
+and every heading cell has `scope="col"`. An `id` goes on the wrap, for a section the old scripts or the tests reach by
+it.
 -->
 <script lang="ts" generics="Row">
   import type { Snippet } from 'svelte';
@@ -20,6 +21,7 @@ and every heading cell has `scope="col"`.
   import Pager from './Pager.svelte';
 
   let {
+    id,
     key,
     noun = 'rows',
     columns,
@@ -34,6 +36,8 @@ and every heading cell has `scope="col"`.
     empty,
     labelledby,
   }: {
+    /** The wrap's id. */
+    id?: string;
     /** The pager's key: the page is kept under it, and the controls' ids are made of it (`pager-<key>-size`). */
     key: string;
     /** What the rows are called, in the pager. */
@@ -91,7 +95,7 @@ and every heading cell has `scope="col"`.
   {/if}
 {/if}
 {@render intro?.()}
-<div class="table-wrap">
+<div class="table-wrap" {id}>
   {#if !heading}
     {@render pager()}
   {/if}

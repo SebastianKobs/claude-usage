@@ -4,8 +4,10 @@
 import type {
   Agent,
   ApiErrorEvent,
+  Compaction,
   CompactEstimate,
   CompactNow,
+  ContextTurn,
   CostlySession,
   LimitWindow,
   Live,
@@ -19,6 +21,7 @@ import type {
   SessionRuntime,
   Summary,
   Usage,
+  VersusKeeping,
 } from './api';
 
 /** A usage of 10 turns: 1.5K input in all, 900 of it read from the cache, at a cost of $1.50. */
@@ -352,6 +355,69 @@ export function gauge(changes: Partial<SessionGauge> = {}): SessionGauge {
     turns_left: 230,
     compact_now: compactNow(),
     exploration: null,
+    ...changes,
+  };
+}
+
+/** A call of 50K context, nearly all read from the cache, which grew 2K beyond the last reply; `message_id` is the
+ *  one thing each test gives its own. */
+export function contextTurn(changes: Partial<ContextTurn> = {}): ContextTurn {
+  return {
+    message_id: 'msg-1',
+    ts: '2026-09-30T08:00:00.000Z',
+    context: 50_000,
+    effort: null,
+    new_input: 1_000,
+    cache_write: 4_000,
+    cache_read: 45_000,
+    growth: 2_000,
+    rebuild: null,
+    ...changes,
+  };
+}
+
+/** A compaction that saved: 60K dropped to 20K, $0.30 once, paid off at call 5 of the 40 after it, $2.10 net. */
+export function versusKeeping(changes: Partial<VersusKeeping> = {}): VersusKeeping {
+  return {
+    model: 'claude-opus-5-5',
+    before: 60_000,
+    after: 20_000,
+    difference: 40_000,
+    saving_per_call: 0.02,
+    rewrite: 0.1,
+    one_time: 0.3,
+    calls_after: 40,
+    last_stretch: false,
+    capped_at: null,
+    cache_warm: true,
+    breakeven_call: 5,
+    breakeven_at_least: false,
+    net: 2.1,
+    net_low: 1.9,
+    net_high: 2.3,
+    verdict: 'saved',
+    rework_margin: null,
+    added: 500,
+    prefix_read: 20_000,
+    call_low: 0.1,
+    call_cost: 0.2,
+    call_high: 0.25,
+    summary_tokens: 3_000,
+    summary_high: 4_000,
+    ...changes,
+  };
+}
+
+/** An auto-compaction at 09:00 that took 30 s, compared with keeping the context. */
+export function compaction(changes: Partial<Compaction> = {}): Compaction {
+  return {
+    ts: '2026-09-30T09:00:00.000Z',
+    trigger: 'auto',
+    pre_tokens: 60_000,
+    post_tokens: 5_000,
+    duration_ms: 30_000,
+    next_context: 20_000,
+    versus_keeping: versusKeeping(),
     ...changes,
   };
 }

@@ -2,10 +2,11 @@
 @component
 The session view's frame, read from the page's payload: nothing without an open session. With one it is a card of the
 session's heading (with its close link), prompt and facts, what waits for the user, its tile rows, the gauge with the
-calls above it (`ContextGauge`), the secret accesses (`SecretAccesses`, before the gauge), and its tables: usage by
-model, the main thread and subagents, by skill, by MCP server and the API errors. The parts that have not moved to
-components yet (the context chart, the tools and the conversation) are drawn by the old scripts into three empty slots,
-`#session-top`, `#session-mid` and `#session-end`, which stay the same nodes while the session's data is refreshed.
+calls above it (`ContextGauge`), the secret accesses (`SecretAccesses`, before the gauge), the context per turn
+(`ContextPerTurn`, after the gauge) and its tables: usage by model, the main thread and subagents, by skill, by MCP
+server and the API errors. The parts that have not moved to components yet (the tools and the conversation) are drawn by
+the old scripts into two empty slots, `#session-mid` and `#session-end`, which stay the same nodes while the session's
+data is refreshed.
 Another session gets a new view (folds, slots and all), which takes the page over while it is there: the range's
 filters and summary step aside, focus goes to its heading, and closing it (the link or Escape, which clears the
 address's hash) puts the page back.
@@ -22,6 +23,7 @@ address's hash) puts the page back.
   import { modelRows, usageRows } from '../lib/usage';
   import AgentsTable from './AgentsTable.svelte';
   import ContextGauge from './ContextGauge.svelte';
+  import ContextPerTurn from './ContextPerTurn.svelte';
   import EventsTable from './EventsTable.svelte';
   import KpiTiles from './KpiTiles.svelte';
   import RuntimeTiles from './RuntimeTiles.svelte';
@@ -89,7 +91,7 @@ address's hash) puts the page back.
       {/if}
       <SecretAccesses />
       <ContextGauge />
-      <div class="legacy-slot" id="session-top"></div>
+      <ContextPerTurn />
       <UsageTable
         inline
         id="session-models"

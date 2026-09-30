@@ -2,8 +2,8 @@
 @component
 TableView's test bench: rows of a name and a number, the number in a `num` cell, a row with `sub` a sub-row of the one
 above, a row with `group` a group head. `withHeading`, `withIntro` and `empty` turn on the heading, the note and the
-text for no rows, `withRowClass` a class "flagged" on the rows whose name ends in 1, `withTitle` a title on the Amount
-column. Only the tests use it.
+text for no rows, `id` an id on the wrap, `withRowClass` a class "flagged" on the rows whose name ends in 1,
+`withTitle` a title on the Amount column. Only the tests use it.
 -->
 <script lang="ts" module>
   /** A row of the bench. */
@@ -31,6 +31,7 @@ column. Only the tests use it.
     withTitle = false,
     empty,
     labelledby,
+    id,
   }: {
     rows: BenchRow[];
     tableKey?: string;
@@ -43,10 +44,12 @@ column. Only the tests use it.
     withTitle?: boolean;
     empty?: string;
     labelledby?: string;
+    id?: string;
   } = $props();
 </script>
 
 <TableView
+  {id}
   key={tableKey}
   {noun}
   columns={[{ label: 'Name' }, { label: 'Amount', numeric: true, title: withTitle ? 'what it comes to' : undefined }]}

@@ -55,7 +55,8 @@ def definition(script, name):
 
 
 MODULES = {name: LIB / name
-           for name in ("format.ts", "colors.ts", "compact.ts", "secrets.ts", "live.ts", "tables.ts", "charts.ts")}
+           for name in ("format.ts", "colors.ts", "compact.ts", "context.ts", "secrets.ts", "live.ts", "tables.ts",
+                        "charts.ts")}
 
 
 def run_function(script, name, *arguments, uses=()):
@@ -94,20 +95,20 @@ def object_keys(script, name):
 
 class ScriptTest(unittest.TestCase):
     def test_every_rebuild_cause_has_its_words(self):
-        self.assertEqual(object_keys("chat.js", "REBUILD_CAUSES"), {"model", "idle", "prefix"})
+        self.assertEqual(object_keys(MODULES["compact.ts"], "REBUILD_CAUSES"), {"model", "idle", "prefix"})
 
     def test_every_injected_kind_that_is_no_attachment_type_has_its_words(self):
         self.assertEqual(object_keys("chat.js", "INJECTED_KINDS"), {"meta", "skill", "summary"})
 
     def test_every_compaction_verdict_has_its_words(self):
-        self.assertEqual(object_keys("chat.js", "COMPACTION_VERDICTS"), set(turns.VERDICTS))
+        self.assertEqual(object_keys(MODULES["compact.ts"], "COMPACTION_VERDICTS"), set(turns.VERDICTS))
 
     def test_every_compaction_trigger_has_its_words(self):
-        self.assertEqual(object_keys("drilldown.js", "COMPACTION_TRIGGERS"), {"manual", "auto"})
+        self.assertEqual(object_keys(MODULES["context.ts"], "COMPACTION_TRIGGERS"), {"manual", "auto"})
 
     def test_the_context_chart_stacks_the_three_parts_of_a_turn(self):
-        body = re.search(r"const CONTEXT_PARTS = \[(.*?)\];", read(STATIC / "js" / "drilldown.js"), re.DOTALL).group(1)
-        self.assertEqual(re.findall(r'field: "(\w+)"', body), ["cache_read", "cache_write", "new_input"])
+        body = re.search(r"const CONTEXT_PARTS\b[^=]*= \[(.*?)\];", read(MODULES["context.ts"]), re.DOTALL).group(1)
+        self.assertEqual(re.findall(r"field: '(\w+)'", body), ["cache_read", "cache_write", "new_input"])
 
     def test_the_page_orders_effort_levels_like_the_report(self):
         body = re.search(r"const EFFORT_ORDER[^=]*= \[(.*?)\];", read(COLORS)).group(1)
@@ -184,7 +185,7 @@ class VerdictToneTest(unittest.TestCase):
         self.assertIsNone(run_function("compact.ts", "verdictTone", {"verdict": "open", "net": 0.05}))
 
     def test_a_loss_so_far_shows_its_amount(self):
-        body = re.search(r"^function verdictText\(.*?^\}$", read(STATIC / "js" / "chat.js"),
+        body = re.search(r"^export function verdictText\(.*?^\}$", read(MODULES["compact.ts"]),
                          re.DOTALL | re.MULTILINE).group(0)
         self.assertIn("so far", body)
 
@@ -351,7 +352,7 @@ class SecretAccessTest(unittest.TestCase):
         view = read(COMPONENTS / "SessionView.svelte")
         self.assertLess(view.index("<RuntimeTiles"), view.index("<SecretAccesses"))
         self.assertLess(view.index("<SecretAccesses"), view.index("<ContextGauge"))
-        self.assertLess(view.index("<ContextGauge"), view.index('id="session-top"'))
+        self.assertLess(view.index("<ContextGauge"), view.index("<ContextPerTurn"))
 
     def test_the_warning_is_edged_in_the_critical_color(self):
         self.assertIn("var(--status-critical)", css_block(read(STATIC / "css" / "common.css"), ".secret-alert"))
@@ -619,7 +620,7 @@ class CompactionTotalTest(unittest.TestCase):
         self.assertIsNone(run_function("compact.ts", "compactionTotal", rows))
 
     def test_the_compactions_heading_carries_the_total(self):
-        self.assertIn("compactionTotal(agent.compactions)", read(STATIC / "js" / "drilldown.js"))
+        self.assertIn("compactionTotal(compactions)", read(MODULES["context.ts"]))
 
 
 class PagingTest(unittest.TestCase):
@@ -666,7 +667,7 @@ class PagingTest(unittest.TestCase):
         self.assertRegex(module, r"export const PAGE_SIZES = \[10, 25, 50\];")
 
     def test_every_table_is_paged(self):
-        sites = {"tables.js": 1, "drilldown.js": 3, "chartkit.js": 1}
+        sites = {"tables.js": 1, "drilldown.js": 1, "chartkit.js": 1}
         for script, count in sites.items():
             with self.subTest(script=script):
                 self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)

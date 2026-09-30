@@ -377,9 +377,6 @@ function compactChip(hint) {
 }
 
 // A call that wrote the cache again instead of reading it: a neutral chip, the cause in words and what it cost
-const REBUILD_CAUSES = {model: "the model changed", idle: "the cache expired while idle",
-                        prefix: "something early in the context changed"};
-
 function rebuildChip(rebuild) {
   const cost = rebuild.extra_cost === null ? "" : ` · +${money(rebuild.extra_cost)}`;
   const why = `${compact(rebuild.lost)} tokens written to the cache again: ${REBUILD_CAUSES[rebuild.cause]}`;
@@ -474,80 +471,11 @@ function compactionText(entry) {
 
 // --- a compaction against keeping the context (turns.versus_keeping) ------------------------------------------
 
-const COMPACTION_VERDICTS = {saved: "saved", cost_more: "cost more", even: "about even",
-                             forced: "forced: keeping would have auto-compacted", open: "not paid off by the last call",
-                             unknown: "unknown without an output speed or duration"};
-const VERSUS_KEEPING_NOTE = "Compared with keeping the context: the same later calls, each reading the dropped " +
-  "tokens again from the cache, at API list prices. ~ marks the summary call's output, estimated from its " +
-  "duration at your output speed; ▲ + (saved, green) holds even at your fastest, ▼ − (cost more, red) even without " +
-  "the summary, or so far for the stretch still running. Re-reading files after compacting isn't counted.";
-
-// the verdict with its amount: a gain or loss signed, with an arrow, in green or red (the sign and the arrow carry
-// it, not the color); the other verdicts in words
-function verdictText(comparison) {
-  if (comparison.verdict === "saved") return `▲ +${money(comparison.net)}`;
-  if (comparison.verdict === "cost_more") {
-    return comparison.net === null ? `▼ −${money(-comparison.net_high)} or more` : `▼ −${money(-comparison.net)}`;
-  }
-  if (comparison.verdict === "open" && comparison.net !== null) {
-    return comparison.net < 0 ? `▼ −${money(-comparison.net)} so far` : "about even so far";
-  }
-  if (comparison.verdict === "unknown" && comparison.net_high > 0) {
-    return `saved at most ${money(comparison.net_high)}, the summary call unknown`;
-  }
-  return COMPACTION_VERDICTS[comparison.verdict];
-}
-
 // the verdict as an element: a gain or loss in its tone, with the words in its title
 function verdictBadge(comparison) {
   const tone = verdictTone(comparison);
-  const words = tone === "gain" ? "Saved against keeping the context"
-    : comparison.verdict === "open" ? "Not paid off by the last call: cost more than keeping the context so far"
-    : tone === "loss" ? "Cost more than keeping the context" : null;
-  return el("span", {class: tone ? `verdict-${tone}` : null, title: words, text: verdictText(comparison)});
-}
-
-// the break-even call, judged at the fastest summary like saved; without a summary estimate a lower bound; none
-// for a forced compaction, which had nothing to pay off against
-function breakevenCall(comparison) {
-  if (comparison.verdict === "forced") return null;
-  if (comparison.breakeven_call === null) return "never";
-  return `${comparison.breakeven_at_least ? "≥ " : ""}call ${whole(comparison.breakeven_call)}`;
-}
-
-function breakevenText(comparison) {
-  const call = breakevenCall(comparison);
-  if (call === null) return null;
-  if (call === "never") return "never pays off";
-  if (comparison.breakeven_at_least) return `pays off at call ${whole(comparison.breakeven_call)} or later`;
-  return comparison.breakeven_call > comparison.calls_after ? `would pay off at ${call}` : `paid off at ${call}`;
-}
-
-// what compacting cost once: the summary call and the rewrite; only the input side is known without an output speed
-function oneTimeText(comparison) {
-  return comparison.one_time === null ? `≥ ${money(comparison.call_low + comparison.rewrite)}`
-                                      : `~${money(comparison.one_time)}`;
-}
-
-function oneTimeTitle(comparison) {
-  const summary = comparison.summary_tokens === null ? "its summary unknown"
-    : `a summary of about ${compact(comparison.summary_tokens)} tokens, at most ${compact(comparison.summary_high)}`;
-  const cache = comparison.cache_warm ? "warm" : "cold";
-  return `The summary call ${comparison.call_cost === null ? "" : `~${money(comparison.call_cost)} `}(${summary}; ` +
-    `input ${money(comparison.call_low)}, cache ${cache}) and rewriting the next call's context ` +
-    `${money(comparison.rewrite)}`;
-}
-
-// the re-work that would cancel a saving, and where the kept session would have auto-compacted itself
-function verdictTitle(comparison) {
-  const notes = [];
-  if (comparison.rework_margin !== null) {
-    notes.push(`Re-reading about ${compact(comparison.rework_margin)} tokens after compacting would cancel the saving`);
-  }
-  if (comparison.capped_at !== null) {
-    notes.push(`The kept session would have auto-compacted at call ${whole(comparison.capped_at)}`);
-  }
-  return notes.join(". ") || null;
+  return el("span", {class: tone ? `verdict-${tone}` : null, title: verdictWords(comparison),
+                     text: verdictText(comparison)});
 }
 
 function versusKeepingLine(comparison) {

@@ -1,15 +1,25 @@
 import { expect, test } from 'vitest';
 import type { Compaction, CompactEstimate, SessionDetail, SessionGauge, VersusKeeping } from './api.ts';
+import { versusKeeping } from './fixtures.ts';
 import {
+  breakevenCall,
+  breakevenText,
   compactCallKind,
   compactionTotal,
+  COMPACTION_VERDICTS,
   delegateCallShown,
+  oneTimeText,
+  oneTimeTitle,
   PAYOFF_WORDS,
   payoffAhead,
   payoffText,
   payoffTone,
+  REBUILD_CAUSES,
   spread,
+  verdictText,
+  verdictTitle,
   verdictTone,
+  verdictWords,
 } from './compact.ts';
 
 const NOW = '2026-09-28T12:00:00.000+00:00';
@@ -249,4 +259,85 @@ test('the compactions add up, forced ones left out and those without an estimate
 test('without a compaction to count there is no total', () => {
   expect(compactionTotal([])).toBeNull();
   expect(compactionTotal([row(null), row(comparison('forced', 1))])).toBeNull();
+});
+
+test('a saving shows as a signed gain, a loss as a signed loss, with an arrow', () => {
+  expect(verdictText(versusKeeping({ verdict: 'saved', net: 2.1 }))).toBe('▲ +$2.10');
+  expect(verdictText(versusKeeping({ verdict: 'cost_more', net: -0.4 }))).toBe('▼ −$0.40');
+  expect(verdictText(versusKeeping({ verdict: 'cost_more', net: null, net_high: -0.3 }))).toBe('▼ −$0.30 or more');
+});
+
+test('the last stretch says so far, and a summary call unknown says how much it saved at most', () => {
+  expect(verdictText(versusKeeping({ verdict: 'open', net: -0.25 }))).toBe('▼ −$0.25 so far');
+  expect(verdictText(versusKeeping({ verdict: 'open', net: 0.05 }))).toBe('about even so far');
+  expect(verdictText(versusKeeping({ verdict: 'open', net: null }))).toBe(COMPACTION_VERDICTS.open);
+  expect(verdictText(versusKeeping({ verdict: 'unknown', net: null, net_high: 0.8 }))).toBe(
+    'saved at most $0.80, the summary call unknown',
+  );
+  expect(verdictText(versusKeeping({ verdict: 'unknown', net: null, net_high: 0 }))).toBe(COMPACTION_VERDICTS.unknown);
+});
+
+test('the neutral verdicts have their words', () => {
+  for (const verdict of ['even', 'forced'] as const) {
+    expect(verdictText(versusKeeping({ verdict }))).toBe(COMPACTION_VERDICTS[verdict]);
+  }
+  expect(Object.keys(COMPACTION_VERDICTS).sort()).toEqual(['cost_more', 'even', 'forced', 'open', 'saved', 'unknown']);
+  expect(Object.keys(REBUILD_CAUSES).sort()).toEqual(['idle', 'model', 'prefix']);
+});
+
+test('a gain and a loss say what they mean on hover, a neutral verdict nothing', () => {
+  expect(verdictWords(versusKeeping({ verdict: 'saved' }))).toBe('Saved against keeping the context');
+  expect(verdictWords(versusKeeping({ verdict: 'cost_more', net: -1 }))).toBe('Cost more than keeping the context');
+  expect(verdictWords(versusKeeping({ verdict: 'open', net: -1 }))).toContain('Not paid off by the last call');
+  expect(verdictWords(versusKeeping({ verdict: 'open', net: 1 }))).toContain('Not paid off by the last call');
+  expect(verdictWords(versusKeeping({ verdict: 'even' }))).toBeNull();
+});
+
+test('the break-even is a call, a lower bound without a summary estimate, never, or nothing for a forced one', () => {
+  expect(breakevenCall(versusKeeping({ breakeven_call: 5 }))).toBe('call 5');
+  expect(breakevenCall(versusKeeping({ breakeven_call: 5, breakeven_at_least: true }))).toBe('≥ call 5');
+  expect(breakevenCall(versusKeeping({ breakeven_call: null }))).toBe('never');
+  expect(breakevenCall(versusKeeping({ verdict: 'forced', breakeven_call: 5 }))).toBeNull();
+});
+
+test('the break-even in words says whether it was reached', () => {
+  expect(breakevenText(versusKeeping({ breakeven_call: 5, calls_after: 40 }))).toBe('paid off at call 5');
+  expect(breakevenText(versusKeeping({ breakeven_call: 50, calls_after: 40 }))).toBe('would pay off at call 50');
+  expect(breakevenText(versusKeeping({ breakeven_call: 5, breakeven_at_least: true }))).toBe(
+    'pays off at call 5 or later',
+  );
+  expect(breakevenText(versusKeeping({ breakeven_call: null }))).toBe('never pays off');
+  expect(breakevenText(versusKeeping({ verdict: 'forced' }))).toBeNull();
+});
+
+test('the one-time cost is the estimate, or without an output speed the input side at least', () => {
+  expect(oneTimeText(versusKeeping({ one_time: 0.3 }))).toBe('~$0.30');
+  expect(oneTimeText(versusKeeping({ one_time: null, call_low: 0.1, rewrite: 0.15 }))).toBe('≥ $0.25');
+});
+
+test('its title names the summary call, its cache and the rewrite', () => {
+  expect(oneTimeTitle(versusKeeping())).toBe(
+    'The summary call ~$0.20 (a summary of about 3K tokens, at most 4K; input $0.10, cache warm) and rewriting the ' +
+      "next call's context $0.10",
+  );
+  const cold = oneTimeTitle(versusKeeping({ summary_tokens: null, call_cost: null, cache_warm: false }));
+  expect(cold).toBe(
+    "The summary call (its summary unknown; input $0.10, cache cold) and rewriting the next call's context $0.10",
+  );
+});
+
+test('the verdict’s title names the re-work that would cancel a saving and where keeping would have compacted', () => {
+  expect(verdictTitle(versusKeeping())).toBeNull();
+  expect(verdictTitle(versusKeeping({ rework_margin: 12_000 }))).toBe(
+    'Re-reading about 12K tokens after compacting would cancel the saving',
+  );
+  expect(verdictTitle(versusKeeping({ rework_margin: 12_000, capped_at: 30 }))).toBe(
+    'Re-reading about 12K tokens after compacting would cancel the saving. ' +
+      'The kept session would have auto-compacted at call 30',
+  );
+});
+
+test('a last stretch that broke exactly even is about even, and a break-even at the last call was reached', () => {
+  expect(verdictText(versusKeeping({ verdict: 'open', net: 0 }))).toBe('about even so far');
+  expect(breakevenText(versusKeeping({ breakeven_call: 40, calls_after: 40 }))).toBe('paid off at call 40');
 });
