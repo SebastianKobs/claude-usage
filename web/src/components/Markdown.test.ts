@@ -2,11 +2,14 @@
 // DOMPurify's README calls happy-dom not safe, so the sanitizing is checked under jsdom, with the real libraries.
 import { render } from '@testing-library/svelte';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { loadVendor, unloadVendor } from '../lib/vendor.testing';
+import { disableSanitizer, enableSanitizer } from '../lib/sanitizer.testing';
 import Markdown from './Markdown.svelte';
 
-// the first describe runs without the libraries, the second with the real ones
-describe('without the libraries', () => {
+// the first describe runs where DOMPurify can't work, the second with the real libraries
+describe('where DOMPurify cannot work', () => {
+  beforeAll(disableSanitizer);
+  afterAll(enableSanitizer);
+
   test('the text is shown as text', () => {
     const { container } = render(Markdown, { text: '**not bold** <b>x</b>' });
     const node = container.querySelector('div.chat-markdown.chat-text');
@@ -16,9 +19,6 @@ describe('without the libraries', () => {
 });
 
 describe('with the libraries', () => {
-  beforeAll(loadVendor);
-  afterAll(unloadVendor);
-
   test('bold becomes strong, in a markdown block that is not the text fallback', () => {
     const { container } = render(Markdown, { text: 'a **bold** word' });
     const node = container.querySelector('div.chat-markdown');

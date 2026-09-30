@@ -41,20 +41,15 @@ PRICES = pricing.parse_prices({
     "claude-sonnet-5": {"input": 2.0, "cache_write_5m": 2.5, "cache_write_1h": 4.0, "cache_read": 0.2,
                         "output": 10.0},
 })
-VENDOR = "/static/js/vendor/"
-# what the vendored libraries contain as text, not as resources: links in their messages and license notes, XML
-# namespace names, the prefix marked puts before a bare www. link, and the Objective-C keyword "@import" of
-# highlight.js's grammars (a JavaScript file imports nothing that way)
-VENDOR_LINKS = (b"https://github.com/highlightjs/highlight.js/issues/2277",
-                b"https://github.com/highlightjs/highlight.js/wiki/security", b'"@import"',
-                b"https://github.com/markedjs/marked.", b'"http://"',
-                b"http://www.w3.org/1998/Math/MathML", b"http://www.w3.org/1999/xhtml",
-                b"https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE")
 BUNDLE = "/static/js/app.js"
-# the same in the bundle built from web/: the pages Svelte's errors link to (only the prefix: each names its error)
-# and the namespace names of the elements it creates
+# what the bundle built from web/ contains as text, not as resources: the pages Svelte's errors link to (only the
+# prefix: each names its error), the namespace names of the elements it creates, the links in highlight.js's and
+# marked's messages, the prefix marked puts before a bare www. link, and the Objective-C keyword "@import" in
+# highlight.js's list of them (a JavaScript file imports nothing that way)
 BUNDLE_LINKS = (b"https://svelte.dev/e/", b"http://www.w3.org/1998/Math/MathML", b"http://www.w3.org/1999/xhtml",
-                b"http://www.w3.org/1999/xlink")
+                b"http://www.w3.org/1999/xlink", b"https://github.com/highlightjs/highlight.js/issues/2277",
+                b"https://github.com/highlightjs/highlight.js/wiki/security", b".@import.",
+                b"https://github.com/markedjs/marked.", b'"http://" + ')
 
 
 class KeepRedirect(urllib.request.HTTPRedirectHandler):
@@ -321,27 +316,23 @@ class DashboardTest(ServerCase):
         for path in ["/", *self.page_assets()]:
             _, _, body = self.get(path)
             body = body.replace(b"http://www.w3.org/2000/svg", b"")      # the SVG namespace name, not a resource
-            # text in the vendored files and the bundle, not resources; the CSP would block any load anyway
-            for link in VENDOR_LINKS if path.startswith(VENDOR) else BUNDLE_LINKS if path == BUNDLE else ():
+            # text in the bundle, not resources; the CSP would block any load anyway
+            for link in BUNDLE_LINKS if path == BUNDLE else ():
                 body = body.replace(link, b"")
             for external in (b"https://", b"http://", b"@import"):
                 with self.subTest(path=path, external=external):
                     self.assertNotIn(external, body)
 
-    def test_the_vendored_markdown_renderer_and_sanitizer_are_served_and_loaded(self):
-        for path, marker in (("/static/js/vendor/marked.umd.min.js", b"marked"),
-                             ("/static/js/vendor/purify.min.js", b"DOMPurify 3.")):
-            with self.subTest(path=path):
-                self.assertIn(path, self.page_assets())
-                status, headers, body = self.get(path)
-                self.assertEqual((status, headers["Content-Type"]), (200, "text/javascript; charset=utf-8"))
+    def test_the_markdown_renderer_sanitizer_and_highlighter_are_in_the_bundle(self):
+        self.assertIn(BUNDLE, self.page_assets())
+        _, _, body = self.get(BUNDLE)
+        for marker in (b"markedjs/marked", b"DOMPurify", b"hljs-"):
+            with self.subTest(marker=marker):
                 self.assertIn(marker, body)
 
-    def test_the_vendored_highlighter_is_served_and_loaded(self):
-        self.assertIn("/static/js/vendor/highlight.min.js", self.page_assets())
-        status, headers, body = self.get("/static/js/vendor/highlight.min.js")
-        self.assertEqual((status, headers["Content-Type"]), (200, "text/javascript; charset=utf-8"))
-        self.assertIn(b"Highlight.js v11.", body)
+    def test_the_libraries_are_no_files_of_their_own(self):
+        status, _, _ = self.get("/static/js/vendor/highlight.min.js")
+        self.assertEqual(status, 404)
 
     def test_dashboard_calls_the_api_endpoints(self):
         scripts = b"".join(self.get(asset)[2] for asset in self.page_assets() if asset.endswith(".js"))

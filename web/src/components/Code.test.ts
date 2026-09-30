@@ -1,22 +1,18 @@
 // @vitest-environment jsdom
 import { render } from '@testing-library/svelte';
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { loadVendor, unloadVendor } from '../lib/vendor.testing';
+import { describe, expect, test } from 'vitest';
 import Code from './Code.svelte';
 
-describe('without the libraries', () => {
-  test('a block is text in a pre, whatever the language', () => {
-    const { container } = render(Code, { code: '{"a": 1}', language: 'json' });
+describe('without a language highlight.js knows', () => {
+  test('a block is text in a pre', () => {
+    const { container } = render(Code, { code: '{"a": 1}', language: 'klingon' });
     const code = container.querySelector('pre.code > code.hljs');
     expect(code?.textContent).toBe('{"a": 1}');
     expect(code?.children).toHaveLength(0);
   });
 });
 
-describe('with the libraries', () => {
-  beforeAll(loadVendor);
-  afterAll(unloadVendor);
-
+describe('with a language highlight.js knows', () => {
   test('a block is a pre around the highlighted code', () => {
     const { container } = render(Code, { code: 'const a = 1;', language: 'javascript' });
     const code = container.querySelector('pre.code > code.hljs');

@@ -1,7 +1,8 @@
 <!--
 @component
-Claude's answer or the user's prompt as markdown: marked's HTML after DOMPurify, put in by the attachment. Without the
-libraries the text is shown as text. `breaks` keeps single line breaks, as typed in a prompt.
+Claude's answer or the user's prompt as markdown: marked's HTML after DOMPurify, put in by the attachment. Where
+DOMPurify can't work (no DOM it trusts) the text is shown as text. `breaks` keeps single line breaks, as typed in a
+prompt.
 -->
 <script lang="ts">
   import { markdown, markdownAvailable } from '../lib/markup';

@@ -1,17 +1,13 @@
 // @vitest-environment jsdom
 // The code blocks are highlighted by the real highlight.js, so that a language given shows in the markup.
 import { render } from '@testing-library/svelte';
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import type { ToolField } from '../lib/api';
 import { chatEntry } from '../lib/fixtures';
 import { when } from '../lib/format';
-import { loadVendor, unloadVendor } from '../lib/vendor.testing';
 import ChatToolCall from './ChatToolCall.svelte';
 
 const TIME = '2026-09-30T08:00:00.000Z';
-
-beforeAll(loadVendor);
-afterAll(unloadVendor);
 
 function field(name: string, value: string, changes: Partial<ToolField> = {}): ToolField {
   return { name, value, chars: value.length, is_json: false, ...changes };

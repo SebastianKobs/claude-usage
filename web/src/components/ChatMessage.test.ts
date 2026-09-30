@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-// Claude's text is sanitized markdown, which needs DOMPurify under jsdom and the real libraries.
+// Claude's text is sanitized markdown, which needs DOMPurify under jsdom.
 import { render } from '@testing-library/svelte';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { chatEntry } from '../lib/fixtures';
 import { when } from '../lib/format';
-import { loadVendor, unloadVendor } from '../lib/vendor.testing';
+import { disableSanitizer, enableSanitizer } from '../lib/sanitizer.testing';
 import ChatMessage from './ChatMessage.svelte';
 
 const TIME = '2026-09-30T08:00:00.000Z';
@@ -19,8 +19,11 @@ function prompt(text: string | null) {
 
 const head = (container: HTMLElement) => container.querySelector('.chat-head') as HTMLElement;
 
-// the first describe runs without the libraries, the second with the real ones
-describe('without the libraries', () => {
+// the first describe runs where DOMPurify can't work
+describe('where DOMPurify cannot work', () => {
+  beforeAll(disableSanitizer);
+  afterAll(enableSanitizer);
+
   test('a reply is plain text', () => {
     const { container } = render(ChatMessage, { entry: reply({ text: '**a** <b>x</b>' }) });
     const body = container.querySelector('.chat-assistant > .chat-markdown.chat-text');
@@ -33,9 +36,11 @@ describe('without the libraries', () => {
     expect(container.querySelector('.chat-user > .chat-markdown.chat-text')?.textContent).toBe('a\nb');
   });
 
-  test('a JSON prompt is text in a code block', () => {
+  test('a JSON prompt is still highlighted, as that needs no sanitizer', () => {
     const { container } = render(ChatMessage, { entry: prompt('{"a":1}') });
-    expect(container.querySelector('.chat-user > pre.code > code.hljs')?.textContent).toBe('{\n  "a": 1\n}');
+    const code = container.querySelector('.chat-user > pre.code > code.hljs');
+    expect(code?.textContent).toBe('{\n  "a": 1\n}');
+    expect(code?.querySelector('span.hljs-attr')).not.toBeNull();
   });
 });
 
@@ -99,9 +104,6 @@ describe('thinking', () => {
 });
 
 describe('a prompt', () => {
-  beforeAll(loadVendor);
-  afterAll(unloadVendor);
-
   test('is a user entry', () => {
     const { container } = render(ChatMessage, { entry: prompt('hi') });
     const entry = container.firstElementChild as HTMLElement;
@@ -148,9 +150,6 @@ describe('a prompt', () => {
 });
 
 describe("Claude's reply", () => {
-  beforeAll(loadVendor);
-  afterAll(unloadVendor);
-
   test('is an assistant entry with its head above its text', () => {
     const { container } = render(ChatMessage, { entry: reply() });
     const entry = container.firstElementChild as HTMLElement;

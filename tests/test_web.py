@@ -65,6 +65,7 @@ class BuildSettingsTest(unittest.TestCase):
         ranges = {name: version for name, version in package["devDependencies"].items()
                   if not re.fullmatch(r"\d+\.\d+\.\d+", version)}
         self.assertEqual(ranges, {})
+        # nothing is installed to run the page: the libraries the bundle holds are built in, so they are dev ones
         self.assertNotIn("dependencies", package)
 
 
@@ -99,11 +100,16 @@ class BuildManifestTest(unittest.TestCase):
 
 class BundleTest(unittest.TestCase):
     def test_the_bundle_ships_the_licenses_of_what_it_holds(self):
-        self.assertIn("svelte", read(LICENSES))
+        licenses = read(LICENSES)
+        for package in ("svelte", "marked", "dompurify", "highlight.js"):
+            with self.subTest(package=package):
+                self.assertIn(f"## {package} - ", licenses)
 
-    def test_the_bundle_creates_no_trusted_types_policy(self):
+    def test_the_bundle_creates_only_dompurifys_trusted_types_policy(self):
         # fragments: 'tree' builds templates without one; 3.34's CSP names only DOMPurify's and highlight.js's
-        self.assertNotIn("createPolicy", read(BUNDLE))
+        bundle = read(BUNDLE)
+        self.assertEqual(len(re.findall(r"createPolicy\(", bundle)), 1)
+        self.assertIn('"dompurify"', bundle)
 
 
 if __name__ == "__main__":

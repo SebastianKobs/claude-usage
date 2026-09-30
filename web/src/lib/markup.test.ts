@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // DOMPurify's README calls happy-dom not safe, so the sanitizing is checked under jsdom, with the real libraries.
+import DOMPurify from 'dompurify';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 import { highlight, highlightable, markdown, markdownAvailable, renderMarkdown } from './markup';
-import { loadVendor, unloadVendor } from './vendor.testing';
+import { disableSanitizer, enableSanitizer } from './sanitizer.testing';
 
 function rendered(text: string, breaks = false): HTMLElement {
   const host = document.createElement('div');
@@ -10,33 +11,33 @@ function rendered(text: string, breaks = false): HTMLElement {
   return host;
 }
 
-describe('without the libraries', () => {
-  test('nothing is highlightable and there is no markdown', () => {
-    expect(highlightable('json')).toBe(false);
+describe('where DOMPurify cannot work', () => {
+  beforeAll(disableSanitizer);
+  afterAll(enableSanitizer);
+
+  test('there is no markdown', () => {
     expect(markdownAvailable()).toBe(false);
     expect(renderMarkdown('# hi', false)).toBeNull();
   });
 
-  test('code goes in as text', () => {
-    const node = document.createElement('code');
-    highlight('a < b', 'json')(node);
-    expect(node.textContent).toBe('a < b');
-    expect(node.children).toHaveLength(0);
+  test('markdown leaves the element empty', () => {
+    const host = rendered('# hi');
+    expect(host.childNodes).toHaveLength(0);
   });
 });
 
-declare global {
-  var DOMPurify: unknown;
-}
-
-describe('with the libraries', () => {
-  beforeAll(loadVendor);
-  afterAll(unloadVendor);
-
+describe('the libraries', () => {
   test('knows the languages highlight.js has, and not others', () => {
     expect(highlightable('python')).toBe(true);
     expect(highlightable('klingon')).toBe(false);
     expect(highlightable(null)).toBe(false);
+  });
+
+  test('code in a language it does not know goes in as text', () => {
+    const node = document.createElement('code');
+    highlight('a < b', 'klingon')(node);
+    expect(node.textContent).toBe('a < b');
+    expect(node.children).toHaveLength(0);
   });
 
   test('highlights code into spans that only carry classes', () => {
@@ -121,6 +122,15 @@ describe('with the libraries', () => {
     expect(host.querySelector('p')?.hasAttribute('class')).toBe(false);
   });
 
+  test('drops a language class anywhere but on code, and one with more than a language in it', () => {
+    const host = rendered(
+      '<p class="language-js">p</p> <code class="language-js chat-marker">a</code> <code class="language-">b</code>' +
+        ' <code class="x-language-js">c</code>',
+    );
+    expect(host.querySelector('p')?.hasAttribute('class')).toBe(false);
+    expect([...host.querySelectorAll('code')].map((code) => code.getAttribute('class'))).toEqual([null, null, null]);
+  });
+
   test('keeps a class on code only where it names a language', () => {
     const host = rendered('<code class="language-js">a</code> <code class="chat-marker">b</code>');
     const codes = [...host.querySelectorAll('code')];
@@ -151,25 +161,20 @@ describe('with the libraries', () => {
     expect(host.textContent?.trim()).toBe('second');
   });
 
-  test('is not available where DOMPurify says it cannot work', () => {
-    const purify = globalThis.DOMPurify as { isSupported: boolean };
-    purify.isSupported = false;
-    try {
-      expect(markdownAvailable()).toBe(false);
-    } finally {
-      purify.isSupported = true;
-    }
+  test('is available once DOMPurify can work again', () => {
+    disableSanitizer();
+    expect(markdownAvailable()).toBe(false);
+    enableSanitizer();
+    expect(markdownAvailable()).toBe(true);
   });
 
-  test('sanitizes as well with libraries loaded again after they were gone', () => {
-    unloadVendor();
-    expect(markdownAvailable()).toBe(false);
-    loadVendor();
-    const hooks = vi.spyOn(globalThis.DOMPurify as { addHook: () => void }, 'addHook');
+  test('hooks DOMPurify once, however often markdown is rendered', () => {
+    expect(markdownAvailable()).toBe(true);
+    const hooks = vi.spyOn(DOMPurify, 'addHook');
     const host = rendered('[c](javascript:alert(1)) <img src=x onerror=alert(1)> <p class="x">p</p>');
     rendered('again');
-    expect(hooks).toHaveBeenCalledTimes(2);
-    expect(markdownAvailable()).toBe(true);
+    expect(hooks).not.toHaveBeenCalled();
+    hooks.mockRestore();
     expect(host.querySelector('img')).toBeNull();
     expect(host.querySelector('a')?.hasAttribute('href')).toBe(false);
     expect(host.querySelector('p')?.hasAttribute('class')).toBe(false);

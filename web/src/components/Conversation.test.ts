@@ -1,11 +1,12 @@
 import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Chat, ChatEntry, SessionDetail } from '../lib/api';
 import { agent, chatAnswer, chatEntry, sessionDetail } from '../lib/fixtures';
 import { payload, setPayload } from '../lib/payload.svelte';
 import { preferences } from '../lib/prefs.svelte';
+import { disableSanitizer, enableSanitizer } from '../lib/sanitizer.testing';
 import Conversation from './Conversation.svelte';
 
 /** A session with the main thread, a helper, a workflow run's two agents and the background calls. */
@@ -78,6 +79,10 @@ function holding() {
 
 const chatNode = () => document.getElementById('chat') as HTMLElement;
 const rows = () => [...document.querySelectorAll<HTMLElement>('.chat-row')];
+// replies show as plain text here: what the frame keeps is under test, not the markdown (markup.test.ts has that)
+beforeAll(disableSanitizer);
+afterAll(enableSanitizer);
+
 /** What each row says: a message's text, or the name of a tool call, in the rows' order. */
 const texts = () => rows().map((row) => row.querySelector('.chat-text, summary strong')?.textContent);
 const detailsOf = (row: HTMLElement | undefined) => row?.querySelector('details') as HTMLDetailsElement;

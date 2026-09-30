@@ -80,19 +80,17 @@ claude_usage/
   server.py                  loopback-only http.server + JSON API (a route table)
   readers.py                 who besides you can read the projects folder: serve's warnings at start
   icons/                     the desktop notifications' icons, PNG (notify.ICON_NAMES)
-  static/                    the page: vanilla JS, inline SVG, no external resources (three vendored libraries)
+  static/                    the page: vanilla JS, inline SVG, no external resources
     dashboard.html           the markup only
     css/common.css           layout and components, for every theme
     css/themes/              one file per theme (light, dark, hacker, startup, rgb); the gimmicks share dark's
                              palette, fun.css their other rules
     js/                      classic scripts sharing one scope, loaded in order: util, state, chartkit,
-                             tables, highlight.js, marked, DOMPurify, drilldown, themes, main
+                             tables, drilldown, themes, main
                              (calls setup())
       app.js                 the bundle built from web/ (make build, committed): a module loaded before them,
                              which hands them what moved (web/src/legacy.svelte.ts); app-licenses.md the
-                             licenses of the packages it holds
-      vendor/                highlight.js 11.11.2 (common build, BSD-3), marked 18.0.14 (UMD, MIT), DOMPurify
-                             3.4.16 (MPL-2.0 or Apache-2.0), each with its license
+                             licenses of the packages it holds (Svelte, and the libraries below)
 web/                         the page's Svelte 5 + TypeScript sources, which take over static/js section by
                              section; node only to build and test them, never to run the dashboard
   build.json                 what the last build read and wrote, by sha256: test_web.py says "run make build"
@@ -164,8 +162,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              with their own view), the highlight.js language of a file, hidden context, a compaction's
                              line, a call's usage badge and its chips and hints to compact (used by the components)
   src/lib/markup.ts          the two places a string becomes markup: highlight.js's output (`highlight`, an attachment)
-                             and Claude's answers as sanitized markdown (`markdown`, an attachment), both libraries
-                             still the vendored globals until 3.31
+                             and Claude's answers as sanitized markdown (`markdown`, an attachment), on highlight.js,
+                             marked and DOMPurify from npm
   src/lib/http.ts            `fetchJson`: the server's JSON, or the reason it gave (the old scripts have their own
                              until the app fetches)
   src/lib/opening.ts         opening and closing the session view (`opening`, an attachment): the page's other sections
@@ -825,15 +823,13 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       typed, a whole-JSON prompt highlighted) as marked's HTML after DOMPurify. That keeps only `TAGS` and
       `ATTRIBUTES`: no images, styles, forms or event attributes, `class` only as `language-*` on `code`, and links
       only to http, https and mailto, opened with `noopener noreferrer`. `markup.test.ts` checks it in jsdom, with the
-      vendored libraries, against scripts, `onerror`, `javascript:` and `data:` links, `<style>`, forms and classes.
-  - highlight.js is vendored, not fetched: `static/js/vendor/highlight.min.js`, the cdnjs "common" build of
-    11.11.2 (sha256 `62960a35…7d5a`). To update: download the new `highlight.min.js` and LICENSE from
-    cdnjs / the tag, check its output still escapes `<`, `>` and `&`, and update the version here and in
-    `test_server.VENDOR_LINKS` if its warning links change. marked (`lib/marked.umd.min.js`, sha256
-    `e67a06aa…d905`) and DOMPurify (`purify.min.js`, sha256 `2c90a9b4…4ea2`) come from cdnjs the same way; after an
-    update re-run the sanitizing checks. DOMPurify's source-map comment only makes developer tools ask the
-    dashboard for a `.map` file, which answers 404. Its token colors are `--code-*` per theme (≥ 4.5:1 on
-    the wash), not a highlight.js theme.
+      real libraries, against scripts, `onerror`, `javascript:` and `data:` links, `<style>`, forms and classes.
+  - highlight.js (11.11.2, `highlight.js/lib/common`, BSD-3), marked (18.0.14, MIT) and DOMPurify (3.4.16, MPL-2.0 or
+    Apache-2.0) are npm packages in `web/package.json`, exact versions, built into the bundle (their licenses are in
+    `app-licenses.md`); nothing is fetched and no file of theirs is served. To update: bump them, check
+    highlight.js's output still escapes `<`, `>` and `&`, run the sanitizing tests (`markup.test.ts`) and add the
+    links their new messages hold to `test_server.BUNDLE_LINKS`. Its token colors are `--code-*` per theme (≥ 4.5:1
+    on the wash), not a highlight.js theme.
   - Contrast in every theme: text ≥ 4.5:1, marks ≥ 3:1. Categorical slots 3–5 in light mode are the palette's
     documented exception; the legend and table view carry them.
   - Documented exception, chosen by the user: the effort shades of two neighbouring models come closer than the

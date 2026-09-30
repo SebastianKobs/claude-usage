@@ -143,13 +143,12 @@ class ScriptTest(unittest.TestCase):
         self.assertEqual({name: count for name, count in uses.items() if count}, {"markup.ts": 2})
 
     def test_the_scripts_load_in_the_order_claude_md_gives(self):
-        loaded = [Path(source).stem.replace(".min", "").replace(".umd", "")
+        loaded = [Path(source).stem
                   for source in re.findall(r'<script src="/static/js/([^"]+)"', dashboard())]
         documented = re.search(r"loaded in order: (.+?)\n\s+\(calls setup\(\)\)", read(ROOT / "CLAUDE.md"),
                                re.DOTALL).group(1)
         names = [name.strip() for name in re.sub(r"\s+", " ", documented).split(",")]
-        aliases = {"highlight.js": "highlight", "marked": "marked", "DOMPurify": "purify", "main": "main"}
-        self.assertEqual(loaded, [aliases.get(name, name) for name in names])
+        self.assertEqual(loaded, names)
 
     def test_the_bundle_loads_first_as_a_module(self):
         tags = re.findall(r"<script\b[^>]*>", dashboard())

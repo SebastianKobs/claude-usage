@@ -1,47 +1,22 @@
 // The two places markup goes into the page, and the only two: highlight.js's output for a code block, and Claude's
-// answers and the user's prompts as markdown (marked's HTML after DOMPurify). Both libraries are still the vendored
-// classic scripts, found as globals, until 3.31 imports them; without them the text goes in as text. A test counts the
-// places where a string becomes markup in the page's sources.
+// answers and the user's prompts as markdown (marked's HTML after DOMPurify). Both are attachments on the element that
+// holds them. A test counts the places where a string becomes markup in the page's sources.
 
+import DOMPurify from 'dompurify';
+import hljs from 'highlight.js/lib/common';
+import { marked } from 'marked';
 import type { Attachment } from 'svelte/attachments';
 import { fenceLanguage } from './entries';
 
-interface Highlighter {
-  getLanguage(name: string): unknown;
-  highlight(code: string, options: { language: string; ignoreIllegals: boolean }): { value: string };
-}
-
-interface Sanitizer {
-  isSupported: boolean;
-  addHook(name: string, hook: (node: Element) => void): void;
-  sanitize(html: string, options: Record<string, unknown>): string;
-}
-
-interface Markdown {
-  parse(text: string, options: { gfm: boolean; breaks: boolean; async: false }): string;
-}
-
-interface Libraries {
-  hljs?: Highlighter;
-  DOMPurify?: Sanitizer;
-  marked?: Markdown;
-}
-
-function libraries(): Libraries {
-  return globalThis as Libraries;
-}
-
 /** Whether `language` is one highlight.js knows. */
 export function highlightable(language: string | null | undefined): language is string {
-  const hljs = libraries().hljs;
-  return Boolean(language && hljs && hljs.getLanguage(language));
+  return Boolean(language && hljs.getLanguage(language));
 }
 
 /** Puts `code` into `node` highlighted where the language is known, else as text. highlight.js escapes the text it is
  *  given (<, >, & and quotes), and its spans only carry classes. */
 function highlightInto(node: HTMLElement, code: string, language: string | null | undefined): void {
-  const hljs = libraries().hljs;
-  if (hljs && highlightable(language)) {
+  if (highlightable(language)) {
     node.innerHTML = hljs.highlight(code, { language, ignoreIllegals: true }).value;
   } else {
     node.textContent = code;
@@ -65,16 +40,16 @@ const ATTRIBUTES = ['href', 'title', 'class', 'align', 'start'];
 // classes only name a fenced block's language: others could dress transcript text up as the page's own notes
 const LANGUAGE_CLASS = /^language-[\w+-]+$/;
 const LINKS = /^(?:https?|mailto):/i;
-let hooked: Sanitizer | null = null;
+let hooked = false;
 
 function setup(): boolean {
-  const { DOMPurify, marked } = libraries();
-  if (!marked || !DOMPurify || !DOMPurify.isSupported) return false;
-  if (hooked === DOMPurify) return true;
+  // DOMPurify needs a DOM it can work in; without one the text goes in as text
+  if (!DOMPurify.isSupported) return false;
+  if (hooked) return true;
   // a task list's checkbox becomes a character, as the sanitized markdown has no form elements
   DOMPurify.addHook('uponSanitizeElement', (node) => {
-    if (node.tagName === 'INPUT' && node.getAttribute('type') === 'checkbox') {
-      node.replaceWith(node.ownerDocument.createTextNode(node.hasAttribute('checked') ? '☑' : '☐'));
+    if (node instanceof HTMLInputElement && node.getAttribute('type') === 'checkbox') {
+      node.replaceWith(document.createTextNode(node.hasAttribute('checked') ? '☑' : '☐'));
     }
   });
   // links open in a new tab and pass nothing on
@@ -88,22 +63,20 @@ function setup(): boolean {
       node.setAttribute('rel', 'noopener noreferrer');
     }
   });
-  hooked = DOMPurify;
+  hooked = true;
   return true;
 }
 
-/** Whether the libraries that turn text into markdown are there. */
+/** Whether the sanitizer can work here, so text can be shown as markdown. */
 export function markdownAvailable(): boolean {
   return setup();
 }
 
 /** Claude's text as markdown: marked turns the text into HTML (raw HTML in the text included), DOMPurify keeps only
  *  the allowed tags and attributes, and fenced code is then highlighted like the tool calls. `breaks` keeps single line
- *  breaks, as typed in a prompt. Null without the libraries. */
+ *  breaks, as typed in a prompt. Null where the sanitizer can't work. */
 export function renderMarkdown(text: string, breaks: boolean): Node[] | null {
   if (!setup()) return null;
-  const { DOMPurify, marked } = libraries();
-  if (!DOMPurify || !marked) return null;
   const container = document.createElement('div');
   container.innerHTML = DOMPurify.sanitize(marked.parse(text, { gfm: true, breaks, async: false }), {
     ALLOWED_TAGS: TAGS,
