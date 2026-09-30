@@ -11,19 +11,7 @@ function chartRoot(width, height, label) {
   return svg("svg", {viewBox: `0 0 ${width} ${height}`, height, role: "img", "aria-label": label});
 }
 
-function niceMax(value) {
-  if (value <= 0) return 1;
-  const power = Math.pow(10, Math.floor(Math.log10(value)));
-  for (const step of [1, 2, 2.5, 5, 10]) {
-    if (value <= step * power) return step * power;
-  }
-  return 10 * power;
-}
-
-// 0, max / steps, ..., max: the values the gridlines sit at
-function ticks(max, steps) {
-  return Array.from({length: steps + 1}, (_, index) => max * index / steps);
-}
+// niceMax, ticks, columnPath, nearestIndex and bandIndex come from the bundle (web/src/lib/charts.ts)
 
 // a gridline at each value, the first one (0) in the axis color, each labelled left of the plot
 function drawYAxis(root, left, right, values, yOf, format) {
@@ -61,14 +49,6 @@ function drawAreaLine(root, values, xOf, yOf, bottom, color) {
 function pointDot(color, x = 0, y = 0, hidden = false) {
   return svg("circle", {cx: x, cy: y, r: 4, fill: color, stroke: "var(--surface)", "stroke-width": 2,
                         visibility: hidden ? "hidden" : "visible"});
-}
-
-function columnPath(x, y, width, height, rounded) {
-  const radius = rounded ? Math.min(CORNER, width / 2, height) : 0;
-  return `M${x},${y + height}V${y + radius}` +
-    (radius ? `Q${x},${y} ${x + radius},${y}H${x + width - radius}Q${x + width},${y} ${x + width},${y + radius}`
-            : `H${x + width}`) +
-    `V${y + height}Z`;
 }
 
 // a vertical line (the crosshair) or a band (a column's highlight) that the cursor moves and shows
@@ -154,14 +134,6 @@ function chartCursor(root, width, area, options) {
   layer.setAttribute("aria-valuenow", count);
   layer.setAttribute("aria-valuetext", valueText(last));
   return layer;
-}
-
-// the bucket a point falls in: evenly spaced points (a line) snap to the nearest, columns own their band
-function nearestIndex(left, right, count) {
-  return x => (count > 1 ? Math.round((x - left) / (right - left) * (count - 1)) : 0);
-}
-function bandIndex(left, band) {
-  return x => Math.floor((x - left) / band);
 }
 
 // --- table views ---------------------------------------------------------------------------------------------

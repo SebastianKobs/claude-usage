@@ -52,8 +52,6 @@ function svg(tag, attributes) {
   return node;
 }
 
-function inputTotal(row) { return row.new_input + row.cache_write + row.cache_read; }
-
 // "12 s ago" that refreshAgo() keeps current, so an unchanged live list needn't be drawn again
 function agoSpan(iso) {
   return el("span", {"data-ago": iso || "", text: ago(iso)});

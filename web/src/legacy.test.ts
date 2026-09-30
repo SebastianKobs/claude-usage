@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { bridge, type Bridge } from './legacy.svelte';
+import * as charts from './lib/charts';
 import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
@@ -10,7 +11,7 @@ import * as live from './lib/live';
 import * as secrets from './lib/secrets';
 import * as tables from './lib/tables';
 
-const MODULES = [format, colors, compact, secrets, live, tables];
+const MODULES = [format, colors, compact, secrets, live, tables, charts];
 
 // a path, not a URL: the simulated DOM's URL class isn't node's
 const PAGE = join(import.meta.dirname, '../../claude_usage/static/dashboard.html');
@@ -70,6 +71,7 @@ test.each([
   ['secrets helpers', secrets, 'secretTone'],
   ['live helpers', live, 'liveWaitBadge'],
   ['tables helpers', tables, 'pageWindow'],
+  ['charts helpers', charts, 'niceMax'],
 ])("the old scripts' %s are the module's exports", (_kind, module, sample) => {
   const names = Object.keys(module) as (keyof typeof module & keyof Window)[];
   expect(names).toContain(sample);

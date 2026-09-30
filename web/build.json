@@ -3,9 +3,10 @@
     "web/package-lock.json": "a4c499001d8d60541bd11b832e64746e07866d901ae7979b417f334e166188ee",
     "web/package.json": "f8e1725af6c59a8aea0a0735bc465bb9feaa7bbe5f30e86f70f72bc6f9d3f786",
     "web/src/components/Banner.svelte": "d449dc6ef39c779958212c5cc073467795804ded04c1b33d815dc59cc5bbdb36",
-    "web/src/legacy.svelte.ts": "9743895de55b0c627a3dee6f44818723968691ed3d60bdb1a84a645802c98d49",
+    "web/src/legacy.svelte.ts": "c1ae0888215c02af9cee6abf5ff064f1367b37eacde88c22982baa89a5153575",
     "web/src/lib/banner.svelte.ts": "2bcc2747224c3bc55c4120fd47e17ad383527684826309e01cda94763bbb67e9",
-    "web/src/lib/colors.ts": "c11fde82d5971552edf2428edc3d06d85a5e8271f8d38f13f86b0b7d9df86315",
+    "web/src/lib/charts.ts": "876dae0a41357a84a2425cb7cc8befec574a9605c6fcc9164afabe37bd0b21f7",
+    "web/src/lib/colors.ts": "ad3085cf71cbebbdb1a2c54f913c354201056ecab3beba04290602062bfcb54d",
     "web/src/lib/compact.ts": "6ead0048229e475d91baffc135fb21f979c9f4154b5093be50bb410b9fb02d3a",
     "web/src/lib/format.ts": "57d78f4b8bb1c588430a346be6d48b7eae0067fdbaf78adb724b84b244ec81f5",
     "web/src/lib/live.ts": "c77a2a16090835b48c473a24f7b029f4a0d5598f8d870dc0d91b5e215a72c9b2",
@@ -18,6 +19,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "f2e10bbc0f42e92d7f6fa9f5f2eca6474d286e638703eaf9d9240a3037ae0109",
-    "claude_usage/static/js/app.js": "1945a2859454ffdca040da0fd575de4cc305b62d297b1b5b4ccebbe8c4c0e3c1"
+    "claude_usage/static/js/app.js": "425fd5d1c0745f317ec9f11fff52ba5305a82ec292b3e855aad07debdb06e28e"
   }
 }

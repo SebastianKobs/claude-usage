@@ -1753,27 +1753,237 @@ function Or(e, t = Date.now(), n) {
 	return r < 60 ? `${r} s ago` : r < 3600 ? `${Math.floor(r / 60)} min ago` : Dr(e, n);
 }
 //#endregion
-//#region src/lib/compact.ts
+//#region src/lib/charts.ts
 var kr = /* @__PURE__ */ t({
-	PAYOFF_WORDS: () => Ar,
-	compactCallKind: () => Fr,
-	compactionTotal: () => Rr,
-	delegateCallShown: () => Ir,
-	payoffAhead: () => Nr,
-	payoffText: () => Pr,
-	payoffTone: () => Mr,
-	spread: () => jr,
-	verdictTone: () => Lr
-}), Ar = {
+	LIMIT_ICON: () => "⚠",
+	NO_USAGE: () => Hr,
+	RATE_LIMIT: () => Jr,
+	bandIndex: () => Ir,
+	barShare: () => ri,
+	bucketTotals: () => Ur,
+	chartSeries: () => Wr,
+	columnPath: () => Rr,
+	columnTotals: () => Kr,
+	columnWidth: () => Lr,
+	costSplit: () => ti,
+	costTop: () => ni,
+	errorText: () => Zr,
+	inputTotal: () => Ar,
+	limitCounts: () => Qr,
+	limitTop: () => Nr,
+	limitType: () => Xr,
+	lineX: () => Pr,
+	modelGroups: () => Gr,
+	nearestIndex: () => Fr,
+	niceMax: () => jr,
+	peakIndex: () => zr,
+	rangeDays: () => Br,
+	stackSegments: () => qr,
+	ticks: () => Mr,
+	timeBuckets: () => Vr,
+	windowHitAfter: () => $r,
+	windowSpan: () => ei
+});
+function Ar(e) {
+	return e.new_input + e.cache_write + e.cache_read;
+}
+function jr(e) {
+	if (e <= 0) return 1;
+	let t = 10 ** Math.floor(Math.log10(e));
+	for (let n of [
+		1,
+		2,
+		2.5,
+		5,
+		10
+	]) if (e <= n * t) return n * t;
+	return 10 * t;
+}
+function Mr(e, t) {
+	return Array.from({ length: t + 1 }, (n, r) => e * r / t);
+}
+function Nr(e) {
+	return Math.max(2, Math.ceil(jr(e) / 2) * 2);
+}
+function Pr(e, t, n) {
+	let r = e - 1;
+	return (e) => r > 0 ? t + (n - t) * e / r : (t + n) / 2;
+}
+function Fr(e, t, n) {
+	return (r) => n > 1 ? Math.round((r - e) / (t - e) * (n - 1)) : 0;
+}
+function Ir(e, t) {
+	return (n) => Math.floor((n - e) / t);
+}
+function Lr(e, t = 24) {
+	return Math.max(2, Math.min(t, e * .6));
+}
+function Rr(e, t, n, r, i, a = 4) {
+	let o = i ? Math.min(a, n / 2, r) : 0;
+	return `M${e},${t + r}V${t + o}` + (o ? `Q${e},${t} ${e + o},${t}H${e + n - o}Q${e + n},${t} ${e + n},${t + o}` : `H${e + n}`) + `V${t + r}Z`;
+}
+function zr(e) {
+	return e.indexOf(Math.max(...e));
+}
+function Br(e, t = /* @__PURE__ */ new Date()) {
+	let n = [];
+	for (let r = br(e); r <= t; r.setDate(r.getDate() + 1)) n.push(xr(r));
+	return n;
+}
+function Vr(e, t = /* @__PURE__ */ new Date()) {
+	if (e.days !== 1 || !e.hour_model) return {
+		keys: Br(e.since, t),
+		unit: "day",
+		heading: "Day",
+		short: Sr,
+		long: Cr,
+		keyOf: (e) => e.day ?? ""
+	};
+	let n = e.since === xr(t) ? t.getHours() : 23, r = [];
+	for (let t = 0; t <= n; t += 1) r.push(`${e.since}T${String(t).padStart(2, "0")}`);
+	return {
+		keys: r,
+		unit: "hour",
+		heading: "Hour",
+		short: Tr,
+		long: Er,
+		keyOf: (e) => e.hour ?? ""
+	};
+}
+var Hr = {
+	cost: 0,
+	input: 0,
+	output: 0
+};
+function Ur(e, t) {
+	let n = /* @__PURE__ */ new Map();
+	for (let r of e) {
+		let e = t(r), i = n.get(e) ?? {
+			cost: 0,
+			input: 0,
+			output: 0
+		};
+		i.cost += r.cost || 0, i.input += Ar(r), i.output += r.output, n.set(e, i);
+	}
+	return n;
+}
+function Wr(e, t, n) {
+	let r = qn([...new Set(e.map((e) => e.model))]), i = /* @__PURE__ */ new Map();
+	for (let a of e) {
+		let e = r.get(a.model) ?? null, o = e === null ? "Other" : a.model, s = `${o} · ${Zn(a.effort)}`, c = i.get(s);
+		c || (c = {
+			key: s,
+			model: o,
+			effort: a.effort,
+			slot: e,
+			color: ar(e, a.effort),
+			hatch: or(e, a.effort),
+			turn: sr(a.effort),
+			values: /* @__PURE__ */ new Map()
+		}, i.set(s, c));
+		let l = t(a);
+		c.values.set(l, (c.values.get(l) ?? 0) + n(a));
+	}
+	let a = (e) => e === "background" ? -2 : e == null ? -1 : Yn(e);
+	return [...i.values()].sort((e, t) => (e.slot ?? 8) - (t.slot ?? 8) || e.model.localeCompare(t.model) || a(e.effort) - a(t.effort) || String(e.effort).localeCompare(String(t.effort)));
+}
+function Gr(e) {
+	let t = [];
+	for (let n of e) {
+		let e = t[t.length - 1];
+		e?.model !== n.model && (e = {
+			model: n.model,
+			entries: []
+		}, t.push(e)), e.entries.push(n);
+	}
+	return t;
+}
+function Kr(e, t) {
+	return t.map((t) => e.reduce((e, n) => e + (n.values.get(t) ?? 0), 0));
+}
+function qr(e, t, n, r = 2, i = 4) {
+	let a = [], o = n;
+	return t.forEach((n, s) => {
+		let c = s === 0 ? 0 : e[s - 1] === e[s] ? r : i, l = n - (n > c ? c : 0);
+		l > 0 && a.push({
+			position: s,
+			y: o - n,
+			height: l,
+			top: s === t.length - 1
+		}), o -= n;
+	}), a;
+}
+var Jr = "rate_limit", Yr = {
+	five_hour: "5-hour limit",
+	seven_day: "weekly limit",
+	seven_day_opus: "weekly Opus limit"
+};
+function Xr(e) {
+	return e ? Object.hasOwn(Yr, e) ? Yr[e] ?? e : e.replaceAll("_", " ") : "–";
+}
+function Zr(e) {
+	let t = e.status ? ` (${e.status})` : "";
+	return e.error === "rate_limit" ? `⚠ Rate limit${t}` : `${e.error.replaceAll("_", " ")}${t}`;
+}
+function Qr(e, t) {
+	let n = /* @__PURE__ */ new Map();
+	for (let r of e) {
+		let e = t(r), i = n.get(e) ?? {
+			limits: 0,
+			other: 0
+		};
+		r.error === "rate_limit" ? i.limits += r.count : i.other += r.count, n.set(e, i);
+	}
+	return (e) => n.get(e) ?? {
+		limits: 0,
+		other: 0
+	};
+}
+function $r(e) {
+	return Date.parse(e.first_hit) - Date.parse(e.start);
+}
+function ei(e, t) {
+	let n = new Date(e.start), r = new Date(e.resets_at), i = n.toDateString() === r.toDateString() ? r.toLocaleTimeString(t, {
+		hour: "2-digit",
+		minute: "2-digit"
+	}) : Dr(e.resets_at, t);
+	return `${Dr(e.start, t)} – ${i}`;
+}
+function ti(e) {
+	let t = e.cost_parts.cache_read;
+	return {
+		cacheRead: t,
+		rest: Math.max(0, (e.cost || 0) - t)
+	};
+}
+function ni(e) {
+	return Math.max(0, ...e.map((e) => e.cost || 0)) || 1;
+}
+function ri(e, t) {
+	return 100 * (e || 0) / t;
+}
+//#endregion
+//#region src/lib/compact.ts
+var ii = /* @__PURE__ */ t({
+	PAYOFF_WORDS: () => ai,
+	compactCallKind: () => ui,
+	compactionTotal: () => pi,
+	delegateCallShown: () => di,
+	payoffAhead: () => ci,
+	payoffText: () => li,
+	payoffTone: () => si,
+	spread: () => oi,
+	verdictTone: () => fi
+}), ai = {
 	soon: "Soon",
 	close: "Close",
 	later: "Not yet",
 	unlikely: "Likely too late"
 };
-function jr(e, t) {
+function oi(e, t) {
 	return e === t ? "" : ` (${e}–${t})`;
 }
-function Mr(e, t) {
+function si(e, t) {
 	let n = e.calls_ahead, r = e.breakeven_calls;
 	if (t) {
 		if (e.cold_saving >= 0) return "soon";
@@ -1781,36 +1991,36 @@ function Mr(e, t) {
 	}
 	return r !== null && n != null && r <= n ? r <= n / 2 ? "soon" : "close" : (e.pays_later_in ?? null) === null ? r === null ? "unlikely" : n == null ? null : "unlikely" : "later";
 }
-function Nr(e, t, n) {
+function ci(e, t, n) {
 	if (!e || t.calls_ahead === null || t.calls_ahead === void 0) return null;
 	if (e === "later") {
 		let e = t.pays_later_in === 1 ? "1 reply" : `${$(t.pays_later_in)} replies`;
-		return `${Ar.later}: growing at its recent pace, the context reaches about ${hr(t.pays_later_at)} in ${e}, and compacting then would pay off within the replies still ahead on average.`;
+		return `${ai.later}: growing at its recent pace, the context reaches about ${hr(t.pays_later_at)} in ${e}, and compacting then would pay off within the replies still ahead on average.`;
 	}
 	if ((n ? t.cold_saving >= 0 ? null : t.breakeven_cold : t.breakeven_calls) === null) return null;
 	let r = $(Math.round(t.calls_ahead));
-	return `${Ar[e]}: ` + (t.ahead_from === "longer" ? `after your past compactions, a stretch this long went on for about ${r} more replies on average.` : `after your past compactions you went on for about ${r} replies on average.`);
+	return `${ai[e]}: ` + (t.ahead_from === "longer" ? `after your past compactions, a stretch this long went on for about ${r} more replies on average.` : `after your past compactions you went on for about ${r} replies on average.`);
 }
-function Pr(e, t) {
+function li(e, t) {
 	let n = (e.pays_later_in ?? null) === null ? "would never pay off" : "would not pay off yet";
 	if (t) return e.breakeven_cold === null ? `${n}: the context is below what compacting leaves` : e.cold_saving >= 0 ? `pays off at once (about ${_r(e.cold_saving)}), since the next reply sends it all anyway` : `would pay off after about ${$(e.breakeven_cold)} replies`;
 	let r = (e) => e === null ? "never" : $(e);
-	return e.breakeven_calls === null ? e.breakeven_low === null ? `${n}: the context is below what compacting leaves` : `would likely not pay off (at best after about ${$(e.breakeven_low)} replies)` : `would pay off after about ${$(e.breakeven_calls)} replies` + jr(r(e.breakeven_low), r(e.breakeven_high));
+	return e.breakeven_calls === null ? e.breakeven_low === null ? `${n}: the context is below what compacting leaves` : `would likely not pay off (at best after about ${$(e.breakeven_low)} replies)` : `would pay off after about ${$(e.breakeven_calls)} replies` + oi(r(e.breakeven_low), r(e.breakeven_high));
 }
-function Fr(e, t) {
+function ui(e, t) {
 	let n = e.live ? e.current : null, r = n ? n.compact_now : null;
 	if (!n || !r) return null;
 	let i = n.context >= n.hint_tokens ? "threshold" : null, a = r.estimate, o = r.cache_warm_until;
 	return a && o !== null && Date.parse(o) < Date.parse(t) && a.cold_saving >= 0 ? "cold" : i;
 }
-function Ir(e) {
+function di(e) {
 	let t = e.live ? e.current : null, n = t ? t.exploration : null, r = t && t.compact_now ? t.compact_now.estimate : null;
 	return !n || !r || r.calls_ahead === null || r.calls_ahead === void 0 ? !1 : n.tokens >= e.delegate_hint_tokens && r.calls_ahead >= e.delegate_calls_ahead;
 }
-function Lr(e) {
+function fi(e) {
 	return e.verdict === "saved" ? "gain" : e.verdict === "cost_more" || e.verdict === "open" && (e.net ?? 0) < 0 ? "loss" : null;
 }
-function Rr(e) {
+function pi(e) {
 	let t = e.map((e) => e.versus_keeping).filter((e) => e !== null && e.verdict !== "forced");
 	if (!t.length) return null;
 	let n = t.map((e) => e.net).filter((e) => e !== null);
@@ -1822,15 +2032,15 @@ function Rr(e) {
 }
 //#endregion
 //#region src/lib/live.ts
-var zr = /* @__PURE__ */ t({
-	liveCompactBadge: () => Hr,
-	liveSecretBadge: () => Vr,
-	liveStateBadges: () => Ur,
-	liveWaitBadge: () => Br,
-	sessionWaits: () => Wr,
-	waitChanged: () => Gr
+var mi = /* @__PURE__ */ t({
+	liveCompactBadge: () => _i,
+	liveSecretBadge: () => gi,
+	liveStateBadges: () => vi,
+	liveWaitBadge: () => hi,
+	sessionWaits: () => yi,
+	waitChanged: () => bi
 });
-function Br(e) {
+function hi(e) {
 	if (!e) return null;
 	let t = ` since ${Dr(e.since)}`;
 	if (e.kind === "permission") {
@@ -1847,7 +2057,7 @@ function Br(e) {
 		text: `Waiting for ${e.tool === "ExitPlanMode" ? "you to approve the plan" : "your answer"}${t}`
 	};
 }
-function Vr(e) {
+function gi(e) {
 	let t = e.high ?? 0, n = e.medium ?? 0;
 	if (!t && !n) return null;
 	let r = (e) => e === 1 ? "1 call" : `${$(e)} calls`, i = t ? `${r(t)} sent out${n ? `, ${$(n)} more returned a result or may still` : ""}` : `${r(n)} returned a result or may still`;
@@ -1857,7 +2067,7 @@ function Vr(e) {
 		text: `Possible secret access: ${i}`
 	};
 }
-function Hr(e, t) {
+function _i(e, t) {
 	let n = e ? e.compact_now : null;
 	if (!e || !n) return null;
 	let r = e.context >= e.hint_tokens ? `Past your ${hr(e.hint_tokens)} compact hint.` : null, i = r ? ["hint"] : [], a = () => r ? {
@@ -1867,13 +2077,13 @@ function Hr(e, t) {
 		states: i
 	} : null, o = n.estimate;
 	if (!o) return a();
-	let s = n.cache_warm_until, c = s !== null && Date.parse(s) < Date.parse(t), l = Mr(o, c), u = (e, t) => ({
+	let s = n.cache_warm_until, c = s !== null && Date.parse(s) < Date.parse(t), l = si(o, c), u = (e, t) => ({
 		kind: "compact",
 		tone: l,
 		text: [t, r].filter(Boolean).join(" "),
 		states: [e, ...i]
 	});
-	if (Fr({
+	if (ui({
 		live: !0,
 		current: e
 	}, t) === "cold") return u("cold", `Compacting now saves ~${_r(o.cold_saving)} at once: the cache has expired.`);
@@ -1882,19 +2092,19 @@ function Hr(e, t) {
 	if (f === null && (d === null || p === null || d > p)) return a();
 	if (d === null) return c || o.breakeven_low === null ? a() : u("unlikely", "Compacting now would likely not pay off.");
 	let m = `pays off after ~${$(d)} replies`;
-	return !l || f === null ? u("pays", `Compacting now ${m}.`) : u(l, `${Ar[l]}: compacting now ${m}, ~${$(Math.round(f))} ahead on average.`);
+	return !l || f === null ? u("pays", `Compacting now ${m}.`) : u(l, `${ai[l]}: compacting now ${m}, ~${$(Math.round(f))} ahead on average.`);
 }
-function Ur(e, t) {
-	return [Vr(e.secrets), Hr(e.current, t)].filter((e) => e !== null);
+function vi(e, t) {
+	return [gi(e.secrets), _i(e.current, t)].filter((e) => e !== null);
 }
-function Wr(e, t) {
-	let n = Br(e.waiting), r = n ? [{
+function yi(e, t) {
+	let n = hi(e.waiting), r = n ? [{
 		...n,
 		session_id: e.session_id,
 		title: null
 	}] : [], i = [];
 	for (let n of t) {
-		let t = n.session_id === e.session_id ? null : Br(n.waiting);
+		let t = n.session_id === e.session_id ? null : hi(n.waiting);
 		t && i.push({
 			...t,
 			session_id: n.session_id,
@@ -1903,68 +2113,68 @@ function Wr(e, t) {
 	}
 	return [...r, ...i];
 }
-function Gr(e, t) {
+function bi(e, t) {
 	let n = t.find((t) => t.session_id === e.session_id);
 	return n !== void 0 && JSON.stringify(n.waiting ?? null) !== JSON.stringify(e.waiting ?? null);
 }
 //#endregion
 //#region src/lib/secrets.ts
-var Kr = /* @__PURE__ */ t({
-	secretReach: () => Xr,
-	secretTone: () => qr,
-	secretVia: () => Jr
+var xi = /* @__PURE__ */ t({
+	secretReach: () => Ti,
+	secretTone: () => Si,
+	secretVia: () => Ci
 });
-function qr(e) {
+function Si(e) {
 	let t = (e.secret_accesses ?? []).map((e) => e.severity);
 	return t.length ? t.includes("high") ? "alert" : t.includes("medium") ? "warning" : "quiet" : null;
 }
-function Jr(e) {
+function Ci(e) {
 	return e.via ? `in ${e.via}, which it ran` : null;
 }
-var Yr = {
+var wi = {
 	sent: "sent to a service",
 	returned: "into the conversation",
 	empty: "nothing returned",
 	pending: "no result yet"
 };
-function Xr(e) {
-	return e.reach === "error" ? e.sent ? "error, the service may have got it" : "error: blocked or failed" : e.reach === "returned" && e.test ? "into the conversation, likely a test" : Object.hasOwn(Yr, e.reach) ? Yr[e.reach] ?? "" : "no result yet";
+function Ti(e) {
+	return e.reach === "error" ? e.sent ? "error, the service may have got it" : "error: blocked or failed" : e.reach === "returned" && e.test ? "into the conversation, likely a test" : Object.hasOwn(wi, e.reach) ? wi[e.reach] ?? "" : "no result yet";
 }
 //#endregion
 //#region src/lib/tables.ts
-var Zr = /* @__PURE__ */ t({
+var Ei = /* @__PURE__ */ t({
 	DEFAULT_PAGE_SIZE: () => 25,
-	PAGE_SIZES: () => Qr,
-	TOOL_KINDS: () => oi,
-	chatRows: () => yi,
-	detailNoun: () => fi,
-	emptyDetail: () => li,
-	entryKey: () => vi,
-	kindLabel: () => ci,
-	orderedEntries: () => _i,
-	pageSizeFrom: () => ni,
-	pageText: () => ti,
-	pageUnits: () => $r,
-	pageWindow: () => ei,
-	sessionCount: () => ai,
-	sessionMatches: () => ri,
-	sessionProjects: () => ii,
-	toolFolds: () => hi,
-	toolRowClass: () => pi,
-	toolRowName: () => mi,
-	toolRowShown: () => gi,
-	toolTableRows: () => si,
-	toolsAndChat: () => bi
-}), Qr = [
+	PAGE_SIZES: () => Di,
+	TOOL_KINDS: () => Fi,
+	chatRows: () => Ji,
+	detailNoun: () => Vi,
+	emptyDetail: () => Ri,
+	entryKey: () => qi,
+	kindLabel: () => Li,
+	orderedEntries: () => Ki,
+	pageSizeFrom: () => ji,
+	pageText: () => Ai,
+	pageUnits: () => Oi,
+	pageWindow: () => ki,
+	sessionCount: () => Pi,
+	sessionMatches: () => Mi,
+	sessionProjects: () => Ni,
+	toolFolds: () => Wi,
+	toolRowClass: () => Hi,
+	toolRowName: () => Ui,
+	toolRowShown: () => Gi,
+	toolTableRows: () => Ii,
+	toolsAndChat: () => Yi
+}), Di = [
 	10,
 	25,
 	50
 ];
-function $r(e) {
+function Oi(e) {
 	let t = -1;
 	return e.map((e) => ((!e || t < 0) && (t += 1), t));
 }
-function ei(e, t, n) {
+function ki(e, t, n) {
 	let r = Math.max(1, Math.ceil(e / t)), i = Math.min(Math.max(n, 0), r - 1);
 	return {
 		page: i,
@@ -1973,19 +2183,19 @@ function ei(e, t, n) {
 		last: Math.min(e, (i + 1) * t)
 	};
 }
-function ti(e, t, n = "rows") {
+function Ai(e, t, n = "rows") {
 	return `${n} ${e.first + 1}–${e.last} of ${t}`;
 }
-function ni(e, t, n) {
+function ji(e, t, n) {
 	let r = Number(e);
 	return t.includes(r) ? r : n;
 }
-function ri(e, t, n) {
+function Mi(e, t, n) {
 	if (t && e.project !== t) return !1;
 	let r = `${e.title || ""} ${e.project} ${e.session_id}`.toLowerCase();
 	return n.toLowerCase().split(/\s+/).filter(Boolean).every((e) => r.includes(e));
 }
-function ii(e, t) {
+function Ni(e, t) {
 	let n = /* @__PURE__ */ new Map();
 	for (let t of e) n.set(t.project, (n.get(t.project) ?? 0) + 1);
 	return t && !n.has(t) && n.set(t, 0), [...n].sort(([e], [t]) => e.localeCompare(t)).map(([e, t]) => ({
@@ -1993,11 +2203,11 @@ function ii(e, t) {
 		count: t
 	}));
 }
-function ai(e, t) {
+function Pi(e, t) {
 	let n = `${t} session${t === 1 ? "" : "s"}`;
 	return e === t ? n : `${e} of ${n}`;
 }
-var oi = {
+var Fi = {
 	search: "search",
 	view: "view",
 	list: "list",
@@ -2007,7 +2217,7 @@ var oi = {
 	git: "git",
 	run: "run a program"
 };
-function si(e) {
+function Ii(e) {
 	return e.flatMap((e) => {
 		let t = e.agent_id ?? "";
 		return e.tool_kinds ? e.tool_kinds.map((n) => {
@@ -2051,11 +2261,11 @@ function si(e) {
 		}));
 	});
 }
-function ci(e, t) {
+function Li(e, t) {
 	let n = e.kind ?? "";
 	return e.tool === "Bash" && Object.hasOwn(t, n) ? t[n] ?? n : n;
 }
-function li(e) {
+function Ri(e) {
 	if (e.kind !== null) return "(none)";
 	let t = {
 		Glob: "no single type",
@@ -2063,39 +2273,39 @@ function li(e) {
 	};
 	return Object.hasOwn(t, e.tool) ? t[e.tool] ?? "no type" : "no type";
 }
-var ui = {
+var zi = {
 	inline_script: ["interpreter", "interpreters"],
 	git: ["subcommand", "subcommands"]
-}, di = {
+}, Bi = {
 	Grep: ["output mode", "output modes"],
 	Agent: ["subagent type", "subagent types"],
 	Task: ["subagent type", "subagent types"],
 	Skill: ["skill", "skills"]
 };
-function fi(e, t) {
+function Vi(e, t) {
 	let n = e.kind ?? "", r;
-	return r = e.detail === null ? e.kind === null ? Object.hasOwn(di, e.tool) && di[e.tool] || ["file type", "file types"] : e.tool === "MCP" ? ["tool", "tools"] : Object.hasOwn(ui, n) && ui[n] || ["program", "programs"] : ["option set", "option sets"], t === 1 ? r[0] : r[1];
+	return r = e.detail === null ? e.kind === null ? Object.hasOwn(Bi, e.tool) && Bi[e.tool] || ["file type", "file types"] : e.tool === "MCP" ? ["tool", "tools"] : Object.hasOwn(zi, n) && zi[n] || ["program", "programs"] : ["option set", "option sets"], t === 1 ? r[0] : r[1];
 }
-function pi(e, t) {
+function Hi(e, t) {
 	return e.sub ? "sub-row" : t?.sub ? "group-row" : null;
 }
-function mi(e) {
+function Ui(e) {
 	let t = e.kind === null ? " under-tool" : "";
 	return e.options === null ? e.detail === null ? e.sub ? {
 		className: "tool-kind",
-		text: ci(e, oi)
+		text: Li(e, Fi)
 	} : {
 		className: null,
 		text: e.tool
 	} : {
 		className: `tool-detail${t}`,
-		text: e.detail || li(e)
+		text: e.detail || Ri(e)
 	} : {
 		className: `tool-options${t}`,
 		text: e.options || "no options"
 	};
 }
-function hi(e) {
+function Wi(e) {
 	let t = /* @__PURE__ */ new Map(), n = e.map((e, n) => {
 		let r = e.parent === null ? void 0 : t.get(e.parent), i = e.parent !== null && r ? [...r.above, e.parent] : [];
 		return r && (r.members += 1), e.fold && t.set(e.fold, {
@@ -2110,7 +2320,7 @@ function hi(e) {
 			fold: n,
 			row: i,
 			members: a,
-			label: `${$(a)} ${fi(t, a)}`
+			label: `${$(a)} ${Vi(t, a)}`
 		});
 	}
 	return {
@@ -2118,10 +2328,10 @@ function hi(e) {
 		folds: r
 	};
 }
-function gi(e, t) {
+function Gi(e, t) {
 	return e.every((e) => t.has(e));
 }
-function _i(e, t) {
+function Ki(e, t) {
 	if (t) return e;
 	let n = [];
 	for (let t of e) {
@@ -2130,30 +2340,31 @@ function _i(e, t) {
 	}
 	return n.reverse().flat();
 }
-function vi(e, t) {
+function qi(e, t) {
 	return `${e.timestamp} ${e.kind} ${t}`;
 }
-function yi(e, t) {
+function Ji(e, t) {
 	let n = new Map(e.map((e, t) => [e, t]));
-	return _i(e, t).map((e) => ({
-		key: vi(e, n.get(e) ?? 0),
+	return Ki(e, t).map((e) => ({
+		key: qi(e, n.get(e) ?? 0),
 		entry: e
 	}));
 }
-function bi(e, t, n) {
+function Yi(e, t, n) {
 	return e ? [n, t] : [t, n];
 }
 //#endregion
 //#region src/legacy.svelte.ts
-var xi = [
+var Xi = [
 	lr,
 	Gn,
-	kr,
-	Kr,
-	zr,
-	Zr
+	ii,
+	xi,
+	mi,
+	Ei,
+	kr
 ];
-function Si(e) {
+function Zi(e) {
 	let t = new Wn(), n = e.document.getElementById("error");
 	if (!n?.parentElement) throw Error("The page has no #error placeholder for the banner");
 	let r = In(Hn, {
@@ -2163,12 +2374,12 @@ function Si(e) {
 	});
 	return n.remove(), e.showError = (e, n) => {
 		t.show(e, n), ut();
-	}, e.hasError = (e) => t.has(e), Object.assign(e, ...xi), { stop() {
+	}, e.hasError = (e) => t.has(e), Object.assign(e, ...Xi), { stop() {
 		Bn(r), Reflect.deleteProperty(e, "showError"), Reflect.deleteProperty(e, "hasError");
-		for (let t of xi.flatMap((e) => Object.keys(e))) Reflect.deleteProperty(e, t);
+		for (let t of Xi.flatMap((e) => Object.keys(e))) Reflect.deleteProperty(e, t);
 	} };
 }
 //#endregion
 //#region src/main.ts
-Si(window);
+Zi(window);
 //#endregion

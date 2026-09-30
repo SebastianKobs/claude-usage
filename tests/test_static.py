@@ -54,7 +54,7 @@ def definition(script, name):
 
 
 MODULES = {name: LIB / name
-           for name in ("format.ts", "colors.ts", "compact.ts", "secrets.ts", "live.ts", "tables.ts")}
+           for name in ("format.ts", "colors.ts", "compact.ts", "secrets.ts", "live.ts", "tables.ts", "charts.ts")}
 
 
 def run_function(script, name, *arguments, uses=()):
@@ -1198,7 +1198,7 @@ class LimitWindowTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_window_is_hit_after_the_time_from_its_start(self):
-        self.assertEqual(run_function("limits.js", "windowHitAfter", self.WINDOW), (3 * 60 + 12) * 60 * 1000)
+        self.assertEqual(run_function("charts.ts", "windowHitAfter", self.WINDOW), (3 * 60 + 12) * 60 * 1000)
 
     def test_the_windows_come_between_the_chart_and_the_latest_errors(self):
         page = dashboard()

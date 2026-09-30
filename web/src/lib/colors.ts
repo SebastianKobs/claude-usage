@@ -21,7 +21,7 @@ export const KNOWN_MODELS: readonly string[] = [
 export type Slot = number | null;
 
 /** An effort level as the data carries it; missing for a call that has none. */
-type Effort = string | null | undefined;
+export type Effort = string | null | undefined;
 
 /** The slot of each model: a known one its own, the others the free slots in name order, then null. */
 export function modelSlots(models: readonly string[]): Map<string, Slot> {

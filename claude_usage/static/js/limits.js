@@ -6,39 +6,14 @@
 // slot; other API errors are rarer and go into the tooltip, the table view and the list, not a second color.
 
 const LIMIT_PLOT = 120;
-const RATE_LIMIT = "rate_limit";
 const LIMIT_COLOR = "var(--status-critical)";
-const LIMIT_ICON = "⚠";
-const LIMIT_TYPES = {five_hour: "5-hour limit", seven_day: "weekly limit", seven_day_opus: "weekly Opus limit"};
-
-function limitType(type) {
-  if (!type) return "–";
-  return LIMIT_TYPES[type] || type.replaceAll("_", " ");
-}
-
-function errorText(event) {
-  if (event.error === RATE_LIMIT) return `${LIMIT_ICON} Rate limit${event.status ? ` (${event.status})` : ""}`;
-  return `${event.error.replaceAll("_", " ")}${event.status ? ` (${event.status})` : ""}`;
-}
-
-// the same time axis as the other charts: the range's days, or the day's hours
-function limitCounts(summary) {
-  const buckets = timeBuckets(summary);
-  const rows = buckets.unit === "hour" ? summary.api_errors.hour : summary.api_errors.day;
-  const counts = new Map();
-  for (const row of rows) {
-    const key = buckets.unit === "hour" ? row.hour : row.day;
-    const bucket = counts.get(key) || {limits: 0, other: 0};
-    if (row.error === RATE_LIMIT) bucket.limits += row.count;
-    else bucket.other += row.count;
-    counts.set(key, bucket);
-  }
-  return {buckets, at: key => counts.get(key) || {limits: 0, other: 0}};
-}
+// RATE_LIMIT, LIMIT_ICON, limitType, errorText, limitCounts, windowHitAfter and windowSpan come from the bundle
+// (web/src/lib/charts.ts)
 
 function renderLimits(summary) {
   const container = document.getElementById("limits");
-  const {buckets, at} = limitCounts(summary);
+  const buckets = timeBuckets(summary);
+  const at = limitCounts(buckets.unit === "hour" ? summary.api_errors.hour : summary.api_errors.day, buckets.keyOf);
   const keys = buckets.keys;
   const limits = keys.map(key => at(key).limits);
   const others = keys.map(key => at(key).other);
@@ -57,17 +32,17 @@ function renderLimits(summary) {
   const width = chartWidth(container);
   const right = width - 8;
   // counts are whole, and so is the middle gridline: an even top of at least 2
-  const top = Math.max(2, Math.ceil(niceMax(Math.max(...limits, 0)) / 2) * 2);
+  const top = limitTop(Math.max(...limits, 0));
   const scale = value => LIMIT_PLOT * value / top;
   const band = (right - LEFT_AXIS) / keys.length;
-  const barWidth = Math.max(2, Math.min(BAR_MAX, band * 0.6));
+  const barWidth = columnWidth(band, BAR_MAX);
   const total = limits.reduce((sum, value) => sum + value, 0);
   const root = chartRoot(width, LIMIT_PLOT + AXIS_BAND,
                          `Rate-limit hits per ${buckets.unit}: ${whole(total)} in the range; table view available`);
   drawYAxis(root, LEFT_AXIS, right, ticks(top, 2), value => LIMIT_PLOT - scale(value), whole);
   drawXLabels(root, keys.length, index => LEFT_AXIS + band * (index + 0.5), LIMIT_PLOT + 18,
               index => buckets.short(keys[index]));
-  const peak = limits.indexOf(Math.max(...limits));
+  const peak = peakIndex(limits);
   keys.forEach((key, index) => {
     const x = LEFT_AXIS + band * index + (band - barWidth) / 2;
     const height = scale(limits[index]);
@@ -113,17 +88,6 @@ function renderLimitsTable(buckets, at) {
 }
 
 // --- the 5-hour windows that hit a limit: what each used up to its first hit, its models under it ------------
-
-function windowHitAfter(window) { return Date.parse(window.first_hit) - Date.parse(window.start); }
-
-// "Sep 28, 10:00 – 15:00", the reset's day only where it isn't the start's
-function windowSpan(window) {
-  const start = new Date(window.start);
-  const end = new Date(window.resets_at);
-  const endText = start.toDateString() === end.toDateString()
-    ? end.toLocaleTimeString(undefined, {hour: "2-digit", minute: "2-digit"}) : when(window.resets_at);
-  return `${when(window.start)} – ${endText}`;
-}
 
 // a usage row with the window's own cells after its name
 function limitWindowRow(usage, name, windowCells, className) {

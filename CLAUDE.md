@@ -108,6 +108,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/live.ts            the live cards' badges (waiting, secret, compacting now) and what waits for the user
   src/lib/tables.ts          paging (page units, window and text), the sessions list's filter and count, the Tools
                              table's rows with their keys, folds and labels, the conversation's order and keys
+  src/lib/charts.ts          the charts' maths: scales and ticks, where a point or column falls, the time axis, the
+                             by-model series and stacks, the rate-limit counts and windows, the cost bars' split
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)

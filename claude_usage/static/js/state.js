@@ -9,7 +9,6 @@ const LEFT_AXIS = 56;
 const BAR_MAX = 24;
 const GAP = 2;
 const MODEL_GAP = 4;                                      // between two models in a column, wider than between shades
-const CORNER = 4;
 const METRICS = {
   cost: {label: "Estimated cost", value: row => row.cost || 0, format: money},
   output: {label: "Output tokens", value: row => row.output, format: compact},

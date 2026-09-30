@@ -11,26 +11,15 @@ const TREND_PANELS = [
 const PANEL_TITLE = 22;
 const PANEL_PLOT = 76;
 const PANEL_GAP = 18;
-const NO_USAGE = {cost: 0, input: 0, output: 0};
 
-function bucketTotals(buckets) {
-  const totals = new Map();
-  for (const row of buckets.rows) {
-    const key = buckets.keyOf(row);
-    const bucket = totals.get(key) || {cost: 0, input: 0, output: 0};
-    bucket.cost += row.cost || 0;
-    bucket.input += inputTotal(row);
-    bucket.output += row.output;
-    totals.set(key, bucket);
-  }
-  return totals;
-}
+// bucketTotals, NO_USAGE, timeBuckets, rangeDays, chartSeries, modelGroups, columnTotals and stackSegments come from
+// the bundle (web/src/lib/charts.ts)
 
 function renderTrend(summary) {
   const container = document.getElementById("trend");
   const buckets = timeBuckets(summary);
   const days = buckets.keys;
-  const totals = bucketTotals(buckets);
+  const totals = bucketTotals(buckets.unit === "hour" ? summary.hour_model : summary.day_model, buckets.keyOf);
   const at = day => totals.get(day) || NO_USAGE;
   document.getElementById("trend-note").textContent =
     `estimated cost, input and output tokens per ${buckets.unit}`;
@@ -39,7 +28,7 @@ function renderTrend(summary) {
   const left = LEFT_AXIS;
   const right = width - RIGHT_PAD;
   const last = days.length - 1;
-  const xOf = index => (last > 0 ? left + (right - left) * index / last : (left + right) / 2);
+  const xOf = lineX(days.length, left, right);
   const panelHeight = PANEL_TITLE + PANEL_PLOT + PANEL_GAP;
   const plotsBottom = panelHeight * TREND_PANELS.length - PANEL_GAP;
   const root = chartRoot(width, plotsBottom + AXIS_BAND,
@@ -104,67 +93,11 @@ function renderTrendTable(buckets, at) {
 
 // --- daily chart ---------------------------------------------------------------------------------------------
 
-function rangeDays(since) {
-  const days = [];
-  for (let day = parseDay(since); day <= new Date(); day.setDate(day.getDate() + 1)) {
-    days.push(dayText(day));
-  }
-  return days;
-}
-
-// The time axis of both charts: days, or for today alone its hours from midnight up to now, since one day would
-// be a single point
-function timeBuckets(summary) {
-  if (summary.days !== 1 || !summary.hour_model) {
-    return {keys: rangeDays(summary.since), rows: summary.day_model, keyOf: row => row.day, unit: "day",
-            heading: "Day", short: shortDay, long: longDay};
-  }
-  const now = new Date();
-  const lastHour = summary.since === dayText(now) ? now.getHours() : 23;
-  const keys = [];
-  for (let hour = 0; hour <= lastHour; hour += 1) keys.push(`${summary.since}T${String(hour).padStart(2, "0")}`);
-  return {keys, rows: summary.hour_model, keyOf: row => row.hour, unit: "hour", heading: "Hour", short: shortHour,
-          long: longHour};
-}
-
-// The columns' series: one per model and effort level. A model keeps its color slot ("Other" past the eighth) and
-// its effort levels are shades of that color, in stack order low to max within the model.
 function chartData(summary) {
   const metric = METRICS[state.metric];
   const buckets = timeBuckets(summary);
   const rows = buckets.unit === "hour" ? summary.hour_model_effort : summary.day_model_effort;
-  const slots = modelSlots([...new Set(rows.map(row => row.model))]);
-  const bySeries = new Map();
-  for (const row of rows) {
-    const slot = slots.get(row.model);
-    const model = slot === null ? "Other" : row.model;
-    const key = `${model} · ${effortName(row.effort)}`;
-    if (!bySeries.has(key)) {
-      bySeries.set(key, {key, model, effort: row.effort, slot, color: effortShade(slot, row.effort),
-                         hatch: effortHatch(slot, row.effort), turn: hatchTurn(row.effort), values: new Map()});
-    }
-    const entry = bySeries.get(key);
-    const bucket = buckets.keyOf(row);
-    entry.values.set(bucket, (entry.values.get(bucket) || 0) + metric.value(row));
-  }
-  // background calls and calls without an effort level first, as they wear the model's own color
-  const effortOrder = effort => (effort === BACKGROUND_EFFORT ? -2 : effort === null ? -1 : effortRank(effort));
-  const series = [...bySeries.values()].sort((left, right) =>
-    (left.slot ?? SLOT_COUNT) - (right.slot ?? SLOT_COUNT) || left.model.localeCompare(right.model) ||
-    effortOrder(left.effort) - effortOrder(right.effort) || String(left.effort).localeCompare(String(right.effort)));
-  return {buckets, days: buckets.keys, series, metric};
-}
-
-// The series grouped by model, in stack order
-function modelGroups(series) {
-  const groups = [];
-  for (const entry of series) {
-    if (!groups.length || groups[groups.length - 1].model !== entry.model) {
-      groups.push({model: entry.model, entries: []});
-    }
-    groups[groups.length - 1].entries.push(entry);
-  }
-  return groups;
+  return {buckets, days: buckets.keys, series: chartSeries(rows, buckets.keyOf, metric.value), metric};
 }
 
 // per model its name, then a swatch for each of its effort levels in the range
@@ -198,11 +131,11 @@ function renderChart(summary) {
   renderModelTable(buckets, series, metric);
   const width = chartWidth(container);
   const right = width - 8;
-  const totals = days.map(day => series.reduce((sum, entry) => sum + (entry.values.get(day) || 0), 0));
+  const totals = columnTotals(series, days);
   const top = niceMax(Math.max(...totals, 0));
   const scale = value => PLOT_HEIGHT * value / top;
   const band = (right - LEFT_AXIS) / days.length;
-  const barWidth = Math.max(2, Math.min(BAR_MAX, band * 0.6));
+  const barWidth = columnWidth(band, BAR_MAX);
   const root = chartRoot(width, PLOT_HEIGHT + AXIS_BAND,
                          `${metric.label} per ${buckets.unit} by model and effort level; table view available`);
   drawYAxis(root, LEFT_AXIS, right, ticks(top, 4), value => PLOT_HEIGHT - scale(value), metric.format);
@@ -220,22 +153,15 @@ function renderChart(summary) {
   }
   // stacked columns, a 2px surface gap between a model's shades and a wider one between models (the shades of two
   // models can come close), rounded data end on the top segment only
-  const peak = totals.indexOf(Math.max(...totals));
+  const peak = peakIndex(totals);
   days.forEach((day, index) => {
     const x = LEFT_AXIS + band * index + (band - barWidth) / 2;
     const present = series.filter(entry => (entry.values.get(day) || 0) > 0);
-    let base = PLOT_HEIGHT;
-    present.forEach((entry, position) => {
-      const height = scale(entry.values.get(day));
-      const wanted = position === 0 ? 0 : present[position - 1].model === entry.model ? GAP : MODEL_GAP;
-      const gap = height > wanted ? wanted : 0;
-      const drawn = height - gap;
-      if (drawn > 0) {
-        root.append(svg("path", {d: columnPath(x, base - height, barWidth, drawn, position === present.length - 1),
-                                 fill: fills.get(entry)}));
-      }
-      base -= height;
-    });
+    const heights = present.map(entry => scale(entry.values.get(day)));
+    for (const segment of stackSegments(present.map(entry => entry.model), heights, PLOT_HEIGHT, GAP, MODEL_GAP)) {
+      root.append(svg("path", {d: columnPath(x, segment.y, barWidth, segment.height, segment.top),
+                               fill: fills.get(present[segment.position])}));
+    }
     if (index === peak && totals[index] > 0) {
       const label = svg("text", {x: x + barWidth / 2, y: PLOT_HEIGHT - scale(totals[index]) - 6,
                                  "text-anchor": "middle", class: "value-text"});
@@ -297,9 +223,9 @@ function renderModelTable(buckets, series, metric) {
 // their lengths compare across sessions, then everything else (strong).
 
 const COSTLY_PARTS = [
-  {label: "Cache reads", color: "var(--split-soft)", value: session => session.cost_parts.cache_read},
+  {label: "Cache reads", color: "var(--split-soft)", value: session => costSplit(session).cacheRead},
   {label: "Everything else", color: "var(--split-strong)",
-   value: session => Math.max(0, (session.cost || 0) - session.cost_parts.cache_read),
+   value: session => costSplit(session).rest,
    note: "new input, cache writes, output and web searches"},
 ];
 
@@ -313,12 +239,12 @@ function renderCostly(sessions) {
     container.replaceChildren(el("div", {class: "empty", text: "No sessions in this range."}));
     return;
   }
-  const top = Math.max(...sessions.map(session => session.cost || 0)) || 1;
+  const top = costTop(sessions);
   const tooltip = tooltipBox();
   const rows = sessions.map(session => {
     const cost = session.cost || 0;
     const parts = COSTLY_PARTS.map(part => ({...part, amount: part.value(session)}));
-    const bar = el("div", {class: "bar", style: `width:${(100 * cost / top).toFixed(2)}%`},
+    const bar = el("div", {class: "bar", style: `width:${barShare(cost, top).toFixed(2)}%`},
       ...parts.filter(part => part.amount > 0).map(part =>
         el("span", {style: `flex-grow:${part.amount};background:${part.color}`})));
     const summaryText = parts.map(part => `${part.label} ${money(part.amount)}`).join(", ");
