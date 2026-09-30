@@ -1217,7 +1217,7 @@ class StyleTest(unittest.TestCase):
         # light.css and common.css apply in every theme; the others only override
         defaults = set(re.findall(r"(--[\w-]+):", read(STATIC / "css" / "themes" / "light.css")
                                   + read(STATIC / "css" / "common.css")))
-        sources = STYLESHEETS + OWN_SCRIPTS + [COLORS, LIB / "tiles.ts"]
+        sources = STYLESHEETS + OWN_SCRIPTS + [COLORS, LIB / "tiles.ts", LIB / "costly.ts"]
         used = {name for path in sources for name in re.findall(r"var\((--[\w-]+)", read(path))}
         # a --series-N or --shade-step-N built in a script counts for every slot
         used = {name for name in used if not name.endswith("-")}

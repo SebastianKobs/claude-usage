@@ -86,7 +86,7 @@ claude_usage/
     css/themes/              one file per theme (light, dark, hacker, startup, rgb); the gimmicks share dark's
                              palette, fun.css their other rules
     js/                      classic scripts sharing one scope, loaded in order: util, state, figures, chartkit,
-                             charts, tables, limits, highlight.js, marked, DOMPurify, chat, drilldown, themes, main
+                             tables, limits, highlight.js, marked, DOMPurify, chat, drilldown, themes, main
                              (calls setup())
       app.js                 the bundle built from web/ (make build, committed): a module loaded before them,
                              which hands them what moved (web/src/legacy.svelte.ts); app-licenses.md the
@@ -127,6 +127,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              and table rows (used by the component)
   src/lib/bymodel.ts         the by-model chart: its metrics (cost, output, input), the stacked columns' geometry and
                              segments, the hatched fills, the legend, tooltip and table rows (used by the component)
+  src/lib/costly.ts          the cost-per-session ranking: its two parts of the cost, the rows, tooltip and table
+                             rows (used by the component)
   src/lib/payload.svelte.ts  what the page has loaded, as reactive state (`payload`: the summary, or that loading it
                              failed), which the old scripts fill through `setPayload`
   src/lib/overview.svelte.ts the session view's tile rows, mounted for the old scripts (`mountSessionKpis`,
@@ -134,8 +136,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
                              `YAxis`, `XLabels`, `AreaLine`, `PointDot`, and the tiles: `StatTile`, `InputSplit`,
                              `KpiTiles`, `RuntimeTiles`, `SummaryTiles`; `ChartCard`, the section a chart lives in, with
-                             its table-view toggle; `TableView`, a paged table; `OverTime`, `ByModel`), each with
-                             its Testing Library test
+                             its table-view toggle; `TableView`, a paged table; `OverTime`, `ByModel`,
+                             `CostPerSession`), each with its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)

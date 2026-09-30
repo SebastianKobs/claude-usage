@@ -288,7 +288,7 @@ function setup() {
   });
   document.getElementById("day-prev").addEventListener("click", () => stepDay("previous_day"));
   document.getElementById("day-next").addEventListener("click", () => stepDay("next_day"));
-  for (const name of ["costly", "limits"]) {
+  for (const name of ["limits"]) {
     document.getElementById(`${name}-table-toggle`).addEventListener("click", event => {
       const table = document.getElementById(`${name}-table`);
       table.hidden = !table.hidden;

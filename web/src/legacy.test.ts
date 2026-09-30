@@ -7,7 +7,7 @@ import * as charts from './lib/charts';
 import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
-import { summary } from './lib/fixtures';
+import { costlySession, summary } from './lib/fixtures';
 import * as live from './lib/live';
 import * as overview from './lib/overview.svelte';
 import * as paging from './lib/paging.svelte';
@@ -202,6 +202,16 @@ test('the by-model section is mounted in its container: a card, drawn from the p
   expect(card.querySelectorAll('.segmented button')).toHaveLength(3);
 });
 
+test('the cost-per-session section is mounted in its container: a card, drawn from the payload', () => {
+  const card = tilesOf('costly-card');
+  expect(screen.getByRole('region', { name: 'Cost per session' })).toBeInTheDocument();
+  expect(card).toContainElement(screen.getByRole('region', { name: 'Cost per session' }));
+  expect(card.querySelector('.bars')).toBeNull();
+  window.setPayload({ summary: summary({ costly_sessions: [costlySession()] }) });
+  expect(card.querySelectorAll('a.bar-row')).toHaveLength(1);
+  expect(card.querySelectorAll('.legend > span')).toHaveLength(2);
+});
+
 test('a page without the tile containers fails loudly and mounts nothing', () => {
   bridged.stop();
   document.body.replaceChildren(pageBody());
@@ -230,6 +240,23 @@ test('a page without the by-model container fails loudly and mounts nothing', ()
   expect(document.getElementById('error')).not.toBeNull();
   expect(document.getElementById('kpis')?.children).toHaveLength(0);
   expect(document.getElementById('trend-card')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('a page without the cost-per-session container fails loudly and mounts nothing', () => {
+  bridged.stop();
+  document.body.replaceChildren(pageBody());
+  document.getElementById('costly-card')?.remove();
+  expect(() => bridge(window)).toThrow('The page has no #costly-card container for the cost-per-session section');
+  expect(document.getElementById('error')).not.toBeNull();
+  expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  expect(document.getElementById('chart-card')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('stopping takes the cost-per-session section away too', () => {
+  bridged.stop();
+  expect(tilesOf('costly-card').children).toHaveLength(0);
   bridged = { stop() {} };
 });
 

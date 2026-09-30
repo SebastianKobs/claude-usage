@@ -1,7 +1,7 @@
 // Made-up answers of the server for the tests of what draws them: a usage, a summary and a session's detail, each
 // with the changes a test asks for on top of one plain default.
 
-import type { RuntimeTotals, SessionDetail, SessionRuntime, Summary, Usage } from './api';
+import type { CostlySession, RuntimeTotals, SessionDetail, SessionRuntime, Summary, Usage } from './api';
 
 /** A usage of 10 turns: 1.5K input in all, 900 of it read from the cache, at a cost of $1.50. */
 export function usage(changes: Partial<Usage> = {}): Usage {
@@ -17,6 +17,22 @@ export function usage(changes: Partial<Usage> = {}): Usage {
     cost: 1.5,
     cost_parts: { new_input: 0.1, cache_write: 0.4, cache_read: 0.2, output: 0.7, web_search: 0 },
     unpriced_turns: 0,
+    ...changes,
+  };
+}
+
+/** One of the costliest sessions: $1.50 of which $0.20 was read from the cache. */
+export function costlySession(changes: Partial<CostlySession> = {}): CostlySession {
+  return {
+    ...usage(),
+    session_id: 'abc-1',
+    project: 'shop',
+    title: 'Checkout: split payment step',
+    first_ts: '2026-09-29T09:00:00Z',
+    last_ts: '2026-09-29T11:00:00Z',
+    subagents: 2,
+    context_avg: 40_000,
+    context_peak: 90_000,
     ...changes,
   };
 }

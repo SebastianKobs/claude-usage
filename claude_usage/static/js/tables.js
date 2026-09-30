@@ -112,7 +112,6 @@ function renderTables(summary) {
   document.getElementById("by-mcp-server").replaceChildren(paged("by-mcp-server", usageTable(summary.mcp_server,
     "MCP server", row => row.mcp_server, "No turns attributed to an MCP server in this range.")));
   renderSessions(summary.sessions);
-  renderCostly(summary.costly_sessions);
 }
 
 // --- the sessions list: every session of the range, filtered by project and words ----------------------------
