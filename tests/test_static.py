@@ -347,12 +347,14 @@ class SecretAccessTest(unittest.TestCase):
         self.assertIsNone(run_function("secrets.ts", "secretVia", {"via": None}))
 
     def test_the_warning_comes_after_the_tiles_and_before_the_call_to_compact(self):
-        # the tiles are the session view's component, which leaves the slot the warning is drawn into right after them
+        # the tiles and the call to compact (with the gauge) are the session view's components, which leaves the slot
+        # the warning is drawn into between them
         view = read(COMPONENTS / "SessionView.svelte")
-        self.assertLess(view.index("<RuntimeTiles"), view.index('id="session-top"'))
+        self.assertLess(view.index("<RuntimeTiles"), view.index('id="session-secrets"'))
+        self.assertLess(view.index('id="session-secrets"'), view.index("<ContextGauge"))
+        self.assertLess(view.index("<ContextGauge"), view.index('id="session-top"'))
         render = function_body("drilldown.js", "renderDrilldown")
-        self.assertLess(render.index('getElementById("session-top")'), render.index("secretAccesses(detail"))
-        self.assertLess(render.index("secretAccesses(detail"), render.index("compactCall(detail)"))
+        self.assertIn('fill(document.getElementById("session-secrets"), secretAccesses(detail', render)
 
     def test_the_warning_is_edged_in_the_critical_color(self):
         self.assertIn("var(--status-critical)", css_block(read(STATIC / "css" / "common.css"), ".secret-alert"))
@@ -470,10 +472,7 @@ class PayoffToneTest(unittest.TestCase):
         self.assertIn("var(--text-secondary)", block)
         self.assertNotIn("font-size", block)
         self.assertIn("var(--text-primary)", css_block(css, ".compact-estimate strong"))
-        source = read(STATIC / "js" / "drilldown.js")
-        notes = source[source.index("function compactNowNotes("):source.index("\n}\n", source.index(
-            "function compactNowNotes("))]
-        self.assertIn('class: "compact-estimate"', notes)
+        self.assertIn('class="compact-estimate"', read(COMPONENTS / "ContextGauge.svelte"))
 
 
 class CompactCallTest(unittest.TestCase):
@@ -529,25 +528,18 @@ class CompactCallTest(unittest.TestCase):
         self.assertIsNone(self.kind(self.detail(context=250_000, compacted=self.NOW)))
 
     def test_the_copy_button_is_wired_in_the_script_not_inline(self):
-        script = read(STATIC / "js" / "drilldown.js")
-        self.assertIn('id: "compact-copy"', script)
-        self.assertIn("navigator.clipboard", script)
-        self.assertNotIn("onclick", script)
+        component = read(COMPONENTS / "CompactCall.svelte")
+        self.assertIn('id="compact-copy"', component)
+        self.assertIn("navigator.clipboard", component)
+        self.assertNotIn(" onclick=\"", component)
 
 
 class CompactedGaugeTest(unittest.TestCase):
-    USES = ("format.ts:compact",)
-
-    @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_after_a_compaction_without_a_call_since_the_gauge_gives_the_context_before_it(self):
-        note = run_function("drilldown.js", "compactedNote", {"context": 250_000, "auto_compact": 967_000},
-                            uses=self.USES)
-        self.assertEqual(note, "Before it, the context was 250K of 967K. The next reply shows the new one: the "
-                               "summary, with the system prompt, tools and CLAUDE.md sent again.")
-
     def test_the_gauge_draws_the_compaction_in_place_of_the_meter(self):
-        body = function_body("drilldown.js", "currentGauge")
-        self.assertLess(body.index("current.compacted"), body.index('role: "meter"'))
+        # the words are tested in gauge.test.ts; the card shows the meter only for the other kind
+        component = read(COMPONENTS / "ContextGauge.svelte")
+        self.assertIn("{#if card.kind === 'meter'}", component)
+        self.assertLess(component.index("{#if card.kind === 'meter'}"), component.index('role="meter"'))
 
 
 class ChatOrderTest(unittest.TestCase):

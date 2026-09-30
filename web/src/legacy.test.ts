@@ -424,7 +424,8 @@ test('an open session is drawn into its container with the old scripts` slots, a
   window.setPayload({ session: sessionDetail() });
   const card = tilesOf('session-card');
   expect(card.querySelector('section#drilldown')).not.toBeNull();
-  expect(card.querySelectorAll('.legacy-slot')).toHaveLength(3);
+  expect(card.querySelectorAll('.legacy-slot')).toHaveLength(4);
+  expect(document.getElementById('session-secrets')).not.toBeNull();
   expect(document.getElementById('session-top')).not.toBeNull();
   bridged.stop();
   expect(card.children).toHaveLength(0);

@@ -4,6 +4,8 @@
 import type {
   Agent,
   ApiErrorEvent,
+  CompactEstimate,
+  CompactNow,
   CostlySession,
   LimitWindow,
   Live,
@@ -11,6 +13,7 @@ import type {
   LiveSubagent,
   RuntimeTotals,
   SessionDetail,
+  SessionGauge,
   SessionListItem,
   SessionRuntime,
   Summary,
@@ -268,6 +271,67 @@ export function live(changes: Partial<Live> = {}): Live {
     scan_errors: [],
     prompts_unavailable: null,
     notifications_unavailable: null,
+    ...changes,
+  };
+}
+
+/** What compacting would leave after 5 stored compactions: 50K, paying off after 10 of 40 replies ahead on average. */
+export function compactEstimate(changes: Partial<CompactEstimate> = {}): CompactEstimate {
+  return {
+    compactions: 5,
+    after: 50_000,
+    after_low: 40_000,
+    after_high: 60_000,
+    summary_tokens: 3000,
+    one_time: 0.3,
+    breakeven_calls: 10,
+    breakeven_low: 5,
+    breakeven_high: 20,
+    before_break: null,
+    cold_saving: -0.5,
+    breakeven_cold: 10,
+    calls_after_low: 20,
+    calls_after_high: 60,
+    calls_ahead: 40,
+    ahead_from: 'longer',
+    stretches_ahead: 3,
+    pays_later_in: null,
+    pays_later_at: null,
+    ...changes,
+  };
+}
+
+/** Compacting right after the last call, from a 150K context, its cache warm until 12:30 UTC on 2026-09-28. */
+export function compactNow(changes: Partial<CompactNow> = {}): CompactNow {
+  return {
+    before: 150_000,
+    reread_cost: 0.06,
+    cache_ttl_minutes: 5,
+    cache_warm_until: '2026-09-28T12:30:00.000+00:00',
+    keep_across_break: 0.9,
+    stored_compactions: 5,
+    estimate: compactEstimate(),
+    ...changes,
+  };
+}
+
+/** The main thread's gauge: 150K of the 967K auto-compact point, the hint at 200K, 40 turns since a compaction. */
+export function gauge(changes: Partial<SessionGauge> = {}): SessionGauge {
+  return {
+    context: 150_000,
+    model: 'claude-opus-5-5',
+    auto_compact: 967_000,
+    hint_tokens: 200_000,
+    share: 0.155,
+    headroom: 817_000,
+    turns_since_compaction: 40,
+    last_compaction: '2026-09-28T09:00:00.000+00:00',
+    compacted: null,
+    mean_growth: 3000,
+    mean_step: 3500,
+    turns_left: 230,
+    compact_now: compactNow(),
+    exploration: null,
     ...changes,
   };
 }

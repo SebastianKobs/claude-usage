@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { SessionDetail, Waiting } from '../lib/api';
-import { agent, apiErrorEvent, live, liveSession, sessionDetail, sessionRuntime, usage } from '../lib/fixtures';
+import { agent, apiErrorEvent, gauge, live, liveSession, sessionDetail, sessionRuntime, usage } from '../lib/fixtures';
 import { tablePages } from '../lib/paging.svelte';
 import { payload, setPayload } from '../lib/payload.svelte';
 import { preferences } from '../lib/prefs.svelte';
@@ -290,19 +290,43 @@ describe('the tile rows', () => {
   });
 });
 
+describe('the gauge', () => {
+  test('follows the secrets slot and the tile rows, and comes before the `#session-top` slot', () => {
+    render(SessionView);
+    setPayload({ session: fullSession({ live: true, current: gauge() }) });
+    const gaugeCard = document.getElementById('current-gauge') as HTMLElement;
+    const group = screen.getByRole('group', { name: 'Time and lines changed' });
+    const secrets = document.getElementById('session-secrets') as HTMLElement;
+    expect(secrets.previousElementSibling).toBe(group);
+    expect(secrets.nextElementSibling).toBe(gaugeCard);
+    expect(gaugeCard.nextElementSibling).toBe(document.getElementById('session-top'));
+  });
+
+  test('leaves nothing between the slots for a session without a gauge', () => {
+    render(SessionView);
+    setPayload({ session: fullSession() });
+    expect(document.getElementById('current-gauge')).toBeNull();
+    expect(document.getElementById('session-secrets')?.nextElementSibling).toBe(
+      document.getElementById('session-top'),
+    );
+  });
+});
+
 describe('the slots for the old scripts', () => {
   const ids = () => [...document.querySelectorAll('.legacy-slot')].map((slot) => slot.id);
 
-  test('are three empty divs, in order between the tile rows, the tables and the end', () => {
+  test('are four empty divs, in order between the tile rows, the tables and the end', () => {
     render(SessionView);
     setPayload({ session: fullSession() });
-    expect(ids()).toEqual(['session-top', 'session-mid', 'session-end']);
+    expect(ids()).toEqual(['session-secrets', 'session-top', 'session-mid', 'session-end']);
     for (const slot of document.querySelectorAll('.legacy-slot')) {
       expect(slot.tagName).toBe('DIV');
       expect(slot).toBeEmptyDOMElement();
     }
     const top = document.getElementById('session-top') as HTMLElement;
-    expect(top.previousElementSibling).toBe(screen.getByRole('group', { name: 'Time and lines changed' }));
+    const secrets = document.getElementById('session-secrets') as HTMLElement;
+    expect(secrets.previousElementSibling).toBe(screen.getByRole('group', { name: 'Time and lines changed' }));
+    expect(top.previousElementSibling).toBe(secrets);
     expect(top.nextElementSibling).toBe(document.getElementById('session-models-title'));
     const mid = document.getElementById('session-mid') as HTMLElement;
     const agentsTable = screen.getByRole('table', { name: 'Main thread and subagents' });

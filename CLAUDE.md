@@ -102,8 +102,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/format.ts          number, money, duration, day, hour and moment formatting, handed to the classic scripts
                              as globals; test_static.py's node tests import it as it is (node runs TypeScript)
   src/lib/colors.ts          the by-model chart's model slots, effort order, shades and hatches, handed over the same way
-  src/lib/compact.ts         when compacting pays off (`payoffTone` and its words), the call to compact, the hint to
-                             delegate, a compaction's verdict and their sum; handed over the same way
+  src/lib/compact.ts         when compacting pays off (`payoffTone` and its words), which call to compact or delegate
+                             applies, a compaction's verdict and their sum; handed over the same way
   src/lib/secrets.ts         how the secret accesses show: the card's tone, a path's script, how far a call got
   src/lib/live.ts            the live cards' badges (waiting, secret, compacting now), the live list's words (its
                              window, the past day, the empty list) and what waits for the user
@@ -145,6 +145,10 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              a preference), which the old scripts load from and reload through `range.onchange`
   src/lib/session.ts         the session view's frame: the facts under its heading, the main thread and subagents
                              table's columns and rows (a workflow run's agents under one row, its fold)
+  src/lib/gauge.ts           the gauge's words: the meter or the compaction, the exact and estimated notes, the call to
+                             compact, the hint to delegate (used by the components)
+  src/lib/clock.svelte.ts    the cache's expiry as a reactive clock (`cacheClock`, `createSubscriber`, its timer
+                             cleared when nothing reads it), which draws the gauge again when the cache runs out
   src/lib/opening.ts         opening and closing the session view (`opening`, an attachment): the page's other sections
                              step aside, focus goes to the heading, closing returns focus and scroll to the link
   src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
@@ -155,7 +159,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              `RateLimits`, the usage tables: `UsageTable`, `UsageTables`, the sessions card:
                              `SessionsList`, the live sessions: `LiveSessions`, `LiveCard`, `LiveIcon`, the range
                              filter: `RangeFilter`, and the session view's frame: `SessionView` with `SessionWaits`,
-                             `AgentsTable` and `EventsTable`, which leaves three slots for the old scripts), each with
+                             `AgentsTable` and `EventsTable`, and the gauge with the calls above it: `ContextGauge`,
+                             `CompactCall`, `DelegateCall`, which leaves four slots for the old scripts), each with
                              its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
@@ -716,8 +721,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     history does.
   - The session view (`SessionView`) takes focus on open; Escape or Close returns focus and scroll to the link that
     opened it (`opening`).
-  - The session view's context section (`drilldown.js`): the gauge (`current`) as a meter with the compact hint
-    marked; the context per turn stacked as cache read, cache write and new input (`--context-read/-write/-new`,
+  - The gauge (`ContextGauge`, `current`) is a meter with the compact hint marked, or the compaction where no reply
+    followed it. The session view's context section (`drilldown.js`): the context per turn stacked as cache read,
+    cache write and new input (`--context-read/-write/-new`,
     blue 400/550/700 in light and 500/350/200 in dark, validated as ordinal ramps), a dashed rule per compaction
     labelled by trigger where it fits, the compact hint as a reference line when the plot reaches it. A picker
     (only with subagents) switches the chart, its table view, the tiles (overhead, rebuilds, compactions, mean
@@ -733,15 +739,16 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     ahead, "Not yet:" with the replies and the context by then) carry the tone, not the mark's color. It calls
     for nothing: replayed on the stored sessions (38 main threads, 2026-09-29, counts only), heeding a warm hint
     below the threshold on top of it added at best $0.03, and lost with 10K re-read after compacting.
-  - The call to compact (`compactCall`, above the gauge), for a live session (`compactCallKind`): cold once the cache
-    has expired where compacting cold saves at once; else `threshold` where the context is at or past `hint_tokens`,
-    whatever the savings, since the replies still to come can't be predicted (the user's choice over waiting for a
-    share of the mean stretch). No call for a warm cache below the hint: replayed on the stored sessions (37 main
-    threads, 6,476 calls, 2026-09-29, counts only), heeding it added about $1.5 against $175 for the threshold, and
-    without its gate it lost money. In plain words (each reply's re-read, the size after, the cost once, when it pays
-    back, and compacting before a break; the threshold one claims no saving and says why it shows) with a "Copy
-    /compact" button: the clipboard, else the command selected in a field. It turns with the cache, like the gauge.
-  - The hint to delegate exploration (`delegateCall`, after the call to compact), for a live session
+  - The call to compact (`CompactCall`, above the gauge; its words `compactCall` in `gauge.ts`), for a live session
+    (`compactCallKind`): cold once the cache has expired where compacting cold saves at once; else `threshold` where
+    the context is at or past `hint_tokens`, whatever the savings, since the replies still to come can't be predicted
+    (the user's choice over waiting for a share of the mean stretch). No call for a warm cache below the hint:
+    replayed on the stored sessions (37 main threads, 6,476 calls, 2026-09-29, counts only), heeding it added about
+    $1.5 against $175 for the threshold, and without its gate it lost money. In plain words (each reply's re-read, the
+    size after, the cost once, when it pays back, and compacting before a break; the threshold one claims no saving
+    and says why it shows) with a "Copy /compact" button: the clipboard, else the command selected in a field. It
+    turns with the cache (`cacheClock`), like the gauge.
+  - The hint to delegate exploration (`DelegateCall`, after the call to compact), for a live session
     (`delegateCallShown`): where the main thread's exploration since its last compaction (`current.exploration`
     from `tool_kinds.exploration`: Read, Grep, Glob, LSP and Bash search, view and list; MCP tools don't count)
     holds at least `[chat] delegate_hint_tokens` (20K) and the compaction estimate's `calls_ahead` is at least

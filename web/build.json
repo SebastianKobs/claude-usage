@@ -9,7 +9,10 @@
     "web/src/components/Chart.svelte": "cf18d433a7892c96ce2c40b1e238730b1d2004774897b01bfd33e0c34eca32f0",
     "web/src/components/ChartCard.svelte": "570d5846f11aca804669332357a369017bf33e1f6698b7b83c27aa4c41f147b8",
     "web/src/components/ChartTooltip.svelte": "95295ba9aab6d486333ee64eb2b531b6aec5f927157cd044c7b9044de0b01186",
+    "web/src/components/CompactCall.svelte": "e05baaf14ffcd9383bd2d797c09fa80fc28824bfd42a2295a79970cabb4886f3",
+    "web/src/components/ContextGauge.svelte": "c1883d7aa6f48d580f885fdca2b80c8569b3291b336794af6f1ece4c20043a93",
     "web/src/components/CostPerSession.svelte": "1503ce4c460fc09044b35a3e02a6526578e0ff59f574effd8642e1fda6dd22b0",
+    "web/src/components/DelegateCall.svelte": "880a7fea54fd73a5488f3d0d783927caac456dd202ca12ebeed3d6e25f5d0dac",
     "web/src/components/EventsTable.svelte": "b48b8d383de45abb6c91d0c87d677870bc2f8bc57dbb48bf08f1e5e4af7fe7d1",
     "web/src/components/InputSplit.svelte": "9e3109148ac593ff0030fac955d90adff10da776dc59362cfb3ca37586793d7e",
     "web/src/components/KpiTiles.svelte": "fcd1604b7a221eb9efd49f6480296d8ea25f6e6e1ea4e40b8684385b9bbab9d5",
@@ -22,7 +25,7 @@
     "web/src/components/RangeFilter.svelte": "2bc90db43aea2c8541e322bda360f02bc05e367741696c3bea7a652cf90e2548",
     "web/src/components/RateLimits.svelte": "e570b8d43ce44c6ef63e56e7ea6a825252f68c80dddef150036587c9211b4435",
     "web/src/components/RuntimeTiles.svelte": "6acbc1390e855f37291433650391daabaea907d2e9448f7dad8a4bb9baa4498c",
-    "web/src/components/SessionView.svelte": "10ec48ae09b2524f30cf1f74a35358627fdc2d3e7f14b153db0477c49c52b336",
+    "web/src/components/SessionView.svelte": "9076384afabce5e25d689286625071b0ce9b3d9e72e4100df8c180a7bd7e05c6",
     "web/src/components/SessionWaits.svelte": "1827dcee2ee2317e012cc04c72be5851a7513590bdd991a4eee2580522b057ec",
     "web/src/components/SessionsList.svelte": "8fcc1f7ab32615344d834b4f5d35c1c69437defd1f770fb2e13140239564f51d",
     "web/src/components/StatTile.svelte": "5ecd0138f05cfe87e68a69d64ec6a3478e04e1bd1dc141808a5d2e9fd2993b49",
@@ -38,10 +41,12 @@
     "web/src/lib/bymodel.ts": "1f1b26f6ad7515c3473fd90709b3fbdfc0410c5fcc7c406b5e62febabc3554cc",
     "web/src/lib/chartkit.ts": "0abc565531d389285a10e0d8017d1bad67f4acec851289b234dc7d382b1b879f",
     "web/src/lib/charts.ts": "75494245d6baabf66096a147ef34446cd660dd01fb251422399690adc5d3cd6e",
+    "web/src/lib/clock.svelte.ts": "d9bee166d4fe2291e025f6681325d6e24758cc8dec96a4c6937abceb46078d0f",
     "web/src/lib/colors.ts": "ad3085cf71cbebbdb1a2c54f913c354201056ecab3beba04290602062bfcb54d",
     "web/src/lib/compact.ts": "6ead0048229e475d91baffc135fb21f979c9f4154b5093be50bb410b9fb02d3a",
     "web/src/lib/costly.ts": "1564906373ac0d4ee898b3855211dd6eab44976c019cb36187c843fb7472f9e4",
     "web/src/lib/format.ts": "57d78f4b8bb1c588430a346be6d48b7eae0067fdbaf78adb724b84b244ec81f5",
+    "web/src/lib/gauge.ts": "01e6b00fc74f8b0c08c48e953928c85a03c971f59e457404b12c5fb21f8fb069",
     "web/src/lib/limits.ts": "1a49596a587d98caa09ff6028df4d32b7c6b95354671735152651fe0414491d0",
     "web/src/lib/live.ts": "c47e01bf43760e2a125a3d3b25bb3b4a4fec5157fbfbc0945ab71beb2bbd331f",
     "web/src/lib/opening.ts": "a88ceed4e028873b66fee5fde3d07bc8455f4994218d0c95ce5c54aec8c056d8",
@@ -65,6 +70,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "6d80e4fb7b0647d9b9a3ce6ffb2721afbd1d0e8a403c135068f9b3ac4a09b597",
-    "claude_usage/static/js/app.js": "1910676cb4f884df9244339c65ff0ee1841143ecf6e8d401be3df896e258911d"
+    "claude_usage/static/js/app.js": "67c84fcb5df24adcea1d8c9a0a9ce42789ff59b3edb1ab62d3c18a0607e4d69f"
   }
 }

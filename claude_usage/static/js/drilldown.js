@@ -4,14 +4,14 @@
 // --- drilldown -----------------------------------------------------------------------------------------------
 
 // The view's frame is the SessionView component (web/src/components/SessionView.svelte), drawn from the payload: its
-// heading and facts, the waits, the tiles, and the model, agent, skill, MCP server and API error tables. It leaves
-// three empty slots, #session-top, #session-mid and #session-end, for the sections still drawn here.
+// heading and facts, the waits, the tiles, the gauge with the calls above it (ContextGauge), and the model, agent,
+// skill, MCP server and API error tables. It leaves four empty slots, #session-secrets, #session-top, #session-mid and
+// #session-end, for the sections still drawn here.
 // refresh: the same session drawn again with newer numbers, keeping what the reader had open (keptView)
 function renderDrilldown(detail, refresh = false) {
   const kept = refresh && document.getElementById("chat") ? keptView(document.getElementById("drilldown")) : null;
   if (!kept) chatRequest++;                               // a conversation still loading belongs to the old view
   if (!detail) {
-    clearTimeout(gaugeTimer);
     setPayload({session: null});                          // the view goes: the page comes back, focus to the link
     return;
   }
@@ -27,11 +27,8 @@ function renderDrilldown(detail, refresh = false) {
                              kept ? kept.chat : [chatSection(detail)]);
   setPayload({session: detail});
   const panel = document.getElementById("drilldown");
+  fill(document.getElementById("session-secrets"), secretAccesses(detail, key("secrets")));
   fill(document.getElementById("session-top"),
-    secretAccesses(detail, key("secrets")),
-    compactCall(detail),
-    delegateCall(detail),
-    currentGauge(detail.current),
     el("div", {class: "chart-head"}, el("h3", {text: "Context per turn"}),
        el("span", {id: "context-note", class: "muted"}),
        el("span", {class: "spacer"}), contextPicker(detail),
@@ -52,7 +49,6 @@ function renderDrilldown(detail, refresh = false) {
   if (kept) restoreView(panel, kept);                     // before the chart, which fills the table view
   renderContext(detail);                                  // the view is in the page, so the chart can measure it
   if (kept) restoreFocusAndScroll(panel, kept);
-  scheduleGaugeRefresh(detail);
 }
 
 // the view's elements as the reader sees them in order: its own children, and the children of the slots the old
@@ -215,50 +211,6 @@ function contextPicker(detail) {
   return select;
 }
 
-// the main thread's latest context against the auto-compact point, with the soft hint marked on the bar; once it
-// compacted after its last call, the compaction, since the context it now has shows only with the next call
-function currentGauge(current) {
-  if (!current) return null;
-  if (current.compacted) {
-    return el("div", {class: "card gauge-card", id: "current-gauge"},
-      el("div", {class: "label", text: `Latest context, main thread · ${current.model}`}),
-      el("div", {class: "tile-value"}, "Compacted ",
-         el("span", {class: "secondary", text: `at ${when(current.compacted)}, no reply since`})),
-      el("div", {class: "note", text: compactedNote(current)}));
-  }
-  const share = Math.min(1, current.context / current.auto_compact);
-  const hint = current.hint_tokens < current.auto_compact ? current.hint_tokens / current.auto_compact : null;
-  const since = current.last_compaction ? `since the last compaction (${when(current.last_compaction)})`
-                                        : "since the session started";
-  const pace = current.mean_step === null ? "too few turns for an estimate"
-             : current.turns_left === null ? `${signed(current.mean_step)} per turn, not growing`
-             : `about ${whole(current.turns_left)} turns left at ${signed(current.mean_step)} per turn ` +
-               "(mean of the last 10)";
-  return el("div", {class: "card gauge-card", id: "current-gauge"},
-    el("div", {class: "label", text: `Latest context, main thread · ${current.model}`}),
-    el("div", {class: "tile-value"}, `${compact(current.context)} `,
-       el("span", {class: "secondary",
-                   text: `of ${compact(current.auto_compact)} · ${percent(current.context, current.auto_compact)}`})),
-    el("div", {class: "gauge", role: "meter", "aria-valuemin": 0, "aria-valuemax": current.auto_compact,
-               "aria-valuenow": current.context,
-               "aria-label": `Latest context ${compact(current.context)} of the auto-compact point ` +
-                             `${compact(current.auto_compact)}`},
-       el("span", {class: "gauge-fill", style: `width:${(share * 100).toFixed(1)}%`}),
-       hint === null ? null : el("span", {class: "gauge-hint", style: `left:${(hint * 100).toFixed(1)}%`})),
-    el("div", {class: "note", text: [
-      `${compact(current.headroom)} until auto-compact`,
-      hint === null ? null : `the mark is the compact hint at ${compact(current.hint_tokens)}, a heuristic`,
-      `${whole(current.turns_since_compaction)} turns ${since}`, pace].filter(Boolean).join(" · ")}),
-    ...compactNowNotes(current.compact_now));
-}
-
-// the gauge's words after a compaction without a reply since: the context before it; what it left shows with the
-// next call, which sends the prefix again (postTokens isn't that call's context)
-function compactedNote(current) {
-  return `Before it, the context was ${compact(current.context)} of ${compact(current.auto_compact)}. The next ` +
-         "reply shows the new one: the summary, with the system prompt, tools and CLAUDE.md sent again.";
-}
-
 // Every call that named a possible secret location ([secrets] patterns, matched by the server), the most severe
 // first: the path as the call gave it, the pattern, and how far it got. Open as a warning that draws the eye while
 // one sent its input out (secretTone "alert"); else folded behind its heading, edged in the warning color while one
@@ -313,158 +265,6 @@ function secretAccesses(detail, pagerKey) {
     el("div", {class: "secret-folded-line"},
        el("h3", {class: "secret-folded-head", id: "secret-alert-title", text: summary}), toggle),
     body);
-}
-
-// the call to compact above the gauge, in plain words, with a button that copies /compact
-function compactCall(detail) {
-  const now = new Date().toISOString();
-  const kind = compactCallKind(detail, now);
-  if (!kind) return null;
-  const preview = detail.current.compact_now;
-  const estimate = preview.estimate;
-  const expired = preview.cache_warm_until !== null && Date.parse(preview.cache_warm_until) < Date.parse(now);
-  const lines = kind === "threshold" ? thresholdCallLines(detail.current, expired)
-    : [`The cache has expired, so the next reply sends your whole conversation (${compact(preview.before)}) again ` +
-       `at the full price. Compacting would shrink it to about ${compact(estimate.after)}. Doing it now saves ` +
-       `about ${money(estimate.cold_saving)} at once.`];
-  if (kind === "threshold" && !expired && estimate && estimate.before_break !== null && estimate.before_break > 0 &&
-      preview.cache_warm_until !== null) {
-    lines.push(`Taking a break past ${when(preview.cache_warm_until)}? Compact before it: the cache expires ` +
-               `then, and compacting first saves about ${money(estimate.before_break)} at the next reply.`);
-  }
-  if (kind === "threshold") {
-    lines.push("How many replies still follow can't be predicted, so past your own threshold ([chat] " +
-               "compact_hint_tokens) this shows whatever the estimate says.");
-  }
-  const status = el("span", {class: "compact-call-status", role: "status"});
-  const button = el("button", {type: "button", id: "compact-copy", text: "Copy /compact"});
-  button.addEventListener("click", () => copyCompact(status));
-  return el("div", {class: "card compact-call", id: "compact-call", role: "region",
-                    "aria-labelledby": "compact-call-title"},
-    el("strong", {id: "compact-call-title", text: kind === "threshold"
-      ? `⚠ Your context is past your ${compact(detail.current.hint_tokens)} compact hint`
-      : "⚠ The cache has expired: compacting now saves money"}),
-    ...lines.map(line => el("p", {text: line})),
-    el("div", {class: "compact-call-actions"}, button, status));
-}
-
-// the hint to delegate exploration, above the gauge, in plain words; a heuristic, so it says so
-function delegateCall(detail) {
-  if (!delegateCallShown(detail)) return null;
-  const exploration = detail.current.exploration;
-  const estimate = detail.current.compact_now.estimate;
-  const ahead = whole(Math.round(estimate.calls_ahead));
-  return el("div", {class: "card delegate-call", id: "delegate-call", role: "region",
-                    "aria-labelledby": "delegate-call-title"},
-    el("strong", {id: "delegate-call-title", text: "Explore in a subagent"}),
-    el("p", {text: `Since the last compaction the main thread has read, searched and listed ` +
-                   `${compact(exploration.tokens)} tokens in ${whole(exploration.calls)} calls. They stay in the ` +
-                   `context: every reply reads them again, ~${money(exploration.reread)} each and ` +
-                   `~${money(exploration.carried)} so far.`}),
-    el("p", {text: (estimate.ahead_from === "longer"
-      ? `After your past compactions, a stretch this long went on for about ${ahead} more replies on average. `
-      : `After your past compactions you went on for about ${ahead} replies on average. `) +
-      "A subagent (such as Explore) reads in its own context and hands back only its summary, so the next search " +
-      "costs less delegated."}),
-    el("p", {class: "muted", text: "A heuristic ([chat] delegate_hint_tokens and delegate_calls_ahead): replayed " +
-      "on real sessions, delegating was cheaper in 52 of 53 cases with 60 to 150 calls ahead, and about even with " +
-      "20 to 60."}));
-}
-
-// the call past the hint, which claims no saving: what each reply re-reads, and what compacting would cost and when
-// it would pay off where past compactions give an estimate
-function thresholdCallLines(current, expired) {
-  const preview = current.compact_now;
-  const estimate = preview.estimate;
-  const lines = [expired
-    ? `The cache has expired, so the next reply sends your whole conversation (${compact(preview.before)}) again ` +
-      "at the full price."
-    : `Every reply sends your whole conversation again: ${compact(preview.before)}, ` +
-      `~${money(preview.reread_cost)} each time from the cache.`];
-  if (estimate) {
-    lines.push(`Compacting would shrink it to about ${compact(estimate.after)}` +
-               (expired ? ` and ${payoffText(estimate, true)}.`
-                        : `. That costs ~${money(estimate.one_time)} once and ${payoffText(estimate, false)}.`));
-  }
-  return lines;
-}
-
-// copies /compact for pasting into Claude Code; where the clipboard is refused, shows it selected to copy by hand
-function copyCompact(status) {
-  const fallback = () => {
-    const field = el("input", {type: "text", readonly: true, value: "/compact", "aria-label": "The command to copy",
-                               class: "compact-call-field"});
-    status.replaceChildren("Copy it from here: ", field);
-    field.select();
-  };
-  if (!navigator.clipboard) {
-    fallback();
-    return;
-  }
-  navigator.clipboard.writeText("/compact").then(
-    () => { status.textContent = "Copied: paste it into Claude Code."; }, fallback);
-}
-
-// what compacting now would cost: the exact parts (each call's re-read, the cache's lifetime, keeping across a
-// break), then the estimate from past compactions (turns.compact_preview)
-function compactNowNotes(preview) {
-  if (!preview) return [];
-  const until = preview.cache_warm_until;
-  const expired = until !== null && Date.parse(until) < Date.now();
-  const cache = until === null ? null
-    : expired ? `The cache has likely expired (${when(until)}): the next reply sends it all at the full price, ` +
-                `${money(preview.keep_across_break)} more.`
-    : `The cache stays warm until ${when(until)} (${preview.cache_ttl_minutes} min after the last request); ` +
-      `after that, the next reply costs ${money(preview.keep_across_break)} more.`;
-  const reread = `Every reply sends the whole conversation again: ${compact(preview.before)}, ` +
-                 `${money(preview.reread_cost)} each time from the cache.`;
-  const exact = el("div", {class: "note", text: [reread, cache].filter(Boolean).join(" ")});
-  const estimate = preview.estimate;
-  if (!estimate) {
-    const stored = preview.stored_compactions;
-    const why = stored ? `your ${whole(stored)} stored ${stored === 1 ? "compaction carries" : "compactions carry"} ` +
-                         "no duration or output speed to estimate the summary from"
-                       : "no stored compaction to learn from yet";
-    return [exact, el("div", {class: "note", text: `No estimate of compacting now: ${why}.`})];
-  }
-  const count = `${whole(estimate.compactions)} stored ${estimate.compactions === 1 ? "compaction" : "compactions"}`;
-  const low = whole(estimate.calls_after_low);
-  const high = whole(estimate.calls_after_high);
-  const followed = estimate.calls_after_low === null ? ""
-    : `, which were followed by ${low === high ? low : `${low}–${high}`} replies until the next one`;
-  const tone = payoffTone(estimate, expired);
-  const after = [payoffAhead(tone, estimate, expired), `Learnt from your ${count}${followed}.`];
-  if (estimate.before_break !== null && !expired && until !== null) {
-    after.push(`Compacting before a break past ${when(until)} saves about ${money(estimate.before_break)} at once.`);
-  }
-  // the estimate is what the reader acts on, so it reads as text, not as a muted note like the exact parts
-  return [exact, el("p", {class: "compact-estimate"},
-    `If you compacted now, it would shrink to about ${compact(estimate.after)}` +
-    `${spread(compact(estimate.after_low), compact(estimate.after_high))}. `,
-    expired ? "Compacting " : `That costs ~${money(estimate.one_time)} once and `,
-    tone ? el("span", {class: `payoff-mark payoff-${tone}`, "aria-hidden": "true"}) : null,
-    el("strong", {text: payoffText(estimate, expired)}),
-    `. ${after.filter(Boolean).join(" ")}`)];
-}
-
-// the gauge's cache wording turns once the cache expires: draw it again then, if the session is still open
-let gaugeTimer = null;
-function scheduleGaugeRefresh(detail) {
-  clearTimeout(gaugeTimer);
-  const until = detail && detail.current && detail.current.compact_now
-    ? detail.current.compact_now.cache_warm_until : null;
-  const wait = until === null ? -1 : Date.parse(until) - Date.now();
-  if (wait <= 0 || wait > 2 ** 31 - 1) return;
-  gaugeTimer = setTimeout(() => {
-    const gauge = document.getElementById("current-gauge");
-    if (!gauge || state.session !== detail) return;
-    gauge.replaceWith(currentGauge(detail.current));
-    // the call to compact turns with the cache too: shown, gone or reworded
-    const call = compactCall(detail);
-    const shown = document.getElementById("compact-call");
-    if (shown) shown.remove();
-    if (call) document.getElementById("current-gauge").before(call);
-  }, wait + 1000);
 }
 
 // the turn the chart puts a compaction before: the first turn after it
