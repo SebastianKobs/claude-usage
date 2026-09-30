@@ -9,12 +9,14 @@ compaction itself, and under it what compacting now would cost. The cache's cloc
 node, as it does while the session refreshes.
 -->
 <script lang="ts">
+  import { getApp } from '../lib/app.svelte';
   import { cacheClock } from '../lib/clock.svelte';
   import { compactCallKind, delegateCallShown } from '../lib/compact';
   import { compactCall, compactNotes, delegateCall, gaugeCard } from '../lib/gauge';
-  import { payload } from '../lib/payload.svelte';
   import CompactCall from './CompactCall.svelte';
   import DelegateCall from './DelegateCall.svelte';
+
+  const { payload } = getApp();
 
   const session = $derived(payload.session);
   const current = $derived(session?.current ?? null);

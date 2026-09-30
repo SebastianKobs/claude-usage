@@ -2,10 +2,11 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import { agent, toolKindRow } from '../lib/fixtures';
-import { tablePages } from '../lib/paging.svelte';
-import { preferences } from '../lib/prefs.svelte';
 import ToolsTable from './ToolsTable.svelte';
+
+const page = pagePerTest();
 
 // Bash, split by kind, its search kind by program, the program by option set, and Read
 function calls(bashCalls = 9) {
@@ -36,25 +37,23 @@ const grepFold = () => screen.getByRole('button', { name: '1 option set' });
 
 beforeEach(() => {
   localStorage.clear();
-  preferences.pageSize = 25;
+  page.app.preferences.pageSize = 25;
 });
 
 afterEach(() => {
-  tablePages.forget('s1-tools');
-  preferences.pageSize = 25;
   localStorage.clear();
 });
 
 describe('the table', () => {
   test('is named by its level 3 heading', () => {
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(/^Tools$/);
     expect(screen.getByRole('heading', { level: 3 })).toHaveAttribute('id', 'session-tools-title');
     expect(screen.getByRole('table', { name: 'Tools' })).toHaveAttribute('aria-labelledby', 'session-tools-title');
   });
 
   test('is headed by the agent, tool, calls, errors, result sizes, calls after and the estimated costs', () => {
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     const heads = screen.getAllByRole('columnheader');
     expect(heads.map((head) => head.textContent)).toEqual([
       'Agent',
@@ -74,7 +73,7 @@ describe('the table', () => {
   });
 
   test('has the agent, the tool and then the numbers, right-aligned, in a row', () => {
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     const cells = within(screen.getAllByRole('row')[1] as HTMLElement).getAllByRole('cell');
     expect(cells.map((cell) => cell.textContent)).toEqual([
       'main',
@@ -99,7 +98,7 @@ describe('the table', () => {
 
 describe('the note', () => {
   test('explains the estimates, between the heading and the table, while a transcript gives them', () => {
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     const note = document.querySelector('.note');
     expect(note).toHaveTextContent(/^Bash splits by what a command does.*2\.3 characters/);
     expect(note?.previousElementSibling).toBe(screen.getByRole('heading', { level: 3 }));
@@ -108,14 +107,14 @@ describe('the note', () => {
 
   test('is left out once every transcript is gone', () => {
     const gone = agent({ tool_kinds: null, tools: [{ tool: 'Bash', calls: 3, result_chars: 450 }] });
-    render(ToolsTable, { ...DEFAULTS, agents: [gone] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [gone] });
     expect(document.querySelector('.note')).toBeNull();
   });
 });
 
 describe('without calls', () => {
   test('says so instead of showing a table', () => {
-    render(ToolsTable, { ...DEFAULTS, agents: [agent({ tool_kinds: [] })] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [agent({ tool_kinds: [] })] });
     expect(screen.getByText('No tool calls.')).toBeInTheDocument();
     expect(screen.queryByRole('table')).toBeNull();
     expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Tools');
@@ -125,7 +124,7 @@ describe('without calls', () => {
 describe('a stored row', () => {
   test('has the calls and result characters, and dashes for what needs the transcript', () => {
     const gone = agent({ tool_kinds: null, tools: [{ tool: 'Bash', calls: 3, result_chars: 450 }] });
-    render(ToolsTable, { ...DEFAULTS, agents: [gone] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [gone] });
     const cells = within(screen.getAllByRole('row')[1] as HTMLElement).getAllByRole('cell');
     expect(cells.map((cell) => cell.textContent)).toEqual([
       'main',
@@ -145,7 +144,7 @@ describe('a stored row', () => {
 
 describe('the rows', () => {
   test('are the tools and the kinds, what splits further folded, each fold a closed button', () => {
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     expect(names()).toEqual(['Bash', 'search (1 program)', 'view', 'Read']);
     expect(searchFold()).toHaveAttribute('aria-expanded', 'false');
     expect(searchFold()).toHaveClass('link-button');
@@ -153,7 +152,7 @@ describe('the rows', () => {
   });
 
   test('name a kind by its class, with one space before the bracket and none inside it', () => {
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     const name = searchFold().parentElement as HTMLElement;
     expect(name).toHaveClass('tool-kind');
     expect(name.textContent).toBe('search (1 program)');
@@ -161,13 +160,13 @@ describe('the rows', () => {
   });
 
   test('have a sub-row for a kind and a group-row for the tool it splits from', () => {
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     const rows = screen.getAllByRole('row').slice(1);
     expect(rows.map((row) => row.className)).toEqual(['group-row', 'sub-row', 'sub-row', '']);
   });
 
   test('leave the agent cell empty on a sub-row', () => {
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     const rows = screen.getAllByRole('row').slice(1);
     const agentCells = rows.map((row) => within(row).getAllByRole('cell')[0]?.textContent);
     expect(agentCells).toEqual(['main', '', '', 'main']);
@@ -177,7 +176,7 @@ describe('the rows', () => {
 describe('a fold', () => {
   test('shows the rows under it once its button opens it, and hides them with a second click', async () => {
     const user = userEvent.setup();
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     await user.click(searchFold());
     expect(searchFold()).toHaveAttribute('aria-expanded', 'true');
     expect(names()).toEqual(['Bash', 'search (1 program)', 'grep (1 option set)', 'view', 'Read']);
@@ -188,7 +187,7 @@ describe('a fold', () => {
 
   test('has the options of a program only while both folds above them are open', async () => {
     const user = userEvent.setup();
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     await user.click(searchFold());
     await user.click(grepFold());
     expect(names()).toEqual(['Bash', 'search (1 program)', 'grep (1 option set)', '-rn', 'view', 'Read']);
@@ -196,7 +195,7 @@ describe('a fold', () => {
 
   test('hides an open inner fold’s rows with the outer one, and has them again when it opens', async () => {
     const user = userEvent.setup();
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     await user.click(searchFold());
     await user.click(grepFold());
     await user.click(searchFold());
@@ -208,7 +207,7 @@ describe('a fold', () => {
 
   test('stays open while the agents change, the button and rows keeping their nodes and focus', async () => {
     const user = userEvent.setup();
-    const { rerender } = render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    const { rerender } = page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     await user.click(searchFold());
     const button = searchFold();
     const before = screen.getAllByRole('row').slice(1);
@@ -227,10 +226,10 @@ describe('a fold', () => {
 
   test('starts closed again in a new component', async () => {
     const user = userEvent.setup();
-    const first = render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    const first = page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     await user.click(searchFold());
     first.unmount();
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     expect(searchFold()).toHaveAttribute('aria-expanded', 'false');
   });
 });
@@ -239,23 +238,23 @@ describe('the pager', () => {
   const tools = Array.from({ length: 12 }, (_unused, index) => toolKindRow({ tool: `Tool${index}`, calls: 1 }));
 
   test('joins the heading past 10 groups of rows, under the key it is given', () => {
-    render(ToolsTable, { ...DEFAULTS, agents: [agent({ tool_kinds: tools })] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [agent({ tool_kinds: tools })] });
     expect(screen.getByRole('combobox', { name: 'Rows per page' }).id).toBe('pager-s1-tools-size');
     expect(screen.getByRole('heading', { level: 3 }).parentElement).toHaveClass('title-row');
   });
 
   test('shows a page of rows and the next one with its button', async () => {
     const user = userEvent.setup();
-    preferences.pageSize = 10;
-    render(ToolsTable, { ...DEFAULTS, agents: [agent({ tool_kinds: tools })] });
+    page.app.preferences.pageSize = 10;
+    page.render(ToolsTable, { ...DEFAULTS, agents: [agent({ tool_kinds: tools })] });
     expect(names()).toHaveLength(10);
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
     expect(names()).toEqual(['Tool10', 'Tool11']);
-    expect(tablePages.first('s1-tools')).toBe(10);
+    expect(page.app.pages.first('s1-tools')).toBe(10);
   });
 
   test('is not there for fewer rows', () => {
-    render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
+    page.render(ToolsTable, { ...DEFAULTS, agents: [mainThread()] });
     expect(screen.queryByRole('combobox', { name: 'Rows per page' })).toBeNull();
   });
 });

@@ -27,11 +27,11 @@ Without a summary the card has its heading and no chart.
     tipGroups,
     type MetricName,
   } from '../lib/bymodel';
+  import { getApp } from '../lib/app.svelte';
   import { chartWidth, LEFT_AXIS } from '../lib/chartkit';
   import { columnPath, niceMax, peakIndex, ticks } from '../lib/charts';
   import { swatchFill } from '../lib/colors';
-  import { payload } from '../lib/payload.svelte';
-  import { hype, readPreference, savePreference } from '../lib/prefs.svelte';
+  import { readPreference, savePreference } from '../lib/prefs.svelte';
   import Chart, { type ChartCursor } from './Chart.svelte';
   import ChartCard from './ChartCard.svelte';
   import Swatch from './Swatch.svelte';
@@ -40,6 +40,8 @@ Without a summary the card has its heading and no chart.
   import YAxis from './YAxis.svelte';
 
   type ModelRow = ReturnType<typeof modelTable>['rows'][number];
+
+  const { payload, hype } = getApp();
 
   const summary = $derived(payload.summary);
   let metric = $state<MetricName>(metricName(readPreference('metric')));

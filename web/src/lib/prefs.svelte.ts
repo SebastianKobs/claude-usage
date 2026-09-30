@@ -1,9 +1,9 @@
 // What the page remembers between visits: the theme, the page size of the tables and the conversation's order, each
-// saved in localStorage as it is chosen. The days and the metric are still kept by the old scripts, through
-// readPreference and savePreference.
+// saved in localStorage as it is chosen. The range's days (range.svelte.ts) and the by-model chart's metric (ByModel)
+// are read and saved through readPreference and savePreference.
 
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES, pageSizeFrom } from './tables.ts';
-import { themeFooter, themeLabel, themeName } from './themes.ts';
+import { themeName } from './themes.ts';
 
 /** A saved preference, or null where none is saved or the storage can't be read (a blocked one throws). */
 export function readPreference(name: string): string | null {
@@ -69,18 +69,4 @@ export class Preferences {
     this.#oldestFirst = value;
     savePreference('chat-oldest-first', String(value));
   }
-}
-
-// The page's one instance. A module singleton for now, since the old classic scripts reach it as a global through the
-// bridge; it moves into context (3.32) once the components own the page.
-export const preferences = new Preferences();
-
-/** A label as the chosen theme words it: the theme's wording if it has one, else the label. Reads the reactive theme. */
-export function hype(label: string): string {
-  return themeLabel(preferences.theme, label);
-}
-
-/** The sentence the chosen theme adds to the page's footer, or empty. Reads the reactive theme. */
-export function footerCopy(): string {
-  return themeFooter(preferences.theme);
 }

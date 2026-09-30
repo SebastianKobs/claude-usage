@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { summary } from './fixtures.ts';
 import { readPreference } from './prefs.svelte.ts';
-import { RangeState, range } from './range.svelte.ts';
+import { RangeState } from './range.svelte.ts';
 
 const TODAY = '2026-09-30';
 
+// the one under test in select, step and fit: each test gets a new one
+let range: RangeState;
+
 beforeEach(() => {
   localStorage.clear();
-  range.reset();
+  range = new RangeState();
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(2026, 8, 30, 12));
 });
@@ -15,7 +18,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   localStorage.clear();
-  range.reset();
 });
 
 describe('a new range', () => {
@@ -138,18 +140,5 @@ describe('fit', () => {
     range.fit(summary({ days: 90 }));
     expect(range.days).toBe(30);
     expect(readPreference('days')).toBeNull();
-  });
-});
-
-describe('reset', () => {
-  test('goes back to the saved range, today and no listener', () => {
-    range.onchange = vi.fn();
-    range.select(1);
-    range.step('previous_day', summary({ days: 1, since: TODAY, until: TODAY, previous_day: '2026-09-28' }));
-    localStorage.clear();
-    range.reset();
-    expect(range.days).toBe(30);
-    expect(range.day).toBeNull();
-    expect(range.onchange).toBeNull();
   });
 });

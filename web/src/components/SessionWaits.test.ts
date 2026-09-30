@@ -1,9 +1,11 @@
 import { render, screen } from '@testing-library/svelte';
-import { afterEach, describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import type { Waiting } from '../lib/api';
 import { live, liveSession, sessionDetail } from '../lib/fixtures';
-import { payload, setPayload } from '../lib/payload.svelte';
 import SessionWaits from './SessionWaits.svelte';
+
+const page = pagePerTest();
 
 const QUESTION: Waiting = {
   kind: 'question',
@@ -13,32 +15,29 @@ const QUESTION: Waiting = {
 };
 const PERMISSION: Waiting = { kind: 'permission', tool: 'Bash', since: '2026-09-29T11:59:00Z', agent_type: 'Explore' };
 
-afterEach(() => {
-  payload.reset();
-});
 
 const notice = () => screen.getByRole('status', { hidden: true });
 
 describe('the notice', () => {
   test('is a status card that is in the page from the start and hidden while nothing waits', () => {
-    render(SessionWaits);
+    page.render(SessionWaits);
     expect(notice()).toHaveClass('card', 'wait-notice');
     expect(notice()).toBeInTheDocument();
     expect(notice()).not.toBeVisible();
-    setPayload({ session: sessionDetail(), live: live({ sessions: [liveSession()] }) });
+    page.set({ session: sessionDetail(), live: live({ sessions: [liveSession()] }) });
     expect(notice()).not.toBeVisible();
     expect(notice().querySelector('.wait-line')).toBeNull();
   });
 
   test('stays hidden, without a line, while no session is open, whatever the live sessions wait for', () => {
-    render(SessionWaits);
-    setPayload({ live: live({ sessions: [liveSession({ waiting: QUESTION })] }) });
+    page.render(SessionWaits);
+    page.set({ live: live({ sessions: [liveSession({ waiting: QUESTION })] }) });
     expect(notice()).not.toBeVisible();
   });
 
   test('shows the open session`s own wait first, as "This session is" with its words, and its icon', () => {
-    render(SessionWaits);
-    setPayload({ session: sessionDetail({ waiting: QUESTION }) });
+    page.render(SessionWaits);
+    page.set({ session: sessionDetail({ waiting: QUESTION }) });
     expect(screen.getByRole('status')).toBeVisible();
     const line = notice().querySelector('.wait-line') as HTMLElement;
     expect(line.tagName).toBe('P');
@@ -48,17 +47,17 @@ describe('the notice', () => {
   });
 
   test('keeps a session`s line while its wait changes to another, so a reader does not hear it again', () => {
-    render(SessionWaits);
-    setPayload({ session: sessionDetail({ waiting: QUESTION }) });
+    page.render(SessionWaits);
+    page.set({ session: sessionDetail({ waiting: QUESTION }) });
     const line = notice().querySelector('.wait-line');
-    setPayload({ session: sessionDetail({ waiting: PERMISSION }) });
+    page.set({ session: sessionDetail({ waiting: PERMISSION }) });
     expect(notice().querySelector('.wait-line')).toBe(line);
     expect(line?.textContent).toMatch(/permission/);
   });
 
   test('shows another live session`s wait as a link to it, its words after', () => {
-    render(SessionWaits);
-    setPayload({
+    page.render(SessionWaits);
+    page.set({
       session: sessionDetail(),
       live: live({ sessions: [liveSession({ session_id: 'other', title: 'Checkout', waiting: PERMISSION })] }),
     });
@@ -70,8 +69,8 @@ describe('the notice', () => {
   });
 
   test('names an untitled session in the list, leaves the open one out of it and lists the own wait first', () => {
-    render(SessionWaits);
-    setPayload({
+    page.render(SessionWaits);
+    page.set({
       session: sessionDetail({ waiting: QUESTION }),
       live: live({
         sessions: [
@@ -87,20 +86,20 @@ describe('the notice', () => {
   });
 
   test('follows the live answer: a wait that goes leaves the notice hidden again', () => {
-    render(SessionWaits);
-    setPayload({ session: sessionDetail(), live: live({ sessions: [liveSession({ waiting: QUESTION })] }) });
+    page.render(SessionWaits);
+    page.set({ session: sessionDetail(), live: live({ sessions: [liveSession({ waiting: QUESTION })] }) });
     expect(screen.getByRole('status')).toBeVisible();
-    setPayload({ live: live({ sessions: [liveSession()] }) });
+    page.set({ live: live({ sessions: [liveSession()] }) });
     expect(notice()).not.toBeVisible();
     expect(notice().querySelector('.wait-line')).toBeNull();
   });
 
   test('keeps a line`s node while the others change', () => {
-    render(SessionWaits);
+    page.render(SessionWaits);
     const own = sessionDetail({ waiting: QUESTION });
-    setPayload({ session: own });
+    page.set({ session: own });
     const line = notice().querySelector('.wait-line');
-    setPayload({ live: live({ sessions: [liveSession({ waiting: PERMISSION })] }) });
+    page.set({ live: live({ sessions: [liveSession({ waiting: PERMISSION })] }) });
     expect(notice().querySelectorAll('.wait-line')).toHaveLength(2);
     expect(notice().querySelector('.wait-line')).toBe(line);
   });

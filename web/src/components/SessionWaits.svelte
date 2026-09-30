@@ -6,10 +6,12 @@ then each other live session's, linked. Read from the page's payload (the open s
 status that is always in the page and hidden while nothing waits, so a screen reader hears a wait appear.
 -->
 <script lang="ts">
+  import { getApp } from '../lib/app.svelte';
   import { sessionHref } from '../lib/costly';
   import { sessionWaits } from '../lib/live';
-  import { payload } from '../lib/payload.svelte';
   import LiveIcon from './LiveIcon.svelte';
+
+  const { payload } = getApp();
 
   const session = $derived(payload.session);
   const waits = $derived(session ? sessionWaits(session, payload.live?.sessions ?? []) : []);

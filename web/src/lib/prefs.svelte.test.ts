@@ -2,9 +2,6 @@ import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   Preferences,
-  footerCopy,
-  hype,
-  preferences,
   readPreference,
   savePreference,
   savedOption,
@@ -25,7 +22,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  preferences.theme = null;
   localStorage.clear();
 });
 
@@ -199,20 +195,5 @@ describe('reactivity', () => {
     });
     cleanup();
     expect(seen).toEqual([null, 'rgb', null]);
-  });
-});
-
-describe('the themed wording', () => {
-  test('hype and footerCopy follow the theme of the page', () => {
-    expect(hype('Estimated cost')).toBe('Estimated cost');
-    expect(footerCopy()).toBe('');
-    preferences.theme = 'hacker';
-    expect(hype('Estimated cost')).toBe('burn_rate');
-    expect(footerCopy()).toContain('Works on my machine');
-  });
-
-  test('a label the theme does not know stays as it is', () => {
-    preferences.theme = 'startup';
-    expect(hype('No such label')).toBe('No such label');
   });
 });

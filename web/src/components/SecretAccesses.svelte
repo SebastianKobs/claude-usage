@@ -9,7 +9,7 @@ session refreshes: it is this component's own, and the session view keys its par
 starts folded.
 -->
 <script lang="ts">
-  import { payload } from '../lib/payload.svelte';
+  import { getApp } from '../lib/app.svelte';
   import {
     SECRET_COLUMNS,
     secretAlertHeading,
@@ -19,6 +19,8 @@ starts folded.
     type SecretRow,
   } from '../lib/secrets';
   import TableView from './TableView.svelte';
+
+  const { payload } = getApp();
 
   const session = $derived(payload.session);
   const accesses = $derived(session?.secret_accesses ?? []);

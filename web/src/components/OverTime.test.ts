@@ -2,13 +2,13 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import type { DayModelUsage, HourModelUsage } from '../lib/api';
 import { summary, usage } from '../lib/fixtures';
-import { tablePages } from '../lib/paging.svelte';
-import { payload, setPayload } from '../lib/payload.svelte';
-import { preferences } from '../lib/prefs.svelte';
 import { panelBox, trendHeight } from '../lib/trend';
 import OverTime from './OverTime.svelte';
+
+const page = pagePerTest();
 
 function dayRow(day: string, changes: Partial<DayModelUsage> = {}): DayModelUsage {
   return { ...usage(), day, model: 'claude-opus-4', ...changes };
@@ -56,44 +56,40 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(2026, 8, 30, 12, 0, 0));
   localStorage.clear();
-  preferences.pageSize = 25;
+  page.app.preferences.pageSize = 25;
   measure(0);
 });
 
 afterEach(() => {
   vi.useRealTimers();
-  payload.reset();
-  tablePages.forget('trend-table');
-  preferences.theme = null;
-  preferences.pageSize = 25;
   localStorage.clear();
   Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
 });
 
 describe('the card', () => {
   test('a section named by its heading, with the note for days before any summary', () => {
-    const { container } = render(OverTime);
+    const { container } = page.render(OverTime);
     expect(screen.getByRole('region', { name: 'Over time' })).toHaveClass('card');
     expect(container.querySelector('.muted')).toHaveTextContent(/^estimated cost, input and output tokens per day$/);
     expect(screen.getByRole('button', { name: 'Table view' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   test('without a summary there is a chart container and nothing in it', () => {
-    const { container } = render(OverTime);
+    const { container } = page.render(OverTime);
     expect(container.querySelector('.chart')).toBeEmptyDOMElement();
     expect(container.querySelector('svg')).toBeNull();
   });
 
   test('without a summary the table view has no table', async () => {
     const user = userEvent.setup();
-    render(OverTime);
+    page.render(OverTime);
     await user.click(screen.getByRole('button', { name: 'Table view' }));
     expect(screen.queryByRole('table')).toBeNull();
   });
 
   test('a single day says its unit in the note and the drawing`s name', () => {
-    const { container } = render(OverTime);
-    setPayload({ summary: today() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: today() });
     expect(container.querySelector('.muted')).toHaveTextContent(/^estimated cost, input and output tokens per hour$/);
     expect(screen.getByRole('img')).toHaveAccessibleName(
       'Estimated cost, input tokens and output tokens per hour; table view available',
@@ -101,8 +97,8 @@ describe('the card', () => {
   });
 
   test('the heading is in the theme`s words', () => {
-    preferences.theme = 'hacker';
-    render(OverTime);
+    page.app.preferences.theme = 'hacker';
+    page.render(OverTime);
     expect(screen.getByRole('region', { name: 'git log --graph' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/^git log --graph$/);
   });
@@ -110,8 +106,8 @@ describe('the card', () => {
 
 describe('the chart', () => {
   test('a summary draws it at once: an image named for the unit, at the panels` height', () => {
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     const svg = container.querySelector('svg');
     expect(svg?.getAttribute('height')).toBe(String(trendHeight()));
     expect(screen.getByRole('img')).toHaveAccessibleName(
@@ -121,27 +117,27 @@ describe('the chart', () => {
 
   test('it is as wide as its container, but not narrower than the minimum', () => {
     measure(640);
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe(`0 0 640 ${trendHeight()}`);
   });
 
   test('an unmeasured container draws at the minimum width', () => {
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe(`0 0 320 ${trendHeight()}`);
   });
 
   test('three panels, each titled, with its latest value at the line`s end', () => {
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     expect(texts('.panel-title', container)).toEqual(['Estimated cost', 'Input tokens', 'Output tokens']);
     expect(texts('.value-text', container)).toEqual(['$2.00', '1.2K', '1.5K']);
   });
 
   test('each panel has a line key, a line, its area and an end dot, in its own series color', () => {
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     const keys = [...container.querySelectorAll('g[role="img"] > line[stroke-linecap="round"]')];
     expect(keys.map((key) => key.getAttribute('stroke'))).toEqual([
       'var(--series-1)',
@@ -156,8 +152,8 @@ describe('the chart', () => {
   });
 
   test('each panel has its own axis, scaled to a nice top of its own', () => {
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     const axis = texts('.axis-text[text-anchor="end"]', container);
     expect(axis).toHaveLength(9);
     expect(axis.slice(0, 3)).toEqual(['$0.00', '$1.00', '$2.00']);
@@ -166,8 +162,8 @@ describe('the chart', () => {
   });
 
   test('x labels run along the bottom, one per day of the week', () => {
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     const labels = [...container.querySelectorAll('.axis-text[text-anchor="middle"]')];
     expect(labels).toHaveLength(7);
     expect(labels.every((label) => label.getAttribute('y') === String(panelBox(2).bottom + 18))).toBe(true);
@@ -177,8 +173,8 @@ describe('the chart', () => {
 describe('the drawing`s geometry', () => {
   test('the lines run from the axis to the right padding, each ending in a dot and its value beside it', () => {
     measure(640);
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     const dots = [...container.querySelectorAll('circle')];
     expect(dots.map((dot) => dot.getAttribute('cx'))).toEqual(['576', '576', '576']);
     expect(texts('.value-text', container)).toHaveLength(3);
@@ -191,8 +187,8 @@ describe('the drawing`s geometry', () => {
 
   test('a panel`s line key is a short stroke at the axis, left of its title', () => {
     measure(640);
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     const key = container.querySelector('g[role="img"] > line[stroke-linecap="round"]');
     expect([key?.getAttribute('x1'), key?.getAttribute('x2')]).toEqual(['56', '70']);
     expect(container.querySelector('.panel-title')?.getAttribute('x')).toBe('76');
@@ -200,8 +196,8 @@ describe('the drawing`s geometry', () => {
 
   test('each value is scaled to its own panel`s top: a peak sits at the plot`s top, 1.2K of 2K three fifths up', () => {
     measure(640);
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     const heights = [...container.querySelectorAll('circle')].map((dot) => Number(dot.getAttribute('cy')));
     expect(heights[0]).toBeCloseTo(panelBox(0).top);
     expect(heights[1]).toBeCloseTo(panelBox(1).bottom - 76 * 0.6);
@@ -211,8 +207,8 @@ describe('the drawing`s geometry', () => {
   test('the crosshair stands at the last bucket`s x, the tooltip a gap right of it', async () => {
     measure(640);
     const user = userEvent.setup();
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     await focusSlider(user);
     expect(container.querySelector('.crosshair')?.getAttribute('x1')).toBe('576');
     expect(container.querySelector<HTMLElement>('.tooltip')?.style.left).toBe('588px');
@@ -221,8 +217,8 @@ describe('the drawing`s geometry', () => {
 
 describe('the cursor', () => {
   test('one slider over the days, reading the day and each panel`s value', () => {
-    render(OverTime);
-    setPayload({ summary: week() });
+    page.render(OverTime);
+    page.set({ summary: week() });
     const slider = screen.getByRole('slider', {
       name: 'Estimated cost, input and output tokens per day; arrow keys step through them',
     });
@@ -237,8 +233,8 @@ describe('the cursor', () => {
 
   test('the slider covers the plots, from the axis to the padding at the right', () => {
     measure(640);
-    render(OverTime);
-    setPayload({ summary: week() });
+    page.render(OverTime);
+    page.set({ summary: week() });
     const slider = screen.getByRole('slider');
     expect(slider.getAttribute('x')).toBe('56');
     expect(slider.getAttribute('width')).toBe(String(640 - 64 - 56));
@@ -246,16 +242,16 @@ describe('the cursor', () => {
   });
 
   test('nothing is marked until the cursor is on a bucket', () => {
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     expect(container.querySelector('.crosshair')).toBeNull();
     expect(container.querySelector('.tooltip')).toBeNull();
   });
 
   test('stepping with the keyboard shows the crosshair, a dot per panel and the tooltip of the day', async () => {
     const user = userEvent.setup();
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     await focusSlider(user);
     const slider = screen.getByRole('slider');
     await user.keyboard('{ArrowLeft}');
@@ -284,8 +280,8 @@ describe('the cursor', () => {
 
   test('the crosshair and the tooltip go when focus leaves', async () => {
     const user = userEvent.setup();
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     await focusSlider(user);
     expect(container.querySelector('.crosshair')).not.toBeNull();
     await user.tab();
@@ -295,8 +291,8 @@ describe('the cursor', () => {
 
   test('Home takes the crosshair to the first bucket, at the plots` left edge', async () => {
     const user = userEvent.setup();
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     await focusSlider(user);
     await user.keyboard('{Home}');
     expect(container.querySelector('.crosshair')?.getAttribute('x1')).toBe('56');
@@ -307,8 +303,8 @@ describe('the cursor', () => {
 describe('the table view', () => {
   async function shown(summaryToShow = week()) {
     const user = userEvent.setup();
-    const view = render(OverTime);
-    setPayload({ summary: summaryToShow });
+    const view = page.render(OverTime);
+    page.set({ summary: summaryToShow });
     await user.click(screen.getByRole('button', { name: 'Table view' }));
     return { user, ...view };
   }
@@ -364,30 +360,30 @@ describe('the table view', () => {
   test('the page is kept when a new summary comes', async () => {
     const { user } = await shown(month());
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
-    setPayload({ summary: month() });
+    page.set({ summary: month() });
     expect(screen.getByText('rows 26–30 of 30')).toBeInTheDocument();
   });
 });
 
 describe('a new summary', () => {
   test('updates the chart in place: the same svg, the new values', () => {
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     const svg = container.querySelector('svg');
     const slider = screen.getByRole('slider');
-    setPayload({ summary: summary({ day_model: [dayRow('2026-09-30', { cost: 4 })] }) });
+    page.set({ summary: summary({ day_model: [dayRow('2026-09-30', { cost: 4 })] }) });
     expect(container.querySelector('svg')).toBe(svg);
     expect(screen.getByRole('slider')).toBe(slider);
     expect(texts('.value-text', container)[0]).toBe('$4.00');
   });
 
   test('another range changes the buckets and the note', () => {
-    const { container } = render(OverTime);
-    setPayload({ summary: week() });
+    const { container } = page.render(OverTime);
+    page.set({ summary: week() });
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuemax', '7');
-    setPayload({ summary: month() });
+    page.set({ summary: month() });
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuemax', '30');
-    setPayload({ summary: today() });
+    page.set({ summary: today() });
     flushSync();
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuemax', '13');
     expect(container.querySelector('.muted')).toHaveTextContent('per hour');
@@ -395,20 +391,20 @@ describe('a new summary', () => {
 
   test('the table is updated in place too, its rows keeping their nodes by bucket', async () => {
     const user = userEvent.setup();
-    render(OverTime);
-    setPayload({ summary: week() });
+    page.render(OverTime);
+    page.set({ summary: week() });
     await user.click(screen.getByRole('button', { name: 'Table view' }));
     const before = screen.getAllByRole('row');
-    setPayload({ summary: summary({ day_model: [dayRow('2026-09-30', { cost: 9 })] }) });
+    page.set({ summary: summary({ day_model: [dayRow('2026-09-30', { cost: 9 })] }) });
     const after = screen.getAllByRole('row');
     after.forEach((row, index) => expect(row).toBe(before[index]));
     expect(within(after[1] as HTMLElement).getAllByRole('cell')[1]).toHaveTextContent('$9.00');
   });
 
   test('the theme changes the heading in place', () => {
-    render(OverTime);
+    page.render(OverTime);
     const heading = screen.getByRole('heading', { level: 2 });
-    preferences.theme = 'hacker';
+    page.app.preferences.theme = 'hacker';
     flushSync();
     expect(screen.getByRole('heading', { level: 2 })).toBe(heading);
     expect(heading).toHaveTextContent('git log --graph');

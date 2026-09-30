@@ -5,12 +5,14 @@ One of the overview's two tile rows, read from the page's payload: the `kpis` ro
 runtime row stays empty.
 -->
 <script lang="ts">
-  import { payload } from '../lib/payload.svelte';
+  import { getApp } from '../lib/app.svelte';
   import { rangeText, runtimeFrom } from '../lib/tiles';
   import KpiTiles from './KpiTiles.svelte';
   import RuntimeTiles from './RuntimeTiles.svelte';
 
   let { rows }: { rows: 'kpis' | 'runtime' } = $props();
+
+  const { payload } = getApp();
 
   const summary = $derived(payload.summary);
 </script>

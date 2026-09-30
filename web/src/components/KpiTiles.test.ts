@@ -1,12 +1,13 @@
 import { render } from '@testing-library/svelte';
 import { afterEach, expect, test } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import type { CompactionSavings, Usage } from '../lib/api';
 import { usage } from '../lib/fixtures';
-import { preferences } from '../lib/prefs.svelte';
 import KpiTiles from './KpiTiles.svelte';
 
+const page = pagePerTest();
+
 afterEach(() => {
-  preferences.theme = null;
   localStorage.clear();
 });
 
@@ -16,7 +17,7 @@ function cards(
   scope = 'last 7 days',
 ): HTMLElement[] {
   // `context` is also a mount option, so the props go in their own object
-  const { container } = render(KpiTiles, {
+  const { container } = page.render(KpiTiles, {
     props: { totals, scope, context: { turns: 8, median: 40_000, p90: 90_000 }, hintTokens: 200_000, savings },
   });
   return [...container.querySelectorAll<HTMLElement>(':scope > div.card')];
@@ -41,7 +42,7 @@ test('the cost card names its scope after the label and shows the cost as the he
 });
 
 test('the estimated cost label follows the theme, the scope does not', () => {
-  preferences.theme = 'hacker';
+  page.app.preferences.theme = 'hacker';
   const [cost] = cards();
   expect(cost?.querySelector('.label')).toHaveTextContent(/^burn_rate, last 7 days$/);
 });
@@ -55,7 +56,7 @@ test('the turns and output cards show their numbers and notes', () => {
 });
 
 test('the turns note follows the theme, the output note is a price and stays', () => {
-  preferences.theme = 'hacker';
+  page.app.preferences.theme = 'hacker';
   const [, , turns, output] = cards();
   expect(turns?.querySelector('.label')).toHaveTextContent(/^requests$/);
   expect(turns?.querySelector('.note')).toHaveTextContent(/^200 OK, all of them$/);

@@ -1,15 +1,18 @@
 import { render } from '@testing-library/svelte';
 import { expect, test } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import type { RuntimeTotals, SessionRuntime } from '../lib/api';
 import { runtimeTotals, sessionRuntime } from '../lib/fixtures';
 import RuntimeTiles from './RuntimeTiles.svelte';
+
+const page = pagePerTest();
 
 function tiles(
   runtime: RuntimeTotals | SessionRuntime = runtimeTotals(),
   costPer100Lines: number | null = 2.5,
   from = '3 sessions that ended in the range',
 ): string[][] {
-  const { container } = render(RuntimeTiles, { runtime, from, costPer100Lines });
+  const { container } = page.render(RuntimeTiles, { runtime, from, costPer100Lines });
   return [...container.querySelectorAll('div.card')].map((card) =>
     [...card.children].map((child) => child.textContent ?? ''),
   );

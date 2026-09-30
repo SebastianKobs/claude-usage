@@ -6,8 +6,8 @@ what the main threads' compactions saved against keeping the context, null witho
 -->
 <script lang="ts">
   import type { CompactionSavings, ContextStats, Usage } from '../lib/api';
+  import { getApp } from '../lib/app.svelte';
   import { compact, money, whole } from '../lib/format';
-  import { hype } from '../lib/prefs.svelte';
   import { costNotes, savingsNote } from '../lib/tiles';
   import InputSplit from './InputSplit.svelte';
   import StatTile from './StatTile.svelte';
@@ -25,6 +25,8 @@ what the main threads' compactions saved against keeping the context, null witho
     hintTokens: number;
     savings: CompactionSavings | null;
   } = $props();
+
+  const { hype } = getApp();
 
   const saved = $derived(savings ? savingsNote(savings) : null);
 </script>

@@ -80,26 +80,23 @@ claude_usage/
   server.py                  loopback-only http.server + JSON API (a route table)
   readers.py                 who besides you can read the projects folder: serve's warnings at start
   icons/                     the desktop notifications' icons, PNG (notify.ICON_NAMES)
-  static/                    the page: vanilla JS, inline SVG, no external resources
-    dashboard.html           the markup only
+  static/                    the page: a Svelte app built from web/, inline SVG, no external resources
+    dashboard.html           the head and an empty `<main>` the app mounts on
     css/common.css           layout and components, for every theme
     css/themes/              one file per theme (light, dark, hacker, startup, rgb); the gimmicks share dark's
                              palette, fun.css their other rules
-    js/                      classic scripts sharing one scope, loaded in order: util, state, chartkit,
-                             tables, drilldown, themes, main
-                             (calls setup())
-      app.js                 the bundle built from web/ (make build, committed): a module loaded before them,
-                             which hands them what moved (web/src/legacy.svelte.ts); app-licenses.md the
-                             licenses of the packages it holds (Svelte, and the libraries below)
-web/                         the page's Svelte 5 + TypeScript sources, which take over static/js section by
-                             section; node only to build and test them, never to run the dashboard
+    js/app.js                the bundle built from web/ (make build, committed), the page's only script: a module
+                             that mounts `App` on `<main>`; app-licenses.md the licenses of the packages it holds
+                             (Svelte, and the libraries below)
+web/                         the page's Svelte 5 + TypeScript sources; node only to build and test them, never to
+                             run the dashboard
   build.json                 what the last build read and wrote, by sha256: test_web.py says "run make build"
                              where the checkout differs
   src/lib/api.ts             the types of the server's answers: test_api_types.py checks the demo's against them,
                              so a field added in server.py or queries.py is added there too
-  src/lib/format.ts          number, money, duration, day, hour and moment formatting, handed to the classic scripts
-                             as globals; test_static.py's node tests import it as it is (node runs TypeScript)
-  src/lib/colors.ts          the by-model chart's model slots, effort order, shades and hatches, handed over the same way
+  src/lib/format.ts          number, money, duration, day, hour and moment formatting; test_static.py's node tests
+                             import it as it is (node runs TypeScript)
+  src/lib/colors.ts          the by-model chart's model slots, effort order, shades and hatches
   src/lib/compact.ts         when compacting pays off (`payoffTone` and its words), which call to compact or delegate
                              applies, a compaction's verdict (its words, break-even and one-time cost, the rebuild
                              causes) and their sum; handed over the same way
@@ -116,13 +113,24 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/themes.ts          the themes and the gimmick themes' wording (`test_static.py` reads its labels): which theme
                              a saved choice names, what a label and the footer say in a theme
   src/lib/prefs.svelte.ts    the saved preferences (theme, page size, the conversation's order) as reactive state,
-                             written back in their setters, and `hype`, which words a label for the theme chosen
-  src/lib/paging.svelte.ts   the page each table is on (`tablePages`, the first unit shown, reactive), the window it
-                             shows (`shownWindow`) and the pager mounted for the old scripts (`mountPager`,
-                             `releaseDetachedPagers`)
+                             written back in their setters (`Preferences`), and `readPreference`/`savePreference`
+  src/lib/paging.svelte.ts   the page each table is on (`TablePages`: the first unit shown, reactive) and the pager's
+                             props
+  src/lib/app.svelte.ts      the page's shared state in one context (`AppState`: the payload, range, preferences,
+                             table pages and banner messages, `hype` which words a label for the theme chosen,
+                             `footerCopy` and `shownWindow`); components take it with `getApp()`, `App` sets it
+  src/lib/app.testing.ts     `renderApp` and `pagePerTest`: a component's test in a page of its own (AppState) in
+                             context, through `AppFixture.test.svelte`
+  src/lib/loader.ts          loading and polling (`Loader`): live every 5 s, the summary every 60 s, the open
+                             session every 5 s while live else 60 s, none in a hidden tab, each after the previous
+                             answer, only the newest answer drawn, an unchanged one not drawn again; the results go
+                             into the payload, the failures into the banner
+  src/lib/kept.ts            `keepingView`: a refresh of the open session keeps focus and the element at the top of
+                             the window
+  src/lib/page.ts            the page's own words: the scope after the heading, when it was updated, the footer
   src/lib/chartkit.ts        the chart kit's maths: the drawing width and scale, the pointer's x, how the cursor steps
                              (`cursorStep`), where the tooltip sits, which x labels show, the gridline's pixel
-                             (not handed to the old scripts yet: the components use it), and the plot's margins
+                             and the plot's margins
   src/lib/scroll.ts          keeping the reader's place while a view is redrawn (`scrollAnchor`, `keepScroll`)
   src/lib/tiles.ts           what the KPI and runtime tiles say: the range in words, the cost's notes, what compacting
                              saved so far, the input split's parts, the runtime's notes (used by the components)
@@ -138,12 +146,12 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/usage.ts           the usage tables' rows: a name, the shared cells dearest first, and the by-model table's
                              effort rows under each model with its swatch color (used by the components)
   src/lib/payload.svelte.ts  what the page has loaded, as reactive state (`payload`: the summary and the live answer, or
-                             that loading them failed, when the latest answer came, each live card's state, and the
-                             session open), which the old scripts fill through `setPayload`
+                             that loading them failed, when the latest answer came, each live card's state, the session
+                             open, and a summary loading), which the loader fills
   src/lib/range.ts           the range filter's logic: the ranges on offer (cut to the retention), the query a range
                              becomes, the day the Daily range shows and where an arrow goes
-  src/lib/range.svelte.ts    the range shown (`range`: the days and the Daily range's day, reactive, the choice saved as
-                             a preference), which the old scripts load from and reload through `range.onchange`
+  src/lib/range.svelte.ts    the range shown (`RangeState`: the days and the Daily range's day, reactive, the choice
+                             saved as a preference), which the loader reloads the data on through `range.onchange`
   src/lib/session.ts         the session view's frame: the facts under its heading, the main thread and subagents
                              table's columns and rows (a workflow run's agents under one row, its fold), the Tools
                              table's columns, note and rows (the rows of a closed fold left out)
@@ -164,11 +172,11 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/markup.ts          the two places a string becomes markup: highlight.js's output (`highlight`, an attachment)
                              and Claude's answers as sanitized markdown (`markdown`, an attachment), on highlight.js,
                              marked and DOMPurify from npm
-  src/lib/http.ts            `fetchJson`: the server's JSON, or the reason it gave (the old scripts have their own
-                             until the app fetches)
+  src/lib/http.ts            `fetchJson`: the server's JSON, or the reason it gave
   src/lib/opening.ts         opening and closing the session view (`opening`, an attachment): the page's other sections
                              step aside, focus goes to the heading, closing returns focus and scroll to the link
-  src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
+  src/components/            the Svelte components (`App`, the page, with `ThemePicker` and `Banner`; `Pager`,
+                             `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
                              `YAxis`, `XLabels`, `AreaLine`, `PointDot`, and the tiles: `StatTile`, `InputSplit`,
                              `KpiTiles`, `RuntimeTiles`, `SummaryTiles`; `ChartCard`, the section a chart lives in, with
                              its table-view toggle; `TableView`, a paged table (`scope` on its headings, named by its
@@ -661,8 +669,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - Categorical colors come from its validated palette in a fixed order per model; past eight slots a model folds
     into "Other".
   - Never a second y-axis: cost and tokens get aligned panels, or a metric switch.
-  - Every chart has a legend, a table view and hover or focus tooltips. Charts are built from `chartkit.js`
-    (axes, x labels, area line, tooltips, table shell). Each has one focusable cursor layer (`chartCursor`, a
+  - Every chart has a legend, a table view and hover or focus tooltips. Charts are built from the chart kit
+    (`Chart`, `YAxis`, `XLabels`, `AreaLine`, `PointDot`, `ChartTooltip`; `TableView` for the table view). Each has
+    one focusable cursor layer (`chartCursor`, a
     slider): the pointer picks the bucket under it, arrow keys, Page Up/Down, Home and End step, and a screen
     reader reads each bucket's values; a column chart highlights the band, a line chart shows a crosshair.
   - The Daily range shows one day (today by default, earlier ones with the ‹ › arrows via `until`) and plots its
@@ -672,7 +681,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     An unchanged payload isn't drawn again, so focus stays put. The banner keeps one message per source (live,
     summary, session, scan), and a response only renders if it answers the newest request.
   - The live sessions follow the range shown: both requests carry it (`rangeQuery`), a new range loads both at once
-    (`loadRange`), and the server cuts both to the retention (`UsageApp.date_range`). `/api/live` then keeps the
+    (`Loader.loadRange`), and the server cuts both to the retention (`UsageApp.date_range`). `/api/live` then keeps the
     live sessions active in the range (`queries.live_sessions` with since and until): with usage in it, as the
     sessions list counts them, else by their last activity (a session without a reply yet). So a past day shows
     only the running sessions that were active on it, and says so; without a range `/api/live` lists every one.
@@ -688,7 +697,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       other live sessions wait for (the latest `/api/live`), each linked; a line keeps its node while its words
       change, so a screen reader hears a new wait once. A wait
       makes the session `live`, so its view keeps polling every 5 s, and a live answer that sees the open session's
-      wait change asks for it at once (`waitChanged`), unless another session is loading (`sessionShown`).
+      wait change asks for it at once (`waitChanged`), unless another session is loading (only where the address
+      names the open one).
   - Permission prompts come from a `PermissionRequest` hook that posts Claude Code's hook input to the running
     dashboard over a Unix socket, `permission.sock` next to the store (`server.open_prompt_socket`, the user's choice
     over a file next to the store and over a TCP route without the token), so it works the same for a checkout and an
@@ -716,7 +726,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     midway leaves its agents busy for good. The card lists those agents, the heading names the minutes. The main
     thread's own calls don't count (the user's choice: 7 of 55 main threads ended in a call).
   - Each live card's state comes from `/api/session/<id>/state`, asked for after every live answer and not awaited
-    (`loadLiveStates`: one request per session at a time, a failed one keeps what is shown), and is kept by session
+    (the loader: one request per session at a time, a failed one keeps what is shown), and is kept by session
     (`payload.liveState`), so a redrawn list shows it at once. It shows as small icons right of the title (`LiveIcon`,
     in currentColor, faintly glowing in the gimmick themes), each described on hover and to screen readers
     (`title`, `aria-label`) and colored as the session view's marks (`--gain-text`, `--hint-warning-edge`,
@@ -731,7 +741,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     A card's icons are drawn again only where they changed, which a cache expiring does too.
   - An open session polls too: every 5 s while it is `live` (a transcript changed within `live_minutes`, or waiting
     for the user), else every 60 s, which notices a resumed session. A changed one is drawn in place
-    (`renderDrilldown(detail, true)`):
+    (`keepingView`):
     the components keep their own state (the table view, the folds open: a workflow run's agents, an inline script's
     interpreters in the Tools table), focus and the element at the top of the window are kept. A conversation shown
     (`Conversation`) reads itself again when the session's payload changes, and is drawn only if it changed: an
@@ -793,20 +803,18 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     place, after the agents, and the tools go last (`SessionView` puts `ToolsTable` after the API errors); without it the
     tools stay there and the conversation, which can only say it is gone, comes last. A transcript that comes or goes
     mounts the conversation in its other place, which starts it over.
-  - Tables page (`paged(key, table)` in `tables.js`, every table and chart table view): past 10 groups of rows (a
+  - Tables page (`TableView`, every table and chart table view): past 10 groups of rows (a
     sub-row, an effort level or a workflow run's agent, stays with the row above it) a pager goes right-aligned into
-    the row of the table's heading (`placePager`; above the table where there is none, like a chart's table view): 10,
+    the row of the table's heading (above the table where there is none, like a chart's table view): 10,
     25 or 50 rows (25 by default, kept as a preference and applied to every table at once), previous and next, and
     "rows 11–20 of 84". Each table keeps its page by key across redraws (the session view's keys carry the session and
-    the picked transcript, so another one starts at the first page), and its controls keep focus. Rows off the page
-    get the `off-page` class, since a workflow run's switch uses `hidden`. The live sessions' cards page the same way
+    the picked transcript, so another one starts at the first page), and its controls keep focus. A table draws
+    only the rows of its page. The live sessions' cards page the same way
     (`LiveSessions`: a `Pager` under the key `live`, each card a group, "sessions 1–10 of 300"), most recent first
     like the sessions list: by the last record's time, then the mtime (`queries.live_sessions`; a copied transcript
     has a new mtime).
     Each card and subagent shows that time (`queries.activity_time`: the last record's, else the mtime); only
     whether a session is live goes by the mtime.
-    Once a draw is in the page, the pagers it replaced are let go (`forgetDetachedPagers`), since a list drawn every
-    5 s would keep each old draw.
   - The sessions list holds every session of the range, newest first (`sessions` in `/api/summary`, only
     `server.SESSION_LIST_FIELDS`, about 250 bytes each; the costliest keep their parts), so no older session is cut
     without a word. Each carries what it used in the range (`queries.recent_sessions`: totals, turns, the subagents that

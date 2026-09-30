@@ -29,8 +29,7 @@ has its heading and no chart or tables.
     windowsHead,
     type WindowRow,
   } from '../lib/limits';
-  import { payload } from '../lib/payload.svelte';
-  import { hype } from '../lib/prefs.svelte';
+  import { getApp } from '../lib/app.svelte';
   import Chart, { type ChartCursor } from './Chart.svelte';
   import ChartCard from './ChartCard.svelte';
   import EventsTable from './EventsTable.svelte';
@@ -38,6 +37,8 @@ has its heading and no chart or tables.
   import TableView from './TableView.svelte';
   import XLabels from './XLabels.svelte';
   import YAxis from './YAxis.svelte';
+
+  const { payload, hype } = getApp();
 
   type BucketRow = ReturnType<typeof limitTable>['rows'][number];
 

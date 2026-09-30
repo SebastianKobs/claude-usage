@@ -1,5 +1,5 @@
 // The range the page shows, as reactive state: how many days, and for the Daily range which day. The range filter
-// draws it and changes it; the old classic scripts reload the page's data when it changes, through `onchange`.
+// draws it and changes it; the loader (lib/loader.ts) reloads the page's data when it changes, through `onchange`.
 
 import type { Summary } from './api';
 import { dayText } from './format.ts';
@@ -11,14 +11,13 @@ function savedDays(): number {
   return rangeDays(Number(readPreference('days'))) ?? 30;
 }
 
-/** The range shown as reactive state. Not named `Range`: the bridge hands this module's exports to `window`, where
- *  that would overwrite the DOM's own `Range`. */
+/** The range shown as reactive state. Not named `Range`, which is the DOM's own class. */
 export class RangeState {
   #days = $state(savedDays());
   // null follows today, which stays today past midnight.
   #day = $state<string | null>(null);
 
-  /** What to do once the range changed: the old scripts set it to reload the page's data. Not reactive. */
+  /** What to do once the range changed: the loader sets it to reload the page's data. Not reactive. */
   onchange: (() => void) | null = null;
 
   /** The range's length in days: 1 for the Daily range. */
@@ -57,15 +56,4 @@ export class RangeState {
     this.#days = summary.days;
     savePreference('days', summary.days);
   }
-
-  /** Back to the saved range, today and no listener: for the tests, which share the singleton. */
-  reset(): void {
-    this.#days = savedDays();
-    this.#day = null;
-    this.onchange = null;
-  }
 }
-
-// A module singleton for now, like `payload` in payload.svelte.ts: the old scripts reach it as a global through the
-// bridge; it moves into context (3.32) once the components own the page.
-export const range = new RangeState();

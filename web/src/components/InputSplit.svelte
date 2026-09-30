@@ -6,9 +6,9 @@ which a threshold can be chosen by. Null `context` or no turns leaves that note 
 -->
 <script lang="ts">
   import type { ContextStats, Usage } from '../lib/api';
+  import { getApp } from '../lib/app.svelte';
   import { inputTotal } from '../lib/charts';
   import { compact, money, percent } from '../lib/format';
-  import { hype } from '../lib/prefs.svelte';
   import { contextNote, splitDescription, splitSegments } from '../lib/tiles';
   import Swatch from './Swatch.svelte';
 
@@ -17,6 +17,8 @@ which a threshold can be chosen by. Null `context` or no turns leaves that note 
     context,
     hintTokens,
   }: { totals: Usage; context: ContextStats | null; hintTokens: number } = $props();
+
+  const { hype } = getApp();
 
   // what a compact hint threshold can be chosen by, said on hover
   const CONTEXT_TITLE =

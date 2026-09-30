@@ -2,11 +2,12 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import { apiErrorEvent } from '../lib/fixtures';
 import { eventRows } from '../lib/limits';
-import { tablePages } from '../lib/paging.svelte';
-import { preferences } from '../lib/prefs.svelte';
 import EventsTable from './EventsTable.svelte';
+
+const page = pagePerTest();
 
 const DEFAULTS = { id: 'errors', title: 'Latest API errors', empty: 'No API errors.', pagerKey: 'errors-key' };
 
@@ -30,18 +31,16 @@ function events() {
 
 beforeEach(() => {
   localStorage.clear();
-  preferences.pageSize = 25;
+  page.app.preferences.pageSize = 25;
 });
 
 afterEach(() => {
-  tablePages.forget('errors-key');
-  preferences.pageSize = 25;
   localStorage.clear();
 });
 
 describe('the table', () => {
   test('is named by its level 3 heading, which stands bare before the wrap up to ten rows', () => {
-    render(EventsTable, { ...DEFAULTS, rows: events() });
+    page.render(EventsTable, { ...DEFAULTS, rows: events() });
     const heading = screen.getByRole('heading', { level: 3 });
     expect(heading).toHaveTextContent(/^Latest API errors$/);
     expect(heading.id).toBe('errors-title');
@@ -50,13 +49,13 @@ describe('the table', () => {
   });
 
   test('is headed by the time, the error, the quota, its reset, the session and the agent', () => {
-    render(EventsTable, { ...DEFAULTS, rows: events() });
+    page.render(EventsTable, { ...DEFAULTS, rows: events() });
     const heads = screen.getAllByRole('columnheader');
     expect(heads.map((head) => head.textContent)).toEqual(['When', 'Error', 'Quota', 'Resets', 'Session', 'Agent']);
   });
 
   test('has a row per call: the error in words, the quota, a link to its session with the project, the agent', () => {
-    render(EventsTable, { ...DEFAULTS, rows: events() });
+    page.render(EventsTable, { ...DEFAULTS, rows: events() });
     const [first, second] = screen.getAllByRole('row').slice(1) as [HTMLElement, HTMLElement];
     const cells = within(first).getAllByRole('cell');
     expect(cells.map((cell) => cell.classList.contains('num'))).toEqual([true, false, false, true, false, false]);
@@ -71,7 +70,7 @@ describe('the table', () => {
 
 describe('without the session', () => {
   test('the session column is left out of the heading and every row', () => {
-    render(EventsTable, { ...DEFAULTS, rows: events(), withSession: false });
+    page.render(EventsTable, { ...DEFAULTS, rows: events(), withSession: false });
     const heads = screen.getAllByRole('columnheader');
     expect(heads.map((head) => head.textContent)).toEqual(['When', 'Error', 'Quota', 'Resets', 'Agent']);
     const cells = within(screen.getAllByRole('row')[1] as HTMLElement).getAllByRole('cell');
@@ -83,7 +82,7 @@ describe('without the session', () => {
 
 describe('without rows', () => {
   test('it says the empty text instead of the table, the heading staying', () => {
-    const { container } = render(EventsTable, { ...DEFAULTS, rows: [] });
+    const { container } = page.render(EventsTable, { ...DEFAULTS, rows: [] });
     expect(screen.queryByRole('table')).toBeNull();
     expect(container.querySelector('.table-wrap > .empty')).toHaveTextContent(/^No API errors\.$/);
     expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Latest API errors');
@@ -97,7 +96,7 @@ describe('the pager', () => {
 
   test('there is none up to ten rows; past them it shares a row with the heading, under the key given', async () => {
     const user = userEvent.setup();
-    const { rerender, container } = render(EventsTable, { ...DEFAULTS, rows: many(10) });
+    const { rerender, container } = page.render(EventsTable, { ...DEFAULTS, rows: many(10) });
     expect(container.querySelector('.title-row')).toBeNull();
     void rerender({ rows: many(30) });
     flushSync();
@@ -105,14 +104,14 @@ describe('the pager', () => {
     expect(screen.getByRole('combobox', { name: 'Rows per page' }).id).toBe('pager-errors-key-size');
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
     expect(screen.getAllByRole('row')).toHaveLength(6);
-    expect(tablePages.first('errors-key')).toBe(25);
+    expect(page.app.pages.first('errors-key')).toBe(25);
   });
 });
 
 describe('a redraw', () => {
   test('keeps a row`s node by its record when the rows come in another order', () => {
     const rows = events();
-    const { rerender } = render(EventsTable, { ...DEFAULTS, rows });
+    const { rerender } = page.render(EventsTable, { ...DEFAULTS, rows });
     const before = screen.getAllByRole('row').slice(1);
     void rerender({ rows: [...rows].reverse() });
     flushSync();

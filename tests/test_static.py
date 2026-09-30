@@ -15,7 +15,6 @@ from claude_usage import turns
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = Path(server.__file__).resolve().parent / "static"
 BUNDLE = STATIC / "js" / "app.js"                       # built from web/ (make build), not written by hand
-OWN_SCRIPTS = sorted(path for path in (STATIC / "js").glob("*.js") if path != BUNDLE)
 FORMAT = ROOT / "web" / "src" / "lib" / "format.ts"     # the formatters, moved out of util.js
 COLORS = ROOT / "web" / "src" / "lib" / "colors.ts"     # the model colors and effort levels, moved out of util.js
 LIB = ROOT / "web" / "src" / "lib"                      # what moved out of the old scripts, as TypeScript
@@ -36,6 +35,12 @@ def dashboard():
     return read(STATIC / "dashboard.html")
 
 
+def page_sources():
+    """The page's own sources (web/src, without the tests): its TypeScript and its Svelte components."""
+    return sorted(path for path in (ROOT / "web" / "src").rglob("*")
+                  if path.suffix in (".ts", ".svelte") and ".test." not in path.name)
+
+
 def css_block(text, selector):
     """The declarations of the first rule whose selector starts with selector."""
     start = text.index(selector)
@@ -47,35 +52,15 @@ def declarations(block):
     return dict(re.findall(r"(--[\w-]+):\s*([^;]+);", block))
 
 
-def definition(script, name):
-    """A script's top-level function or constant, as written."""
-    source = re.search(rf"^(?:function {name}\(.*?^\}}|const {name} = .*?;)$", read(STATIC / "js" / script),
-                       re.DOTALL | re.MULTILINE)
-    return source.group(0)
-
-
 MODULES = {name: LIB / name
            for name in ("format.ts", "colors.ts", "compact.ts", "context.ts", "secrets.ts", "live.ts", "tables.ts",
                         "charts.ts")}
 
 
-def run_function(script, name, *arguments, uses=()):
-    """Calls a top-level function of a script in node, with the page's functions and constants it uses named in uses
-    ("script.js:name"), which must use nothing else of the page; its result. The script, or a use, may be a module of
-    web/src/lib (MODULES): its function is imported as it is, which node runs as TypeScript (skipped where it can't)."""
-    imported = {}
-    helpers = []
-    for source, function in [use.split(":") for use in uses]:
-        if source in MODULES:
-            imported.setdefault(source, []).append(function)
-        else:
-            helpers.append(definition(source, function))
-    if script in MODULES:
-        imported.setdefault(script, []).append(name)
-    imports = [f"import {{ {', '.join(names)} }} from {json.dumps(MODULES[source].as_uri())};"
-               for source, names in imported.items()]
-    tested = [] if script in MODULES else [definition(script, name)]
-    program = "\n".join([*imports, *helpers, *tested,
+def run_function(module, name, *arguments):
+    """Calls a function of a module of web/src/lib (MODULES) in node, which imports it as it is and runs it as
+    TypeScript (skipped where it can't); its result."""
+    program = "\n".join([f"import {{ {name} }} from {json.dumps(MODULES[module].as_uri())};",
                          f"process.stdout.write(JSON.stringify({name}(...{json.dumps(arguments)})));"])
     result = subprocess.run(["node", "--input-type=module", "-e", program], capture_output=True, text=True,
                             timeout=30)
@@ -86,9 +71,9 @@ def run_function(script, name, *arguments, uses=()):
     return json.loads(result.stdout)
 
 
-def object_keys(script, name):
-    """The keys of a script's `const name = {…}` object literal (a type annotation before the = is fine)."""
-    source = read(script if isinstance(script, Path) else STATIC / "js" / script)
+def object_keys(source_file, name):
+    """The keys of a source file's `const name = {…}` object literal (a type annotation before the = is fine)."""
+    source = read(source_file)
     body = re.search(rf"const {name}\b[^=]*= \{{(.*?)\}};", source, re.DOTALL).group(1)
     return set(re.findall(r"(\w+):", body))
 
@@ -137,38 +122,27 @@ class ScriptTest(unittest.TestCase):
         self.assertEqual(run_function("colors.ts", "swatchFill", "red", None, None), "red")
 
     def test_html_is_inserted_only_by_the_two_sanitized_paths_in_markup_ts(self):
-        sources = OWN_SCRIPTS + sorted(path for path in (ROOT / "web" / "src").rglob("*")
-                                       if path.suffix in (".ts", ".svelte") and ".test." not in path.name)
-        uses = {path.name: len(re.findall(r"\binnerHTML\b|\{@html\b", read(path))) for path in sources}
+        uses = {path.name: len(re.findall(r"\binnerHTML\b|\{@html\b", read(path))) for path in page_sources()}
         self.assertEqual({name: count for name, count in uses.items() if count}, {"markup.ts": 2})
 
-    def test_the_scripts_load_in_the_order_claude_md_gives(self):
-        loaded = [Path(source).stem
-                  for source in re.findall(r'<script src="/static/js/([^"]+)"', dashboard())]
-        documented = re.search(r"loaded in order: (.+?)\n\s+\(calls setup\(\)\)", read(ROOT / "CLAUDE.md"),
-                               re.DOTALL).group(1)
-        names = [name.strip() for name in re.sub(r"\s+", " ", documented).split(",")]
-        self.assertEqual(loaded, names)
+    def test_the_page_is_the_bundle_mounted_on_an_empty_main(self):
+        # the app (web/src/components/App.svelte) draws everything, so the page holds only its head and the mount point
+        page = dashboard()
+        self.assertEqual(re.findall(r"<script\b[^>]*>", page), ['<script type="module" src="/static/js/app.js">'])
+        self.assertIn("<main></main>", page)
+        body = page[page.index("<body>"):]
+        self.assertEqual(re.findall(r"<(?!/?(?:body|main|script)\b)[a-z]+", body), [])
 
-    def test_the_bundle_loads_first_as_a_module(self):
-        tags = re.findall(r"<script\b[^>]*>", dashboard())
-        self.assertEqual(tags[0], '<script type="module" src="/static/js/app.js">')
-
-    def test_the_classic_scripts_are_deferred_so_they_run_after_the_bundle(self):
-        classic = [tag for tag in re.findall(r"<script\b[^>]*>", dashboard()) if 'type="module"' not in tag]
-        self.assertEqual([tag for tag in classic if not tag.endswith(" defer>")], [])
-
-    def test_every_own_script_is_loaded(self):
-        loaded = set(re.findall(r'<script src="/static/js/([^"/]+\.js)"', dashboard()))
-        self.assertEqual(loaded, {path.name for path in OWN_SCRIPTS})
+    def test_no_script_but_the_bundle_is_served(self):
+        self.assertEqual([path.name for path in (STATIC / "js").glob("*.js")], ["app.js"])
 
 
 class CompactionWordingTest(unittest.TestCase):
     def test_the_one_time_amount_reads_as_a_cost(self):
         # "one-time $0.12" read like a saving; the page says "costs $0.12 once"
-        for path in OWN_SCRIPTS:
-            strings = re.findall(r'"[^"\n]*"|`[^`]*`', read(path))
-            with self.subTest(script=path.name):
+        for path in page_sources():
+            strings = re.findall(r"""'[^'\n]*'|"[^"\n]*"|`[^`]*`""", read(path))
+            with self.subTest(source=path.name):
                 self.assertEqual([text for text in strings if re.search(r"one-time", text, re.IGNORECASE)], [])
 
 
@@ -646,21 +620,13 @@ class PagingTest(unittest.TestCase):
         self.assertEqual(run_function("tables.ts", "pageSizeFrom", None, [10, 25, 50], 25), 25)
 
     def test_the_page_size_is_a_preference(self):
-        script = read(STATIC / "js" / "tables.js")
-        # saved and read by the bundle's preferences (prefs.svelte.test.ts holds the key and the round trip); the
-        # pager component sets it, and every pager reads it
+        # saved and read by the preferences (prefs.svelte.test.ts holds the key and the round trip); the pager
+        # component sets it, and every pager reads it
         self.assertIn("preferences.pageSize = size;", read(COMPONENTS / "Pager.svelte"))
-        self.assertNotIn("pagers", script)
         self.assertIn("page_size", read(LIB / "prefs.svelte.ts"))
         module = read(MODULES["tables.ts"])
         self.assertIn("export const DEFAULT_PAGE_SIZE = 25;", module)
         self.assertRegex(module, r"export const PAGE_SIZES = \[10, 25, 50\];")
-
-    def test_every_table_is_paged(self):
-        sites = {"tables.js": 1, "chartkit.js": 1}
-        for script, count in sites.items():
-            with self.subTest(script=script):
-                self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_pager_of_cards_names_what_they_are(self):
@@ -668,72 +634,26 @@ class PagingTest(unittest.TestCase):
         self.assertEqual(run_function("tables.ts", "pageText", window, 300, "sessions"), "sessions 1–10 of 300")
 
     def test_the_pager_comes_before_the_table(self):
-        script = read(STATIC / "js" / "tables.js")
-        self.assertIn('el("div", {class: "paged"}, pager, list)', script)
-        self.assertIn("list.before(pager)", script)
-        self.assertNotIn("list.after(pager)", script)
+        # where it goes (TableView.test.ts); here only the room it leaves
         self.assertIn("margin-bottom: 8px", css_block(read(STATIC / "css" / "common.css"), ".pager"))
 
     def test_the_pager_joins_the_title_row(self):
-        script = read(STATIC / "js" / "tables.js")
-        self.assertIn("queueMicrotask(() => placePager(pager, pager))", script)
-        self.assertLess(script.index("queueMicrotask(() => placePager(pager, pager))"),
-                        script.index("queueMicrotask(() => document.getElementById(refocus)"))
         css = read(STATIC / "css" / "common.css")
         self.assertIn("display: flex", css_block(css, ".title-row {"))
         self.assertIn("margin-left: auto", css_block(css, ".title-row .pager"))
-
-    def test_rows_off_the_page_are_hidden_by_a_class_not_by_hidden(self):
-        # a workflow run's agents are shown and hidden with `hidden`, so paging keeps to its own switch
-        self.assertIn("display: none", css_block(read(STATIC / "css" / "common.css"), "tr.off-page"))
-        self.assertIn("classList.toggle('off-page'", read(COMPONENTS / "Pager.svelte"))
-        self.assertNotIn("hidden", read(COMPONENTS / "Pager.svelte").replace("never `hidden`", ""))
-
-    def test_a_redrawn_tables_old_pager_is_let_go(self):
-        # the live sessions redraw every 5 s: a pager kept for good would keep every old draw's rows alive
-        body = re.search(r"^function paged\(.*?^\}$", read(STATIC / "js" / "tables.js"),
-                         re.DOTALL | re.MULTILINE).group(0)
-        self.assertIn("queueMicrotask(releaseDetachedPagers)", body)
-        release = re.search(r"^export function releaseDetachedPagers\(.*?^\}$", read(LIB / "paging.svelte.ts"),
-                            re.DOTALL | re.MULTILINE).group(0)
-        self.assertIn("isConnected", release)
-        self.assertIn("unmount(", release)
 
     def test_the_live_sessions_are_paged_as_cards_their_pager_by_the_heading(self):
         live = read(COMPONENTS / "LiveSessions.svelte")
         self.assertIn("pageUnits(", live)
         self.assertIn('<Pager key={KEY} noun="sessions"', live)
         self.assertIn('class="title-row"', live)
-        self.assertIn('<div id="live-card"></div>', dashboard())
+        self.assertIn('<div id="live-card"><LiveSessions /></div>', read(COMPONENTS / "App.svelte"))
 
 
 def function_body(script, name):
     """The source of a script's top-level function."""
     return re.search(rf"^(?:async )?function {name}\(.*?^\}}$", read(STATIC / "js" / script),
                      re.DOTALL | re.MULTILINE).group(0)
-
-
-class LiveRangeTest(unittest.TestCase):
-    def test_the_live_sessions_ask_for_the_summarys_range(self):
-        script = read(STATIC / "js" / "main.js")
-        self.assertIn("fetchJson(`/api/live?${rangeQuery(range.days, range.day)}`)", script)
-        self.assertIn("fetchJson(`/api/summary?${rangeQuery(range.days, range.day)}`)", script)
-
-    def test_a_new_range_loads_the_live_sessions_at_once(self):
-        load = function_body("main.js", "loadRange")
-        self.assertIn("loadSummary();", load)
-        self.assertIn("loadLive();", load)
-        # the range filter (a component) reports a new range, and the summary's load fits it to the retention
-        setup = function_body("main.js", "setup")
-        self.assertIn("range.onchange = loadRange;", setup)
-        self.assertNotIn("loadSummary();", setup)
-        self.assertIn("range.fit(summary);", function_body("main.js", "loadSummary"))
-
-    def test_only_the_newest_live_request_renders(self):
-        # a poll for the range before may answer after the new range's request
-        body = function_body("main.js", "loadLive")
-        self.assertIn("const request = ++liveRequest;", body)
-        self.assertEqual(body.count("if (request !== liveRequest) return;"), 2)
 
 
 class LiveStateTest(unittest.TestCase):
@@ -900,19 +820,6 @@ class LiveStateTest(unittest.TestCase):
         self.assertLess(card.index('<div class="title">'), card.index("<LiveIcon badge={waitBadge} />"))
         self.assertLess(card.index("<LiveIcon badge={waitBadge} />"), card.index('class="live-states"'))
 
-    def test_the_states_are_asked_for_after_the_list_is_drawn_without_holding_up_the_poll(self):
-        body = function_body("main.js", "loadLive")
-        self.assertIn("loadLiveStates(live.sessions);", body)
-        self.assertNotIn("await loadLiveStates", body)
-        self.assertLess(body.index("setPayload({live, liveAt"), body.index("loadLiveStates(live.sessions)"))
-        self.assertIn("fetchJson(`/api/session/${encodeURIComponent(id)}/state`)",
-                      function_body("main.js", "loadLiveState"))
-
-    def test_a_state_still_on_its_way_is_not_asked_for_again(self):
-        body = function_body("main.js", "loadLiveState")
-        self.assertIn("if (liveStateRequests.has(id)) return;", body)
-        self.assertIn("liveStateRequests.delete(id)", body)
-
 
 class SessionListTest(unittest.TestCase):
     SESSIONS = [
@@ -979,11 +886,11 @@ class SessionListTest(unittest.TestCase):
 
     def test_a_new_filter_starts_at_the_first_page(self):
         source = read(COMPONENTS / "SessionsList.svelte")
-        self.assertEqual(source.count("tablePages.forget(KEY)"), 2)
+        self.assertEqual(source.count("pages.forget(KEY)"), 2)
         self.assertIn("const KEY = 'sessions'", source)
 
-    def test_the_page_mounts_the_list_where_the_old_card_was(self):
-        self.assertIn('<div id="sessions-card"></div>', dashboard())
+    def test_the_app_mounts_the_list_in_its_card(self):
+        self.assertIn('<div id="sessions-card"><SessionsList /></div>', read(COMPONENTS / "App.svelte"))
         self.assertNotIn('id="sessions-project"', dashboard())
 
     def test_the_search_field_looks_like_the_other_controls_in_every_theme(self):
@@ -1054,19 +961,6 @@ class SessionWaitTest(unittest.TestCase):
         self.assertLess(view.index("<SessionWaits"), view.index("<KpiTiles"))
         self.assertIn('role="status"', read(COMPONENTS / "SessionWaits.svelte"))
 
-    def test_each_live_answer_asks_for_the_session_where_its_wait_changed(self):
-        # the notice itself follows the payload's live answer
-        body = function_body("main.js", "loadLive")
-        self.assertIn("setPayload({live, liveAt", body)
-        self.assertIn("if (state.session && sessionShown() && waitChanged(state.session, live.sessions)) refreshSession()",
-                      body)
-
-    def test_a_wait_asks_for_the_open_session_only_while_no_other_one_loads(self):
-        # a refresh of the open one would drop the answer of the one loading
-        body = function_body("main.js", "sessionShown")
-        self.assertIn("location.hash.match(SESSION_HASH)", body)
-        self.assertIn("match[1] === state.session.session_id", body)
-
     def test_the_waits_are_keyed_so_a_screen_reader_hears_a_new_one_once(self):
         notice = read(COMPONENTS / "SessionWaits.svelte")
         self.assertRegex(notice, r"\{#each \w+ as \w+ \([^)]+\)\}")
@@ -1080,41 +974,6 @@ class SessionWaitTest(unittest.TestCase):
         self.assertIn("var(--series-1)", css_block(css, ".wait-icon {"))
 
 
-class SessionPollTest(unittest.TestCase):
-    def function_body(self, name):
-        """main.js's function `name`, from its line to its closing brace."""
-        return re.search(rf"^(async )?function {name}\(.*?^\}}$", read(STATIC / "js" / "main.js"),
-                         re.DOTALL | re.MULTILINE).group(0)
-
-    def test_opening_another_session_or_hiding_the_tab_stops_the_open_sessions_poll(self):
-        for name in ("loadSession", "pollWhileVisible", "pollSession"):
-            with self.subTest(name=name):
-                self.assertIn("clearTimeout(sessionTimer)", self.function_body(name))
-
-    def test_a_changed_session_is_drawn_in_place_and_the_conversation_reads_itself_again(self):
-        body = self.function_body("refreshSession")
-        self.assertIn("renderDrilldown(session, true)", body)
-        self.assertNotIn("refreshChat", body)
-        # the conversation's effect follows the payload's session, which renderDrilldown sets
-        self.assertIn("void payload.session;", read(COMPONENTS / "Conversation.svelte"))
-
-
-class BannerTest(unittest.TestCase):
-    def test_the_banner_and_its_messages_come_from_the_bundle(self):
-        # web/src/lib/banner.svelte.ts keeps one message per source; the old scripts call its showError and hasError
-        moved = r"\bfunction (showError|hasError|bannerText)\b|\berrors\.(has|set|delete)\("
-        for path in OWN_SCRIPTS:
-            with self.subTest(script=path.name):
-                self.assertNotRegex(read(path), moved)
-
-    def test_the_banner_takes_the_placeholders_place(self):
-        # the bridge mounts it there, so it keeps its place in the layout
-        self.assertIn('<div id="error" class="banner" role="alert"></div>', dashboard())
-
-    def test_a_refused_request_says_why_without_its_address(self):
-        self.assertIn("if (response.status === 403) throw new Error(payload.error", read(STATIC / "js" / "util.js"))
-
-
 class LimitWindowTest(unittest.TestCase):
     WINDOW = {"start": "2026-09-01T12:00:00.000+00:00", "first_hit": "2026-09-01T15:12:00.000+00:00",
               "resets_at": "2026-09-01T17:00:00.000+00:00"}
@@ -1125,9 +984,8 @@ class LimitWindowTest(unittest.TestCase):
 
     def test_the_rate_limits_section_is_drawn_by_its_component(self):
         # the chart, the windows and the latest errors, in that order, are RateLimits.svelte's markup
-        page = dashboard()
-        self.assertIn('<div id="limits-card"></div>', page)
-        self.assertNotIn('id="limit-windows"', page)
+        self.assertIn('<div id="limits-card"><RateLimits /></div>', read(COMPONENTS / "App.svelte"))
+        self.assertNotIn('id="limit-windows"', dashboard())
 
 
 class StyleTest(unittest.TestCase):
@@ -1135,7 +993,7 @@ class StyleTest(unittest.TestCase):
         # light.css and common.css apply in every theme; the others only override
         defaults = set(re.findall(r"(--[\w-]+):", read(STATIC / "css" / "themes" / "light.css")
                                   + read(STATIC / "css" / "common.css")))
-        sources = STYLESHEETS + OWN_SCRIPTS + [COLORS, LIB / "tiles.ts", LIB / "costly.ts", LIB / "limits.ts"]
+        sources = STYLESHEETS + [COLORS, LIB / "tiles.ts", LIB / "costly.ts", LIB / "limits.ts"]
         used = {name for path in sources for name in re.findall(r"var\((--[\w-]+)", read(path))}
         # a --series-N or --shade-step-N built in a script counts for every slot
         used = {name for name in used if not name.endswith("-")}
@@ -1165,15 +1023,9 @@ class CopyTest(unittest.TestCase):
         return set(re.findall(r'^\s+"([^"]+)":', block, re.MULTILINE))
 
     def labels(self):
-        """The labels the page themes: data-label in the markup, themed() and tile() in the scripts, hype() and
-        StatTile's label and themed note in the components, the tiles' parts in lib/tiles.ts, and the by-model chart's title per time unit."""
-        found = set(re.findall(r'data-label="([^"]+)"', dashboard()))
-        for path in OWN_SCRIPTS:
-            text = read(path)
-            found |= set(re.findall(r'themed\("[a-z0-9]+", "([^"]+)"', text))
-            found |= set(re.findall(r'\btile\("([^"]+)"', text))
-            for template in re.findall(r"`(Per \$\{buckets\.unit\}, [^`]+)`", text):
-                found |= {template.replace("${buckets.unit}", unit) for unit in ("day", "hour")}
+        """The labels the page themes: hype() and StatTile's label and themed note in the components, the tiles' parts
+        in lib/tiles.ts, and the by-model chart's title per time unit."""
+        found = set()
         for path in sorted(COMPONENTS.glob("*.svelte")):
             found |= set(re.findall(r"\bhype\('([^']+)'\)", read(path)))
             found |= set(re.findall(r'\bnote="([^"]+)" themedNote', read(path)))
@@ -1187,11 +1039,11 @@ class CopyTest(unittest.TestCase):
                 self.assertEqual(sorted(self.labels() - self.copy(theme)), [])
 
     def test_every_wording_belongs_to_a_label(self):
-        # a label can also reach themed() through a variable: then it is a string elsewhere in the scripts
-        scripts = "".join(read(path) for path in OWN_SCRIPTS)
+        # a label can also reach hype() through a variable: then it is a string elsewhere in the page's sources
+        sources = "".join(read(path) for path in page_sources() if path.name != "themes.ts")
         for theme in GIMMICK_THEMES:
             with self.subTest(theme=theme):
-                unused = [key for key in self.copy(theme) - self.labels() if f'"{key}"' not in scripts]
+                unused = [key for key in self.copy(theme) - self.labels() if f"'{key}'" not in sources]
                 self.assertEqual(sorted(unused), [])
 
 

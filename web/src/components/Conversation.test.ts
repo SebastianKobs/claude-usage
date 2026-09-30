@@ -2,12 +2,13 @@ import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import type { Chat, ChatEntry, SessionDetail } from '../lib/api';
 import { agent, chatAnswer, chatEntry, sessionDetail } from '../lib/fixtures';
-import { payload, setPayload } from '../lib/payload.svelte';
-import { preferences } from '../lib/prefs.svelte';
 import { disableSanitizer, enableSanitizer } from '../lib/sanitizer.testing';
 import Conversation from './Conversation.svelte';
+
+const page = pagePerTest();
 
 /** A session with the main thread, a helper, a workflow run's two agents and the background calls. */
 function session(changes: Partial<SessionDetail> = {}): SessionDetail {
@@ -118,45 +119,44 @@ async function load(): Promise<void> {
 
 beforeEach(() => {
   localStorage.clear();
-  preferences.oldestFirst = false;
-  setPayload({ session: session() });
+  page.app.preferences.oldestFirst = false;
+  page.set({ session: session() });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  payload.reset();
-  preferences.oldestFirst = false;
+  page.app.preferences.oldestFirst = false;
   localStorage.clear();
 });
 
 describe('before the conversation is asked for', () => {
   test('the section is named by its level 3 heading', () => {
-    render(Conversation);
+    page.render(Conversation);
     expect(screen.getByRole('heading', { level: 3, name: 'Conversation' })).toHaveAttribute('id', 'chat-heading');
     expect(screen.getByRole('region', { name: 'Conversation' })).toHaveAttribute('id', 'chat-section');
     expect(screen.getByText('read from the transcript when you ask, never stored')).toBeInTheDocument();
   });
 
   test('the heading is worded by the theme', () => {
-    preferences.theme = 'hacker';
-    render(Conversation);
+    page.app.preferences.theme = 'hacker';
+    page.render(Conversation);
     expect(screen.getByRole('heading', { level: 3 })).not.toHaveTextContent(/^Conversation$/);
-    preferences.theme = null;
+    page.app.preferences.theme = null;
   });
 
   test('only the button to show it is there: Close is hidden', () => {
-    render(Conversation);
+    page.render(Conversation);
     expect(showButton()).toHaveTextContent('Show conversation');
     expect(closeButton().hidden).toBe(true);
   });
 
   test('#chat has no children, for the style that hides it while empty', () => {
-    render(Conversation);
+    page.render(Conversation);
     expect(chatNode()).toBeEmptyDOMElement();
   });
 
   test('the end note follows the section, focusable by a script only', () => {
-    render(Conversation);
+    page.render(Conversation);
     const end = document.getElementById('chat-end') as HTMLElement;
     expect(end).toHaveAttribute('tabindex', '-1');
     expect(end).toHaveAttribute('role', 'note');
@@ -166,14 +166,14 @@ describe('before the conversation is asked for', () => {
 
   test('nothing is fetched', () => {
     const stub = answering(chatAnswer());
-    render(Conversation);
+    page.render(Conversation);
     expect(stub).not.toHaveBeenCalled();
   });
 });
 
 describe('the picker', () => {
   test('offers the main thread first, then a helper by its type and description', () => {
-    render(Conversation);
+    page.render(Conversation);
     const options = [...picker().children].filter((child) => child.tagName === 'OPTION') as HTMLOptionElement[];
     expect(options.map((option) => [option.value, option.textContent])).toEqual([
       ['', 'Main thread'],
@@ -183,7 +183,7 @@ describe('the picker', () => {
   });
 
   test('groups a workflow run`s agents under one heading named by the run', () => {
-    render(Conversation);
+    page.render(Conversation);
     const groups = [...picker().querySelectorAll('optgroup')];
     expect(groups.map((group) => group.label)).toEqual(['workflow · review']);
     expect([...(groups[0] as HTMLElement).querySelectorAll('option')].map((option) => option.value)).toEqual([
@@ -193,14 +193,14 @@ describe('the picker', () => {
   });
 
   test('leaves the background calls out, since they have no transcript', () => {
-    render(Conversation);
+    page.render(Conversation);
     expect([...picker().querySelectorAll('option')].map((option) => option.textContent)).not.toContain('(background)');
     expect(picker().querySelectorAll('option')).toHaveLength(4);
   });
 
   test('changing it before the conversation is shown fetches nothing', async () => {
     const stub = answering(chatAnswer());
-    render(Conversation);
+    page.render(Conversation);
     await userEvent.selectOptions(picker(), 'a-1');
     expect(stub).not.toHaveBeenCalled();
     expect(chatNode()).toBeEmptyDOMElement();
@@ -208,7 +208,7 @@ describe('the picker', () => {
 
   test('changing it while the conversation is shown loads that agent`s', async () => {
     const stub = answering(chatAnswer(entries()), chatAnswer([chatEntry({ text: 'the helper' })]));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     await userEvent.selectOptions(picker(), 'a-1');
     await settle();
@@ -218,7 +218,7 @@ describe('the picker', () => {
 
   test('choosing a workflow agent asks for its id', async () => {
     const stub = answering(chatAnswer());
-    render(Conversation);
+    page.render(Conversation);
     await load();
     await userEvent.selectOptions(picker(), 'w-2');
     await settle();
@@ -227,7 +227,7 @@ describe('the picker', () => {
 
   test('going back to the main thread asks for no agent', async () => {
     const stub = answering(chatAnswer());
-    render(Conversation);
+    page.render(Conversation);
     await load();
     await userEvent.selectOptions(picker(), 'a-1');
     await userEvent.selectOptions(picker(), '');
@@ -237,7 +237,7 @@ describe('the picker', () => {
 
   test('quick switches draw only the newest answer, whichever comes last', async () => {
     const { pending } = holding();
-    render(Conversation);
+    page.render(Conversation);
     await userEvent.click(showButton());
     await userEvent.selectOptions(picker(), 'a-1');
     expect(pending.map((request) => request.url)).toEqual([
@@ -256,7 +256,7 @@ describe('the picker', () => {
 describe('loading', () => {
   test('says so while the answer is awaited, with no conversation yet', async () => {
     holding();
-    render(Conversation);
+    page.render(Conversation);
     await userEvent.click(showButton());
     expect(chatNode()).toHaveTextContent(/^Loading…$/);
     expect(chatNode().querySelector('.empty')).not.toBeNull();
@@ -266,7 +266,7 @@ describe('loading', () => {
 
   test('asks for the main thread of the session', async () => {
     const stub = answering(chatAnswer());
-    render(Conversation);
+    page.render(Conversation);
     await load();
     expect(stub).toHaveBeenCalledTimes(1);
     expect(stub).toHaveBeenCalledWith('/api/session/abc123/chat', { cache: 'no-store' });
@@ -274,14 +274,14 @@ describe('loading', () => {
 
   test('lists the entries newest first, a call`s entries together in their order', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     expect(texts()).toEqual(['reply two', 'reply one', 'call one', 'the prompt']);
   });
 
   test('gives each entry a row with a unique key, its time, kind and place', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     const keys = rows().map((row) => row.dataset.key);
     expect(new Set(keys).size).toBe(4);
@@ -290,7 +290,7 @@ describe('loading', () => {
 
   test('puts the skip button first, then the reminders, then the entries', async () => {
     answering(chatAnswer(entries(), { reminders: { calls: 3, chars: 258 } }));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     const children = [...chatNode().children];
     expect(children.map((child) => child.tagName)).toEqual(['BUTTON', 'DIV', 'DIV']);
@@ -301,7 +301,7 @@ describe('loading', () => {
 
   test('the button then reads Reload and Close shows', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     expect(showButton()).toHaveTextContent('Reload');
     expect(closeButton().hidden).toBe(false);
@@ -309,7 +309,7 @@ describe('loading', () => {
 
   test('Reload reads it again and draws the answer', async () => {
     answering(chatAnswer(entries()), chatAnswer([chatEntry({ text: 'later' })]));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     await load();
     expect(texts()).toEqual(['later']);
@@ -317,7 +317,7 @@ describe('loading', () => {
 
   test('says the reminders in one line: the calls and their characters', async () => {
     answering(chatAnswer(entries(), { reminders: { calls: 3, chars: 258 } }));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     expect(chatNode().querySelector('.chat-reminders')).toHaveTextContent(
       "Claude Code's token reminder went with 3 calls, 258 characters in all",
@@ -326,14 +326,14 @@ describe('loading', () => {
 
   test('has no reminders line without reminders', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     expect(chatNode().querySelector('.chat-reminders')).toBeNull();
   });
 
   test('says where the transcript is gone, with no entries', async () => {
     answering(chatAnswer([], { available: false }));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     expect(chatNode()).toHaveTextContent(
       'The transcript is gone: Claude Code deleted it after its cleanup period. The usage history stays.',
@@ -345,7 +345,7 @@ describe('loading', () => {
 
   test('says where there is no conversation yet', async () => {
     answering(chatAnswer([]));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     expect(chatNode()).toHaveTextContent(/^No conversation in this transcript yet\.$/);
     expect(chatNode().querySelector('.empty')).not.toBeNull();
@@ -354,7 +354,7 @@ describe('loading', () => {
 
   test('shows why it failed, in place of the conversation', async () => {
     answering(new Error('HTTP 500, not JSON'));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     expect(chatNode()).toHaveTextContent('HTTP 500, not JSON');
     expect(chatNode().querySelector('.empty')).not.toBeNull();
@@ -367,14 +367,14 @@ describe('loading', () => {
       'fetch',
       vi.fn(async () => reply({ error: 'no such session' }, 404)),
     );
-    render(Conversation);
+    page.render(Conversation);
     await load();
     expect(chatNode()).toHaveTextContent('/api/session/abc123/chat: no such session');
   });
 
   test('an older failure does not replace a newer answer', async () => {
     const { pending } = holding();
-    render(Conversation);
+    page.render(Conversation);
     await userEvent.click(showButton());
     await userEvent.selectOptions(picker(), 'a-1');
     pending[1]?.resolve(chatAnswer([chatEntry({ text: 'newest' })]));
@@ -387,7 +387,7 @@ describe('loading', () => {
 
   test('the skip button moves focus to the end note', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     await userEvent.click(screen.getByRole('button', { name: 'Skip the conversation' }));
     expect(document.getElementById('chat-end')).toHaveFocus();
@@ -398,7 +398,7 @@ describe('the order button', () => {
   const order = () => document.getElementById('chat-order') as HTMLElement;
 
   test('is named Oldest first, pressed or not, with a title saying what a click does', () => {
-    render(Conversation);
+    page.render(Conversation);
     expect(order()).toHaveAttribute('aria-label', 'Oldest first');
     expect(order()).toHaveAttribute('aria-pressed', 'false');
     expect(order()).toHaveAttribute('title', 'Newest first: click for oldest first');
@@ -407,24 +407,24 @@ describe('the order button', () => {
 
   test('turns the list to the transcript`s order', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     await userEvent.click(order());
     expect(texts()).toEqual(['the prompt', 'reply one', 'call one', 'reply two']);
   });
 
   test('presses, retitles and saves the choice', async () => {
-    render(Conversation);
+    page.render(Conversation);
     await userEvent.click(order());
     expect(order()).toHaveAttribute('aria-pressed', 'true');
     expect(order()).toHaveAttribute('title', 'Oldest first: click for newest first');
-    expect(preferences.oldestFirst).toBe(true);
+    expect(page.app.preferences.oldestFirst).toBe(true);
     expect(localStorage.getItem('claude-usage.chat-oldest-first')).toBe('true');
   });
 
   test('clicked again goes back to newest first', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     await userEvent.click(order());
     await userEvent.click(order());
@@ -434,7 +434,7 @@ describe('the order button', () => {
 
   test('moves the entries` nodes, rows and what is in them, as they are', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     const before = nodesByKey();
     await userEvent.click(order());
@@ -445,7 +445,7 @@ describe('the order button', () => {
 
   test('keeps open what the reader opened while it turns the list', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     detailsOf(rows()[2]).open = true;
     await userEvent.click(order());
@@ -454,9 +454,9 @@ describe('the order button', () => {
   });
 
   test('starts pressed where the saved choice is oldest first', async () => {
-    preferences.oldestFirst = true;
+    page.app.preferences.oldestFirst = true;
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     expect(order()).toHaveAttribute('aria-pressed', 'true');
     await load();
     expect(texts()[0]).toBe('the prompt');
@@ -466,7 +466,7 @@ describe('the order button', () => {
 describe('Close', () => {
   test('empties #chat, hides itself, reads Show conversation and focuses that button', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     await userEvent.click(closeButton());
     expect(chatNode()).toBeEmptyDOMElement();
@@ -477,7 +477,7 @@ describe('Close', () => {
 
   test('drops a load still under way', async () => {
     const { pending } = holding();
-    render(Conversation);
+    page.render(Conversation);
     await userEvent.click(showButton());
     await userEvent.click(closeButton());
     expect(chatNode()).toBeEmptyDOMElement();
@@ -490,7 +490,7 @@ describe('Close', () => {
   test('keeps a failure under way from showing too', async () => {
     const stub = vi.fn(() => Promise.reject(new Error('late failure')));
     vi.stubGlobal('fetch', stub);
-    render(Conversation);
+    page.render(Conversation);
     await userEvent.click(showButton());
     await userEvent.click(closeButton());
     await settle();
@@ -499,7 +499,7 @@ describe('Close', () => {
 
   test('lets the picker change fetch nothing again', async () => {
     const stub = answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     await userEvent.click(closeButton());
     await userEvent.selectOptions(picker(), 'a-1');
@@ -508,7 +508,7 @@ describe('Close', () => {
 
   test('shows the conversation again from the button', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     await userEvent.click(closeButton());
     await load();
@@ -520,7 +520,7 @@ describe('Close', () => {
 describe('when it is destroyed', () => {
   test('a load under way draws nothing', async () => {
     const { pending } = holding();
-    const { unmount } = render(Conversation);
+    const { unmount } = page.render(Conversation);
     await userEvent.click(showButton());
     unmount();
     pending[0]?.resolve(chatAnswer(entries()));
@@ -533,12 +533,12 @@ describe('when it is destroyed', () => {
 describe('a refresh of the session', () => {
   /** The page sees the same session change: a new object for it. */
   function refreshed(changes: Partial<SessionDetail> = {}): void {
-    setPayload({ session: session({ turns: 11, ...changes }) });
+    page.set({ session: session({ turns: 11, ...changes }) });
   }
 
   test('reads the conversation shown again, from the agent shown', async () => {
     const stub = answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await userEvent.selectOptions(picker(), 'a-1');
     await load();
     refreshed();
@@ -549,7 +549,7 @@ describe('a refresh of the session', () => {
 
   test('changes nothing where the answer is the same: every node stays', async () => {
     const stub = answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     const before = nodesByKey();
     refreshed();
@@ -561,7 +561,7 @@ describe('a refresh of the session', () => {
   test('keeps the nodes of an entry that came again as another object, equal to the old', async () => {
     // as read from the server: equal entries, but other objects
     answering(chatAnswer(entries()), chatAnswer(structuredClone(entries())));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     const before = nodesByKey();
     refreshed();
@@ -576,7 +576,7 @@ describe('a refresh of the session', () => {
       chatEntry({ timestamp: '2026-09-30T08:00:04.000Z', text: 'reply three', message_id: 'm-3' }),
     ]);
     answering(chatAnswer(first), chatAnswer(second));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     const before = nodesByKey();
     refreshed();
@@ -595,7 +595,7 @@ describe('a refresh of the session', () => {
       chatEntry({ ...first[3], text: 'reply two, longer' }),
     ]);
     answering(chatAnswer(first), chatAnswer(second));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     const before = nodesByKey();
     const row = rows()[0];
@@ -621,7 +621,7 @@ describe('a refresh of the session', () => {
     /** Loads the call without its result, then has the next read give it. */
     async function loadAsked(): Promise<void> {
       answering(chatAnswer(asked()), chatAnswer(answered()));
-      render(Conversation);
+      page.render(Conversation);
       await load();
     }
 
@@ -675,7 +675,7 @@ describe('a refresh of the session', () => {
 
   test('keeps a fresh load from inheriting what was open before', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     detailsOf(rows()[2]).open = true;
     await load();
@@ -686,7 +686,7 @@ describe('a refresh of the session', () => {
     const first = entries();
     const second = [...first, chatEntry({ timestamp: '2026-09-30T08:00:04.000Z', text: 'reply three' })];
     answering(chatAnswer(first), chatAnswer(second));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     const scrollBy = vi.fn();
     window.scrollBy = scrollBy as unknown as typeof window.scrollBy;
@@ -703,7 +703,7 @@ describe('a refresh of the session', () => {
     const first = entries();
     const second = [...first, chatEntry({ timestamp: '2026-09-30T08:00:04.000Z', text: 'reply three' })];
     answering(chatAnswer(first), chatAnswer(second));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     const scrollBy = vi.fn();
     window.scrollBy = scrollBy as unknown as typeof window.scrollBy;
@@ -718,7 +718,7 @@ describe('a refresh of the session', () => {
 
   test('keeps the conversation where reading it fails', async () => {
     answering(chatAnswer(entries()), new Error('HTTP 500'));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     const before = nodesByKey();
     refreshed();
@@ -729,7 +729,7 @@ describe('a refresh of the session', () => {
 
   test('tries again with the next one after a failure', async () => {
     answering(chatAnswer(entries()), new Error('HTTP 500'), chatAnswer([chatEntry({ text: 'recovered' })]));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     refreshed();
     await settle();
@@ -740,7 +740,7 @@ describe('a refresh of the session', () => {
 
   test('reads nothing while the conversation is not shown', async () => {
     const stub = answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     refreshed();
     await settle();
     expect(stub).not.toHaveBeenCalled();
@@ -748,7 +748,7 @@ describe('a refresh of the session', () => {
 
   test('reads nothing once it is closed', async () => {
     const stub = answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await load();
     await userEvent.click(closeButton());
     refreshed();
@@ -759,7 +759,7 @@ describe('a refresh of the session', () => {
 
   test('reads nothing while the first load is under way', async () => {
     const { stub } = holding();
-    render(Conversation);
+    page.render(Conversation);
     await userEvent.click(showButton());
     refreshed();
     await settle();
@@ -768,7 +768,7 @@ describe('a refresh of the session', () => {
 
   test('is dropped where a newer read started meanwhile', async () => {
     const { pending } = holding();
-    render(Conversation);
+    page.render(Conversation);
     await userEvent.click(showButton());
     pending[0]?.resolve(chatAnswer(entries()));
     await settle();
@@ -786,7 +786,7 @@ describe('a refresh of the session', () => {
 
   test('keeps the nodes of the frame: the picker keeps its choice', async () => {
     answering(chatAnswer(entries()));
-    render(Conversation);
+    page.render(Conversation);
     await userEvent.selectOptions(picker(), 'a-1');
     const node = picker();
     refreshed();

@@ -10,11 +10,9 @@ its heading and the filters only.
 -->
 <script lang="ts">
   import type { SessionListItem } from '../lib/api';
+  import { getApp } from '../lib/app.svelte';
   import { sessionHref, sessionName } from '../lib/costly';
   import { whole } from '../lib/format';
-  import { tablePages } from '../lib/paging.svelte';
-  import { payload } from '../lib/payload.svelte';
-  import { hype } from '../lib/prefs.svelte';
   import {
     SESSION_COLUMNS,
     sessionCells,
@@ -23,6 +21,8 @@ its heading and the filters only.
     sessionProjects,
   } from '../lib/tables';
   import TableView from './TableView.svelte';
+
+  const { payload, hype, pages } = getApp();
 
   const KEY = 'sessions';
 
@@ -67,7 +67,7 @@ its heading and the filters only.
         () => project,
         (picked) => {
           project = picked;
-          tablePages.forget(KEY);
+          pages.forget(KEY);
         }
       }
     >
@@ -87,7 +87,7 @@ its heading and the filters only.
         () => text,
         (typed) => {
           text = typed;
-          tablePages.forget(KEY);
+          pages.forget(KEY);
         }
       }
     />

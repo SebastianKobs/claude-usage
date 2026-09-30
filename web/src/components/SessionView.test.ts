@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import type { SecretAccess, SessionDetail, Waiting } from '../lib/api';
 import {
   agent,
@@ -17,10 +18,9 @@ import {
   toolKindRow,
   usage,
 } from '../lib/fixtures';
-import { tablePages } from '../lib/paging.svelte';
-import { payload, setPayload } from '../lib/payload.svelte';
-import { preferences } from '../lib/prefs.svelte';
 import SessionView from './SessionView.svelte';
+
+const page = pagePerTest();
 
 const QUESTION: Waiting = {
   kind: 'question',
@@ -92,7 +92,7 @@ class IdleResizeObserver {
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', IdleResizeObserver);
   localStorage.clear();
-  preferences.pageSize = 25;
+  page.app.preferences.pageSize = 25;
   scrollTo = vi.fn();
   window.scrollTo = scrollTo as unknown as typeof window.scrollTo;
   Element.prototype.scrollIntoView = vi.fn() as unknown as typeof Element.prototype.scrollIntoView;
@@ -104,10 +104,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  payload.reset();
-  for (const key of KEYS) tablePages.forget(key);
-  preferences.theme = null;
-  preferences.pageSize = 25;
+  for (const key of KEYS) page.app.pages.forget(key);
   localStorage.clear();
   location.hash = '';
   document.body.innerHTML = '';
@@ -118,13 +115,13 @@ const headings = (level: number) => screen.getAllByRole('heading', { level }).ma
 
 describe('without a session', () => {
   test('there is nothing in the page', () => {
-    const { container } = render(SessionView);
+    const { container } = page.render(SessionView);
     expect(container.children).toHaveLength(0);
     expect(screen.queryByRole('region')).toBeNull();
   });
 
   test('the other sections stay', () => {
-    render(SessionView);
+    page.render(SessionView);
     expect(document.getElementById('filters')?.hidden).toBe(false);
     expect(document.getElementById('summary')?.hidden).toBe(false);
   });
@@ -132,8 +129,8 @@ describe('without a session', () => {
 
 describe('the heading', () => {
   test('is the section`s name: a level 2 heading with the title, taking no place in the tab order', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const section = screen.getByRole('region', { name: 'Checkout: split payment step' });
     expect(section).toHaveAttribute('id', 'drilldown');
     expect(section).toHaveClass('card');
@@ -144,14 +141,14 @@ describe('the heading', () => {
   });
 
   test('calls a session without a title untitled', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ title: null }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ title: null }) });
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/^Untitled session$/);
   });
 
   test('has the Close link, which goes to the page`s address, after a spacer', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const close = screen.getByRole('link', { name: 'Close' });
     expect(close).toHaveAttribute('href', '#');
     expect(close).toHaveAttribute('aria-keyshortcuts', 'Escape');
@@ -159,8 +156,8 @@ describe('the heading', () => {
   });
 
   test('is followed by the prompt where there is one, then the facts', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const prompt = document.querySelector('.prompt');
     expect(prompt).toHaveTextContent(/^Split the payment step in two$/);
     expect(prompt?.previousElementSibling).toHaveClass('chart-head');
@@ -170,8 +167,8 @@ describe('the heading', () => {
   });
 
   test('has no prompt without one, the facts right after the heading', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ prompt: null }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ prompt: null }) });
     expect(document.querySelector('.prompt')).toBeNull();
     expect(document.querySelector('.chart-head')?.nextElementSibling).toHaveClass('muted');
   });
@@ -179,19 +176,19 @@ describe('the heading', () => {
 
 describe('opening and closing', () => {
   test('focuses the heading and steps the range`s filters and the summary aside', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     expect(screen.getByRole('heading', { level: 2 })).toHaveFocus();
     expect(document.getElementById('filters')?.hidden).toBe(true);
     expect(document.getElementById('summary')?.hidden).toBe(true);
   });
 
   test('shows the sections again when the session goes, and returns focus to the link that opened it', () => {
-    render(SessionView);
+    page.render(SessionView);
     document.getElementById('opener')?.focus();
-    setPayload({ session: fullSession() });
+    page.set({ session: fullSession() });
     expect(document.getElementById('opener')).not.toHaveFocus();
-    setPayload({ session: null });
+    page.set({ session: null });
     expect(document.getElementById('filters')?.hidden).toBe(false);
     expect(document.getElementById('summary')?.hidden).toBe(false);
     expect(document.getElementById('opener')).toHaveFocus();
@@ -200,29 +197,29 @@ describe('opening and closing', () => {
 
   test('scrolls back to where the page was', () => {
     Object.defineProperty(window, 'scrollY', { value: 250, configurable: true });
-    render(SessionView);
-    setPayload({ session: fullSession() });
-    setPayload({ session: null });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
+    page.set({ session: null });
     expect(scrollTo).toHaveBeenCalledWith(0, 250);
   });
 
   test('does not open again, or move focus, when the same session is refreshed', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const section = screen.getByRole('region', { name: 'Checkout: split payment step' });
     const close = screen.getByRole('link', { name: 'Close' });
     close.focus();
-    setPayload({ session: fullSession({ turns: 11 }) });
+    page.set({ session: fullSession({ turns: 11 }) });
     expect(screen.getByRole('region', { name: 'Checkout: split payment step' })).toBe(section);
     expect(close).toHaveFocus();
     expect(document.getElementById('summary')?.hidden).toBe(true);
   });
 
   test('opens again for another session, without the page coming back in between', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const section = screen.getByRole('region', { name: 'Checkout: split payment step' });
-    setPayload({ session: fullSession({ session_id: 'other', title: 'Another one' }) });
+    page.set({ session: fullSession({ session_id: 'other', title: 'Another one' }) });
     expect(screen.getByRole('region', { name: 'Another one' })).not.toBe(section);
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Another one');
     expect(screen.getByRole('heading', { level: 2 })).toHaveFocus();
@@ -234,8 +231,8 @@ describe('Escape', () => {
   test('clears the hash while a session is shown', async () => {
     const user = userEvent.setup();
     location.hash = '#session/abc123';
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     await user.keyboard('{Escape}');
     expect(location.hash).toBe('');
   });
@@ -247,8 +244,8 @@ describe('Escape', () => {
     window.addEventListener('keydown', take, true);
     try {
       location.hash = '#session/abc123';
-      render(SessionView);
-      setPayload({ session: fullSession() });
+      page.render(SessionView);
+      page.set({ session: fullSession() });
       await user.keyboard('{Escape}');
       expect(location.hash).toBe('#session/abc123');
     } finally {
@@ -259,8 +256,8 @@ describe('Escape', () => {
   test('leaves the hash alone for another key', async () => {
     const user = userEvent.setup();
     location.hash = '#session/abc123';
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     await user.keyboard('a');
     expect(location.hash).toBe('#session/abc123');
   });
@@ -268,16 +265,16 @@ describe('Escape', () => {
   test('does nothing where no session is shown', async () => {
     const user = userEvent.setup();
     location.hash = '#other';
-    render(SessionView);
+    page.render(SessionView);
     await user.keyboard('{Escape}');
     expect(location.hash).toBe('#other');
   });
 
   test('does nothing once the session is closed', async () => {
     const user = userEvent.setup();
-    render(SessionView);
-    setPayload({ session: fullSession() });
-    setPayload({ session: null });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
+    page.set({ session: null });
     location.hash = '#other';
     await user.keyboard('{Escape}');
     expect(location.hash).toBe('#other');
@@ -286,8 +283,8 @@ describe('Escape', () => {
 
 describe('the waits', () => {
   test('are a status notice under the facts, hidden while nothing waits', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const notice = screen.getByRole('status', { hidden: true });
     expect(notice).toHaveClass('card', 'wait-notice');
     expect(notice).not.toBeVisible();
@@ -295,20 +292,20 @@ describe('the waits', () => {
   });
 
   test('show the session`s own wait, and follow the live answer for the others', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ waiting: QUESTION }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ waiting: QUESTION }) });
     expect(screen.getByRole('status')).toHaveTextContent(/^This session is waiting for your answer since /);
-    setPayload({ live: live({ sessions: [liveSession({ session_id: 'live-2', title: 'Blog', waiting: QUESTION })] }) });
+    page.set({ live: live({ sessions: [liveSession({ session_id: 'live-2', title: 'Blog', waiting: QUESTION })] }) });
     expect(screen.getByRole('link', { name: 'Blog' })).toHaveAttribute('href', '#session/live-2');
-    setPayload({ live: live({ sessions: [liveSession({ session_id: 'live-2', title: 'Blog' })] }) });
+    page.set({ live: live({ sessions: [liveSession({ session_id: 'live-2', title: 'Blog' })] }) });
     expect(screen.queryByRole('link', { name: 'Blog' })).toBeNull();
   });
 });
 
 describe('the tile rows', () => {
   test('are two: the cost, input, turns and output, then time and lines changed, in a labelled group', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const rows = document.querySelectorAll('.kpis.session-kpis');
     expect(rows).toHaveLength(2);
     expect(rows[0]).not.toHaveAttribute('role');
@@ -320,16 +317,16 @@ describe('the tile rows', () => {
   });
 
   test('are one without a runtime: no group for the time', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ runtime: null }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ runtime: null }) });
     expect(document.querySelectorAll('.kpis.session-kpis')).toHaveLength(1);
     expect(screen.queryByRole('group', { name: 'Time and lines changed' })).toBeNull();
   });
 
   test('follow a refresh: the group comes when a runtime does', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ runtime: null }) });
-    setPayload({ session: fullSession({ runtime: sessionRuntime({ source: 'transcripts' }) }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ runtime: null }) });
+    page.set({ session: fullSession({ runtime: sessionRuntime({ source: 'transcripts' }) }) });
     expect(screen.getByRole('group', { name: 'Time and lines changed' })).toBeInTheDocument();
   });
 });
@@ -339,16 +336,16 @@ describe('the secret accesses', () => {
     severities.map((severity, index) => secretAccess({ severity, path: `place-${index}` }));
 
   test('come after the tile rows and before the gauge', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ live: true, current: gauge(), secret_accesses: accesses('medium') }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ live: true, current: gauge(), secret_accesses: accesses('medium') }) });
     const card = document.getElementById('secret-alert') as HTMLElement;
     expect(card.previousElementSibling).toBe(screen.getByRole('group', { name: 'Time and lines changed' }));
     expect(card.nextElementSibling).toBe(document.getElementById('current-gauge'));
   });
 
   test('leave nothing in the view for a session without any', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ live: true, current: gauge() }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ live: true, current: gauge() }) });
     expect(document.getElementById('secret-alert')).toBeNull();
     const group = screen.getByRole('group', { name: 'Time and lines changed' });
     expect(group.nextElementSibling).toBe(document.getElementById('current-gauge'));
@@ -356,20 +353,20 @@ describe('the secret accesses', () => {
 
   test('stay folded open or shut through a refresh, and start folded again in another session', async () => {
     const user = userEvent.setup();
-    render(SessionView);
-    setPayload({ session: fullSession({ secret_accesses: accesses('medium') }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ secret_accesses: accesses('medium') }) });
     await user.click(screen.getByRole('button', { name: 'Show them' }));
-    setPayload({ session: fullSession({ secret_accesses: accesses('medium', 'low') }) });
+    page.set({ session: fullSession({ secret_accesses: accesses('medium', 'low') }) });
     expect(screen.getByRole('button', { name: 'Hide them' })).toHaveAttribute('aria-expanded', 'true');
-    setPayload({ session: fullSession({ session_id: 'other', secret_accesses: accesses('medium') }) });
+    page.set({ session: fullSession({ session_id: 'other', secret_accesses: accesses('medium') }) });
     expect(screen.getByRole('button', { name: 'Show them' })).toHaveAttribute('aria-expanded', 'false');
   });
 });
 
 describe('the gauge', () => {
   test('follows the tile rows and comes before the context per turn', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ live: true, current: gauge() }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ live: true, current: gauge() }) });
     const gaugeCard = document.getElementById('current-gauge') as HTMLElement;
     const group = screen.getByRole('group', { name: 'Time and lines changed' });
     expect(gaugeCard.previousElementSibling).toBe(group);
@@ -377,8 +374,8 @@ describe('the gauge', () => {
   });
 
   test('leaves nothing between the tile rows and the context per turn for a session without a gauge', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     expect(document.getElementById('current-gauge')).toBeNull();
     const group = screen.getByRole('group', { name: 'Time and lines changed' });
     expect(group.nextElementSibling).toBe(contextHead());
@@ -387,8 +384,8 @@ describe('the gauge', () => {
 
 describe('the context per turn', () => {
   test('is a section of its own between the gauge and the By model table, its details closing it', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const head = contextHead();
     expect(head.nextElementSibling).toHaveClass('legend');
     expect(head.nextElementSibling?.nextElementSibling).toBe(document.getElementById('context-chart'));
@@ -397,25 +394,25 @@ describe('the context per turn', () => {
   });
 
   test('is not there without a session', () => {
-    render(SessionView);
+    page.render(SessionView);
     expect(document.getElementById('context-chart')).toBeNull();
   });
 
   test('starts at the main thread again in another session', async () => {
     const user = userEvent.setup();
-    render(SessionView);
-    setPayload({ session: fullSession({ agents: withTurns() }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ agents: withTurns() }) });
     await user.selectOptions(screen.getByRole('combobox', { name: PICKER }), 'a-1');
     expect(screen.getByRole('combobox', { name: PICKER })).toHaveValue('a-1');
-    setPayload({ session: fullSession({ session_id: 'other', agents: withTurns() }) });
+    page.set({ session: fullSession({ session_id: 'other', agents: withTurns() }) });
     expect(screen.getByRole('combobox', { name: PICKER })).toHaveValue('main');
     expect(document.getElementById('context-note')).toHaveTextContent(/^main thread: /);
   });
 
   test('keeps the transcript picked and the table view through a refresh of the same session', async () => {
     const user = userEvent.setup();
-    render(SessionView);
-    setPayload({ session: fullSession({ agents: withTurns() }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ agents: withTurns() }) });
     await user.selectOptions(screen.getByRole('combobox', { name: PICKER }), 'a-1');
     await user.click(screen.getByRole('button', { name: 'Table view' }));
     const nodes = [
@@ -423,7 +420,7 @@ describe('the context per turn', () => {
       document.getElementById('context-chart'),
       document.getElementById('context-table'),
     ];
-    setPayload({ session: fullSession({ turns: 11, agents: withTurns() }) });
+    page.set({ session: fullSession({ turns: 11, agents: withTurns() }) });
     expect([
       screen.getByRole('combobox', { name: PICKER }),
       document.getElementById('context-chart'),
@@ -448,8 +445,8 @@ describe('the conversation', () => {
   const sections = () => [...document.querySelectorAll('#chat-section')];
 
   test('is one section, after the agents and before the skills and servers, with a transcript', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ transcript: true, agents: toolAgents() }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ transcript: true, agents: toolAgents() }) });
     expect(sections()).toHaveLength(1);
     const section = sections()[0] as HTMLElement;
     const agentsTable = screen.getByRole('table', { name: 'Main thread and subagents' });
@@ -459,8 +456,8 @@ describe('the conversation', () => {
   });
 
   test('is last, after the API errors, without a transcript', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ agents: toolAgents() }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ agents: toolAgents() }) });
     expect(sections()).toHaveLength(1);
     const section = sections()[0] as HTMLElement;
     const errors = screen.getByRole('table', { name: 'Rate limits and API errors' });
@@ -470,35 +467,35 @@ describe('the conversation', () => {
   });
 
   test('is the same node across a refresh of the same session, with what the reader opened', async () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const section = sections()[0] as HTMLElement;
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Conversation of' }), 'a-1');
-    setPayload({ session: fullSession({ turns: 11, agents: [agent(), inRun('w-1')] }) });
+    page.set({ session: fullSession({ turns: 11, agents: [agent(), inRun('w-1')] }) });
     expect(sections()[0]).toBe(section);
   });
 
   test('is new for another session, with its picker at the main thread', async () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const section = sections()[0] as HTMLElement;
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Conversation of' }), 'a-1');
-    setPayload({ session: fullSession({ session_id: 'other' }) });
+    page.set({ session: fullSession({ session_id: 'other' }) });
     expect(sections()[0]).not.toBe(section);
     expect(screen.getByRole('combobox', { name: 'Conversation of' })).toHaveValue('');
   });
 
   test('has no slot left for the old scripts', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     expect(document.querySelectorAll('.legacy-slot')).toHaveLength(0);
   });
 });
 
 describe('the tables', () => {
   test('come in order under their headings: by model, agents, tools, by skill, by MCP server, API errors', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ agents: toolAgents() }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ agents: toolAgents() }) });
     // the first is the context per turn's, which has no table without a transcript with turns
     expect(headings(3).slice(1)).toEqual([
       'By model',
@@ -514,8 +511,8 @@ describe('the tables', () => {
   });
 
   test('come in order with a transcript too, the tools after the API errors', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ transcript: true, agents: toolAgents() }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ transcript: true, agents: toolAgents() }) });
     expect(headings(3).slice(1)).toEqual([
       'By model',
       'Main thread and subagents',
@@ -528,8 +525,8 @@ describe('the tables', () => {
   });
 
   test('have the tools between the agents and the conversation without a transcript', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ agents: toolAgents() }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ agents: toolAgents() }) });
     const tools = screen.getByRole('table', { name: 'Tools' });
     const agents = screen.getByRole('table', { name: 'Main thread and subagents' });
     expect(agents.parentElement?.nextElementSibling).toBe(document.getElementById('session-tools-title'));
@@ -538,8 +535,8 @@ describe('the tables', () => {
   });
 
   test('have the tools after the API errors table, last in the card, with a transcript', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ transcript: true, agents: toolAgents() }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ transcript: true, agents: toolAgents() }) });
     const errors = screen.getByRole('table', { name: 'Rate limits and API errors' });
     const tools = screen.getByRole('table', { name: 'Tools' });
     expect(errors.parentElement?.nextElementSibling).toBe(document.getElementById('session-tools-title'));
@@ -547,14 +544,14 @@ describe('the tables', () => {
   });
 
   test('say there are no tool calls where the transcripts hold none', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     expect(screen.getByText('No tool calls.')).toBeInTheDocument();
   });
 
   test('are no cards of their own: the session card holds them, the skills and servers side by side', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     // the conversation is a section of its own inside it, named by its heading
     expect(screen.getAllByRole('region').map((region) => region.id)).toEqual(['drilldown', 'chat-section']);
     const grid = document.querySelector('.grid-2') as HTMLElement;
@@ -564,8 +561,8 @@ describe('the tables', () => {
   });
 
   test('say their words for no rows', () => {
-    render(SessionView);
-    setPayload({ session: fullSession({ models: [], skills: [], mcp_servers: [], api_errors: [] }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ models: [], skills: [], mcp_servers: [], api_errors: [] }) });
     expect(screen.getByText('No usage in this range.')).toBeInTheDocument();
     expect(screen.getByText('No turns attributed to a skill.')).toBeInTheDocument();
     expect(screen.getByText('No turns attributed to an MCP server.')).toBeInTheDocument();
@@ -573,8 +570,8 @@ describe('the tables', () => {
   });
 
   test('have the model with its swatch, the skill and the server by name', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const models = screen.getByRole('table', { name: 'By model' });
     expect(within(models).getByText('claude-opus-5-5').querySelector('.swatch')).not.toBeNull();
     expect(within(screen.getByRole('table', { name: 'By skill' })).getByText('review')).toBeInTheDocument();
@@ -582,25 +579,25 @@ describe('the tables', () => {
   });
 
   test('have the main thread and the helper as agent rows', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const table = screen.getByRole('table', { name: 'Main thread and subagents' });
     const names = within(table).getAllByRole('row').slice(1).map((row) => row.querySelector('strong')?.textContent);
     expect(names).toEqual(['main', 'Explore']);
   });
 
   test('have the API errors without the session column', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     const table = screen.getByRole('table', { name: 'Rate limits and API errors' });
     const heads = within(table).getAllByRole('columnheader').map((head) => head.textContent);
     expect(heads).toEqual(['When', 'Error', 'Quota', 'Resets', 'Agent']);
   });
 
   test('use the theme`s words for the headings they have', () => {
-    preferences.theme = 'hacker';
-    render(SessionView);
-    setPayload({ session: fullSession() });
+    page.app.preferences.theme = 'hacker';
+    page.render(SessionView);
+    page.set({ session: fullSession() });
     expect(headings(3)[0]).toBe('Context per turn');
     expect(headings(3)[1]).not.toBe('By model');
     expect(headings(3)[2]).toBe('Main thread and subagents');
@@ -609,13 +606,13 @@ describe('the tables', () => {
   test('page under the session`s keys, so another session starts at the first page', async () => {
     const user = userEvent.setup();
     const errors = Array.from({ length: 30 }, (_unused, index) => apiErrorEvent({ record_id: `err-${index}` }));
-    render(SessionView);
-    setPayload({ session: fullSession({ api_errors: errors }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ api_errors: errors }) });
     const sizes = screen.getAllByRole('combobox', { name: 'Rows per page' }).map((select) => select.id);
     expect(sizes).toEqual(['pager-abc123-api-errors-size']);
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
-    expect(tablePages.first('abc123-api-errors')).toBe(25);
-    setPayload({ session: fullSession({ session_id: 'other', api_errors: errors }) });
+    expect(page.app.pages.first('abc123-api-errors')).toBe(25);
+    page.set({ session: fullSession({ session_id: 'other', api_errors: errors }) });
     expect(screen.getByRole('combobox', { name: 'Rows per page' }).id).toBe('pager-other-api-errors-size');
     const table = screen.getByRole('table', { name: 'Rate limits and API errors' });
     expect(within(table).getAllByRole('row')).toHaveLength(1 + 25);
@@ -626,8 +623,8 @@ describe('the tables', () => {
       model: `m${index}`,
       ...usage({ cost: 50 - index }),
     }));
-    render(SessionView);
-    setPayload({ session: fullSession({ models }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ models }) });
     expect(screen.getByRole('combobox', { name: 'Rows per page' }).id).toBe('pager-abc123-models-size');
   });
 });
@@ -641,8 +638,8 @@ describe('a workflow run', () => {
 
   test('opens its agents with its button, closed at first', async () => {
     const user = userEvent.setup();
-    render(SessionView);
-    setPayload({ session: withRun() });
+    page.render(SessionView);
+    page.set({ session: withRun() });
     expect(fold()).toHaveAttribute('aria-expanded', 'false');
     expect(agentRowCount()).toBe(2);
     await user.click(fold());
@@ -652,11 +649,11 @@ describe('a workflow run', () => {
 
   test('stays open across a refresh of the same session', async () => {
     const user = userEvent.setup();
-    render(SessionView);
-    setPayload({ session: withRun() });
+    page.render(SessionView);
+    page.set({ session: withRun() });
     await user.click(fold());
     const button = fold();
-    setPayload({ session: withRun({ turns: 11 }) });
+    page.set({ session: withRun({ turns: 11 }) });
     flushSync();
     expect(fold()).toBe(button);
     expect(fold()).toHaveAttribute('aria-expanded', 'true');
@@ -665,10 +662,10 @@ describe('a workflow run', () => {
 
   test('starts closed again for another session', async () => {
     const user = userEvent.setup();
-    render(SessionView);
-    setPayload({ session: withRun() });
+    page.render(SessionView);
+    page.set({ session: withRun() });
     await user.click(fold());
-    setPayload({ session: withRun({ session_id: 'other' }) });
+    page.set({ session: withRun({ session_id: 'other' }) });
     expect(fold()).toHaveAttribute('aria-expanded', 'false');
     expect(agentRowCount()).toBe(2);
   });
@@ -693,8 +690,8 @@ describe('the tools', () => {
 
   test('open what a row splits into with its button, closed at first', async () => {
     const user = userEvent.setup();
-    render(SessionView);
-    setPayload({ session: withBash() });
+    page.render(SessionView);
+    page.set({ session: withBash() });
     expect(fold()).toHaveAttribute('aria-expanded', 'false');
     expect(toolRowCount()).toBe(2);
     await user.click(fold());
@@ -703,28 +700,28 @@ describe('the tools', () => {
 
   test('stay open across a refresh of the same session', async () => {
     const user = userEvent.setup();
-    render(SessionView);
-    setPayload({ session: withBash() });
+    page.render(SessionView);
+    page.set({ session: withBash() });
     await user.click(fold());
     const button = fold();
-    setPayload({ session: withBash({ turns: 11 }) });
+    page.set({ session: withBash({ turns: 11 }) });
     flushSync();
     expect(fold()).toBe(button);
     expect(toolRowCount()).toBe(3);
   });
 
   test('start closed again for another session, on the first page of their own key', () => {
-    render(SessionView);
-    setPayload({ session: withBash() });
-    setPayload({ session: withBash({ session_id: 'other' }) });
+    page.render(SessionView);
+    page.set({ session: withBash() });
+    page.set({ session: withBash({ session_id: 'other' }) });
     expect(fold()).toHaveAttribute('aria-expanded', 'false');
     expect(toolRowCount()).toBe(2);
   });
 
   test('page under the session`s key', () => {
     const tools = Array.from({ length: 12 }, (_unused, index) => toolKindRow({ tool: `Tool${index}` }));
-    render(SessionView);
-    setPayload({ session: fullSession({ agents: [agent({ tool_kinds: tools })] }) });
+    page.render(SessionView);
+    page.set({ session: fullSession({ agents: [agent({ tool_kinds: tools })] }) });
     expect(screen.getByRole('combobox', { name: 'Rows per page' }).id).toBe('pager-abc123-tools-size');
   });
 });

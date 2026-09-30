@@ -7,6 +7,7 @@ a row is hovered or focused a tooltip gives its parts with their shares, the tot
 lists the same sessions with their turns, contexts and parts. Without a summary the card has its heading and no chart.
 -->
 <script lang="ts">
+  import { getApp } from '../lib/app.svelte';
   import {
     COSTLY_PARTS,
     costlyRows,
@@ -16,14 +17,14 @@ lists the same sessions with their turns, contexts and parts. Without a summary 
     sessionHref,
     sessionName,
   } from '../lib/costly';
-  import { payload } from '../lib/payload.svelte';
-  import { hype } from '../lib/prefs.svelte';
   import ChartCard from './ChartCard.svelte';
   import ChartTooltip from './ChartTooltip.svelte';
   import Swatch from './Swatch.svelte';
   import TableView from './TableView.svelte';
 
   type TableRow = ReturnType<typeof costlyTable>['rows'][number];
+
+  const { payload, hype } = getApp();
 
   const summary = $derived(payload.summary);
   const sessions = $derived(summary?.costly_sessions ?? []);

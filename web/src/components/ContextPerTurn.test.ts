@@ -3,12 +3,12 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import type { Agent, ContextTurn, SessionDetail } from '../lib/api';
 import { agent, compaction, contextTurn, sessionDetail, versusKeeping } from '../lib/fixtures';
-import { tablePages } from '../lib/paging.svelte';
-import { payload, setPayload } from '../lib/payload.svelte';
-import { preferences } from '../lib/prefs.svelte';
 import ContextPerTurn from './ContextPerTurn.svelte';
+
+const page = pagePerTest();
 
 /** `count` turns a minute apart, the context growing by 10K from 10K, the parts adding up to it. */
 function turnsOf(count: number, changes: Partial<ContextTurn> = {}): ContextTurn[] {
@@ -85,32 +85,30 @@ const fills = () => [...chart().querySelectorAll('g[role="img"] > [fill^="var(--
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', ImmediateResizeObserver);
   localStorage.clear();
-  preferences.pageSize = 25;
+  page.app.preferences.pageSize = 25;
   measure(0);
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  payload.reset();
   for (const key of ['abc123-main', 'abc123-a-1', 'abc123-none', 'other-main']) {
-    for (const name of ['turns', 'growth', 'compactions']) tablePages.forget(`${key}-${name}`);
+    for (const name of ['turns', 'growth', 'compactions']) page.app.pages.forget(`${key}-${name}`);
   }
-  preferences.pageSize = 25;
   localStorage.clear();
   Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
 });
 
 describe('without a session', () => {
   test('there is nothing in the page', () => {
-    const { container } = render(ContextPerTurn);
+    const { container } = page.render(ContextPerTurn);
     expect(container.children).toHaveLength(0);
   });
 });
 
 describe('the head', () => {
   test('is the heading, the note, a spacer and the table toggle, in a chart head', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     const head = document.querySelector('.chart-head') as HTMLElement;
     expect([...head.children].map((child) => child.tagName)).toEqual(['H3', 'SPAN', 'SPAN', 'BUTTON']);
     expect(head.children[0]).toHaveTextContent(/^Context per turn$/);
@@ -123,32 +121,32 @@ describe('the head', () => {
   });
 
   test('is not themed', () => {
-    preferences.theme = 'hacker';
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.app.preferences.theme = 'hacker';
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     expect(screen.getByRole('heading', { level: 3, name: 'Context per turn' })).toBeInTheDocument();
-    preferences.theme = null;
+    page.app.preferences.theme = null;
   });
 
   test('the note names the transcript shown', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     expect(document.getElementById('context-note')).toHaveTextContent(
       /^main thread: every turn sends its whole context again$/,
     );
   });
 
   test('the note is empty where no transcript has turns', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([agent()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([agent()]) });
     expect(document.getElementById('context-note')?.textContent).toBe('');
   });
 });
 
 describe('the legend', () => {
   test('lists the parts dearest first, each after its swatch, then the compaction rule', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     const legend = document.querySelector('.legend') as HTMLElement;
     expect(texts(':scope > span', legend)).toEqual(['New input', 'Cache write', 'Cache read', 'compaction']);
     expect(legend.previousElementSibling).toHaveClass('chart-head');
@@ -164,20 +162,20 @@ describe('the legend', () => {
 
 describe('the picker', () => {
   test('is not there with one transcript', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     expect(screen.queryByRole('combobox')).toBeNull();
   });
 
   test('is not there where the others have no turns', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main(), helper({ context_per_turn: [] })]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main(), helper({ context_per_turn: [] })]) });
     expect(screen.queryByRole('combobox')).toBeNull();
   });
 
   test('offers the transcripts with turns, the main thread first, between the note and the toggle', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main(), helper()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main(), helper()]) });
     expect(picker()).toHaveAttribute('id', 'context-agent');
     expect(picker().previousElementSibling).toHaveClass('spacer');
     expect(picker().nextElementSibling).toBe(toggle());
@@ -186,7 +184,7 @@ describe('the picker', () => {
   });
 
   test('groups a workflow run`s agents under the run`s name', () => {
-    render(ContextPerTurn);
+    page.render(ContextPerTurn);
     const inRun = (id: string) =>
       helper({
         agent_id: id,
@@ -195,7 +193,7 @@ describe('the picker', () => {
         workflow_run: 'wf_1',
         workflow_name: 'review',
       });
-    setPayload({ session: session([main(), inRun('w-1'), inRun('w-2')]) });
+    page.set({ session: session([main(), inRun('w-1'), inRun('w-2')]) });
     const group = picker().querySelector('optgroup') as HTMLElement;
     expect(group).toHaveAttribute('label', 'workflow · review');
     expect(texts('option', group)).toEqual(['workflow-subagent', 'workflow-subagent']);
@@ -204,8 +202,8 @@ describe('the picker', () => {
 
   test('switches the note, the chart, the table view and the tiles to the transcript picked', async () => {
     const user = userEvent.setup();
-    render(ContextPerTurn);
-    setPayload({ session: session([main(), helper()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main(), helper()]) });
     await user.click(toggle());
     expect(chart().querySelector('g[role="img"]')).toHaveAccessibleName(
       /^Context per turn of the main thread, .* 5 turns/,
@@ -222,10 +220,10 @@ describe('the picker', () => {
 
   test('shows the main thread again where the transcript picked is gone', async () => {
     const user = userEvent.setup();
-    render(ContextPerTurn);
-    setPayload({ session: session([main(), helper()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main(), helper()]) });
     await user.selectOptions(picker(), 'a-1');
-    setPayload({ session: session([main(), helper({ agent_id: 'a-2' })]) });
+    page.set({ session: session([main(), helper({ agent_id: 'a-2' })]) });
     expect(picker()).toHaveValue('main');
     expect(document.getElementById('context-note')).toHaveTextContent(/^main thread: /);
   });
@@ -233,36 +231,36 @@ describe('the picker', () => {
 
 describe('the chart', () => {
   test('is a div of the chart class, in the order: head, legend, chart, details', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     expect(chart()).toHaveClass('chart');
     expect(chart().previousElementSibling).toHaveClass('legend');
     expect(chart().nextElementSibling).toHaveAttribute('id', 'context-details');
   });
 
   test('says so where there are no turns', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([agent()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([agent()]) });
     expect(chart().querySelector('svg')).toBeNull();
     expect(chart().querySelector('.empty')).toHaveTextContent(/^No turns with usage\.$/);
   });
 
   test('is as wide as its container, at the plot`s height with the x labels` band', () => {
     measure(640);
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     expect(chart().querySelector('svg')).toHaveAttribute('viewBox', '0 0 640 206');
   });
 
   test('has the y axis up to the peak rounded up, in steps of a quarter', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     expect(texts('text.axis-text', chart()).slice(0, 5)).toEqual(['0', '12.5K', '25K', '37.5K', '50K']);
   });
 
   test('stacks the parts, cache read at the bottom, each with an edge of the surface on top', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     const areas = fills();
     expect(areas.map((area) => area.getAttribute('fill'))).toEqual([
       'var(--context-read)',
@@ -279,16 +277,16 @@ describe('the chart', () => {
   });
 
   test('a single turn is a short column per part, not an area', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([agent({ context_per_turn: turnsOf(1) })]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([agent({ context_per_turn: turnsOf(1) })]) });
     expect(fills().map((shape) => shape.tagName)).toEqual(['rect', 'rect', 'rect']);
     expect(fills()[0]).toHaveAttribute('width', '12');
   });
 
   test('draws the baseline from the first turn to the last', () => {
     measure(640);
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     const baseline = chart().querySelector('line[stroke="var(--axis)"][y1="178"]');
     expect(baseline).toHaveAttribute('x1', '56');
     expect(baseline).toHaveAttribute('x2', '576');
@@ -297,8 +295,8 @@ describe('the chart', () => {
 
   test('marks the compact hint where the axis reaches it, labelled at the right', () => {
     measure(640);
-    render(ContextPerTurn);
-    setPayload({ session: session([main()], { compact_hint_tokens: 40_000 }) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()], { compact_hint_tokens: 40_000 }) });
     const line = chart().querySelector('line.reference-line');
     expect(line).toHaveAttribute('x1', '56');
     expect(line).toHaveAttribute('x2', '576');
@@ -309,16 +307,16 @@ describe('the chart', () => {
   });
 
   test('leaves the hint out where the axis stops short of it', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()], { compact_hint_tokens: 200_000 }) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()], { compact_hint_tokens: 200_000 }) });
     expect(chart().querySelector('.reference-line')).toBeNull();
   });
 
   test('puts a dashed rule before the first turn after a compaction, labelled by its trigger', () => {
     measure(640);
-    render(ContextPerTurn);
+    page.render(ContextPerTurn);
     const compactions = [compaction({ ts: '2026-09-30T08:01:30.000Z', trigger: 'manual' })];
-    setPayload({ session: session([main({ compactions })]) });
+    page.set({ session: session([main({ compactions })]) });
     const rule = chart().querySelector('line.compaction-rule');
     // between the second turn (x 186) and the third (316)
     expect(rule).toHaveAttribute('x1', '251');
@@ -332,35 +330,35 @@ describe('the chart', () => {
 
   test('labels a rule only where it has room, two close ones sharing the first label', () => {
     measure(640);
-    render(ContextPerTurn);
+    page.render(ContextPerTurn);
     const compactions = [
       compaction({ ts: '2026-09-30T08:00:30.000Z' }),
       compaction({ ts: '2026-09-30T08:00:40.000Z' }),
     ];
-    setPayload({ session: session([main({ compactions })]) });
+    page.set({ session: session([main({ compactions })]) });
     expect(chart().querySelectorAll('line.compaction-rule')).toHaveLength(2);
     expect(texts('text.axis-text[y="10"]', chart())).toEqual(['auto-compact']);
   });
 
   test('draws no rule for a compaction without a turn after it', () => {
-    render(ContextPerTurn);
+    page.render(ContextPerTurn);
     const compactions = [compaction({ ts: '2026-09-30T12:00:00.000Z' }), compaction({ ts: null })];
-    setPayload({ session: session([main({ compactions })]) });
+    page.set({ session: session([main({ compactions })]) });
     expect(chart().querySelector('.compaction-rule')).toBeNull();
   });
 
   test('labels the latest turn, and the peak where it is another', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     expect(texts('text.value-text', chart())).toEqual(['50K']);
     const turns = turnsOf(5).map((turn, index) => (index === 2 ? { ...turn, context: 90_000 } : turn));
-    setPayload({ session: session([agent({ context_per_turn: turns })]) });
+    page.set({ session: session([agent({ context_per_turn: turns })]) });
     expect(texts('text.value-text', chart())).toEqual(['peak 90K', '50K']);
   });
 
   test('labels the turns along the x axis, the first as turn 1', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     const labels = texts('text.axis-text[y="196"]', chart());
     expect(labels).toEqual(['turn 1', '2', '3', '4', '5']);
   });
@@ -369,8 +367,8 @@ describe('the chart', () => {
 describe('the slider', () => {
   test('is one, over the turns, reading the turn and its parts', () => {
     measure(640);
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     const slider = screen.getByRole('slider', { name: 'Context per turn by part; arrow keys step through the turns' });
     expect(screen.getAllByRole('slider')).toHaveLength(1);
     expect(slider).toHaveAttribute('aria-valuemin', '1');
@@ -385,8 +383,8 @@ describe('the slider', () => {
   });
 
   test('shows nothing until it is used', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     expect(chart().querySelector('.crosshair')).toBeNull();
     expect(chart().querySelector('.tooltip')).toBeNull();
   });
@@ -394,8 +392,8 @@ describe('the slider', () => {
   test('stepping shows the crosshair, a dot at the context and the tooltip of the turn', async () => {
     measure(640);
     const user = userEvent.setup();
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     screen.getByRole('slider').focus();
     await user.keyboard('{ArrowLeft}');
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuenow', '4');
@@ -415,8 +413,8 @@ describe('the slider', () => {
 
   test('the tooltip has a row per part dearest first with its swatch, then the context without one', async () => {
     const user = userEvent.setup();
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     screen.getByRole('slider').focus();
     await user.keyboard('{End}');
     const tooltip = chart().querySelector('.tooltip') as HTMLElement;
@@ -444,8 +442,8 @@ describe('the slider', () => {
       ...contextTurn({ ...turns[2], effort: 'high' }),
       rebuild: { cause: 'idle', lost: 25_000, extra_cost: 0.12 },
     };
-    render(ContextPerTurn);
-    setPayload({ session: session([agent({ context_per_turn: turns })]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([agent({ context_per_turn: turns })]) });
     screen.getByRole('slider').focus();
     await user.keyboard('{End}');
     const tooltip = chart().querySelector('.tooltip') as HTMLElement;
@@ -456,8 +454,8 @@ describe('the slider', () => {
 
   test('the crosshair and the tooltip go when focus leaves', async () => {
     const user = userEvent.setup();
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     screen.getByRole('slider').focus();
     await user.keyboard('{Home}');
     expect(chart().querySelector('.crosshair')).not.toBeNull();
@@ -471,8 +469,8 @@ describe('the slider', () => {
 describe('the table view', () => {
   test('is hidden until the toggle is pressed, then a table in a wrap of its id after the chart', async () => {
     const user = userEvent.setup();
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     expect(document.getElementById('context-table')).toBeNull();
     await user.click(toggle());
     expect(toggle()).toHaveAttribute('aria-pressed', 'true');
@@ -486,8 +484,8 @@ describe('the table view', () => {
 
   test('has a column per part, the numbers right-aligned, and a row per turn', async () => {
     const user = userEvent.setup();
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     await user.click(toggle());
     const table = within(document.getElementById('context-table') as HTMLElement).getByRole('table');
     const heads = within(table).getAllByRole('columnheader');
@@ -522,16 +520,16 @@ describe('the table view', () => {
 
   test('says so where there are no turns', async () => {
     const user = userEvent.setup();
-    render(ContextPerTurn);
-    setPayload({ session: session([agent()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([agent()]) });
     await user.click(toggle());
     expect(document.querySelector('#context-table .empty')).toHaveTextContent(/^No turns with usage\.$/);
   });
 
   test('pages past ten turns, under the transcript`s key', async () => {
     const user = userEvent.setup();
-    render(ContextPerTurn);
-    setPayload({ session: session([agent({ context_per_turn: turnsOf(30) })]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([agent({ context_per_turn: turnsOf(30) })]) });
     await user.click(toggle());
     expect(document.querySelectorAll('#context-table tbody tr')).toHaveLength(25);
     expect(document.getElementById('pager-abc123-main-turns-size')).not.toBeNull();
@@ -540,8 +538,8 @@ describe('the table view', () => {
 
 describe('the details', () => {
   test('are four tiles, the growth steps and the compactions, in a div of their id', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     const details = document.getElementById('context-details') as HTMLElement;
     expect(texts('.kpis.session-kpis .label', details)).toEqual([
       'Fixed overhead',
@@ -553,16 +551,16 @@ describe('the details', () => {
   });
 
   test('are empty without a transcript with turns', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([agent()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([agent()]) });
     expect(document.getElementById('context-details')).toBeEmptyDOMElement();
   });
 
   test('follow the transcript picked', async () => {
     const user = userEvent.setup();
-    render(ContextPerTurn);
+    page.render(ContextPerTurn);
     const compactions = [compaction(), compaction({ ts: '2026-09-30T09:30:00.000Z' })];
-    setPayload({ session: session([main(), helper({ compactions })]) });
+    page.set({ session: session([main(), helper({ compactions })]) });
     const details = document.getElementById('context-details') as HTMLElement;
     expect(within(details).getByText('Compactions', { selector: '.label' }).nextElementSibling).toHaveTextContent('0');
     await user.selectOptions(picker(), 'a-1');
@@ -572,13 +570,13 @@ describe('the details', () => {
 
 describe('the growth steps', () => {
   test('say so where no turn grew the context', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     expect(document.querySelector('#context-details .empty')).toHaveTextContent(/^No turn grew the context\.$/);
   });
 
   test('are a row per step, with the tools the call before ran', () => {
-    render(ContextPerTurn);
+    page.render(ContextPerTurn);
     const top_growth = [
       {
         message_id: 'm3',
@@ -588,7 +586,7 @@ describe('the growth steps', () => {
       },
       { message_id: 'm1', ts: '2026-09-30T08:01:00.000Z', growth: 9_000, tools: [] },
     ];
-    setPayload({ session: session([main({ top_growth })]) });
+    page.set({ session: session([main({ top_growth })]) });
     const table = screen.getByRole('table');
     const rows = within(table).getAllByRole('row').slice(1);
     expect(within(rows[0] as HTMLElement).getAllByRole('cell').map((cell) => cell.textContent)).toEqual([
@@ -608,8 +606,8 @@ describe('the compactions', () => {
     [...document.querySelectorAll<HTMLElement>('#context-details table')].at(-1) as HTMLElement;
 
   test('say so where there are none, with no total and no note', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     expect(heading()).toHaveTextContent(/^Compactions$/);
     expect(heading().querySelector('.compaction-total')).toBeNull();
     expect(document.querySelector('#context-details > .note')).toBeNull();
@@ -617,27 +615,27 @@ describe('the compactions', () => {
   });
 
   test('come with a note on how they are reckoned, under the table', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main({ compactions: [compaction()] })]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main({ compactions: [compaction()] })]) });
     const note = document.querySelector('#context-details > .note');
     expect(note).toHaveTextContent(/compared over its own stretch, up to the next one/);
     expect(note?.previousElementSibling).toHaveClass('table-wrap');
   });
 
   test('page past ten rows, under the transcript`s key', () => {
-    render(ContextPerTurn);
+    page.render(ContextPerTurn);
     const compactions = Array.from({ length: 12 }, (_unused, index) =>
       compaction({ ts: `2026-09-30T09:${String(index).padStart(2, '0')}:00.000Z` }),
     );
-    setPayload({ session: session([main({ compactions })]) });
+    page.set({ session: session([main({ compactions })]) });
     expect(compactionsTable().querySelectorAll('tbody tr')).toHaveLength(12);
     expect(document.getElementById('pager-abc123-main-compactions-size')).not.toBeNull();
     expect(document.getElementById('pager-abc123-main-growth-size')).toBeNull();
   });
 
   test('are a row with what they took and left, and how they fared against keeping the context', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main({ compactions: [compaction()] })]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main({ compactions: [compaction()] })]) });
     const table = compactionsTable() as HTMLElement;
     expect(within(table).getAllByRole('columnheader').map((head) => head.textContent)).toEqual([
       'Time',
@@ -675,8 +673,8 @@ describe('the compactions', () => {
   });
 
   test('a saving is a gain, marked in the verdict cell with the words in its title', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main({ compactions: [compaction()] })]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main({ compactions: [compaction()] })]) });
     const cell = compactionsTable()?.querySelector('tbody tr td:last-child') as HTMLElement;
     const mark = cell.querySelector('span') as HTMLElement;
     expect(mark).toHaveClass('verdict-gain');
@@ -685,12 +683,12 @@ describe('the compactions', () => {
   });
 
   test('a dearer one is a loss, a neutral verdict has no class', () => {
-    render(ContextPerTurn);
+    page.render(ContextPerTurn);
     const compactions = [
       compaction({ versus_keeping: versusKeeping({ verdict: 'cost_more', net: -0.5, net_high: -0.4 }) }),
       compaction({ ts: '2026-09-30T09:10:00.000Z', versus_keeping: versusKeeping({ verdict: 'even', net: 0 }) }),
     ];
-    setPayload({ session: session([main({ compactions })]) });
+    page.set({ session: session([main({ compactions })]) });
     const marks = [...document.querySelectorAll<HTMLElement>('tbody tr td:last-child span')];
     expect(marks[0]).toHaveClass('verdict-loss');
     expect(marks[0]).toHaveAttribute('title', 'Cost more than keeping the context');
@@ -699,8 +697,8 @@ describe('the compactions', () => {
   });
 
   test('one without a comparison has one muted cell across the last five columns', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main({ compactions: [compaction({ versus_keeping: null })] })]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main({ compactions: [compaction({ versus_keeping: null })] })]) });
     const row = compactionsTable()?.querySelector('tbody tr') as HTMLElement;
     expect(row.children).toHaveLength(6);
     const last = row.lastElementChild as HTMLElement;
@@ -710,8 +708,8 @@ describe('the compactions', () => {
   });
 
   test('the heading carries the total as a gain, titled, and a note follows the table', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main({ compactions: [compaction()] })]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main({ compactions: [compaction()] })]) });
     const total = heading().querySelector('.compaction-total') as HTMLElement;
     expect(total).toHaveClass('verdict-gain');
     expect(total).toHaveTextContent('▲ saved ~$2.10 so far');
@@ -722,9 +720,9 @@ describe('the compactions', () => {
   });
 
   test('the total is a loss where the compactions cost more', () => {
-    render(ContextPerTurn);
+    page.render(ContextPerTurn);
     const versus = versusKeeping({ verdict: 'cost_more', net: -0.5, net_high: -0.4 });
-    setPayload({ session: session([main({ compactions: [compaction({ versus_keeping: versus })] })]) });
+    page.set({ session: session([main({ compactions: [compaction({ versus_keeping: versus })] })]) });
     const total = heading().querySelector('.compaction-total') as HTMLElement;
     expect(total).toHaveClass('verdict-loss');
     expect(total).toHaveTextContent('▼ cost ~$0.50 more so far');
@@ -734,12 +732,12 @@ describe('the compactions', () => {
 describe('a refresh', () => {
   test('keeps the transcript picked and the table view, in the same nodes', async () => {
     const user = userEvent.setup();
-    render(ContextPerTurn);
-    setPayload({ session: session([main(), helper()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main(), helper()]) });
     await user.selectOptions(picker(), 'a-1');
     await user.click(toggle());
     const nodes = [picker(), toggle(), chart(), document.getElementById('context-table')];
-    setPayload({ session: session([main(), helper()], { turns: 11 }) });
+    page.set({ session: session([main(), helper()], { turns: 11 }) });
     expect([picker(), toggle(), chart(), document.getElementById('context-table')]).toEqual(nodes);
     expect(picker()).toHaveValue('a-1');
     expect(toggle()).toHaveAttribute('aria-pressed', 'true');
@@ -747,17 +745,17 @@ describe('a refresh', () => {
   });
 
   test('follows the new turns', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuemax', '5');
-    setPayload({ session: session([agent({ context_per_turn: turnsOf(6) })]) });
+    page.set({ session: session([agent({ context_per_turn: turnsOf(6) })]) });
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuemax', '6');
   });
 
   test('goes with the session', () => {
-    render(ContextPerTurn);
-    setPayload({ session: session([main()]) });
-    setPayload({ session: null });
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
+    page.set({ session: null });
     expect(screen.queryByRole('heading')).toBeNull();
   });
 });

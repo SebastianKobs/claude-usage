@@ -1062,8 +1062,8 @@ class SessionStateWithoutPatternsTest(ServerCase):
 
 class PageTest(unittest.TestCase):
     def test_the_page_accepts_exactly_the_servers_session_ids(self):
-        main = (Path(server.__file__).parent / "static" / "js" / "main.js").read_text(encoding="utf-8")
-        page = re.search(r"const SESSION_HASH = /\^#session\\/\((.+?)\)\$/;", main).group(1)
+        loader = (Path(server.__file__).parents[1] / "web" / "src" / "lib" / "loader.ts").read_text(encoding="utf-8")
+        page = re.search(r"const SESSION_HASH = /\^#session\\/\((.+?)\)\$/;", loader).group(1)
         self.assertEqual(page, re.search(r"\((.+?)\)", server.SESSION_PATH.pattern).group(1))
 
 
@@ -1132,7 +1132,7 @@ class TokenTest(ServerCase):
         self.assertEqual(self.get_json("/api/live", headers={"Cookie": cookie})[0], 200)
 
     def test_the_page_and_its_scripts_hold_no_data_and_need_no_token(self):
-        for path in ("/", "/static/js/util.js"):
+        for path in ("/", "/static/js/app.js"):
             with self.subTest(path=path):
                 self.assertEqual(self.get(path, token=False)[0], 200)
 

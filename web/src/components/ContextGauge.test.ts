@@ -1,10 +1,12 @@
 import { render, screen } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import { compactEstimate, compactNow, gauge, sessionDetail } from '../lib/fixtures';
 import { compactNotes } from '../lib/gauge';
-import { payload, setPayload } from '../lib/payload.svelte';
 import ContextGauge from './ContextGauge.svelte';
+
+const page = pagePerTest();
 
 const NOW = Date.parse('2026-09-30T12:00:00.000Z');
 const WARM_UNTIL = '2026-09-30T12:05:00.000Z';
@@ -15,7 +17,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  payload.reset();
   vi.useRealTimers();
 });
 
@@ -47,30 +48,30 @@ const notes = () => [...card().querySelectorAll('.note')].map((note) => note.tex
 
 describe('without a gauge', () => {
   test('draws nothing without a session', () => {
-    const { container } = render(ContextGauge);
+    const { container } = page.render(ContextGauge);
     expect(container.children).toHaveLength(0);
   });
 
   test('draws nothing for a session without a main thread`s gauge', () => {
-    const { container } = render(ContextGauge);
-    setPayload({ session: sessionDetail({ live: true, current: null }) });
+    const { container } = page.render(ContextGauge);
+    page.set({ session: sessionDetail({ live: true, current: null }) });
     expect(container.children).toHaveLength(0);
     expect(document.getElementById('current-gauge')).toBeNull();
   });
 
   test('goes once the session closes', () => {
-    render(ContextGauge);
-    setPayload({ session: live() });
+    page.render(ContextGauge);
+    page.set({ session: live() });
     expect(card()).toBeInTheDocument();
-    setPayload({ session: null });
+    page.set({ session: null });
     expect(document.getElementById('current-gauge')).toBeNull();
   });
 });
 
 describe('the meter', () => {
   test('is a meter card: label, value with the share, the bar, then the note', () => {
-    render(ContextGauge);
-    setPayload({ session: live() });
+    page.render(ContextGauge);
+    page.set({ session: live() });
     expect(card()).toHaveClass('card', 'gauge-card');
     expect(card().querySelector('.label')).toHaveTextContent('Latest context, main thread · claude-opus-5-5');
     const value = card().querySelector('.tile-value') as HTMLElement;
@@ -88,8 +89,8 @@ describe('the meter', () => {
   });
 
   test('fills the bar to the share and puts the hint mark at its place', () => {
-    render(ContextGauge);
-    setPayload({ session: live() });
+    page.render(ContextGauge);
+    page.set({ session: live() });
     const fill = screen.getByRole('meter').querySelector('.gauge-fill') as HTMLElement;
     const hint = screen.getByRole('meter').querySelector('.gauge-hint') as HTMLElement;
     expect(fill.style.width).toBe('15.5%');
@@ -98,8 +99,8 @@ describe('the meter', () => {
   });
 
   test('caps the fill at the whole bar and has no hint mark where the hint is not below the auto-compact point', () => {
-    render(ContextGauge);
-    setPayload({ session: live(gauge({ context: 1_100_000, hint_tokens: 967_000 })) });
+    page.render(ContextGauge);
+    page.set({ session: live(gauge({ context: 1_100_000, hint_tokens: 967_000 })) });
     const meter = screen.getByRole('meter');
     expect((meter.querySelector('.gauge-fill') as HTMLElement).style.width).toBe('100.0%');
     expect(meter.querySelector('.gauge-hint')).toBeNull();
@@ -107,8 +108,8 @@ describe('the meter', () => {
   });
 
   test('is drawn for a session that is not live too, without a call', () => {
-    render(ContextGauge);
-    setPayload({ session: sessionDetail({ live: false, current: past() }) });
+    page.render(ContextGauge);
+    page.set({ session: sessionDetail({ live: false, current: past() }) });
     expect(screen.getByRole('meter')).toBeInTheDocument();
     expect(document.getElementById('compact-call')).toBeNull();
   });
@@ -118,8 +119,8 @@ describe('after a compaction without a reply', () => {
   const compacted = () => gauge({ compacted: '2026-09-30T11:30:00.000Z', compact_now: null });
 
   test('is a card of the compaction, without a meter', () => {
-    render(ContextGauge);
-    setPayload({ session: live(compacted()) });
+    page.render(ContextGauge);
+    page.set({ session: live(compacted()) });
     expect(card().querySelector('.label')).toHaveTextContent('Latest context, main thread · claude-opus-5-5');
     const value = card().querySelector('.tile-value') as HTMLElement;
     expect(value).toHaveTextContent(/^Compacted at .+, no reply since$/);
@@ -131,17 +132,17 @@ describe('after a compaction without a reply', () => {
   });
 
   test('has no call to compact, however far the context had got', () => {
-    render(ContextGauge);
+    page.render(ContextGauge);
     const late = gauge({ context: 500_000, compacted: '2026-09-30T11:30:00.000Z', compact_now: null });
-    setPayload({ session: live(late) });
+    page.set({ session: live(late) });
     expect(document.getElementById('compact-call')).toBeNull();
   });
 
   test('turns into the meter with the next call, in the same card', () => {
-    render(ContextGauge);
-    setPayload({ session: live(compacted()) });
+    page.render(ContextGauge);
+    page.set({ session: live(compacted()) });
     const before = card();
-    setPayload({ session: live() });
+    page.set({ session: live() });
     expect(card()).toBe(before);
     expect(screen.getByRole('meter')).toBeInTheDocument();
   });
@@ -149,9 +150,9 @@ describe('after a compaction without a reply', () => {
 
 describe('what compacting now would cost', () => {
   test('are notes under the gauge: the exact parts, then the estimate as a paragraph', () => {
-    render(ContextGauge);
+    page.render(ContextGauge);
     const current = live().current;
-    setPayload({ session: live() });
+    page.set({ session: live() });
     const parts = compactNotes(current?.compact_now ?? compactNow(), false);
     expect(notes()[1]).toBe(parts.exact);
     expect(notes()[1]).toMatch(/^Every reply sends the whole conversation again: 150K, /);
@@ -162,8 +163,8 @@ describe('what compacting now would cost', () => {
   });
 
   test('read as one sentence of the lead, the bold pay-off phrase and the rest', () => {
-    render(ContextGauge);
-    setPayload({ session: live() });
+    page.render(ContextGauge);
+    page.set({ session: live() });
     const parts = compactNotes(compactNow({ cache_warm_until: WARM_UNTIL }), false).estimate;
     if (!parts) throw new Error('an estimate');
     const estimate = card().querySelector('.compact-estimate') as HTMLElement;
@@ -174,8 +175,8 @@ describe('what compacting now would cost', () => {
   });
 
   test('has the tone`s mark before the phrase, hidden from a screen reader', () => {
-    render(ContextGauge);
-    setPayload({ session: live() });
+    page.render(ContextGauge);
+    page.set({ session: live() });
     const mark = card().querySelector('.compact-estimate .payoff-mark') as HTMLElement;
     expect(mark).toHaveClass('payoff-soon');
     expect(mark).toHaveAttribute('aria-hidden', 'true');
@@ -188,14 +189,14 @@ describe('what compacting now would cost', () => {
     ['later', { breakeven_calls: null, breakeven_low: null, pays_later_in: 12, pays_later_at: 300_000 }],
     ['unlikely', { breakeven_calls: 70 }],
   ])('marks %s in its own tone', (tone, changes) => {
-    render(ContextGauge);
-    setPayload({ session: warm(compactEstimate(changes)) });
+    page.render(ContextGauge);
+    page.set({ session: warm(compactEstimate(changes)) });
     expect(card().querySelector('.payoff-mark')).toHaveClass(`payoff-${tone}`);
   });
 
   test('has no mark where there are no replies ahead to compare with', () => {
-    render(ContextGauge);
-    setPayload({ session: warm(compactEstimate({ calls_ahead: null })) });
+    page.render(ContextGauge);
+    page.set({ session: warm(compactEstimate({ calls_ahead: null })) });
     const estimate = card().querySelector('.compact-estimate') as HTMLElement;
     expect(estimate).toBeInTheDocument();
     expect(estimate.querySelector('.payoff-mark')).toBeNull();
@@ -203,16 +204,16 @@ describe('what compacting now would cost', () => {
   });
 
   test('says why there is no estimate, in a note instead of the paragraph', () => {
-    render(ContextGauge);
-    setPayload({ session: live(gauge({ compact_now: compactNow({ estimate: null, stored_compactions: 0 }) })) });
+    page.render(ContextGauge);
+    page.set({ session: live(gauge({ compact_now: compactNow({ estimate: null, stored_compactions: 0 }) })) });
     expect(card().querySelector('.compact-estimate')).toBeNull();
     expect(notes().at(-1)).toBe('No estimate of compacting now: no stored compaction to learn from yet.');
     expect(notes()).toHaveLength(3);
   });
 
   test('has none where the session has nothing to compact', () => {
-    render(ContextGauge);
-    setPayload({ session: live(gauge({ compact_now: null })) });
+    page.render(ContextGauge);
+    page.set({ session: live(gauge({ compact_now: null })) });
     expect(notes()).toHaveLength(1);
     expect(card().querySelector('.compact-estimate')).toBeNull();
   });
@@ -220,8 +221,8 @@ describe('what compacting now would cost', () => {
 
 describe('the call to compact', () => {
   test('comes before the gauge, for a live session past the hint, in the threshold`s words', () => {
-    render(ContextGauge);
-    setPayload({ session: live(past()) });
+    page.render(ContextGauge);
+    page.set({ session: live(past()) });
     const call = screen.getByRole('region', { name: /^⚠ Your context is past your 200K compact hint$/ });
     expect(call).toBe(document.getElementById('compact-call'));
     expect(call.nextElementSibling).toBe(card());
@@ -230,47 +231,47 @@ describe('the call to compact', () => {
   });
 
   test('is not there below the hint while the cache is warm', () => {
-    render(ContextGauge);
-    setPayload({ session: live() });
+    page.render(ContextGauge);
+    page.set({ session: live() });
     expect(document.getElementById('compact-call')).toBeNull();
   });
 
   test('is not there for a session that is not live, past the hint or not', () => {
-    render(ContextGauge);
-    setPayload({ session: sessionDetail({ live: false, current: past() }) });
+    page.render(ContextGauge);
+    page.set({ session: sessionDetail({ live: false, current: past() }) });
     expect(document.getElementById('compact-call')).toBeNull();
   });
 
   test('comes and goes with the session`s refreshes', () => {
-    render(ContextGauge);
-    setPayload({ session: live() });
+    page.render(ContextGauge);
+    page.set({ session: live() });
     expect(document.getElementById('compact-call')).toBeNull();
-    setPayload({ session: live(past()) });
+    page.set({ session: live(past()) });
     expect(document.getElementById('compact-call')).toBeInTheDocument();
-    setPayload({ session: live() });
+    page.set({ session: live() });
     expect(document.getElementById('compact-call')).toBeNull();
   });
 
   test('is cold where the cache has already expired and compacting saves at once', () => {
-    render(ContextGauge);
+    page.render(ContextGauge);
     const estimate = compactEstimate({ cold_saving: 0.4 });
     const expired = compactNow({ cache_warm_until: '2026-09-30T11:00:00Z', estimate });
-    setPayload({ session: live(gauge({ compact_now: expired })) });
+    page.set({ session: live(gauge({ compact_now: expired })) });
     const call = screen.getByRole('region', { name: '⚠ The cache has expired: compacting now saves money' });
     expect(call).toHaveTextContent(/Doing it now saves about \$0\.40 at once\./);
   });
 
   test('is not cold where compacting cold would cost', () => {
-    render(ContextGauge);
-    setPayload({ session: live(gauge({ compact_now: compactNow({ cache_warm_until: '2026-09-30T11:00:00Z' }) })) });
+    page.render(ContextGauge);
+    page.set({ session: live(gauge({ compact_now: compactNow({ cache_warm_until: '2026-09-30T11:00:00Z' }) })) });
     expect(document.getElementById('compact-call')).toBeNull();
   });
 });
 
 describe('the hint to delegate', () => {
   test('comes after the call to compact and before the gauge', () => {
-    render(ContextGauge);
-    setPayload({ session: live(exploring({}, 25_000)) });
+    page.render(ContextGauge);
+    page.set({ session: live(exploring({}, 25_000)) });
     expect(document.getElementById('compact-call')).toBeNull();
     const hint = screen.getByRole('region', { name: 'Explore in a subagent' });
     expect(hint).toBe(document.getElementById('delegate-call'));
@@ -280,9 +281,9 @@ describe('the hint to delegate', () => {
   });
 
   test('follows the call to compact where both show', () => {
-    render(ContextGauge);
+    page.render(ContextGauge);
     const both = exploring();
-    setPayload({ session: live({ ...both, context: 250_000 }) });
+    page.set({ session: live({ ...both, context: 250_000 }) });
     const order = [...document.body.querySelectorAll('#compact-call, #delegate-call, #current-gauge')].map(
       (node) => node.id,
     );
@@ -290,28 +291,28 @@ describe('the hint to delegate', () => {
   });
 
   test('is not there with less exploration than the session asks for', () => {
-    render(ContextGauge);
-    setPayload({ session: live(exploring({}, 19_999)) });
+    page.render(ContextGauge);
+    page.set({ session: live(exploring({}, 19_999)) });
     expect(document.getElementById('delegate-call')).toBeNull();
   });
 
   test('is not there with fewer calls ahead than the session asks for', () => {
-    render(ContextGauge);
-    setPayload({ session: live(exploring({ calls_ahead: 59 })) });
+    page.render(ContextGauge);
+    page.set({ session: live(exploring({ calls_ahead: 59 })) });
     expect(document.getElementById('delegate-call')).toBeNull();
   });
 
   test('is there at exactly both limits', () => {
-    render(ContextGauge);
-    setPayload({ session: live(exploring({ calls_ahead: 60 }, 20_000)) });
+    page.render(ContextGauge);
+    page.set({ session: live(exploring({ calls_ahead: 60 }, 20_000)) });
     expect(document.getElementById('delegate-call')).toBeInTheDocument();
   });
 
   test('is not there without exploration, or for a session that is not live', () => {
-    render(ContextGauge);
-    setPayload({ session: live(gauge({ exploration: null })) });
+    page.render(ContextGauge);
+    page.set({ session: live(gauge({ exploration: null })) });
     expect(document.getElementById('delegate-call')).toBeNull();
-    setPayload({ session: sessionDetail({ live: false, current: exploring() }) });
+    page.set({ session: sessionDetail({ live: false, current: exploring() }) });
     expect(document.getElementById('delegate-call')).toBeNull();
   });
 });
@@ -326,8 +327,8 @@ describe('the clock', () => {
   const saving = compactEstimate({ cold_saving: 0.4 });
 
   test('says the cache stays warm until it runs out, and that it has likely expired after', () => {
-    render(ContextGauge);
-    setPayload({ session: live(gauge({ compact_now: compactNow({ cache_warm_until: WARM_UNTIL }) })) });
+    page.render(ContextGauge);
+    page.set({ session: live(gauge({ compact_now: compactNow({ cache_warm_until: WARM_UNTIL }) })) });
     expect(notes()[1]).toMatch(/The cache stays warm until /);
     expect(notes()[1]).not.toMatch(/has likely expired/);
     vi.advanceTimersByTime(5 * 60_000 + 999);
@@ -340,8 +341,8 @@ describe('the clock', () => {
   });
 
   test('rewords the estimate for the cache that has expired', () => {
-    render(ContextGauge);
-    setPayload({ session: live() });
+    page.render(ContextGauge);
+    page.set({ session: live() });
     const warm = card().querySelector('.compact-estimate')?.textContent;
     expect(warm).toMatch(/That costs ~\$0\.30 once and would pay off after about 10 replies/);
     tick();
@@ -351,8 +352,8 @@ describe('the clock', () => {
   });
 
   test('brings the cold call in where compacting cold saves at once', () => {
-    render(ContextGauge);
-    setPayload({ session: warm(saving) });
+    page.render(ContextGauge);
+    page.set({ session: warm(saving) });
     expect(document.getElementById('compact-call')).toBeNull();
     tick();
     const call = screen.getByRole('region', { name: '⚠ The cache has expired: compacting now saves money' });
@@ -361,8 +362,8 @@ describe('the clock', () => {
   });
 
   test('rewords the threshold call as the cache expires, in the same card', () => {
-    render(ContextGauge);
-    setPayload({ session: live(past()) });
+    page.render(ContextGauge);
+    page.set({ session: live(past()) });
     const call = document.getElementById('compact-call');
     expect(call).toHaveTextContent(/Every reply sends your whole conversation again/);
     tick();
@@ -372,8 +373,8 @@ describe('the clock', () => {
   });
 
   test('keeps the gauge card`s node across the tick', () => {
-    render(ContextGauge);
-    setPayload({ session: live() });
+    page.render(ContextGauge);
+    page.set({ session: live() });
     const before = card();
     const meter = screen.getByRole('meter');
     tick();
@@ -382,11 +383,11 @@ describe('the clock', () => {
   });
 
   test('keeps the gauge card`s node across a refresh of the same session, and the clock with it', () => {
-    render(ContextGauge);
-    setPayload({ session: live() });
+    page.render(ContextGauge);
+    page.set({ session: live() });
     const before = card();
     const grown = gauge({ context: 160_000, compact_now: compactNow({ cache_warm_until: WARM_UNTIL }) });
-    setPayload({ session: live(grown) });
+    page.set({ session: live(grown) });
     expect(card()).toBe(before);
     expect(card().querySelector('.tile-value')).toHaveTextContent(/^160K of /);
     expect(vi.getTimerCount()).toBe(1);
@@ -396,9 +397,9 @@ describe('the clock', () => {
   });
 
   test('follows another moment the refresh brings, with one timer', async () => {
-    render(ContextGauge);
-    setPayload({ session: live() });
-    setPayload({
+    page.render(ContextGauge);
+    page.set({ session: live() });
+    page.set({
       session: live(gauge({ compact_now: compactNow({ cache_warm_until: '2026-09-30T12:20:00.000Z' }) })),
     });
     await Promise.resolve();
@@ -411,23 +412,23 @@ describe('the clock', () => {
   });
 
   test('sets no timer for a cache that has expired already, or for none to watch', async () => {
-    render(ContextGauge);
-    setPayload({ session: live(gauge({ compact_now: compactNow({ cache_warm_until: '2026-09-30T11:00:00Z' }) })) });
+    page.render(ContextGauge);
+    page.set({ session: live(gauge({ compact_now: compactNow({ cache_warm_until: '2026-09-30T11:00:00Z' }) })) });
     expect(vi.getTimerCount()).toBe(0);
-    setPayload({ session: live(gauge({ compact_now: compactNow({ cache_warm_until: null }) })) });
+    page.set({ session: live(gauge({ compact_now: compactNow({ cache_warm_until: null }) })) });
     await Promise.resolve();
     expect(vi.getTimerCount()).toBe(0);
     expect(notes()[1]).not.toMatch(/The cache (stays|has)/);
   });
 
   test('leaves no timer once it is unmounted, or once the session closes', async () => {
-    const { unmount } = render(ContextGauge);
-    setPayload({ session: live() });
+    const { unmount } = page.render(ContextGauge);
+    page.set({ session: live() });
     expect(vi.getTimerCount()).toBe(1);
-    setPayload({ session: null });
+    page.set({ session: null });
     await Promise.resolve();
     expect(vi.getTimerCount()).toBe(0);
-    setPayload({ session: live() });
+    page.set({ session: live() });
     expect(vi.getTimerCount()).toBe(1);
     unmount();
     await Promise.resolve();

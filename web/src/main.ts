@@ -1,6 +1,9 @@
-// The page's bundle. It loads before the classic scripts (a module script runs in document order with
-// deferred ones) and grows section by section as the page moves to Svelte (refactor.md, Phase 3); until the app
-// takes over the page, the bridge hands the old scripts what moved.
-import { bridge } from './legacy.svelte';
+// The page's bundle: it mounts the app on `<main>`, which dashboard.html leaves empty. The app fetches what it draws
+// (lib/loader.ts) and everything it shows is a component (src/components).
+import { mount } from 'svelte';
+import App from './components/App.svelte';
 
-bridge(window);
+const target = document.querySelector('main');
+// A page built for another bundle: better to fail loudly than show nothing.
+if (!target) throw new Error('The page has no <main> to mount the app on');
+mount(App, { target });

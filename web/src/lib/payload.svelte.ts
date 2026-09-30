@@ -1,8 +1,7 @@
 // What the page has loaded, for the components that draw it: the summary of the range shown, the live sessions and
-// their cards' states, the session open, or that loading one failed. The old classic scripts fetch it and hand it over
-// through `setPayload`, until the app fetches it itself.
+// their cards' states, the session open, or that loading one failed. The loader (lib/loader.ts) fetches it and sets
+// the parts; one instance per page, in the app's context (lib/app.svelte.ts).
 
-import { flushSync } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import type { Live, SessionDetail, SessionState, Summary } from './api';
 
@@ -12,6 +11,8 @@ export interface PayloadParts {
   summary: Summary;
   /** Whether loading the first summary failed, so the tiles say so instead of loading. */
   summaryFailed: boolean;
+  /** Whether a summary is being loaded, which dims the overview until it arrives. */
+  summaryLoading: boolean;
   /** The live sessions, /api/live's answer. */
   live: Live;
   /** Whether loading the live sessions failed, so the card says so instead of loading. */
@@ -27,6 +28,7 @@ export class Payload {
   // $state.raw: the summary is replaced whole by each load, never changed in place, and is large.
   #summary = $state.raw<Summary | null>(null);
   #summaryFailed = $state(false);
+  #summaryLoading = $state(false);
   // Likewise replaced whole by each answer.
   #live = $state.raw<Live | null>(null);
   #liveFailed = $state(false);
@@ -44,6 +46,11 @@ export class Payload {
   /** Whether loading the summary failed and none was loaded since. */
   get summaryFailed(): boolean {
     return this.#summaryFailed;
+  }
+
+  /** Whether a summary is being loaded now, which the page shows by dimming the overview. */
+  get summaryLoading(): boolean {
+    return this.#summaryLoading;
   }
 
   /** The live sessions, null until an answer is loaded. */
@@ -92,6 +99,7 @@ export class Payload {
       this.#summaryFailed = false;
     }
     if (parts.summaryFailed !== undefined) this.#summaryFailed = parts.summaryFailed;
+    if (parts.summaryLoading !== undefined) this.#summaryLoading = parts.summaryLoading;
     if (parts.live !== undefined) {
       this.#live = parts.live;
       this.#liveFailed = false;
@@ -100,26 +108,4 @@ export class Payload {
     if (parts.liveAt !== undefined) this.#liveAt = parts.liveAt;
     if (parts.session !== undefined) this.#session = parts.session;
   }
-
-  /** Back to nothing loaded, as at the page's start: for the tests, which share the singleton. */
-  reset(): void {
-    this.#summary = null;
-    this.#summaryFailed = false;
-    this.#live = null;
-    this.#liveFailed = false;
-    this.#liveAt = null;
-    this.#session = null;
-    this.#liveStates.clear();
-  }
-}
-
-// A module singleton for now, like `preferences` in prefs.svelte.ts: the old scripts reach it as a global through the
-// bridge; it moves into context (3.32) once the components own the page.
-export const payload = new Payload();
-
-/** Sets parts of the page's payload and draws at once, which the old scripts count on: they look at the page right
- *  after. */
-export function setPayload(parts: Partial<PayloadParts>): void {
-  payload.set(parts);
-  flushSync();
 }

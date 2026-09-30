@@ -2,28 +2,24 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import type { CompactEstimate, Gauge, LiveSession } from '../lib/api';
 import { live, liveSession, liveSubagent } from '../lib/fixtures';
-import { tablePages } from '../lib/paging.svelte';
-import { payload } from '../lib/payload.svelte';
-import { preferences } from '../lib/prefs.svelte';
 import LiveSessions from './LiveSessions.svelte';
+
+const page = pagePerTest();
 
 const NOW = Date.parse('2026-09-29T12:00:00Z');
 
 beforeEach(() => {
   localStorage.clear();
-  preferences.pageSize = 10;
+  page.app.preferences.pageSize = 10;
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
 });
 
 afterEach(() => {
   vi.useRealTimers();
-  payload.reset();
-  tablePages.forget('live');
-  preferences.theme = null;
-  preferences.pageSize = 25;
   localStorage.clear();
 });
 
@@ -60,7 +56,7 @@ function gauge(): Gauge {
 
 describe('without an answer', () => {
   test('the card says it is loading, with the heading and no window', () => {
-    const { container } = render(LiveSessions);
+    const { container } = page.render(LiveSessions);
     expect(screen.getByRole('region', { name: 'Live sessions' })).toHaveClass('card');
     expect(container.querySelector('h2')).toHaveAttribute('id', 'live-title');
     expect(container.querySelector('h2 .muted')?.textContent).toBe('');
@@ -69,16 +65,16 @@ describe('without an answer', () => {
   });
 
   test('the card says loading failed', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ liveFailed: true });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ liveFailed: true });
     flushSync();
     expect(container.querySelector('.paged-wrap > .empty')).toHaveTextContent(/^Could not load the live sessions\.$/);
   });
 
   test('an answer replaces both', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ liveFailed: true });
-    payload.set({ live: live() });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ liveFailed: true });
+    page.app.payload.set({ live: live() });
     flushSync();
     expect(container.querySelector('.empty')).toBeNull();
     expect(container.querySelectorAll('.live-card')).toHaveLength(1);
@@ -87,8 +83,8 @@ describe('without an answer', () => {
 
 describe('the card', () => {
   test('has a grid with a card for each session, the session’s text and link in it', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live() });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live() });
     flushSync();
     const grid = container.querySelector('.paged-wrap > .live-grid') as HTMLElement;
     expect(grid.children).toHaveLength(1);
@@ -100,19 +96,19 @@ describe('the card', () => {
   });
 
   test('counts "ago" from the time of the newest answer, even one unchanged', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live(), liveAt: NOW });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live(), liveAt: NOW });
     flushSync();
     expect(container.querySelector('.live-card > .muted')).toHaveTextContent('12 s ago');
-    payload.set({ liveAt: NOW + 48_000 });
+    page.app.payload.set({ liveAt: NOW + 48_000 });
     flushSync();
     expect(container.querySelector('.live-card > .muted')).toHaveTextContent('1 min ago');
   });
 
   test('lists the subagents and notes where none runs', () => {
-    const { container } = render(LiveSessions);
+    const { container } = page.render(LiveSessions);
     const agents = liveSession({ session_id: 'live-2', subagents: [liveSubagent()] });
-    payload.set({ live: live({ sessions: [liveSession(), agents] }) });
+    page.app.payload.set({ live: live({ sessions: [liveSession(), agents] }) });
     flushSync();
     const cards = container.querySelectorAll('.live-card');
     expect(cards[0]?.querySelector('.note')).toHaveTextContent('No subagent running');
@@ -123,13 +119,13 @@ describe('the card', () => {
     const permission = { kind: 'permission', tool: 'Bash', since: '2026-09-29T11:58:00Z', agent_type: null } as const;
     const since = '2026-09-29T11:58:00Z';
     const question = { kind: 'question', tool: 'AskUserQuestion', since, agent_type: null } as const;
-    const { container } = render(LiveSessions);
+    const { container } = page.render(LiveSessions);
     const sessions = [
       liveSession({ session_id: 'a', waiting: permission }),
       liveSession({ session_id: 'b', waiting: question }),
       liveSession({ session_id: 'c' }),
     ];
-    payload.set({ live: live({ sessions }) });
+    page.app.payload.set({ live: live({ sessions }) });
     flushSync();
     const heads = [...container.querySelectorAll('.live-head')];
     expect(heads.map((head) => head.children[1]?.className)).toEqual([
@@ -144,9 +140,9 @@ describe('the card', () => {
 
 describe('the state icons', () => {
   test('come from the state kept by session: secret, then compacting now', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live() });
-    payload.setLiveState('live-1', {
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live() });
+    page.app.payload.setLiveState('live-1', {
       session_id: 'live-1',
       current: gauge(),
       secrets: { high: 0, medium: 1, 'low-medium': 0, low: 0 },
@@ -159,16 +155,16 @@ describe('the state icons', () => {
   });
 
   test('are none without a state', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live() });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live() });
     flushSync();
     expect(container.querySelector('.live-states')?.children).toHaveLength(0);
   });
 
   test('are worked out again where a new state replaces the old one', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live() });
-    payload.setLiveState('live-1', {
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live() });
+    page.app.payload.setLiveState('live-1', {
       session_id: 'live-1',
       current: null,
       secrets: { high: 0, medium: 1, 'low-medium': 0, low: 0 },
@@ -176,14 +172,14 @@ describe('the state icons', () => {
     flushSync();
     const icon = container.querySelector('.live-states .live-icon');
     expect(icon).toHaveClass('live-icon-medium');
-    payload.setLiveState('live-1', {
+    page.app.payload.setLiveState('live-1', {
       session_id: 'live-1',
       current: null,
       secrets: { high: 2, medium: 0, 'low-medium': 0, low: 0 },
     });
     flushSync();
     expect(container.querySelector('.live-states .live-icon')).toHaveClass('live-icon-high');
-    payload.setLiveState('live-1', {
+    page.app.payload.setLiveState('live-1', {
       session_id: 'live-1',
       current: null,
       secrets: { high: 0, medium: 0, 'low-medium': 0, low: 0 },
@@ -195,17 +191,17 @@ describe('the state icons', () => {
 
 describe('the heading’s window', () => {
   test('says how lately a session changed', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live() });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live() });
     flushSync();
     expect(container.querySelector('h2 .muted')?.textContent).toBe('· changed in the last 5 min');
     expect(screen.getByRole('heading')).toHaveTextContent('Live sessions · changed in the last 5 min');
   });
 
   test('says how long while agents work, and that a waiting session stays', () => {
-    const { container } = render(LiveSessions);
+    const { container } = page.render(LiveSessions);
     const waiting = { kind: 'question', tool: 'AskUserQuestion', since: null, agent_type: null } as const;
-    payload.set({ live: live({ agent_minutes: 180, sessions: [liveSession({ waiting })] }) });
+    page.app.payload.set({ live: live({ agent_minutes: 180, sessions: [liveSession({ waiting })] }) });
     flushSync();
     expect(container.querySelector('h2 .muted')).toHaveTextContent(
       '· changed in the last 5 min (180 min while agents work) or waiting for you',
@@ -213,8 +209,8 @@ describe('the heading’s window', () => {
   });
 
   test('names the past day the list was kept by', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ since: '2026-09-27', until: '2026-09-27' }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ since: '2026-09-27', until: '2026-09-27' }) });
     flushSync();
     expect(container.querySelector('h2 .muted')?.textContent).toMatch(/^· changed in the last 5 min, active on .+/);
   });
@@ -222,8 +218,8 @@ describe('the heading’s window', () => {
 
 describe('the notes', () => {
   test('say that permission prompts cannot show', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ prompts_unavailable: 'no Unix sockets here' }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ prompts_unavailable: 'no Unix sockets here' }) });
     flushSync();
     const notes = container.querySelectorAll('.paged-wrap > .note');
     expect(notes).toHaveLength(1);
@@ -231,8 +227,8 @@ describe('the notes', () => {
   });
 
   test('say that desktop notifications cannot show', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ notifications_unavailable: 'no notifier found' }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ notifications_unavailable: 'no notifier found' }) });
     flushSync();
     const notes = container.querySelectorAll('.paged-wrap > .note');
     expect(notes).toHaveLength(1);
@@ -240,8 +236,8 @@ describe('the notes', () => {
   });
 
   test('come before the cards, prompts first', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ prompts_unavailable: 'a', notifications_unavailable: 'b' }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ prompts_unavailable: 'a', notifications_unavailable: 'b' }) });
     flushSync();
     const wrap = container.querySelector('.paged-wrap') as HTMLElement;
     expect([...wrap.children].map((child) => child.className)).toEqual(['note', 'note', 'live-grid']);
@@ -249,8 +245,8 @@ describe('the notes', () => {
   });
 
   test('are absent where nothing is wrong', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live() });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live() });
     flushSync();
     expect(container.querySelector('.paged-wrap > .note')).toBeNull();
   });
@@ -258,8 +254,8 @@ describe('the notes', () => {
 
 describe('without a live session', () => {
   test('the card says none was active in the window, today', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ sessions: [] }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ sessions: [] }) });
     flushSync();
     expect(container.querySelector('.paged-wrap > .empty')).toHaveTextContent(
       /^No session active in the last 5 minutes\.$/,
@@ -268,8 +264,8 @@ describe('without a live session', () => {
   });
 
   test('the card says none was active on a past day', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ sessions: [], since: '2026-09-27', until: '2026-09-27' }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ sessions: [], since: '2026-09-27', until: '2026-09-27' }) });
     flushSync();
     expect(container.querySelector('.paged-wrap > .empty')?.textContent).toMatch(
       /^No live session was active on .+\.$/,
@@ -277,8 +273,8 @@ describe('without a live session', () => {
   });
 
   test('the notes still show', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ sessions: [], prompts_unavailable: 'x' }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ sessions: [], prompts_unavailable: 'x' }) });
     flushSync();
     expect(container.querySelectorAll('.paged-wrap > .note, .paged-wrap > .empty')).toHaveLength(2);
   });
@@ -286,25 +282,25 @@ describe('without a live session', () => {
 
 describe('the themes', () => {
   test('word the heading', () => {
-    render(LiveSessions);
-    payload.set({ live: live() });
-    preferences.theme = 'hacker';
+    page.render(LiveSessions);
+    page.app.payload.set({ live: live() });
+    page.app.preferences.theme = 'hacker';
     flushSync();
     expect(screen.getByRole('heading')).toHaveTextContent('ps aux | grep claude · changed in the last 5 min');
     expect(screen.getByRole('region', { name: /^ps aux \| grep claude/ })).toBeInTheDocument();
   });
 
   test('word the heading before an answer too', () => {
-    preferences.theme = 'startup';
-    render(LiveSessions);
+    page.app.preferences.theme = 'startup';
+    page.render(LiveSessions);
     expect(screen.getByRole('heading', { name: 'Shipping now' })).toBeInTheDocument();
   });
 });
 
 describe('the pager', () => {
   test('is in the title row with the heading past ten sessions', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ sessions: many(11) }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ sessions: many(11) }) });
     flushSync();
     const titleRow = container.querySelector('.title-row') as HTMLElement;
     expect(titleRow.firstElementChild).toBe(screen.getByRole('heading'));
@@ -314,8 +310,8 @@ describe('the pager', () => {
   });
 
   test('says which sessions show, and shows the first ten', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ sessions: many(11) }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ sessions: many(11) }) });
     flushSync();
     expect(screen.getByRole('group', { name: 'Pages' })).toHaveTextContent('sessions 1–10 of 11');
     expect(screen.getByRole('combobox', { name: 'Sessions per page' })).toBeInTheDocument();
@@ -323,8 +319,8 @@ describe('the pager', () => {
   });
 
   test('is absent at ten sessions, and the heading stands alone', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ sessions: many(10) }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ sessions: many(10) }) });
     flushSync();
     expect(screen.queryByRole('group', { name: 'Pages' })).toBeNull();
     expect(container.querySelector('.title-row')).toBeNull();
@@ -333,8 +329,8 @@ describe('the pager', () => {
 
   test('the next page shows the rest', async () => {
     const user = userEvent.setup();
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ sessions: many(11) }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ sessions: many(11) }) });
     flushSync();
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
     expect(titles(container)).toEqual(['Session 10']);
@@ -343,14 +339,14 @@ describe('the pager', () => {
 
   test('keeps the page and the focus on Next through a refresh with the same sessions', async () => {
     const user = userEvent.setup();
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ sessions: many(25) }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ sessions: many(25) }) });
     flushSync();
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
     const next = screen.getByRole('button', { name: 'Next ›' });
     next.focus();
     const card = container.querySelector('.live-card');
-    payload.set({ live: live({ sessions: many(25) }), liveAt: NOW + 5_000 });
+    page.app.payload.set({ live: live({ sessions: many(25) }), liveAt: NOW + 5_000 });
     flushSync();
     expect(titles(container)[0]).toBe('Session 10');
     expect(screen.getByRole('button', { name: 'Next ›' })).toBe(next);
@@ -359,10 +355,10 @@ describe('the pager', () => {
   });
 
   test('goes once the list shrinks to ten', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ sessions: many(11) }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ sessions: many(11) }) });
     flushSync();
-    payload.set({ live: live({ sessions: many(10) }) });
+    page.app.payload.set({ live: live({ sessions: many(10) }) });
     flushSync();
     expect(screen.queryByRole('group', { name: 'Pages' })).toBeNull();
     expect(container.querySelector('.title-row')).toBeNull();
@@ -370,13 +366,13 @@ describe('the pager', () => {
 
   test('shows the last page where the list shrank beyond the stored one', async () => {
     const user = userEvent.setup();
-    const { container } = render(LiveSessions);
-    payload.set({ live: live({ sessions: many(25) }) });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live({ sessions: many(25) }) });
     flushSync();
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
     expect(titles(container)).toHaveLength(5);
-    payload.set({ live: live({ sessions: many(12) }) });
+    page.app.payload.set({ live: live({ sessions: many(12) }) });
     flushSync();
     expect(titles(container)).toEqual(['Session 10', 'Session 11']);
   });
@@ -384,36 +380,36 @@ describe('the pager', () => {
 
 describe('a redraw with a new answer', () => {
   test('keeps the cards’ nodes by session, in the new order, and the focus inside one', () => {
-    const { container } = render(LiveSessions);
+    const { container } = page.render(LiveSessions);
     const [first, second] = many(2) as [LiveSession, LiveSession];
-    payload.set({ live: live({ sessions: [first, second] }) });
+    page.app.payload.set({ live: live({ sessions: [first, second] }) });
     flushSync();
     const before = [...container.querySelectorAll('.live-card')];
     const link = before[1]?.querySelector('a') as HTMLElement;
     link.focus();
-    payload.set({ live: live({ sessions: [second, first] }) });
+    page.app.payload.set({ live: live({ sessions: [second, first] }) });
     flushSync();
     expect([...container.querySelectorAll('.live-card')]).toEqual([before[1], before[0]]);
     expect(link).toHaveFocus();
   });
 
   test('keeps the card itself', () => {
-    const { container } = render(LiveSessions);
-    payload.set({ live: live() });
+    const { container } = page.render(LiveSessions);
+    page.app.payload.set({ live: live() });
     flushSync();
     const card = container.querySelector('section');
-    payload.set({ live: live({ sessions: [] }) });
+    page.app.payload.set({ live: live({ sessions: [] }) });
     flushSync();
     expect(container.querySelector('section')).toBe(card);
   });
 
   test('drops the node of a session that goes', () => {
-    const { container } = render(LiveSessions);
+    const { container } = page.render(LiveSessions);
     const [first, second] = many(2) as [LiveSession, LiveSession];
-    payload.set({ live: live({ sessions: [first, second] }) });
+    page.app.payload.set({ live: live({ sessions: [first, second] }) });
     flushSync();
     const before = [...container.querySelectorAll('.live-card')];
-    payload.set({ live: live({ sessions: [second] }) });
+    page.app.payload.set({ live: live({ sessions: [second] }) });
     flushSync();
     const after = [...container.querySelectorAll('.live-card')];
     expect(after).toEqual([before[1]]);
@@ -421,12 +417,12 @@ describe('a redraw with a new answer', () => {
   });
 
   test('takes a new card in, the others staying', () => {
-    const { container } = render(LiveSessions);
+    const { container } = page.render(LiveSessions);
     const [first, second] = many(2) as [LiveSession, LiveSession];
-    payload.set({ live: live({ sessions: [first] }) });
+    page.app.payload.set({ live: live({ sessions: [first] }) });
     flushSync();
     const card = container.querySelector('.live-card');
-    payload.set({ live: live({ sessions: [second, first] }) });
+    page.app.payload.set({ live: live({ sessions: [second, first] }) });
     flushSync();
     expect(titles(container)).toEqual(['Session 1', 'Session 0']);
     expect(container.querySelectorAll('.live-card')[1]).toBe(card);

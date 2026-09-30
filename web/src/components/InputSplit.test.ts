@@ -1,13 +1,14 @@
 import { render } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { afterEach, expect, test } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import type { ContextStats, Usage } from '../lib/api';
 import { usage } from '../lib/fixtures';
-import { preferences } from '../lib/prefs.svelte';
 import InputSplit from './InputSplit.svelte';
 
+const page = pagePerTest();
+
 afterEach(() => {
-  preferences.theme = null;
   localStorage.clear();
 });
 
@@ -15,7 +16,7 @@ const CONTEXT: ContextStats = { turns: 8, median: 40_000, p90: 90_000 };
 
 function card(totals: Usage = usage(), context: ContextStats | null = CONTEXT, hintTokens = 200_000): HTMLElement {
   // `context` is also a mount option, so the props go in their own object
-  const { container } = render(InputSplit, { props: { totals, context, hintTokens } });
+  const { container } = page.render(InputSplit, { props: { totals, context, hintTokens } });
   const element = container.querySelector<HTMLElement>('div.card');
   if (!element) throw new Error('no card drawn');
   return element;
@@ -103,7 +104,7 @@ test('without context or without turns there is no note', () => {
 
 test('the labels follow the theme', () => {
   const element = card();
-  preferences.theme = 'hacker';
+  page.app.preferences.theme = 'hacker';
   flushSync();
   expect(element.querySelector('.label')?.textContent).toBe('context_window.log');
   expect([...element.querySelectorAll('.split-row > span:nth-child(2)')].map((label) => label.textContent)).toEqual([

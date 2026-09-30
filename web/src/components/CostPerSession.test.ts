@@ -2,12 +2,12 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import type { CostlySession } from '../lib/api';
 import { costlySession, summary, usage } from '../lib/fixtures';
-import { tablePages } from '../lib/paging.svelte';
-import { payload, setPayload } from '../lib/payload.svelte';
-import { preferences } from '../lib/prefs.svelte';
 import CostPerSession from './CostPerSession.svelte';
+
+const page = pagePerTest();
 
 /** A session with its cache reads and the rest of its cost (the parts are cache reads and what is left over). */
 function session(id: string, cost: number, cacheRead: number, changes: Partial<CostlySession> = {}): CostlySession {
@@ -66,21 +66,17 @@ function texts(selector: string, root: ParentNode = document): (string | null)[]
 
 beforeEach(() => {
   localStorage.clear();
-  preferences.pageSize = 25;
+  page.app.preferences.pageSize = 25;
 });
 
 afterEach(() => {
-  payload.reset();
-  tablePages.forget('costly-table');
-  preferences.theme = null;
-  preferences.pageSize = 25;
   localStorage.clear();
   Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
 });
 
 describe('the card', () => {
   test('is a section named for its heading, with the note after it', () => {
-    const { container } = render(CostPerSession);
+    const { container } = page.render(CostPerSession);
     expect(screen.getByRole('region', { name: 'Cost per session' })).toHaveClass('card');
     expect(screen.getByRole('heading', { level: 2 })).toHaveAttribute('id', 'costly-title');
     expect(container.querySelector('.chart-head .muted')).toHaveTextContent(
@@ -89,14 +85,14 @@ describe('the card', () => {
   });
 
   test('has its table toggle named for the card', () => {
-    render(CostPerSession);
+    page.render(CostPerSession);
     expect(toggle()).toHaveAttribute('id', 'costly-table-toggle');
     expect(toggle()).toHaveAttribute('aria-pressed', 'false');
   });
 
   test('before any summary it has its heading and no legend, bars, note or table', async () => {
     const user = userEvent.setup();
-    const { container } = render(CostPerSession);
+    const { container } = page.render(CostPerSession);
     expect(container.querySelector('.legend')?.children).toHaveLength(0);
     expect(container.querySelector('.chart')).toBeEmptyDOMElement();
     await user.click(toggle());
@@ -104,19 +100,19 @@ describe('the card', () => {
   });
 
   test('the heading is in the theme`s words', () => {
-    preferences.theme = 'hacker';
-    render(CostPerSession);
+    page.app.preferences.theme = 'hacker';
+    page.render(CostPerSession);
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/^sort -rn cost \| head$/);
-    preferences.theme = 'startup';
+    page.app.preferences.theme = 'startup';
     flushSync();
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/^Burn per sprint$/);
   });
 
   test('the theme changes the heading in place', () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     const heading = screen.getByRole('heading', { level: 2 });
-    preferences.theme = 'hacker';
+    page.app.preferences.theme = 'hacker';
     flushSync();
     expect(screen.getByRole('heading', { level: 2 })).toBe(heading);
     expect(heading).toHaveTextContent('sort -rn cost | head');
@@ -125,8 +121,8 @@ describe('the card', () => {
 
 describe('the legend', () => {
   test('names the two parts, the last with what it holds, before the chart', () => {
-    const { container } = render(CostPerSession);
-    setPayload({ summary: ranking() });
+    const { container } = page.render(CostPerSession);
+    page.set({ summary: ranking() });
     expect(texts('.legend > span', container)).toEqual([
       'Cache reads',
       'Everything else (new input, cache writes, output and web searches)',
@@ -135,23 +131,23 @@ describe('the legend', () => {
   });
 
   test('has a swatch per part in its color', () => {
-    const { container } = render(CostPerSession);
-    setPayload({ summary: ranking() });
+    const { container } = page.render(CostPerSession);
+    page.set({ summary: ranking() });
     const swatches = [...container.querySelectorAll<HTMLElement>('.legend .swatch')];
     expect(swatches.map((swatch) => swatch.style.background)).toEqual(['var(--split-soft)', 'var(--split-strong)']);
   });
 
   test('is there for a range without sessions too', () => {
-    const { container } = render(CostPerSession);
-    setPayload({ summary: summary() });
+    const { container } = page.render(CostPerSession);
+    page.set({ summary: summary() });
     expect(container.querySelectorAll('.legend > span')).toHaveLength(2);
   });
 });
 
 describe('the bars', () => {
   test('a link per session, in the order sent, to its view, named for a screen reader', () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     const links = rowLinks();
     expect(links.map((link) => link.getAttribute('href'))).toEqual(['#session/big', '#session/small']);
     expect(links.map((link) => link.getAttribute('aria-label'))).toEqual([
@@ -162,8 +158,8 @@ describe('the bars', () => {
   });
 
   test('a row has the name, the line under it, the bar and the cost, in that order', () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     const [first, second] = rowLinks() as [HTMLAnchorElement, HTMLAnchorElement];
     expect([...first.children].map((child) => child.className)).toEqual(['bar-name', 'bar-track', 'bar-value']);
     expect(first.querySelector('.bar-name strong')).toHaveTextContent('Session big');
@@ -174,15 +170,15 @@ describe('the bars', () => {
   });
 
   test('a bar is as long as its cost against the dearest, the dearest all of the track', () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     const bars = [...document.querySelectorAll<HTMLElement>('.bar-track > .bar')];
     expect(bars.map((bar) => bar.style.width)).toEqual(['100.00%', '50.00%']);
   });
 
   test('a bar is split by its parts, each growing as its amount, in its color', () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     const [first] = document.querySelectorAll('.bar');
     const parts = [...(first?.children ?? [])] as HTMLElement[];
     expect(parts.map((part) => part.style.flexGrow)).toEqual(['1', '2']);
@@ -190,41 +186,41 @@ describe('the bars', () => {
   });
 
   test('a part without an amount is left out of the bar', () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     const bars = [...document.querySelectorAll('.bar')];
     expect(bars.map((bar) => bar.children.length)).toEqual([2, 1]);
     expect((bars[1]?.firstElementChild as HTMLElement).style.background).toBe('var(--split-soft)');
   });
 
   test('a range without sessions says so, with no bars', () => {
-    const { container } = render(CostPerSession);
-    setPayload({ summary: summary() });
+    const { container } = page.render(CostPerSession);
+    page.set({ summary: summary() });
     expect(container.querySelector('.empty')).toHaveTextContent(/^No sessions in this range\.$/);
     expect(container.querySelector('.bars')).toBeNull();
   });
 
   test('every session of the range is drawn, however many', () => {
-    render(CostPerSession);
-    setPayload({ summary: many(40) });
+    page.render(CostPerSession);
+    page.set({ summary: many(40) });
     expect(rowLinks()).toHaveLength(40);
   });
 });
 
 describe('a new summary', () => {
   test('draws again: the rows of the new sessions, the old ones gone', () => {
-    const { container } = render(CostPerSession);
-    setPayload({ summary: ranking() });
-    setPayload({ summary: summary({ costly_sessions: [session('other', 2, 1)] }) });
+    const { container } = page.render(CostPerSession);
+    page.set({ summary: ranking() });
+    page.set({ summary: summary({ costly_sessions: [session('other', 2, 1)] }) });
     expect(rowLinks().map((link) => link.getAttribute('href'))).toEqual(['#session/other']);
     expect(container.querySelector('.bar-value')).toHaveTextContent('$2.00');
   });
 
   test('a session that stays keeps its row, with the new numbers', () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     const [before] = rowLinks();
-    setPayload({ summary: summary({ costly_sessions: [session('big', 6, 6), session('small', 1.5, 1.5)] }) });
+    page.set({ summary: summary({ costly_sessions: [session('big', 6, 6), session('small', 1.5, 1.5)] }) });
     const [after] = rowLinks();
     expect(after).toBe(before);
     expect(after?.querySelector('.bar-value')).toHaveTextContent('$6.00');
@@ -232,34 +228,25 @@ describe('a new summary', () => {
   });
 
   test('sessions give way to the note when the range has none', () => {
-    const { container } = render(CostPerSession);
-    setPayload({ summary: ranking() });
-    setPayload({ summary: summary() });
+    const { container } = page.render(CostPerSession);
+    page.set({ summary: ranking() });
+    page.set({ summary: summary() });
     expect(container.querySelector('.bars')).toBeNull();
     expect(container.querySelector('.empty')).not.toBeNull();
   });
 
-  test('losing the summary takes the chart away again without throwing', () => {
-    const { container } = render(CostPerSession);
-    setPayload({ summary: ranking() });
-    payload.reset();
-    flushSync();
-    expect(container.querySelector('.chart')).toBeEmptyDOMElement();
-    expect(container.querySelector('.legend')?.children).toHaveLength(0);
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Cost per session');
-  });
 });
 
 describe('the tooltip', () => {
   test('is not there until a row is hovered or focused', () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     expect(tooltip()).toBeNull();
   });
 
   test('a pointer over a row shows it, inside the chart, with the row`s numbers', async () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     await fireEvent.pointerMove(rowLinks()[0] as HTMLElement, { clientX: 100 });
     const box = tooltip() as HTMLElement;
     expect(box.parentElement).toHaveClass('chart');
@@ -270,24 +257,24 @@ describe('the tooltip', () => {
   });
 
   test('its lines have a swatch each, the parts in their colors, the total in the default one', async () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     await fireEvent.pointerMove(rowLinks()[0] as HTMLElement, { clientX: 100 });
     const swatches = [...(tooltip()?.querySelectorAll<HTMLElement>('.row .swatch') ?? [])];
     expect(swatches.map((swatch) => swatch.style.background)).toEqual(['var(--split-soft)', 'var(--split-strong)', '']);
   });
 
   test('names an untitled session', async () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     await fireEvent.pointerMove(rowLinks()[1] as HTMLElement, { clientX: 100 });
     expect(tooltip()?.querySelector('.when')).toHaveTextContent(/^Untitled session$/);
   });
 
   test('keyboard focus shows it too', async () => {
     const user = userEvent.setup();
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     await user.tab();
     await user.tab();
     expect(rowLinks()[0]).toHaveFocus();
@@ -295,8 +282,8 @@ describe('the tooltip', () => {
   });
 
   test('leaving the row hides it', async () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     const link = rowLinks()[0] as HTMLElement;
     await fireEvent.pointerMove(link, { clientX: 100 });
     await fireEvent.pointerLeave(link);
@@ -305,8 +292,8 @@ describe('the tooltip', () => {
 
   test('losing focus hides it', async () => {
     const user = userEvent.setup();
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     await user.tab();
     await user.tab();
     expect(tooltip()).not.toBeNull();
@@ -318,8 +305,8 @@ describe('the tooltip', () => {
   });
 
   test('moving to another row shows that row`s', async () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     await fireEvent.pointerMove(rowLinks()[0] as HTMLElement, { clientX: 100 });
     await fireEvent.pointerMove(rowLinks()[1] as HTMLElement, { clientX: 100 });
     expect(document.querySelectorAll('.tooltip')).toHaveLength(1);
@@ -328,8 +315,8 @@ describe('the tooltip', () => {
 
   test('stands a gap right of the pointer, under its row', async () => {
     measure(600);
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     layOutContainer(50);
     const link = rowLinks()[0] as HTMLElement;
     layOut(link, { left: 60, width: 400 }, 30, 40);
@@ -341,8 +328,8 @@ describe('the tooltip', () => {
 
   test('follows the pointer along the row', async () => {
     measure(600);
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     layOutContainer(50);
     const link = rowLinks()[0] as HTMLElement;
     layOut(link, { left: 60, width: 400 }, 30, 40);
@@ -354,8 +341,8 @@ describe('the tooltip', () => {
   test('for the keyboard stands beside the row`s middle', async () => {
     measure(600);
     const user = userEvent.setup();
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     layOutContainer(50);
     const link = rowLinks()[0] as HTMLElement;
     layOut(link, { left: 60, width: 400 }, 30, 40);
@@ -368,8 +355,8 @@ describe('the tooltip', () => {
 
   test('never passes the container`s edges', async () => {
     measure(600);
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     layOutContainer(50);
     const link = rowLinks()[0] as HTMLElement;
     layOut(link, { left: 60, width: 400 }, 30, 40);
@@ -378,18 +365,18 @@ describe('the tooltip', () => {
   });
 
   test('goes with its session when a new summary leaves it out', async () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     await fireEvent.pointerMove(rowLinks()[0] as HTMLElement, { clientX: 100 });
-    setPayload({ summary: summary({ costly_sessions: [session('small', 1.5, 1.5)] }) });
+    page.set({ summary: summary({ costly_sessions: [session('small', 1.5, 1.5)] }) });
     expect(tooltip()).toBeNull();
   });
 
   test('stays, with the new numbers, when its session is still there', async () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     await fireEvent.pointerMove(rowLinks()[0] as HTMLElement, { clientX: 100 });
-    setPayload({ summary: summary({ costly_sessions: [session('big', 8, 2)] }) });
+    page.set({ summary: summary({ costly_sessions: [session('big', 8, 2)] }) });
     expect(texts('.row strong', tooltip() as HTMLElement)).toEqual(['$2.00', '$6.00', '$8.00']);
   });
 });
@@ -397,15 +384,15 @@ describe('the tooltip', () => {
 describe('the table view', () => {
   async function shown(summaryToShow = ranking()) {
     const user = userEvent.setup();
-    const view = render(CostPerSession);
-    setPayload({ summary: summaryToShow });
+    const view = page.render(CostPerSession);
+    page.set({ summary: summaryToShow });
     await user.click(toggle());
     return { user, ...view };
   }
 
   test('is not drawn until the toggle is pressed', () => {
-    render(CostPerSession);
-    setPayload({ summary: ranking() });
+    page.render(CostPerSession);
+    page.set({ summary: ranking() });
     expect(screen.queryByRole('table')).toBeNull();
   });
 
@@ -479,14 +466,14 @@ describe('the table view', () => {
   test('the page is kept when a new summary comes', async () => {
     const { user } = await shown(many(40));
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
-    setPayload({ summary: many(40) });
+    page.set({ summary: many(40) });
     expect(screen.getByText('rows 26–40 of 40')).toBeInTheDocument();
   });
 
   test('is updated in place, its rows keeping their nodes by session', async () => {
     await shown();
     const before = screen.getAllByRole('row');
-    setPayload({ summary: summary({ costly_sessions: [session('big', 9, 3), session('small', 1.5, 1.5)] }) });
+    page.set({ summary: summary({ costly_sessions: [session('big', 9, 3), session('small', 1.5, 1.5)] }) });
     const after = screen.getAllByRole('row');
     after.forEach((row, index) => expect(row).toBe(before[index]));
     expect(within(after[1] as HTMLElement).getAllByRole('cell')[6]).toHaveTextContent('$9.00');

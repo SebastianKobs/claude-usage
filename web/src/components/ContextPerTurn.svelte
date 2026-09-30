@@ -9,7 +9,7 @@ parts by session, so another session starts at the main thread. A picked transcr
 thread.
 -->
 <script lang="ts">
-  import { payload } from '../lib/payload.svelte';
+  import { getApp } from '../lib/app.svelte';
   import {
     agentChoices,
     agentKey,
@@ -27,6 +27,8 @@ thread.
   import ContextDetails from './ContextDetails.svelte';
   import Swatch from './Swatch.svelte';
   import TableView from './TableView.svelte';
+
+  const { payload } = getApp();
 
   const session = $derived(payload.session);
   let pickedKey = $state('main');

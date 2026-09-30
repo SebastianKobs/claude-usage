@@ -5,11 +5,12 @@ levels under it) side by side, by project across the page, and by skill and by M
 summary each is its heading only.
 -->
 <script lang="ts">
+  import { getApp } from '../lib/app.svelte';
   import { modelSlots } from '../lib/colors';
-  import { payload } from '../lib/payload.svelte';
-  import { hype } from '../lib/prefs.svelte';
   import { modelRows, usageRows } from '../lib/usage';
   import UsageTable from './UsageTable.svelte';
+
+  const { payload, hype } = getApp();
 
   const summary = $derived(payload.summary);
   const agents = $derived(summary ? usageRows(summary.agent_type, (row) => row.agent_type) : null);

@@ -12,12 +12,11 @@ range's filters and summary step aside, focus goes to its heading, and closing i
 the address's hash) puts the page back.
 -->
 <script lang="ts">
+  import { getApp } from '../lib/app.svelte';
   import { modelSlots } from '../lib/colors';
   import { sessionName } from '../lib/costly';
   import { eventRows } from '../lib/limits';
   import { opening } from '../lib/opening';
-  import { payload } from '../lib/payload.svelte';
-  import { hype } from '../lib/prefs.svelte';
   import { sessionFacts } from '../lib/session';
   import { runtimeSource, sessionCostPer100Lines } from '../lib/tiles';
   import { modelRows, usageRows } from '../lib/usage';
@@ -32,6 +31,8 @@ the address's hash) puts the page back.
   import SessionWaits from './SessionWaits.svelte';
   import ToolsTable from './ToolsTable.svelte';
   import UsageTable from './UsageTable.svelte';
+
+  const { payload, hype } = getApp();
 
   const session = $derived(payload.session);
   const models = $derived(

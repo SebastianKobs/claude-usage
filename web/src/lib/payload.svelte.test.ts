@@ -1,10 +1,6 @@
-import { afterEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 import { live, sessionDetail, summary } from './fixtures';
-import { Payload, payload, setPayload } from './payload.svelte.ts';
-
-afterEach(() => {
-  payload.reset();
-});
+import { Payload } from './payload.svelte.ts';
 
 test('a new payload has no summary and no failure', () => {
   const fresh = new Payload();
@@ -47,14 +43,6 @@ test('the values are read-only', () => {
   const fresh = new Payload();
   expect(() => Reflect.set(fresh, 'summary', summary())).not.toThrow();
   expect(fresh.summary).toBeNull();
-});
-
-test('reset forgets both', () => {
-  const fresh = new Payload();
-  fresh.set({ summary: summary() });
-  fresh.set({ summaryFailed: true });
-  fresh.reset();
-  expect([fresh.summary, fresh.summaryFailed]).toEqual([null, false]);
 });
 
 test('a new payload has no live sessions, no failure, no time and no states', () => {
@@ -115,16 +103,6 @@ test('the states of sessions no longer live go', () => {
   expect(fresh.liveState('live-2')?.session_id).toBe('live-2');
 });
 
-test('reset forgets the live answer, its failure, its time and the states', () => {
-  const fresh = new Payload();
-  fresh.set({ live: live(), liveAt: 1_000 });
-  fresh.set({ liveFailed: true });
-  fresh.setLiveState('live-1', SESSION_STATE);
-  fresh.reset();
-  const left = [fresh.live, fresh.liveFailed, fresh.liveAt, fresh.liveState('live-1')];
-  expect(left).toEqual([null, false, null, undefined]);
-});
-
 test('a new payload has no session open', () => {
   expect(new Payload().session).toBeNull();
 });
@@ -148,15 +126,28 @@ test('the session is set apart from the summary and the live answer', () => {
   expect([fresh.summary, fresh.live]).not.toContain(null);
 });
 
-test('reset closes the session', () => {
-  const fresh = new Payload();
-  fresh.set({ session: sessionDetail() });
-  fresh.reset();
-  expect(fresh.session).toBeNull();
+test('a new payload is not loading a summary', () => {
+  expect(new Payload().summaryLoading).toBe(false);
 });
 
-test('setPayload sets the singleton', () => {
+test('loading a summary is set and cleared apart from the summary and its failure', () => {
+  const fresh = new Payload();
   const loaded = summary();
-  setPayload({ summary: loaded });
-  expect(payload.summary).toBe(loaded);
+  fresh.set({ summary: loaded, summaryLoading: true });
+  expect(fresh.summaryLoading).toBe(true);
+  // an answer does not end the loading by itself: the loader says when the newest request is done
+  fresh.set({ summary: summary() });
+  expect(fresh.summaryLoading).toBe(true);
+  fresh.set({ summaryLoading: false });
+  expect(fresh.summaryLoading).toBe(false);
+  expect(fresh.summary).not.toBe(loaded);
+});
+
+test('two payloads share nothing', () => {
+  const left = new Payload();
+  const right = new Payload();
+  left.set({ summary: summary(), live: live(), session: sessionDetail(), summaryLoading: true });
+  left.setLiveState('live-1', SESSION_STATE);
+  expect([right.summary, right.live, right.session, right.summaryLoading]).toEqual([null, null, null, false]);
+  expect(right.liveState('live-1')).toBeUndefined();
 });

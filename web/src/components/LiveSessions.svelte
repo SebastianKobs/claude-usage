@@ -9,14 +9,14 @@ focus inside them. "Ago" counts from the time of the newest live answer, even an
 card says it is loading, or that loading failed.
 -->
 <script lang="ts">
+  import { getApp } from '../lib/app.svelte';
   import { dayText } from '../lib/format';
   import { liveEmpty, liveWindow } from '../lib/live';
-  import { shownWindow } from '../lib/paging.svelte';
-  import { payload } from '../lib/payload.svelte';
-  import { hype } from '../lib/prefs.svelte';
   import { PAGE_SIZES, pageUnits } from '../lib/tables';
   import LiveCard from './LiveCard.svelte';
   import Pager from './Pager.svelte';
+
+  const { payload, hype, shownWindow } = getApp();
 
   const KEY = 'live';
 

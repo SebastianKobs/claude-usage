@@ -2,11 +2,12 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import { usage } from '../lib/fixtures';
-import { tablePages } from '../lib/paging.svelte';
-import { preferences } from '../lib/prefs.svelte';
 import { modelRows, usageRows, type UsageRow } from '../lib/usage';
 import UsageTable from './UsageTable.svelte';
+
+const page = pagePerTest();
 
 /** `count` plain rows "name 0", "name 1", … from dearest to cheapest. */
 function plainRows(count: number): UsageRow[] {
@@ -27,19 +28,16 @@ function names(): (string | null)[] {
 
 beforeEach(() => {
   localStorage.clear();
-  preferences.pageSize = 25;
+  page.app.preferences.pageSize = 25;
 });
 
 afterEach(() => {
-  tablePages.forget('by-agent');
-  tablePages.forget('s1-models');
-  preferences.pageSize = 25;
   localStorage.clear();
 });
 
 describe('the card', () => {
   test('is a section named for its heading, which is a level 2 heading with the id the section names', () => {
-    const { container } = render(UsageTable, { ...DEFAULTS, rows: plainRows(2) });
+    const { container } = page.render(UsageTable, { ...DEFAULTS, rows: plainRows(2) });
     const section = screen.getByRole('region', { name: 'By agent type' });
     expect(section).toBe(container.firstElementChild);
     expect(section).toHaveClass('card');
@@ -50,7 +48,7 @@ describe('the card', () => {
   });
 
   test('has a note under its heading where it has one, before the table', () => {
-    const { container } = render(UsageTable, { ...DEFAULTS, note: 'turns of a skill', rows: plainRows(2) });
+    const { container } = page.render(UsageTable, { ...DEFAULTS, note: 'turns of a skill', rows: plainRows(2) });
     const note = container.querySelector('.note');
     expect(note?.tagName).toBe('P');
     expect(note).toHaveTextContent(/^turns of a skill$/);
@@ -59,14 +57,14 @@ describe('the card', () => {
   });
 
   test('has no note without one', () => {
-    const { container } = render(UsageTable, { ...DEFAULTS, rows: plainRows(2) });
+    const { container } = page.render(UsageTable, { ...DEFAULTS, rows: plainRows(2) });
     expect(container.querySelector('.note')).toBeNull();
   });
 });
 
 describe('the table', () => {
   test('is named by the heading, and every column heading has scope col', () => {
-    render(UsageTable, { ...DEFAULTS, rows: plainRows(2) });
+    page.render(UsageTable, { ...DEFAULTS, rows: plainRows(2) });
     const table = screen.getByRole('table', { name: 'By agent type' });
     expect(table.getAttribute('aria-labelledby')).toBe('by-agent-title');
     const heads = within(table).getAllByRole('columnheader');
@@ -74,7 +72,7 @@ describe('the table', () => {
   });
 
   test('has the name column, then the usage columns, all numeric but the name', () => {
-    render(UsageTable, { ...DEFAULTS, nameLabel: 'Skill', rows: plainRows(1) });
+    page.render(UsageTable, { ...DEFAULTS, nameLabel: 'Skill', rows: plainRows(1) });
     const heads = screen.getAllByRole('columnheader');
     expect(heads.map((head) => head.textContent)).toEqual([
       'Skill',
@@ -88,7 +86,7 @@ describe('the table', () => {
   });
 
   test('has a row per entry, in the order given, with the name and the usage cells', () => {
-    render(UsageTable, {
+    page.render(UsageTable, {
       ...DEFAULTS,
       rows: usageRows(
         [
@@ -105,7 +103,7 @@ describe('the table', () => {
   });
 
   test('has plain rows without a swatch, an effort span or a row class', () => {
-    const { container } = render(UsageTable, { ...DEFAULTS, rows: plainRows(3) });
+    const { container } = page.render(UsageTable, { ...DEFAULTS, rows: plainRows(3) });
     expect(container.querySelector('.swatch')).toBeNull();
     expect(container.querySelector('.effort')).toBeNull();
     expect(container.querySelector('.group-row, .sub-row')).toBeNull();
@@ -132,7 +130,7 @@ describe('a model table', () => {
   }
 
   function renderModels() {
-    return render(UsageTable, { ...DEFAULTS, title: 'By model', nameLabel: 'Model', rows: models() });
+    return page.render(UsageTable, { ...DEFAULTS, title: 'By model', nameLabel: 'Model', rows: models() });
   }
 
   test('has each model, then its effort levels from least to most, none for calls without one', () => {
@@ -165,7 +163,7 @@ describe('a model table', () => {
 
 describe('without rows', () => {
   test('it says the empty text instead of the table, the heading and note staying', () => {
-    const { container } = render(UsageTable, { ...DEFAULTS, note: 'about it', rows: [], empty: 'Nothing used.' });
+    const { container } = page.render(UsageTable, { ...DEFAULTS, note: 'about it', rows: [], empty: 'Nothing used.' });
     expect(screen.queryByRole('table')).toBeNull();
     expect(container.querySelector('.table-wrap > .empty')).toHaveTextContent(/^Nothing used\.$/);
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('By agent type');
@@ -173,7 +171,7 @@ describe('without rows', () => {
   });
 
   test('with null (no summary yet) it is the heading only: no note, table, empty text or pager', () => {
-    const { container } = render(UsageTable, { ...DEFAULTS, note: 'about it', rows: null });
+    const { container } = page.render(UsageTable, { ...DEFAULTS, note: 'about it', rows: null });
     expect(container.firstElementChild?.children).toHaveLength(1);
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('By agent type');
     expect(screen.getByRole('region', { name: 'By agent type' })).toBeInTheDocument();
@@ -181,7 +179,7 @@ describe('without rows', () => {
   });
 
   test('the table comes when the rows do', () => {
-    const { container, rerender } = render(UsageTable, { ...DEFAULTS, rows: null });
+    const { container, rerender } = page.render(UsageTable, { ...DEFAULTS, rows: null });
     void rerender({ rows: plainRows(2) });
     flushSync();
     expect(names()).toEqual(['name 0', 'name 1']);
@@ -191,13 +189,13 @@ describe('without rows', () => {
 
 describe('the pager', () => {
   test('there is none up to ten rows', () => {
-    render(UsageTable, { ...DEFAULTS, rows: plainRows(10) });
+    page.render(UsageTable, { ...DEFAULTS, rows: plainRows(10) });
     expect(screen.queryByRole('group', { name: 'Pages' })).toBeNull();
     expect(document.querySelector('.title-row')).toBeNull();
   });
 
   test('past ten rows it shares a row with the heading, after it', () => {
-    const { container } = render(UsageTable, { ...DEFAULTS, rows: plainRows(40) });
+    const { container } = page.render(UsageTable, { ...DEFAULTS, rows: plainRows(40) });
     const titleRow = container.querySelector('.title-row') as HTMLElement;
     const pager = screen.getByRole('group', { name: 'Pages' });
     expect(pager.parentElement).toBe(titleRow);
@@ -208,7 +206,7 @@ describe('the pager', () => {
 
   test('its page is kept under the table`s id, and next shows the rest', async () => {
     const user = userEvent.setup();
-    render(UsageTable, { ...DEFAULTS, rows: plainRows(40) });
+    page.render(UsageTable, { ...DEFAULTS, rows: plainRows(40) });
     expect(screen.getByRole('combobox', { name: 'Rows per page' }).id).toBe('pager-by-agent-size');
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
     expect(names()[0]).toBe('name 25');
@@ -217,14 +215,14 @@ describe('the pager', () => {
 
   test('the effort rows stay with their model across a page boundary', async () => {
     const user = userEvent.setup();
-    preferences.pageSize = 10;
+    page.app.preferences.pageSize = 10;
     const all = modelRows(
       Array.from({ length: 12 }, (_unused, index) => ({ model: `m${index}`, ...usage({ cost: 100 - index }) })),
       ['low', 'medium', 'high'].map((effort) => ({ model: 'm9', effort, ...usage() })),
       new Map(),
     );
     // m9 is the tenth model, the last unit of the first page, so its three effort rows come with it
-    render(UsageTable, { ...DEFAULTS, title: 'By model', nameLabel: 'Model', rows: all });
+    page.render(UsageTable, { ...DEFAULTS, title: 'By model', nameLabel: 'Model', rows: all });
     expect(names()).toEqual([
       ...Array.from({ length: 9 }, (_unused, index) => `m${index}`),
       'm9',
@@ -239,7 +237,7 @@ describe('the pager', () => {
 
 describe('a redraw', () => {
   test('takes new rows in place, the heading staying the same node', () => {
-    const { rerender } = render(UsageTable, { ...DEFAULTS, rows: plainRows(2) });
+    const { rerender } = page.render(UsageTable, { ...DEFAULTS, rows: plainRows(2) });
     const heading = screen.getByRole('heading', { level: 2 });
     void rerender({ rows: plainRows(3) });
     flushSync();
@@ -249,7 +247,7 @@ describe('a redraw', () => {
 
   test('keeps a row`s node by its key when the rows reorder', () => {
     const rows = plainRows(3);
-    const { rerender } = render(UsageTable, { ...DEFAULTS, rows });
+    const { rerender } = page.render(UsageTable, { ...DEFAULTS, rows });
     const before = new Map(screen.getAllByRole('row').slice(1).map((row) => [row.firstElementChild?.textContent, row]));
     void rerender({ rows: [...rows].reverse() });
     flushSync();
@@ -262,7 +260,7 @@ describe('a redraw', () => {
 
 describe('the inline form', () => {
   test('is no card: the heading is a level 3 one and the table is named by it, all in the parent`s place', () => {
-    const { container } = render(UsageTable, { ...DEFAULTS, inline: true, rows: plainRows(2) });
+    const { container } = page.render(UsageTable, { ...DEFAULTS, inline: true, rows: plainRows(2) });
     expect(container.querySelector('section')).toBeNull();
     const heading = screen.getByRole('heading', { level: 3 });
     expect(heading).toHaveTextContent(/^By agent type$/);
@@ -273,7 +271,7 @@ describe('the inline form', () => {
   });
 
   test('draws the same rows and cells as the card', () => {
-    render(UsageTable, { ...DEFAULTS, inline: true, rows: plainRows(2) });
+    page.render(UsageTable, { ...DEFAULTS, inline: true, rows: plainRows(2) });
     expect(names()).toEqual(['name 0', 'name 1']);
     const cells = within(screen.getAllByRole('row')[1] as HTMLElement).getAllByRole('cell');
     expect(cells.map((cell) => cell.classList.contains('num'))).toEqual([false, true, true, true, true, true]);
@@ -281,15 +279,15 @@ describe('the inline form', () => {
 
   test('keeps its page under the pager key given, not the id', async () => {
     const user = userEvent.setup();
-    render(UsageTable, { ...DEFAULTS, inline: true, pagerKey: 's1-models', rows: plainRows(40) });
+    page.render(UsageTable, { ...DEFAULTS, inline: true, pagerKey: 's1-models', rows: plainRows(40) });
     expect(screen.getByRole('combobox', { name: 'Rows per page' }).id).toBe('pager-s1-models-size');
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
-    expect(tablePages.first('s1-models')).toBe(25);
-    expect(tablePages.first('by-agent')).toBe(0);
+    expect(page.app.pages.first('s1-models')).toBe(25);
+    expect(page.app.pages.first('by-agent')).toBe(0);
   });
 
   test('says the empty text without rows, the heading staying', () => {
-    const { container } = render(UsageTable, { ...DEFAULTS, inline: true, rows: [], empty: 'Nothing used.' });
+    const { container } = page.render(UsageTable, { ...DEFAULTS, inline: true, rows: [], empty: 'Nothing used.' });
     expect(container.querySelector('.table-wrap > .empty')).toHaveTextContent(/^Nothing used\.$/);
     expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('By agent type');
   });

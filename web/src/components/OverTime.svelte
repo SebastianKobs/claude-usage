@@ -5,11 +5,10 @@ tokens), each with its own y axis and its own series color, sharing one time axi
 hours), with a slider over the buckets and a table view. Without a summary the card has its heading and no chart.
 -->
 <script lang="ts">
+  import { getApp } from '../lib/app.svelte';
   import { chartWidth, LEFT_AXIS, RIGHT_PAD } from '../lib/chartkit';
   import { lineX, nearestIndex, niceMax, ticks } from '../lib/charts';
   import { slotColor } from '../lib/colors';
-  import { payload } from '../lib/payload.svelte';
-  import { hype } from '../lib/prefs.svelte';
   import {
     PANEL_PLOT,
     PANEL_TITLE,
@@ -45,6 +44,8 @@ hours), with a slider over the buckets and a table view. Without a summary the c
   }
 
   type TrendRow = ReturnType<typeof trendTable>['rows'][number];
+
+  const { payload, hype } = getApp();
 
   const summary = $derived(payload.summary);
   const trend = $derived(summary ? trendOf(summary) : null);

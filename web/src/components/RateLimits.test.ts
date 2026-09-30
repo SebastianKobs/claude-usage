@@ -2,13 +2,13 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import type { DayErrors, HourErrors, ModelUsage } from '../lib/api';
 import { apiErrorEvent, limitWindow, summary, usage } from '../lib/fixtures';
 import { LIMIT_CHART_HEIGHT, LIMIT_PLOT } from '../lib/limits';
-import { tablePages } from '../lib/paging.svelte';
-import { payload, setPayload } from '../lib/payload.svelte';
-import { preferences } from '../lib/prefs.svelte';
 import RateLimits from './RateLimits.svelte';
+
+const page = pagePerTest();
 
 const dayErrors = (day: string, error: string, count: number): DayErrors => ({ day, error, count });
 const hourErrors = (hour: string, error: string, count: number): HourErrors => ({ hour, error, count });
@@ -111,24 +111,21 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(2026, 8, 30, 12, 0, 0));
   localStorage.clear();
-  preferences.pageSize = 25;
+  page.app.preferences.pageSize = 25;
   measure(640);
 });
 
 afterEach(() => {
   vi.useRealTimers();
-  payload.reset();
-  for (const key of ['limits-table', 'limit-windows', 'limit-events']) tablePages.forget(key);
-  preferences.theme = null;
-  preferences.pageSize = 25;
+  for (const key of ['limits-table', 'limit-windows', 'limit-events']) page.app.pages.forget(key);
   localStorage.clear();
   Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
 });
 
 describe('the card', () => {
   test('is a section named for its heading, with the note for days after it', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
     expect(screen.getByRole('region', { name: 'Rate limits' })).toHaveClass('card');
     expect(screen.getByRole('heading', { level: 2 })).toHaveAttribute('id', 'limits-title');
     expect(container.querySelector('.chart-head .muted')).toHaveTextContent(
@@ -137,20 +134,20 @@ describe('the card', () => {
   });
 
   test('the note names a single day`s hours', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: today() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: today() });
     expect(container.querySelector('.chart-head .muted')).toHaveTextContent(/^rate-limit hits per hour;/);
   });
 
   test('has its table toggle named for the card', () => {
-    render(RateLimits);
+    page.render(RateLimits);
     expect(toggle()).toHaveAttribute('id', 'limits-table-toggle');
     expect(toggle()).toHaveAttribute('aria-pressed', 'false');
   });
 
   test('before any summary it has its heading only: no note, legend entry, chart or tables', async () => {
     const user = userEvent.setup();
-    const { container } = render(RateLimits);
+    const { container } = page.render(RateLimits);
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Rate limits');
     expect(container.querySelector('.muted')).toBeNull();
     expect(container.querySelector('.legend')?.children).toHaveLength(0);
@@ -161,12 +158,12 @@ describe('the card', () => {
   });
 
   test('the headings are in the theme`s words', () => {
-    preferences.theme = 'hacker';
-    render(RateLimits);
-    setPayload({ summary: week() });
+    page.app.preferences.theme = 'hacker';
+    page.render(RateLimits);
+    page.set({ summary: week() });
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/^grep 429 access\.log$/);
     expect(headings().map((heading) => heading.textContent)).toEqual(['ulimit -t 18000', 'tail -f error.log']);
-    preferences.theme = 'startup';
+    page.app.preferences.theme = 'startup';
     flushSync();
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/^Hypergrowth friction$/);
     expect(headings().map((heading) => heading.textContent)).toEqual([
@@ -176,11 +173,11 @@ describe('the card', () => {
   });
 
   test('the theme changes the headings in place', () => {
-    render(RateLimits);
-    setPayload({ summary: week() });
+    page.render(RateLimits);
+    page.set({ summary: week() });
     const heading = screen.getByRole('heading', { level: 2 });
     const [windowsHeading] = headings();
-    preferences.theme = 'hacker';
+    page.app.preferences.theme = 'hacker';
     flushSync();
     expect(screen.getByRole('heading', { level: 2 })).toBe(heading);
     expect(headings()[0]).toBe(windowsHeading);
@@ -190,8 +187,8 @@ describe('the card', () => {
 
 describe('the legend', () => {
   test('has one entry, the hit, with a swatch in the critical status color, before the chart', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
     expect(texts('.legend > span', container)).toEqual(['⚠ Rate-limit hit']);
     const swatch = container.querySelector<HTMLElement>('.legend .swatch');
     expect(swatch?.style.background).toBe('var(--status-critical)');
@@ -199,16 +196,16 @@ describe('the legend', () => {
   });
 
   test('is there for a range without hits too', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: summary() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: summary() });
     expect(container.querySelectorAll('.legend > span')).toHaveLength(1);
   });
 });
 
 describe('the chart', () => {
   test('a summary draws it at once: an image named for the unit and the total, 148 high', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
     expect(container.querySelector('svg')?.getAttribute('height')).toBe(String(LIMIT_CHART_HEIGHT));
     expect(LIMIT_CHART_HEIGHT).toBe(148);
     expect(screen.getByRole('img')).toHaveAccessibleName(
@@ -217,26 +214,26 @@ describe('the chart', () => {
   });
 
   test('one image per hour for a single day', () => {
-    render(RateLimits);
-    setPayload({ summary: today() });
+    page.render(RateLimits);
+    page.set({ summary: today() });
     expect(screen.getByRole('img')).toHaveAccessibleName(
       'Rate-limit hits per hour: 2 in the range; table view available',
     );
   });
 
   test('it is as wide as its container, but not narrower than the minimum', () => {
-    const { container, unmount } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container, unmount } = page.render(RateLimits);
+    page.set({ summary: week() });
     expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 640 148');
     unmount();
     measure(0);
-    const again = render(RateLimits);
+    const again = page.render(RateLimits);
     expect(again.container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 320 148');
   });
 
   test('a column per bucket with hits, in the critical status color, the others drawing nothing', () => {
-    render(RateLimits);
-    setPayload({ summary: week() });
+    page.render(RateLimits);
+    page.set({ summary: week() });
     expect(columns().map((column) => column.getAttribute('fill'))).toEqual([
       'var(--status-critical)',
       'var(--status-critical)',
@@ -245,8 +242,8 @@ describe('the chart', () => {
   });
 
   test('a column is as high as its hits against the axis` top, 24 px wide and centered in its band', () => {
-    render(RateLimits);
-    setPayload({ summary: week() });
+    page.render(RateLimits);
+    page.set({ summary: week() });
     const [first, second, third] = columns().map(numbers) as [number[], number[], number[]];
     // M x,bottom V top+r Q ...: x, then the bottom, which is the plot's
     expect(first[0]).toBeCloseTo(columnLeft(4), 6);
@@ -259,8 +256,8 @@ describe('the chart', () => {
   });
 
   test('the gridlines run from the axis to 8 px before the drawing`s edge, whole numbers on the axis', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
     const lines = [...container.querySelectorAll('g[role="img"] > line')];
     expect(lines.map((line) => [line.getAttribute('x1'), line.getAttribute('x2')])).toEqual([
       ['56', '632'],
@@ -273,8 +270,8 @@ describe('the chart', () => {
   });
 
   test('the axis of a range with few hits is at least 2', () => {
-    const { container } = render(RateLimits);
-    setPayload({
+    const { container } = page.render(RateLimits);
+    page.set({
       summary: summary({
         api_errors: { day: [dayErrors('2026-09-30', 'rate_limit', 1)], hour: [], events: [], windows: [] },
       }),
@@ -283,8 +280,8 @@ describe('the chart', () => {
   });
 
   test('x labels run along the bottom, one per day of the week, centered in their bands', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
     const labels = [...container.querySelectorAll('.axis-text[text-anchor="middle"]')];
     expect(labels).toHaveLength(7);
     expect(labels.every((label) => label.getAttribute('y') === String(LIMIT_PLOT + 18))).toBe(true);
@@ -292,16 +289,16 @@ describe('the chart', () => {
   });
 
   test('a single day labels its hours', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: today() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: today() });
     const labels = texts('.axis-text[text-anchor="middle"]', container);
     expect(labels.length).toBeGreaterThan(1);
     expect(labels[0]).toBe('12:00 AM');
   });
 
   test('the tallest column carries its hits, centered over it, 6 px above its top, and only it', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
     expect(texts('.value-text', container)).toEqual(['3']);
     const label = container.querySelector('.value-text');
     expect(label?.getAttribute('text-anchor')).toBe('middle');
@@ -310,8 +307,8 @@ describe('the chart', () => {
   });
 
   test('of equally tall columns the first carries it', () => {
-    const { container } = render(RateLimits);
-    setPayload({
+    const { container } = page.render(RateLimits);
+    page.set({
       summary: summary({
         api_errors: {
           day: [dayErrors('2026-09-29', 'rate_limit', 2), dayErrors('2026-09-30', 'rate_limit', 2)],
@@ -326,8 +323,8 @@ describe('the chart', () => {
   });
 
   test('other errors alone draw the chart without a column or a label', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: onlyOthers() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: onlyOthers() });
     expect(container.querySelector('svg')).not.toBeNull();
     expect(columns()).toHaveLength(0);
     expect(container.querySelector('.value-text')).toBeNull();
@@ -336,8 +333,8 @@ describe('the chart', () => {
   });
 
   test('a range with neither hits nor errors says so in place of the chart', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: summary() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: summary() });
     expect(container.querySelector('.chart > .empty')).toHaveTextContent(
       /^No rate limits or API errors in this range\.$/,
     );
@@ -346,8 +343,8 @@ describe('the chart', () => {
   });
 
   test('the note and the tables stay for a range without errors', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: summary() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: summary() });
     expect(container.querySelector('.chart-head .muted')).not.toBeNull();
     expect(texts('.table-wrap > .empty', container)).toEqual([
       'No 5-hour window hit its limit in this range.',
@@ -358,8 +355,8 @@ describe('the chart', () => {
 
 describe('the cursor and its tooltip', () => {
   test('one slider over the days, reading the day and both counts', () => {
-    render(RateLimits);
-    setPayload({ summary: week() });
+    page.render(RateLimits);
+    page.set({ summary: week() });
     const slider = screen.getByRole('slider', { name: 'Rate-limit hits per day; arrow keys step through them' });
     expect(screen.getAllByRole('slider')).toHaveLength(1);
     expect(slider).toHaveAttribute('aria-valuemin', '1');
@@ -369,15 +366,15 @@ describe('the cursor and its tooltip', () => {
   });
 
   test('a single day has its hours for buckets', () => {
-    render(RateLimits);
-    setPayload({ summary: today() });
+    page.render(RateLimits);
+    page.set({ summary: today() });
     expect(screen.getByRole('slider')).toHaveAccessibleName('Rate-limit hits per hour; arrow keys step through them');
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuemax', '13');
   });
 
   test('the slider covers the plot, from the axis to 8 px before the drawing`s edge', () => {
-    render(RateLimits);
-    setPayload({ summary: week() });
+    page.render(RateLimits);
+    page.set({ summary: week() });
     const slider = screen.getByRole('slider');
     expect(slider.getAttribute('x')).toBe('56');
     expect(slider.getAttribute('y')).toBe('0');
@@ -386,16 +383,16 @@ describe('the cursor and its tooltip', () => {
   });
 
   test('there is no tooltip and no highlight until the cursor is on the chart', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
     expect(tooltip()).toBeNull();
     expect(container.querySelector('.column-mark')).toBeNull();
   });
 
   test('focus shows the last day`s tooltip: the day, the hits with the icon, the other errors', async () => {
     const user = userEvent.setup();
-    render(RateLimits);
-    setPayload({ summary: week() });
+    page.render(RateLimits);
+    page.set({ summary: week() });
     await focusSlider(user);
     const box = tooltip() as HTMLElement;
     expect(box.querySelector('.when')).toHaveTextContent('Sep 30');
@@ -405,8 +402,8 @@ describe('the cursor and its tooltip', () => {
 
   test('its first line has a swatch in the critical status color, its second the default one', async () => {
     const user = userEvent.setup();
-    render(RateLimits);
-    setPayload({ summary: week() });
+    page.render(RateLimits);
+    page.set({ summary: week() });
     await focusSlider(user);
     const swatches = [...(tooltip()?.querySelectorAll<HTMLElement>('.row .swatch') ?? [])];
     expect(swatches.map((swatch) => swatch.style.background)).toEqual(['var(--status-critical)', '']);
@@ -414,8 +411,8 @@ describe('the cursor and its tooltip', () => {
 
   test('the arrow keys step through the days, the tooltip following', async () => {
     const user = userEvent.setup();
-    render(RateLimits);
-    setPayload({ summary: week() });
+    page.render(RateLimits);
+    page.set({ summary: week() });
     await focusSlider(user);
     await user.keyboard('{ArrowLeft}');
     expect(texts('.row strong', tooltip() as HTMLElement)).toEqual(['3', '2']);
@@ -432,8 +429,8 @@ describe('the cursor and its tooltip', () => {
 
   test('the band under the cursor is highlighted, wider than the column', async () => {
     const user = userEvent.setup();
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
     await focusSlider(user);
     const mark = container.querySelector('rect.column-mark');
     expect(Number(mark?.getAttribute('x'))).toBeCloseTo(56 + BAND * 6, 6);
@@ -446,8 +443,8 @@ describe('the cursor and its tooltip', () => {
 
   test('the tooltip stands a gap right of the band`s middle', async () => {
     const user = userEvent.setup();
-    render(RateLimits);
-    setPayload({ summary: week() });
+    page.render(RateLimits);
+    page.set({ summary: week() });
     await focusSlider(user);
     expect(parseFloat(tooltip()?.style.left ?? '')).toBeCloseTo(56 + BAND * 6.5 + 12, 3);
     await user.keyboard('{Home}');
@@ -456,8 +453,8 @@ describe('the cursor and its tooltip', () => {
 
   test('leaving the slider hides the tooltip and the highlight', async () => {
     const user = userEvent.setup();
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
     await focusSlider(user);
     await user.tab();
     expect(tooltip()).toBeNull();
@@ -466,8 +463,8 @@ describe('the cursor and its tooltip', () => {
 
   test('names the hour for a single day', async () => {
     const user = userEvent.setup();
-    render(RateLimits);
-    setPayload({ summary: today() });
+    page.render(RateLimits);
+    page.set({ summary: today() });
     await focusSlider(user);
     await user.keyboard('{ArrowLeft}');
     // 11:00, the hour before now: nothing there; 10:00 has the other error, 09:00 the hits
@@ -480,10 +477,10 @@ describe('the cursor and its tooltip', () => {
 
   test('a new summary gives the slider its new buckets, and a tooltip its new counts', async () => {
     const user = userEvent.setup();
-    render(RateLimits);
-    setPayload({ summary: week() });
+    page.render(RateLimits);
+    page.set({ summary: week() });
     await focusSlider(user);
-    setPayload({
+    page.set({
       summary: summary({
         api_errors: { day: [dayErrors('2026-09-30', 'rate_limit', 7)], hour: [], events: [], windows: [] },
       }),
@@ -495,42 +492,32 @@ describe('the cursor and its tooltip', () => {
 
 describe('a new summary', () => {
   test('draws the chart again: the columns of the new counts', () => {
-    render(RateLimits);
-    setPayload({ summary: week() });
-    setPayload({ summary: onlyOthers() });
+    page.render(RateLimits);
+    page.set({ summary: week() });
+    page.set({ summary: onlyOthers() });
     expect(columns()).toHaveLength(0);
-    setPayload({ summary: week() });
+    page.set({ summary: week() });
     expect(columns()).toHaveLength(3);
   });
 
   test('gives way to the note when the range has no errors, and back', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
-    setPayload({ summary: summary() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
+    page.set({ summary: summary() });
     expect(container.querySelector('svg')).toBeNull();
     expect(container.querySelector('.chart > .empty')).not.toBeNull();
-    setPayload({ summary: week() });
+    page.set({ summary: week() });
     expect(container.querySelector('svg')).not.toBeNull();
     expect(container.querySelector('.chart > .empty')).toBeNull();
   });
 
-  test('losing the summary takes the chart and the tables away without throwing', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
-    payload.reset();
-    flushSync();
-    expect(container.querySelector('.chart')).toBeEmptyDOMElement();
-    expect(container.querySelector('.legend')?.children).toHaveLength(0);
-    expect(screen.queryByRole('heading', { level: 3 })).toBeNull();
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Rate limits');
-  });
 });
 
 describe('the table view', () => {
   async function shown(summaryToShow = week()) {
     const user = userEvent.setup();
-    const view = render(RateLimits);
-    setPayload({ summary: summaryToShow });
+    const view = page.render(RateLimits);
+    page.set({ summary: summaryToShow });
     await user.click(toggle());
     return { user, ...view };
   }
@@ -540,8 +527,8 @@ describe('the table view', () => {
 
   test('is not drawn until the toggle is pressed, the chart staying after', async () => {
     const user = userEvent.setup();
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
     expect(toggle()).toHaveAttribute('aria-pressed', 'false');
     // the windows' and the errors' tables are there without an event
     expect(screen.queryByRole('columnheader', { name: 'Rate-limit hits' })).toBeNull();
@@ -604,8 +591,8 @@ describe('the table view', () => {
 
 describe('the windows table', () => {
   test('has its heading and its note before it, in the theme`s words', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: manyWindows(1) });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: manyWindows(1) });
     const [heading] = headings();
     expect(heading).toHaveTextContent('5-hour windows that hit the limit');
     expect(heading?.parentElement).not.toHaveClass('title-row');
@@ -620,8 +607,8 @@ describe('the windows table', () => {
   });
 
   test('is headed by the window, when it was hit, the hits and what it used', () => {
-    render(RateLimits);
-    setPayload({ summary: manyWindows(1) });
+    page.render(RateLimits);
+    page.set({ summary: manyWindows(1) });
     const table = screen.getAllByRole('table')[0] as HTMLElement;
     const heads = within(table).getAllByRole('columnheader');
     expect(heads.map((head) => head.textContent)).toEqual([
@@ -638,8 +625,8 @@ describe('the windows table', () => {
   });
 
   test('has a row per window: its span, time to the first hit, hits and usage', () => {
-    render(RateLimits);
-    setPayload({ summary: summary({ api_errors: { day: [], hour: [], events: [], windows: [limitWindow()] } }) });
+    page.render(RateLimits);
+    page.set({ summary: summary({ api_errors: { day: [], hour: [], events: [], windows: [limitWindow()] } }) });
     const row = screen.getAllByRole('row')[1] as HTMLElement;
     const cells = within(row).getAllByRole('cell');
     expect(cells).toHaveLength(8);
@@ -658,8 +645,8 @@ describe('the windows table', () => {
   });
 
   test('a window with models is a group row, its models under it as sub-rows, the dearest first', () => {
-    render(RateLimits);
-    setPayload({
+    page.render(RateLimits);
+    page.set({
       summary: summary({
         api_errors: {
           day: [],
@@ -684,8 +671,8 @@ describe('the windows table', () => {
   });
 
   test('without a window it says so in place of the table, the heading and the note staying', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
     const wrap = container.querySelector('h3 + .note + .table-wrap');
     expect(wrap?.querySelector('.empty')).toHaveTextContent(/^No 5-hour window hit its limit in this range\.$/);
     expect(wrap?.querySelector('table')).toBeNull();
@@ -693,8 +680,8 @@ describe('the windows table', () => {
 
   test('pages past ten windows with the pager in the heading`s row, under its own key', async () => {
     const user = userEvent.setup();
-    render(RateLimits);
-    setPayload({ summary: manyWindows(40) });
+    page.render(RateLimits);
+    page.set({ summary: manyWindows(40) });
     const pager = screen.getByRole('group', { name: 'Pages' });
     expect(pager.parentElement).toHaveClass('title-row');
     expect(pager.previousElementSibling).toBe(headings()[0]);
@@ -706,15 +693,15 @@ describe('the windows table', () => {
 
   test('keeps a model with its window at a page edge', async () => {
     const user = userEvent.setup();
-    preferences.pageSize = 10;
+    page.app.preferences.pageSize = 10;
     const windows = Array.from({ length: 12 }, (_unused, index) =>
       limitWindow({
         resets_at: `2026-09-29T${String(index).padStart(2, '0')}:00:00Z`,
         models: index === 9 ? [modelUsage('claude-opus-4', 1), modelUsage('claude-sonnet-4', 0.5)] : [],
       }),
     );
-    render(RateLimits);
-    setPayload({ summary: summary({ api_errors: { day: [], hour: [], events: [], windows } }) });
+    page.render(RateLimits);
+    page.set({ summary: summary({ api_errors: { day: [], hour: [], events: [], windows } }) });
     // the tenth window and its two models are on the first page
     expect(screen.getAllByRole('row').slice(1)).toHaveLength(12);
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
@@ -724,10 +711,10 @@ describe('the windows table', () => {
 
   test('keeps its page when a new summary comes', async () => {
     const user = userEvent.setup();
-    render(RateLimits);
-    setPayload({ summary: manyWindows(40) });
+    page.render(RateLimits);
+    page.set({ summary: manyWindows(40) });
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
-    setPayload({ summary: manyWindows(40) });
+    page.set({ summary: manyWindows(40) });
     expect(screen.getByText('rows 26–40 of 40')).toBeInTheDocument();
   });
 });
@@ -760,8 +747,8 @@ describe('the latest errors table', () => {
   const eventsTable = () => screen.getAllByRole('table').at(-1) as HTMLElement;
 
   test('has its heading, in the theme`s words, and no note', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: withEvents() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: withEvents() });
     expect(headings()[1]).toHaveTextContent('Latest API errors');
     expect(headings()[1]?.parentElement).not.toHaveClass('title-row');
     expect(headings()[1]?.nextElementSibling).toHaveClass('table-wrap');
@@ -769,16 +756,16 @@ describe('the latest errors table', () => {
   });
 
   test('is headed by the time, the error, the quota, its reset, the session and the agent', () => {
-    render(RateLimits);
-    setPayload({ summary: withEvents() });
+    page.render(RateLimits);
+    page.set({ summary: withEvents() });
     const heads = within(eventsTable()).getAllByRole('columnheader');
     expect(heads.map((head) => head.textContent)).toEqual(['When', 'Error', 'Quota', 'Resets', 'Session', 'Agent']);
     expect(heads.some((head) => head.classList.contains('num'))).toBe(false);
   });
 
   test('has a row per failed call: the error in words, the quota, a link to the session and its agent', () => {
-    render(RateLimits);
-    setPayload({ summary: withEvents() });
+    page.render(RateLimits);
+    page.set({ summary: withEvents() });
     const [first, second] = within(eventsTable()).getAllByRole('row').slice(1) as [HTMLElement, HTMLElement];
     const cells = within(first).getAllByRole('cell');
     expect(cells.map((cell) => cell.classList.contains('num'))).toEqual([true, false, false, true, false, false]);
@@ -795,16 +782,16 @@ describe('the latest errors table', () => {
   });
 
   test('without an error it says so in place of the table, the heading staying', () => {
-    const { container } = render(RateLimits);
-    setPayload({ summary: week() });
+    const { container } = page.render(RateLimits);
+    page.set({ summary: week() });
     const wrap = container.querySelector('.table-wrap:last-child');
     expect(wrap?.querySelector('.empty')).toHaveTextContent(/^No API errors in this range\.$/);
     expect(headings()[1]).toHaveTextContent('Latest API errors');
   });
 
   test('pages past ten errors, its pager in the heading`s row, under its own key', () => {
-    render(RateLimits);
-    setPayload({
+    page.render(RateLimits);
+    page.set({
       summary: summary({
         api_errors: {
           day: [],
@@ -821,10 +808,10 @@ describe('the latest errors table', () => {
   });
 
   test('a new summary updates the rows in place, by record', () => {
-    render(RateLimits);
-    setPayload({ summary: withEvents() });
+    page.render(RateLimits);
+    page.set({ summary: withEvents() });
     const before = within(eventsTable()).getAllByRole('row');
-    setPayload({ summary: withEvents() });
+    page.set({ summary: withEvents() });
     const after = within(eventsTable()).getAllByRole('row');
     after.forEach((row, index) => expect(row).toBe(before[index]));
   });

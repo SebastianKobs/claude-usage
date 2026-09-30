@@ -14,6 +14,7 @@ the conversation, and a load under way with it.
 <script lang="ts">
   import { tick, untrack } from 'svelte';
   import type { Chat, ChatEntry } from '../lib/api';
+  import { getApp } from '../lib/app.svelte';
   import {
     agentChoices,
     chatNotice,
@@ -24,11 +25,11 @@ the conversation, and a load under way with it.
     sameChat,
   } from '../lib/conversation';
   import { fetchJson } from '../lib/http';
-    import { payload } from '../lib/payload.svelte';
-  import { hype, preferences } from '../lib/prefs.svelte';
   import { keepScroll, scrollAnchor } from '../lib/scroll';
   import { chatRows } from '../lib/tables';
   import ConversationEntry from './ConversationEntry.svelte';
+
+  const { payload, hype, preferences } = getApp();
 
   // The picked transcript by the agent's id, '' for the main thread.
   let agentId = $state('');

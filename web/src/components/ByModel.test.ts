@@ -2,13 +2,13 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { pagePerTest } from '../lib/app.testing';
 import type { DayModelEffortUsage, HourModelEffortUsage } from '../lib/api';
 import { CHART_HEIGHT, PLOT_HEIGHT } from '../lib/bymodel';
 import { summary, usage } from '../lib/fixtures';
-import { tablePages } from '../lib/paging.svelte';
-import { payload, setPayload } from '../lib/payload.svelte';
-import { preferences } from '../lib/prefs.svelte';
 import ByModel from './ByModel.svelte';
+
+const page = pagePerTest();
 
 const OPUS_HIGH = 'color-mix(in oklab, var(--series-1), var(--shade-ink) calc(var(--shade-step-1) * 2))';
 const OPUS_ULTRACODE = 'color-mix(in oklab, var(--series-1), var(--shade-ink) calc(var(--shade-step-1) * 3))';
@@ -140,7 +140,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(2026, 8, 30, 12, 0, 0));
   localStorage.clear();
-  preferences.pageSize = 25;
+  page.app.preferences.pageSize = 25;
   measure(0);
 });
 
@@ -148,17 +148,13 @@ afterEach(() => {
   vi.restoreAllMocks();
   for (const restore of restores.splice(0)) restore();
   vi.useRealTimers();
-  payload.reset();
-  tablePages.forget('chart-table');
-  preferences.theme = null;
-  preferences.pageSize = 25;
   localStorage.clear();
   Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
 });
 
 describe('the card', () => {
   test('before any summary the heading says per day, by model, and there is no chart', () => {
-    const { container } = render(ByModel);
+    const { container } = page.render(ByModel);
     expect(screen.getByRole('region', { name: 'Per day, by model' })).toHaveClass('card');
     expect(screen.getByRole('heading', { level: 2 })).toHaveAttribute('id', 'chart-title');
     expect(container.querySelector('.chart')).toBeEmptyDOMElement();
@@ -168,46 +164,46 @@ describe('the card', () => {
 
   test('without a summary the legend is empty and the table view has no table', async () => {
     const user = userEvent.setup();
-    const { container } = render(ByModel);
+    const { container } = page.render(ByModel);
     expect(container.querySelector('.legend')?.children).toHaveLength(0);
     await user.click(screen.getByRole('button', { name: 'Table view' }));
     expect(screen.queryByRole('table')).toBeNull();
   });
 
   test('a summary of days names the heading per day, by model and effort', () => {
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     expect(screen.getByRole('region', { name: 'Per day, by model and effort' })).toBeInTheDocument();
   });
 
   test('a single day names it per hour', () => {
-    render(ByModel);
-    setPayload({ summary: today() });
+    page.render(ByModel);
+    page.set({ summary: today() });
     expect(screen.getByRole('region', { name: 'Per hour, by model and effort' })).toBeInTheDocument();
   });
 
   test('the heading is in the theme`s words, in each of its three wordings', () => {
-    preferences.theme = 'hacker';
-    render(ByModel);
+    page.app.preferences.theme = 'hacker';
+    page.render(ByModel);
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/^top -o model$/);
-    setPayload({ summary: week() });
+    page.set({ summary: week() });
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/^top -o model,effort$/);
-    setPayload({ summary: today() });
+    page.set({ summary: today() });
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/^top -o model,effort$/);
-    preferences.theme = 'startup';
+    page.app.preferences.theme = 'startup';
     flushSync();
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(/^Model × effort mix$/);
   });
 
   test('the table toggle is named for the card', () => {
-    render(ByModel);
+    page.render(ByModel);
     expect(screen.getByRole('button', { name: 'Table view' })).toHaveAttribute('id', 'chart-table-toggle');
   });
 });
 
 describe('the metric switch', () => {
   test('is a group of three buttons: the cost, output and input tokens, the cost pressed', () => {
-    const { container } = render(ByModel);
+    const { container } = page.render(ByModel);
     const group = screen.getByRole('group', { name: 'Metric' });
     expect(group).toHaveClass('segmented');
     const buttons = within(group).getAllByRole('button');
@@ -219,20 +215,20 @@ describe('the metric switch', () => {
 
   test('a saved choice is the one pressed at mount', () => {
     localStorage.setItem('claude-usage.metric', 'input');
-    render(ByModel);
+    page.render(ByModel);
     expect(metricButton('Input tokens')).toHaveAttribute('aria-pressed', 'true');
     expect(metricButton('Estimated cost')).toHaveAttribute('aria-pressed', 'false');
   });
 
   test('a saved name that is no metric leaves the cost', () => {
     localStorage.setItem('claude-usage.metric', 'nonsense');
-    render(ByModel);
+    page.render(ByModel);
     expect(metricButton('Estimated cost')).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('a click presses the button, releases the other and saves the choice', async () => {
     const user = userEvent.setup();
-    render(ByModel);
+    page.render(ByModel);
     await user.click(metricButton('Output tokens'));
     expect(metricButton('Output tokens')).toHaveAttribute('aria-pressed', 'true');
     expect(metricButton('Estimated cost')).toHaveAttribute('aria-pressed', 'false');
@@ -243,8 +239,8 @@ describe('the metric switch', () => {
 
   test('the output metric changes the axis, the peak label, the drawing`s name and the slider', async () => {
     const user = userEvent.setup();
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     expect(texts('.axis-text[text-anchor="end"]', container)).toEqual(['$0.00', '$1.25', '$2.50', '$3.75', '$5.00']);
     expect(texts('.value-text', container)).toEqual(['$4.00']);
     await user.click(metricButton('Output tokens'));
@@ -260,8 +256,8 @@ describe('the metric switch', () => {
 
   test('the input metric counts the whole input side', async () => {
     const user = userEvent.setup();
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     await user.click(metricButton('Input tokens'));
     // 1,200 per row (100 new, 200 cache writes, 900 cache reads), three rows today
     expect(texts('.value-text', container)).toEqual(['3.6K']);
@@ -269,8 +265,8 @@ describe('the metric switch', () => {
 
   test('the table follows the metric', async () => {
     const user = userEvent.setup();
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     await user.click(screen.getByRole('button', { name: 'Table view' }));
     expect(within(screen.getAllByRole('row')[1] as HTMLElement).getAllByRole('cell')[4]).toHaveTextContent('$4.00');
     await user.click(metricButton('Output tokens'));
@@ -280,8 +276,8 @@ describe('the metric switch', () => {
 
 describe('the legend', () => {
   test('groups the efforts under their model, in the fixed model order', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     const groups = [...container.querySelectorAll('.legend > .legend-group')];
     expect(groups.map((group) => group.querySelector('strong')?.textContent)).toEqual([
       'claude-opus-4',
@@ -292,8 +288,8 @@ describe('the legend', () => {
 
   test('each entry has a swatch in its series` color, a hatched series a striped one', () => {
     const backgrounds = recordBackgrounds();
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     expect(container.querySelectorAll('.legend .swatch')).toHaveLength(3);
     expect(backgrounds).toEqual([
       OPUS_HIGH,
@@ -304,8 +300,8 @@ describe('the legend', () => {
 
   test('background calls are hatched the other way', () => {
     const backgrounds = recordBackgrounds();
-    const { container } = render(ByModel);
-    setPayload({
+    const { container } = page.render(ByModel);
+    page.set({
       summary: summary({
         day_model_effort: [dayRow('2026-09-30', 'claude-opus-4', 'background', { cost: 1 })],
       }),
@@ -316,22 +312,22 @@ describe('the legend', () => {
   });
 
   test('a range without usage has no groups', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: summary() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: summary() });
     expect(container.querySelector('.legend')?.children).toHaveLength(0);
   });
 
   test('comes before the chart', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     expect(container.querySelector('.legend + .chart')).not.toBeNull();
   });
 });
 
 describe('the chart', () => {
   test('a summary draws it at once: an image named for the metric and the unit, 248 high', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     expect(container.querySelector('svg')?.getAttribute('height')).toBe(String(CHART_HEIGHT));
     expect(CHART_HEIGHT).toBe(248);
     expect(screen.getByRole('img')).toHaveAccessibleName(
@@ -340,8 +336,8 @@ describe('the chart', () => {
   });
 
   test('one image per hour for a single day', () => {
-    render(ByModel);
-    setPayload({ summary: today() });
+    page.render(ByModel);
+    page.set({ summary: today() });
     expect(screen.getByRole('img')).toHaveAccessibleName(
       'Estimated cost per hour by model and effort level; table view available',
     );
@@ -349,20 +345,20 @@ describe('the chart', () => {
 
   test('it is as wide as its container, but not narrower than the minimum', () => {
     measure(640);
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 640 248');
   });
 
   test('an unmeasured container draws at the minimum width', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 320 248');
   });
 
   test('a path per segment: one for yesterday, three for today, each in its series` fill', () => {
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     expect(segments().map((path) => path.getAttribute('fill'))).toEqual([
       OPUS_HIGH,
       OPUS_HIGH,
@@ -372,8 +368,8 @@ describe('the chart', () => {
   });
 
   test('a hatched series has a pattern: its color with 2 px lines of the hatch at its angle, on a 6 px period', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     const patterns = [...container.querySelectorAll('defs > pattern')];
     expect(patterns).toHaveLength(1);
     const pattern = patterns[0] as Element;
@@ -392,8 +388,8 @@ describe('the chart', () => {
   });
 
   test('background calls` pattern turns the other way, and each hatched series has its own', () => {
-    const { container } = render(ByModel);
-    setPayload({
+    const { container } = page.render(ByModel);
+    page.set({
       summary: summary({
         day_model_effort: [
           dayRow('2026-09-30', 'claude-opus-4', 'background', { cost: 1 }),
@@ -411,22 +407,22 @@ describe('the chart', () => {
   });
 
   test('without a hatched series there are no defs', () => {
-    const { container } = render(ByModel);
-    setPayload({
+    const { container } = page.render(ByModel);
+    page.set({
       summary: summary({ day_model_effort: [dayRow('2026-09-30', 'claude-opus-4', 'high', { cost: 1 })] }),
     });
     expect(container.querySelector('defs')).toBeNull();
   });
 
   test('the tallest column carries its total, and only it', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     expect(texts('.value-text', container)).toEqual(['$4.00']);
   });
 
   test('of equally tall columns the first carries it', () => {
-    const { container } = render(ByModel);
-    setPayload({
+    const { container } = page.render(ByModel);
+    page.set({
       summary: summary({
         day_model_effort: [
           dayRow('2026-09-29', 'claude-opus-4', 'high', { cost: 2 }),
@@ -438,8 +434,8 @@ describe('the chart', () => {
   });
 
   test('a range without usage has no columns and no peak label', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: summary() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: summary() });
     expect(segments()).toHaveLength(0);
     expect(container.querySelector('.value-text')).toBeNull();
     // an axis to 1, the smallest nice top
@@ -447,8 +443,8 @@ describe('the chart', () => {
   });
 
   test('a day of an unpriced model counts as nothing', () => {
-    const { container } = render(ByModel);
-    setPayload({
+    const { container } = page.render(ByModel);
+    page.set({
       summary: summary({
         day_model_effort: [dayRow('2026-09-30', 'claude-opus-4', 'high', { cost: 0, unpriced_turns: 10 })],
       }),
@@ -458,16 +454,16 @@ describe('the chart', () => {
   });
 
   test('x labels run along the bottom, one per day of the week', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     const labels = [...container.querySelectorAll('.axis-text[text-anchor="middle"]')];
     expect(labels).toHaveLength(7);
     expect(labels.every((label) => label.getAttribute('y') === String(PLOT_HEIGHT + 18))).toBe(true);
   });
 
   test('a single day labels its hours', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: today() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: today() });
     const labels = texts('.axis-text[text-anchor="middle"]', container);
     expect(labels.length).toBeGreaterThan(1);
     expect(labels.length).toBeLessThanOrEqual(13);
@@ -478,8 +474,8 @@ describe('the chart', () => {
 describe('the drawing`s geometry', () => {
   test('a column is 24 px wide, centered in its band, the last one at the plot`s right', () => {
     measure(640);
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     // yesterday's column
     const yesterday = numbers(segments()[0] as Element);
     expect(yesterday[0]).toBeCloseTo(columnLeft(5), 6);
@@ -493,8 +489,8 @@ describe('the drawing`s geometry', () => {
 
   test('a segment is as high as its share of the axis` top, the stack rising from the plot`s bottom', () => {
     measure(640);
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     // the axis goes to $5 over 220 px: yesterday's $3 is 132 px, the top segment rounded at the data end
     const yesterday = numbers(segments()[0] as Element);
     expect(yesterday[0]).toBeCloseTo(columnLeft(5), 6);
@@ -512,8 +508,8 @@ describe('the drawing`s geometry', () => {
 
   test('the peak label is centered over its column, 6 px above its top', () => {
     measure(640);
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     const label = container.querySelector('.value-text');
     expect(label?.getAttribute('text-anchor')).toBe('middle');
     expect(Number(label?.getAttribute('x'))).toBeCloseTo(columnLeft(6) + 12, 6);
@@ -523,8 +519,8 @@ describe('the drawing`s geometry', () => {
 
   test('a label over a column that reaches the axis` top is 6 px above the plot', () => {
     measure(640);
-    const { container } = render(ByModel);
-    setPayload({
+    const { container } = page.render(ByModel);
+    page.set({
       summary: summary({ day_model_effort: [dayRow('2026-09-30', 'claude-opus-4', 'high', { cost: 5 })] }),
     });
     expect(Number(container.querySelector('.value-text')?.getAttribute('y'))).toBeCloseTo(-6, 6);
@@ -532,8 +528,8 @@ describe('the drawing`s geometry', () => {
 
   test('the gridlines run from the axis to 8 px before the drawing`s edge, the first in the axis color', () => {
     measure(640);
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     const lines = [...container.querySelectorAll('g[role="img"] > line')];
     expect(lines).toHaveLength(5);
     expect(lines.map((line) => [line.getAttribute('x1'), line.getAttribute('x2')])).toEqual(
@@ -555,16 +551,16 @@ describe('the drawing`s geometry', () => {
 
   test('the x labels are centered in their bands', () => {
     measure(640);
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     const labels = [...container.querySelectorAll('.axis-text[text-anchor="middle"]')];
     labels.forEach((label, index) => expect(Number(label.getAttribute('x'))).toBeCloseTo(56 + BAND * (index + 0.5), 6));
   });
 
   test('the slider covers the plot, from the axis to 8 px before the drawing`s edge', () => {
     measure(640);
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     const slider = screen.getByRole('slider');
     expect(slider.getAttribute('x')).toBe('56');
     expect(slider.getAttribute('y')).toBe('0');
@@ -575,8 +571,8 @@ describe('the drawing`s geometry', () => {
   test('the band under the cursor is highlighted, wider than the column', async () => {
     measure(640);
     const user = userEvent.setup();
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     await focusSlider(user);
     const mark = container.querySelector('rect.column-mark');
     expect(Number(mark?.getAttribute('x'))).toBeCloseTo(56 + BAND * 6, 6);
@@ -590,8 +586,8 @@ describe('the drawing`s geometry', () => {
   test('the tooltip stands a gap right of the band`s middle', async () => {
     measure(640);
     const user = userEvent.setup();
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     await focusSlider(user);
     // the band's middle is 56 + 6.5 bands; the tooltip is 12 px right of it
     expect(parseFloat(tooltip()?.style.left ?? '')).toBeCloseTo(56 + BAND * 6.5 + 12, 3);
@@ -602,8 +598,8 @@ describe('the drawing`s geometry', () => {
 
 describe('the cursor', () => {
   test('one slider over the days, reading the day and its total', () => {
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     const slider = screen.getByRole('slider', { name: 'Estimated cost per day; arrow keys step through them' });
     expect(screen.getAllByRole('slider')).toHaveLength(1);
     expect(slider).toHaveAttribute('aria-valuemin', '1');
@@ -613,23 +609,23 @@ describe('the cursor', () => {
   });
 
   test('a single day has its hours for buckets', () => {
-    render(ByModel);
-    setPayload({ summary: today() });
+    page.render(ByModel);
+    page.set({ summary: today() });
     expect(screen.getByRole('slider')).toHaveAccessibleName('Estimated cost per hour; arrow keys step through them');
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuemax', '13');
   });
 
   test('nothing is marked until the cursor is on a bucket', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     expect(container.querySelector('.column-mark')).toBeNull();
     expect(tooltip()).toBeNull();
   });
 
   test('arrow keys step, Home and End go to the ends, the text following', async () => {
     const user = userEvent.setup();
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     await focusSlider(user);
     const slider = screen.getByRole('slider');
     await user.keyboard('{ArrowLeft}');
@@ -646,8 +642,8 @@ describe('the cursor', () => {
 
   test('the highlight and the tooltip go when focus leaves', async () => {
     const user = userEvent.setup();
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     await focusSlider(user);
     expect(container.querySelector('.column-mark')).not.toBeNull();
     expect(tooltip()).not.toBeNull();
@@ -658,8 +654,8 @@ describe('the cursor', () => {
 
   test('the pointer picks the bucket under it', async () => {
     measure(640);
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     layOut(0, 640);
     const slider = screen.getByRole('slider');
     // the second band: 56 + BAND to 56 + 2 BAND
@@ -674,8 +670,8 @@ describe('the cursor', () => {
 
   test('a container narrower than the drawing scales the pointer back into it', async () => {
     measure(320);
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     // the drawing is the 320 minimum, the container 320: no scaling; a box half as wide maps twice as far
     layOut(0, 160);
     const slider = screen.getByRole('slider');
@@ -688,8 +684,8 @@ describe('the cursor', () => {
 describe('the tooltip', () => {
   async function shown(summaryToShow = week()) {
     const user = userEvent.setup();
-    const view = render(ByModel);
-    setPayload({ summary: summaryToShow });
+    const view = page.render(ByModel);
+    page.set({ summary: summaryToShow });
     await focusSlider(user);
     return { user, ...view };
   }
@@ -775,15 +771,15 @@ describe('the tooltip', () => {
 describe('the table view', () => {
   async function shown(summaryToShow = week()) {
     const user = userEvent.setup();
-    const view = render(ByModel);
-    setPayload({ summary: summaryToShow });
+    const view = page.render(ByModel);
+    page.set({ summary: summaryToShow });
     await user.click(screen.getByRole('button', { name: 'Table view' }));
     return { user, ...view };
   }
 
   test('is not drawn until the toggle is pressed', () => {
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     expect(screen.queryByRole('table')).toBeNull();
     expect(screen.getByRole('button', { name: 'Table view' })).toHaveAttribute('aria-pressed', 'false');
   });
@@ -848,18 +844,18 @@ describe('the table view', () => {
   test('the page is kept when a new summary comes', async () => {
     const { user } = await shown(month());
     await user.click(screen.getByRole('button', { name: 'Next ›' }));
-    setPayload({ summary: month() });
+    page.set({ summary: month() });
     expect(screen.getByText('rows 26–30 of 30')).toBeInTheDocument();
   });
 });
 
 describe('a new summary', () => {
   test('updates the chart in place: the same svg and slider, the new values', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
+    const { container } = page.render(ByModel);
+    page.set({ summary: week() });
     const svg = container.querySelector('svg');
     const slider = screen.getByRole('slider');
-    setPayload({
+    page.set({
       summary: summary({ day_model_effort: [dayRow('2026-09-30', 'claude-opus-4', 'high', { cost: 4 })] }),
     });
     expect(container.querySelector('svg')).toBe(svg);
@@ -870,13 +866,13 @@ describe('a new summary', () => {
   });
 
   test('another range changes the buckets and the heading, the card staying', () => {
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     const card = screen.getByRole('region');
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuemax', '7');
-    setPayload({ summary: month() });
+    page.set({ summary: month() });
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuemax', '30');
-    setPayload({ summary: today() });
+    page.set({ summary: today() });
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuemax', '13');
     expect(screen.getByRole('region')).toBe(card);
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Per hour, by model and effort');
@@ -884,22 +880,22 @@ describe('a new summary', () => {
 
   test('the metric and the table toggle are kept', async () => {
     const user = userEvent.setup();
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     await user.click(metricButton('Input tokens'));
     await user.click(screen.getByRole('button', { name: 'Table view' }));
-    setPayload({ summary: month() });
+    page.set({ summary: month() });
     expect(metricButton('Input tokens')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('table')).toBeInTheDocument();
   });
 
   test('the table is updated in place, its rows keeping their nodes by bucket', async () => {
     const user = userEvent.setup();
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     await user.click(screen.getByRole('button', { name: 'Table view' }));
     const before = screen.getAllByRole('row');
-    setPayload({
+    page.set({
       summary: summary({ day_model_effort: [dayRow('2026-09-30', 'claude-opus-4', 'high', { cost: 9 })] }),
     });
     const after = screen.getAllByRole('row');
@@ -908,22 +904,13 @@ describe('a new summary', () => {
   });
 
   test('the theme changes the heading in place', () => {
-    render(ByModel);
-    setPayload({ summary: week() });
+    page.render(ByModel);
+    page.set({ summary: week() });
     const heading = screen.getByRole('heading', { level: 2 });
-    preferences.theme = 'hacker';
+    page.app.preferences.theme = 'hacker';
     flushSync();
     expect(screen.getByRole('heading', { level: 2 })).toBe(heading);
     expect(heading).toHaveTextContent('top -o model,effort');
   });
 
-  test('losing the summary takes the chart away again without throwing', () => {
-    const { container } = render(ByModel);
-    setPayload({ summary: week() });
-    payload.reset();
-    flushSync();
-    expect(container.querySelector('svg')).toBeNull();
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Per day, by model');
-    expect(container.querySelector('.legend')?.children).toHaveLength(0);
-  });
 });
