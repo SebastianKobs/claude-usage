@@ -8,7 +8,8 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
 - **TDD:** write the test first, then the implementation.
 - **Stdlib only:** Python ≥ 3.12, no dependencies (`sqlite3`, `http.server`, `json`, `tomllib`, `argparse`,
   `unittest`).
-- **Tests:** `make test` runs `python3 -m unittest discover -s tests`.
+- **Tests:** `make test` runs `python3 -m unittest discover -s tests`, then the page's svelte-check and Vitest where
+  `web/node_modules` exists (`make build` installs it); the Python tests never need node.
 - **The guard** (`.claude/hooks/project-guard/`) is a git submodule of
   github.com/SebastianKobs/claude-project-guard. Clone with `--recurse-submodules`, or run
   `git submodule update --init`.

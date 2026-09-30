@@ -83,8 +83,10 @@ backup: ## copy the history into a new file (FILE=<path>), e.g. outside the chec
 	@if [ -z "$(FILE)" ]; then echo "usage: make backup FILE=<new file>"; exit 2; fi
 	@$(CLI) backup "$(FILE)"
 
-test: ## run the tests
+test: ## run the tests, then the page's checks and tests where web/node_modules exists (make build installs it)
 	@$(PYTHON) -m unittest discover -s tests
+	@if [ -d web/node_modules ]; then cd web && npm run --silent check && npm test --silent; \
+	else echo "Skipped the page's checks and tests: no web/node_modules (make build installs it)"; fi
 
 clean: ## remove caches and test scratch folders (never data/)
 	@find . -name __pycache__ -type d -prune -exec rm -rf {} +

@@ -9,6 +9,7 @@
     ],
     "strict": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "erasableSyntaxOnly": true,
     "noUncheckedIndexedAccess": true,
@@ -22,6 +23,8 @@
     "src/**/*.ts",
     "src/**/*.svelte",
     "vite.config.ts",
+    "vitest.config.ts",
+    "vitest-setup.ts",
     "svelte.config.js"
   ]
 }

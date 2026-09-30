@@ -29,6 +29,11 @@ def components():
     return sorted((WEB / "src").rglob("*.svelte"))
 
 
+def markup(path):
+    """A component's template: its text without the script and style blocks."""
+    return re.sub(r"<(script|style)\b.*?</\1>", "", read(path), flags=re.DOTALL)
+
+
 class BuildSettingsTest(unittest.TestCase):
     def test_no_component_injects_its_css(self):
         # the CSP allows no <style> the page adds, and a custom element's CSS is always injected
@@ -37,6 +42,14 @@ class BuildSettingsTest(unittest.TestCase):
                 options = " ".join(re.findall(r"<svelte:options\b[^>]*>", read(path)))
                 self.assertNotIn("css=", options)
                 self.assertNotIn("customElement", options)
+
+    def test_no_component_writes_a_style_attribute(self):
+        # the CSP will drop style attributes (3.34): style: sets a style through the CSSOM, while a style attribute
+        # and a component's --x prop, which wraps the component in an element with one, need them
+        for path in components():
+            with self.subTest(component=path.name):
+                self.assertNotRegex(markup(path), r"\sstyle\s*=")
+                self.assertNotRegex(markup(path), r"<[A-Z][\w.]*\b[^>]*\s--[\w-]+\s*=")
 
     def test_the_compiler_neither_injects_css_nor_builds_templates_from_html(self):
         # html fragments need a Trusted Types policy of Svelte's own, which the CSP won't name
