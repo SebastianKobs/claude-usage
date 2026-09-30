@@ -4,6 +4,8 @@ One of the usage tables: a card with its heading (and, where there is one, a not
 named by `nameLabel`, then the usage columns, dearest first. The heading names the table, and past ten groups of rows
 the pager shares its row. A model row carries a swatch of the model's color, an effort row is indented under its model.
 With no rows the card says `empty` instead of the table; with `rows` null (no summary yet) it is its heading only.
+`inline` is the session view's form: no card, the heading a level 3 one, the table part of the section around it, and
+its pager under `pagerKey` (the session's, so another session starts at the first page) instead of the id.
 -->
 <script lang="ts">
   import { usageColumns, type UsageRow } from '../lib/usage';
@@ -17,6 +19,8 @@ With no rows the card says `empty` instead of the table; with `rows` null (no su
     nameLabel,
     rows,
     empty,
+    inline = false,
+    pagerKey = id,
   }: {
     /** The table's id: its pager's key, and the heading's id is `<id>-title`. */
     id: string;
@@ -30,15 +34,27 @@ With no rows the card says `empty` instead of the table; with `rows` null (no su
     rows: UsageRow[] | null;
     /** What to say where there are no rows. */
     empty: string;
+    /** Whether the table stands in a card of the page's (the session view's) instead of being a card. */
+    inline?: boolean;
+    /** The pager's key, which the page is kept under; the id unless given. */
+    pagerKey?: string;
   } = $props();
 
   const others = $derived(usageColumns(nameLabel).slice(1));
 </script>
 
-<section class="card" aria-labelledby="{id}-title">
+{#if inline}
+  {@render body()}
+{:else}
+  <section class="card" aria-labelledby="{id}-title">
+    {@render body()}
+  </section>
+{/if}
+
+{#snippet body()}
   {#if rows}
     <TableView
-      key={id}
+      key={pagerKey}
       columns={usageColumns(nameLabel)}
       {rows}
       rowKey={(row) => row.key}
@@ -53,10 +69,14 @@ With no rows the card says `empty` instead of the table; with `rows` null (no su
   {:else}
     {@render heading()}
   {/if}
-</section>
+{/snippet}
 
 {#snippet heading()}
-  <h2 id="{id}-title">{title}</h2>
+  {#if inline}
+    <h3 id="{id}-title">{title}</h3>
+  {:else}
+    <h2 id="{id}-title">{title}</h2>
+  {/if}
 {/snippet}
 
 {#snippet intro()}

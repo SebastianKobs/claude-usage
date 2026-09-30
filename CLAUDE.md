@@ -86,7 +86,7 @@ claude_usage/
     css/themes/              one file per theme (light, dark, hacker, startup, rgb); the gimmicks share dark's
                              palette, fun.css their other rules
     js/                      classic scripts sharing one scope, loaded in order: util, state, chartkit,
-                             tables, limits, highlight.js, marked, DOMPurify, chat, drilldown, themes, main
+                             tables, highlight.js, marked, DOMPurify, chat, drilldown, themes, main
                              (calls setup())
       app.js                 the bundle built from web/ (make build, committed): a module loaded before them,
                              which hands them what moved (web/src/legacy.svelte.ts); app-licenses.md the
@@ -137,22 +137,26 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/usage.ts           the usage tables' rows: a name, the shared cells dearest first, and the by-model table's
                              effort rows under each model with its swatch color (used by the components)
   src/lib/payload.svelte.ts  what the page has loaded, as reactive state (`payload`: the summary and the live answer, or
-                             that loading them failed, when the latest answer came, and each live card's state), which
-                             the old scripts fill through `setPayload`
+                             that loading them failed, when the latest answer came, each live card's state, and the
+                             session open), which the old scripts fill through `setPayload`
   src/lib/range.ts           the range filter's logic: the ranges on offer (cut to the retention), the query a range
                              becomes, the day the Daily range shows and where an arrow goes
   src/lib/range.svelte.ts    the range shown (`range`: the days and the Daily range's day, reactive, the choice saved as
                              a preference), which the old scripts load from and reload through `range.onchange`
-  src/lib/overview.svelte.ts the session view's tile rows, mounted for the old scripts (`mountSessionKpis`,
-                             `mountSessionRuntime`, `releaseDetachedTiles`)
+  src/lib/session.ts         the session view's frame: the facts under its heading, the main thread and subagents
+                             table's columns and rows (a workflow run's agents under one row, its fold)
+  src/lib/opening.ts         opening and closing the session view (`opening`, an attachment): the page's other sections
+                             step aside, focus goes to the heading, closing returns focus and scroll to the link
   src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
                              `YAxis`, `XLabels`, `AreaLine`, `PointDot`, and the tiles: `StatTile`, `InputSplit`,
                              `KpiTiles`, `RuntimeTiles`, `SummaryTiles`; `ChartCard`, the section a chart lives in, with
                              its table-view toggle; `TableView`, a paged table (`scope` on its headings, named by its
                              heading), its pager in an optional heading row; `OverTime`, `ByModel`, `CostPerSession`,
                              `RateLimits`, the usage tables: `UsageTable`, `UsageTables`, the sessions card:
-                             `SessionsList`, the live sessions: `LiveSessions`, `LiveCard`, `LiveIcon`, and the range
-                             filter: `RangeFilter`), each with its Testing Library test
+                             `SessionsList`, the live sessions: `LiveSessions`, `LiveCard`, `LiveIcon`, the range
+                             filter: `RangeFilter`, and the session view's frame: `SessionView` with `SessionWaits`,
+                             `AgentsTable` and `EventsTable`, which leaves three slots for the old scripts), each with
+                             its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
@@ -653,9 +657,10 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     tool, since when, the subagent's type), the card shows it first by the title (`liveWaitBadge`, in `--series-1`:
     nothing is wrong): a speech bubble with a question mark, or a padlock, described on hover; the heading adds "or
     waiting for you".
-    - An open session's view hides the live list, so a notice under its heading (`showSessionWaits`, a status, in
+    - An open session's view hides the live list, so a notice under its heading (`SessionWaits`, a status, in
       `--series-1`) shows what it waits for (`waiting` in `/api/session`, from the same `waiting_calls`) and what the
-      other live sessions wait for (the latest `/api/live`), each linked; drawn again only where it changed. A wait
+      other live sessions wait for (the latest `/api/live`), each linked; a line keeps its node while its words
+      change, so a screen reader hears a new wait once. A wait
       makes the session `live`, so its view keeps polling every 5 s, and a live answer that sees the open session's
       wait change asks for it at once (`waitChanged`), unless another session is loading (`sessionShown`).
   - Permission prompts come from a `PermissionRequest` hook that posts Claude Code's hook input to the running
@@ -709,7 +714,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     and returns `retention_days` and `history_since` (the first stored day); the page leaves the longer buttons out,
     falls back from a saved longer range (`range.fit`), and says "history since" when a range starts before the
     history does.
-  - The session view takes focus on open; Escape or Close returns focus and scroll to the link that opened it.
+  - The session view (`SessionView`) takes focus on open; Escape or Close returns focus and scroll to the link that
+    opened it (`opening`).
   - The session view's context section (`drilldown.js`): the gauge (`current`) as a meter with the compact hint
     marked; the context per turn stacked as cache read, cache write and new input (`--context-read/-write/-new`,
     blue 400/550/700 in light and 500/350/200 in dark, validated as ordinal ramps), a dashed rule per compaction

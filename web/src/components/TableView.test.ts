@@ -75,6 +75,33 @@ describe('the table', () => {
   });
 });
 
+describe('a column title', () => {
+  test('is set on the heading cell of the column that has one', () => {
+    render(TableViewFixture, { rows: makeRows(2), withTitle: true });
+    const heads = screen.getAllByRole('columnheader');
+    expect(heads.map((head) => head.getAttribute('title'))).toEqual([null, 'what it comes to']);
+  });
+
+  test('is not there without one', () => {
+    render(TableViewFixture, { rows: makeRows(2) });
+    expect(document.querySelector('th[title]')).toBeNull();
+  });
+});
+
+describe('row classes', () => {
+  test('a row gets the classes its function gives, the others none', () => {
+    render(TableViewFixture, { rows: makeRows(3), withRowClass: true });
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(rows.map((row) => row.className)).toEqual(['', 'flagged', '']);
+  });
+
+  test('they come with sub-row where the row is one', () => {
+    render(TableViewFixture, { rows: makeRows(3, [1]), withSub: true, withRowClass: true });
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(rows.map((row) => row.className)).toEqual(['', 'sub-row flagged', '']);
+  });
+});
+
 describe('the table name', () => {
   test('every heading cell is a column heading by its scope', () => {
     render(TableViewFixture, { rows: makeRows(3) });

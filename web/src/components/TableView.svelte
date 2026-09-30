@@ -2,9 +2,10 @@
 @component
 A table of rows a component draws, paged: a chart's table view, later every table of the page. `rows` come in display
 order; `cells` draws one row's `<td>`s, `sub` says which rows are sub-rows, which stay with the row above them on a
-page (and get the class `sub-row`), `group` which rows head a group (the class `group-row`). Past `PAGE_SIZES[0]`
-groups of rows a pager goes before the table, under `key`, which the page is kept under across draws. Only the rows of
-the page are drawn, none is hidden: unlike the old code's tables this one has no rows off the page to mark.
+page (and get the class `sub-row`), `group` which rows head a group (the class `group-row`); `rowClass` adds classes
+of its own to a row. Past `PAGE_SIZES[0]` groups of rows a pager goes before the table, under `key`, which the page is
+kept under across draws. A column's `title` is set on its heading cell, to say what it counts. Only the rows of the
+page are drawn, none is hidden: unlike the old code's tables this one has no rows off the page to mark.
 
 A table with a `heading` has the pager in a title row with it, right-aligned, where there is a pager (the heading alone,
 without a wrapper, where there is none: a flex row would stop its margin collapsing into the note's); `intro` (a note)
@@ -27,6 +28,7 @@ and every heading cell has `scope="col"`.
     cells,
     sub,
     group,
+    rowClass,
     heading,
     intro,
     empty,
@@ -36,8 +38,8 @@ and every heading cell has `scope="col"`.
     key: string;
     /** What the rows are called, in the pager. */
     noun?: string;
-    /** The heading, `numeric` ones right-aligned. */
-    columns: { label: string; numeric?: boolean }[];
+    /** The heading, `numeric` ones right-aligned, a `title` on hover saying what the column counts. */
+    columns: { label: string; numeric?: boolean; title?: string }[];
     /** The rows, already in the order they show. */
     rows: Row[];
     /** A row's key, unique among the rows, which keeps its node while rows come and go or move. */
@@ -48,6 +50,8 @@ and every heading cell has `scope="col"`.
     sub?: (row: Row) => boolean;
     /** Whether a row heads a group of sub-rows. */
     group?: (row: Row) => boolean;
+    /** Classes a row has besides `sub-row` and `group-row`. */
+    rowClass?: (row: Row) => string | undefined;
     /** The table's heading, which the pager shares a row with. */
     heading?: Snippet;
     /** A note between the heading and the table. */
@@ -98,13 +102,15 @@ and every heading cell has `scope="col"`.
       <thead>
         <tr>
           {#each columns as column (column.label)}
-            <th scope="col" class={column.numeric ? 'num' : undefined}>{column.label}</th>
+            <th scope="col" class={column.numeric ? 'num' : undefined} title={column.title}>{column.label}</th>
           {/each}
         </tr>
       </thead>
       <tbody>
         {#each onPage as row (rowKey(row))}
-          <tr class={sub?.(row) ? 'sub-row' : group?.(row) ? 'group-row' : undefined}>{@render cells(row)}</tr>
+          <tr class={[sub?.(row) ? 'sub-row' : group?.(row) ? 'group-row' : undefined, rowClass?.(row)]}>
+            {@render cells(row)}
+          </tr>
         {/each}
       </tbody>
     </table>

@@ -13,7 +13,6 @@ has its heading and no chart or tables.
   import { columnPath, LIMIT_ICON, ticks } from '../lib/charts';
   import { whole } from '../lib/format';
   import {
-    EVENT_COLUMNS,
     LIMIT_CHART_HEIGHT,
     LIMIT_COLOR,
     LIMIT_PLOT,
@@ -28,13 +27,13 @@ has its heading and no chart or tables.
     limitsOf,
     windowRows,
     windowsHead,
-    type EventRow,
     type WindowRow,
   } from '../lib/limits';
   import { payload } from '../lib/payload.svelte';
   import { hype } from '../lib/prefs.svelte';
   import Chart, { type ChartCursor } from './Chart.svelte';
   import ChartCard from './ChartCard.svelte';
+  import EventsTable from './EventsTable.svelte';
   import Swatch from './Swatch.svelte';
   import TableView from './TableView.svelte';
   import XLabels from './XLabels.svelte';
@@ -191,14 +190,12 @@ has its heading and no chart or tables.
       intro={windowsIntro}
       empty="No 5-hour window hit its limit in this range."
     />
-    <TableView
-      key="limit-events"
-      columns={EVENT_COLUMNS}
+    <EventsTable
+      id="limit-events"
+      title={hype('Latest API errors')}
       rows={events}
-      rowKey={(row) => row.key}
-      cells={eventCells}
-      heading={eventsHeading}
       empty="No API errors in this range."
+      pagerKey="limit-events"
     />
   {/if}
 {/snippet}
@@ -225,17 +222,4 @@ has its heading and no chart or tables.
   {#each windowOthers as column, position (column.label)}
     <td class="num">{row.cells[position]}</td>
   {/each}
-{/snippet}
-
-{#snippet eventsHeading()}
-  <h3>{hype('Latest API errors')}</h3>
-{/snippet}
-
-{#snippet eventCells(row: EventRow)}
-  <td class="num">{row.when}</td>
-  <td>{row.error}</td>
-  <td>{row.quota}</td>
-  <td class="num">{row.resets}</td>
-  <td><a href={row.session.href}>{row.session.name}</a><span class="sub">{row.session.project}</span></td>
-  <td>{row.agent}</td>
 {/snippet}

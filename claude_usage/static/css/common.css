@@ -359,6 +359,8 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
 .secret-severity-medium { background: var(--hint-warning-edge); }
 .secret-severity-low { background: var(--text-secondary); }
 .secret-severity-low-medium { background: var(--series-1); }        /* returned, but likely a test */
+/* where the session view's sections not yet components are drawn: the slot leaves no box of its own */
+.legacy-slot { display: contents; }
 /* what waits for you while a session is open: the live cards' waiting tone, nothing is wrong */
 .wait-notice { margin: 16px 0 0; border: 1px solid var(--series-1); border-left-width: 5px;
   color: var(--text-primary); }

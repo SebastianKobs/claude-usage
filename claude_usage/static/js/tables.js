@@ -1,5 +1,5 @@
-// Paging for the old scripts' tables, and the usage tables of the session view (the overview's are the UsageTables
-// component, its sessions list the SessionsList component).
+// Paging for the old scripts' tables (the usage tables are the UsageTables and UsageTable components, the sessions
+// list the SessionsList component).
 "use strict";
 
 // --- paging -------------------------------------------------------------------------------------------------
@@ -57,42 +57,4 @@ function placePager(node, pager) {
   const row = el("div", {class: "title-row"});
   title.replaceWith(row);
   row.append(title, pager);
-}
-
-// --- tables --------------------------------------------------------------------------------------------------
-
-function usageHead(nameHeader) {
-  return el("tr", {}, el("th", {text: nameHeader}), el("th", {class: "num", text: "Turns"}),
-            el("th", {class: "num", text: "Input"}), el("th", {class: "num", text: "Cache read %"}),
-            el("th", {class: "num", text: "Output"}), el("th", {class: "num", text: "Cost"}));
-}
-
-function usageRow(row, name, className) {
-  return el("tr", {class: className}, el("td", {}, name),
-    el("td", {class: "num", text: whole(row.turns)}), el("td", {class: "num", text: compact(inputTotal(row))}),
-    el("td", {class: "num", text: percent(row.cache_read, inputTotal(row))}),
-    el("td", {class: "num", text: compact(row.output)}), el("td", {class: "num", text: money(row.cost)}));
-}
-
-function usageTable(rows, nameHeader, nameCell, emptyText = "No usage in this range.") {
-  if (!rows.length) return el("div", {class: "empty", text: emptyText});
-  const body = rows.slice().sort(byCost).map(row => usageRow(row, nameCell(row)));
-  return el("table", {}, el("thead", {}, usageHead(nameHeader)), el("tbody", {}, ...body));
-}
-
-// Each model's totals, then its usage per effort level as indented rows, background calls as one of them; calls
-// without an effort level show no row of their own
-function modelEffortTable(models, modelEfforts, nameCell) {
-  if (!models.length) return el("div", {class: "empty", text: "No usage in this range."});
-  const body = [];
-  for (const model of models.slice().sort(byCost)) {
-    body.push(usageRow(model, nameCell(model), "group-row"));
-    const efforts = modelEfforts.filter(row => row.model === model.model && row.effort !== null)
-      .sort((left, right) => effortRank(left.effort) - effortRank(right.effort) ||
-                             left.effort.localeCompare(right.effort));
-    for (const row of efforts) {
-      body.push(usageRow(row, el("span", {class: "effort", text: effortName(row.effort)}), "sub-row"));
-    }
-  }
-  return el("table", {}, el("thead", {}, usageHead("Model")), el("tbody", {}, ...body));
 }

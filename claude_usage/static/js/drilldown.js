@@ -3,52 +3,31 @@
 
 // --- drilldown -----------------------------------------------------------------------------------------------
 
+// The view's frame is the SessionView component (web/src/components/SessionView.svelte), drawn from the payload: its
+// heading and facts, the waits, the tiles, and the model, agent, skill, MCP server and API error tables. It leaves
+// three empty slots, #session-top, #session-mid and #session-end, for the sections still drawn here.
 // refresh: the same session drawn again with newer numbers, keeping what the reader had open (keptView)
 function renderDrilldown(detail, refresh = false) {
-  const panel = document.getElementById("drilldown");
-  const kept = refresh && document.getElementById("chat") ? keptView(panel) : null;
+  const kept = refresh && document.getElementById("chat") ? keptView(document.getElementById("drilldown")) : null;
   if (!kept) chatRequest++;                               // a conversation still loading belongs to the old view
-  // an open session is all the page shows: the range's filters, figures, charts and tables come back on close
-  for (const id of ["filters", "summary"]) document.getElementById(id).hidden = Boolean(detail);
   if (!detail) {
     clearTimeout(gaugeTimer);
-    panel.hidden = true;
-    panel.replaceChildren();
+    setPayload({session: null});                          // the view goes: the page comes back, focus to the link
     return;
   }
   if (detail.session_id !== contextSession) {           // another session starts at its main thread again
     contextSession = detail.session_id;
     contextAgent = "main";
   }
-  const searches = detail.agents.some(agent => agent.web_searches);
-  const head = el("tr", {}, el("th", {text: "Agent"}), el("th", {text: "Model"}),
-                  el("th", {class: "num", text: "Turns"}), el("th", {class: "num", text: "Context first → last"}),
-                  el("th", {class: "num", text: "Input total"}), el("th", {class: "num", text: "Cache read %"}),
-                  el("th", {class: "num", text: "Output"}),
-                  searches ? el("th", {class: "num", text: "Web searches"}) : null,
-                  el("th", {class: "num", text: "Returned",
-                            title: "what a subagent handed back: its result's characters"}),
-                  el("th", {class: "num", text: "Cost"}));
-  const agents = agentRows(detail.agents, searches);
   // the session's tables page by their own keys, so another session starts at the first page
   const key = name => `${detail.session_id}-${name}`;
   const order = toolsAndChat(detail.transcript,
                              [el("h3", {text: "Tools"}), toolsNote(detail.agents),
                               el("div", {class: "table-wrap"}, paged(key("tools"), toolsTable(detail.agents)))],
                              kept ? kept.chat : [chatSection(detail)]);
-  fill(panel,
-    el("div", {class: "chart-head"},
-       el("h2", {id: "drilldown-title", tabindex: -1, text: detail.title || "Untitled session"}),
-       el("span", {class: "spacer"}),
-       el("a", {href: "#", text: "Close", "aria-keyshortcuts": "Escape"})),
-    detail.prompt ? el("div", {class: "prompt", text: detail.prompt}) : null,
-    el("div", {class: "muted", text: `${detail.project}${detail.git_branch ? " · " + detail.git_branch : ""} · ${when(detail.first_ts)} – ${when(detail.last_ts)} · ${detail.session_id}`}),
-    // what waits for you first: the live list, whose cards show it otherwise, is hidden while a session is open
-    el("div", {class: "card wait-notice", id: "session-waits", role: "status", hidden: true}),
-    // the page's tile rows with this session's numbers: its whole usage, main thread, subagents and background
-    mountSessionKpis(detail),
-    // from the cost record Claude Code writes when its process exits, until then estimated from the transcripts
-    detail.runtime ? mountSessionRuntime(detail) : null,
+  setPayload({session: detail});
+  const panel = document.getElementById("drilldown");
+  fill(document.getElementById("session-top"),
     secretAccesses(detail, key("secrets")),
     compactCall(detail),
     delegateCall(detail),
@@ -62,49 +41,25 @@ function renderDrilldown(detail, refresh = false) {
        el("span", {}, el("span", {class: "legend-rule"}), "compaction")),
     el("div", {id: "context-chart", class: "chart"}),
     el("div", {id: "context-table", class: "table-wrap", hidden: true}),
-    el("div", {id: "context-details"}),
-    themed("h3", "By model"), el("div", {class: "table-wrap"}, paged(key("models"), sessionModelTable(detail))),
-    el("h3", {text: "Main thread and subagents"}), el("div", {class: "table-wrap"}, paged(key("agents"), el("table", {},
-       el("thead", {}, head), el("tbody", {}, ...agents)))),
-    ...order[0],
-    el("div", {class: "grid-2"},
-       el("div", {}, themed("h3", "By skill"), el("div", {class: "table-wrap"},
-          paged(key("skills"), usageTable(detail.skills, "Skill", row => row.skill,
-                                          "No turns attributed to a skill.")))),
-       el("div", {}, themed("h3", "By MCP server"), el("div", {class: "table-wrap"},
-          paged(key("mcp-servers"), usageTable(detail.mcp_servers, "MCP server", row => row.mcp_server,
-                                               "No turns attributed to an MCP server."))))),
-    themed("h3", "Rate limits and API errors"),
-    el("div", {class: "table-wrap"}, paged(key("api-errors"),
-       limitEventsTable(detail.api_errors, "No API errors in this session.", false))),
-    ...order[1]);
-  showSessionWaits(detail);
+    el("div", {id: "context-details"}));
+  fill(document.getElementById("session-mid"), ...order[0]);
+  fill(document.getElementById("session-end"), ...order[1]);
   document.getElementById("context-table-toggle").addEventListener("click", event => {
     const table = document.getElementById("context-table");
     table.hidden = !table.hidden;
     event.currentTarget.setAttribute("aria-pressed", String(!table.hidden));
   });
-  panel.hidden = false;
   if (kept) restoreView(panel, kept);                     // before the chart, which fills the table view
-  renderContext(detail);                                  // after unhiding, so the chart can measure its width
+  renderContext(detail);                                  // the view is in the page, so the chart can measure it
   if (kept) restoreFocusAndScroll(panel, kept);
   scheduleGaugeRefresh(detail);
 }
 
-// the waits in their notice at the top of the session view (a status, so a screen reader hears a new one), each
-// by its icon, another session's by a link to it; drawn again only where they changed, hidden while none waits
-function showSessionWaits(detail) {
-  const slot = document.getElementById("session-waits");
-  if (!slot) return;
-  const waits = sessionWaits(detail, payload.live ? payload.live.sessions : []);
-  const key = JSON.stringify(waits);
-  if (slot.dataset.shown === key) return;
-  slot.dataset.shown = key;
-  slot.hidden = !waits.length;
-  slot.replaceChildren(...waits.map(wait => el("p", {class: "wait-line"},
-    el("span", {class: "wait-icon"}, liveIcon(wait.kind)),
-    wait.title === null ? el("strong", {text: `This session is ${wait.text[0].toLowerCase()}${wait.text.slice(1)}`})
-      : el("span", {}, sessionLink(wait), `: ${wait.text}`))));
+// the view's elements as the reader sees them in order: its own children, and the children of the slots the old
+// sections are drawn into
+function panelItems(panel) {
+  return [...panel.children].flatMap(child =>
+    (child.classList.contains("legacy-slot") ? [...child.children] : [child]));
 }
 
 // What a refresh keeps: the conversation's nodes as they are (moved into the new view, so a loaded conversation
@@ -112,7 +67,7 @@ function showSessionWaits(detail) {
 // the top of the window
 function keptView(panel) {
   const active = panel.contains(document.activeElement) ? document.activeElement : null;
-  const anchor = scrollAnchor([...panel.children]);
+  const anchor = scrollAnchor(panelItems(panel));
   return {
     chat: [document.getElementById("chat-section")],
     table: !document.getElementById("context-table").hidden,
@@ -122,7 +77,7 @@ function keptView(panel) {
     activeFold: active && active.dataset.fold,
     activeIndex: active ? [...panel.querySelectorAll(FOCUSABLE)].indexOf(active) : -1,
     anchor,
-    anchorIndex: anchor ? [...panel.children].indexOf(anchor.node) : -1,
+    anchorIndex: anchor ? panelItems(panel).indexOf(anchor.node) : -1,
   };
 }
 
@@ -136,7 +91,7 @@ function restoreView(panel, kept) {
 
 // the same element where it still exists (in the conversation), else by id, by fold, or by position
 function restoreFocusAndScroll(panel, kept) {
-  const anchored = kept.anchor && kept.anchor.node.isConnected ? kept.anchor.node : panel.children[kept.anchorIndex];
+  const anchored = kept.anchor && kept.anchor.node.isConnected ? kept.anchor.node : panelItems(panel)[kept.anchorIndex];
   keepScroll(kept.anchor, anchored);
   if (!kept.active) return;
   const target = kept.active.isConnected ? kept.active
@@ -211,79 +166,6 @@ function toolsNote(agents) {
   return el("div", {class: "note", text: "Bash splits by what a command does, MCP by server. A call's input and " +
     "result stay in the context, so every later call up to the next compaction reads them again: ~Carried " +
     "estimates what that cost, taking a token as 2.3 characters (measured on real transcripts, a heuristic)."});
-}
-
-function agentRows(agents, searches) {
-  const rows = [];
-  const runs = new Map();
-  for (const agent of agents) {
-    if (agent.workflow_run === null) {
-      rows.push(agentRow(agent, searches));
-    } else if (runs.has(agent.workflow_run)) {
-      runs.get(agent.workflow_run).push(agent);
-    } else {
-      const members = [agent];
-      runs.set(agent.workflow_run, members);
-      rows.push(members);                                 // filled in below, in the place of its first agent
-    }
-  }
-  return rows.flatMap(row => (Array.isArray(row) ? workflowRows(row, searches) : [row]));
-}
-
-function agentRow(agent, searches, className = null) {
-  const phase = agent.workflow_phase ? ` · ${agent.workflow_phase}` : "";
-  return el("tr", {class: className},
-    el("td", {}, el("strong", {text: agent.agent_type}),
-       el("span", {class: "sub", text: `${agent.description || ""}${phase}`})),
-    el("td", {}, ...agentModels(agent)), el("td", {class: "num", text: whole(agent.turns)}),
-    el("td", {class: "num", text: `${compact(agent.context_first)} → ${compact(agent.context_last)}`}),
-    el("td", {class: "num", text: compact(agent.input_total)}),
-    el("td", {class: "num", text: percent(agent.cache_read, agent.input_total)}),
-    el("td", {class: "num", text: compact(agent.output)}),
-    searches ? el("td", {class: "num", text: whole(agent.web_searches)}) : null,
-    el("td", {class: "num", text: compact(agent.returned_chars)}),
-    el("td", {class: "num", text: money(agent.cost)}));
-}
-
-// a workflow run: its totals, then its agents, hidden until the button shows them
-function workflowRows(agents, searches) {
-  const sum = field => agents.reduce((total, agent) => total + (agent[field] || 0), 0);
-  const costs = agents.map(agent => agent.cost).filter(cost => cost !== null);
-  const name = agents[0].workflow_name || agents[0].workflow_run;
-  const members = agents.map(agent => agentRow(agent, searches, "sub-row workflow-member"));
-  for (const row of members) row.hidden = true;
-  const toggle = foldToggle(agents[0].workflow_run, `${whole(agents.length)} agents`, open => {
-    for (const row of members) row.hidden = !open;
-  });
-  const models = [...new Set(agents.flatMap(agent => agent.models))];
-  const head = el("tr", {class: "group-row"},
-    el("td", {}, el("strong", {text: `workflow · ${name}`}), el("span", {class: "sub"}, toggle)),
-    el("td", {}, ...models.map(model => el("div", {text: model}))), el("td", {class: "num", text: whole(sum("turns"))}),
-    el("td", {class: "num", text: "–"}), el("td", {class: "num", text: compact(sum("input_total"))}),
-    el("td", {class: "num", text: percent(sum("cache_read"), sum("input_total"))}),
-    el("td", {class: "num", text: compact(sum("output"))}),
-    searches ? el("td", {class: "num", text: whole(sum("web_searches"))}) : null,
-    el("td", {class: "num", text: "–"}),
-    el("td", {class: "num", text: costs.length ? money(costs.reduce((total, cost) => total + cost, 0)) : "–"}));
-  return [head, ...members];
-}
-
-// an agent's models, one line each with its effort levels ("claude-opus-5-5 · high, max"); background calls
-// have none
-function agentModels(agent) {
-  if (!agent.models.length) return ["–"];
-  return agent.models.map(model => {
-    const efforts = agent.model_efforts.filter(entry => entry.model === model).map(entry => entry.effort);
-    return el("div", {text: efforts.length ? `${model} · ${efforts.join(", ")}` : model});
-  });
-}
-
-// the session's usage per model with its effort levels below, as the page's By model table
-function sessionModelTable(detail) {
-  const slots = modelSlots(detail.models.map(row => row.model));
-  return modelEffortTable(detail.models, detail.model_effort, row =>
-    el("span", {}, el("span", {class: "swatch", style: `background:${slotColor(slots.get(row.model) ?? null)}`}),
-       row.model));
 }
 
 // --- context per turn: what each turn sent, stacked by part, for one agent at a time ----------------------------

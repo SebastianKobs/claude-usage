@@ -32,6 +32,7 @@ beforeEach(() => {
 
 afterEach(() => {
   tablePages.forget('by-agent');
+  tablePages.forget('s1-models');
   preferences.pageSize = 25;
   localStorage.clear();
 });
@@ -256,5 +257,40 @@ describe('a redraw', () => {
     for (const row of screen.getAllByRole('row').slice(1)) {
       expect(row).toBe(before.get(row.firstElementChild?.textContent));
     }
+  });
+});
+
+describe('the inline form', () => {
+  test('is no card: the heading is a level 3 one and the table is named by it, all in the parent`s place', () => {
+    const { container } = render(UsageTable, { ...DEFAULTS, inline: true, rows: plainRows(2) });
+    expect(container.querySelector('section')).toBeNull();
+    const heading = screen.getByRole('heading', { level: 3 });
+    expect(heading).toHaveTextContent(/^By agent type$/);
+    expect(heading.id).toBe('by-agent-title');
+    expect(container.firstElementChild).toBe(heading);
+    expect(heading.nextElementSibling).toHaveClass('table-wrap');
+    expect(screen.getByRole('table', { name: 'By agent type' })).toBeInTheDocument();
+  });
+
+  test('draws the same rows and cells as the card', () => {
+    render(UsageTable, { ...DEFAULTS, inline: true, rows: plainRows(2) });
+    expect(names()).toEqual(['name 0', 'name 1']);
+    const cells = within(screen.getAllByRole('row')[1] as HTMLElement).getAllByRole('cell');
+    expect(cells.map((cell) => cell.classList.contains('num'))).toEqual([false, true, true, true, true, true]);
+  });
+
+  test('keeps its page under the pager key given, not the id', async () => {
+    const user = userEvent.setup();
+    render(UsageTable, { ...DEFAULTS, inline: true, pagerKey: 's1-models', rows: plainRows(40) });
+    expect(screen.getByRole('combobox', { name: 'Rows per page' }).id).toBe('pager-s1-models-size');
+    await user.click(screen.getByRole('button', { name: 'Next ›' }));
+    expect(tablePages.first('s1-models')).toBe(25);
+    expect(tablePages.first('by-agent')).toBe(0);
+  });
+
+  test('says the empty text without rows, the heading staying', () => {
+    const { container } = render(UsageTable, { ...DEFAULTS, inline: true, rows: [], empty: 'Nothing used.' });
+    expect(container.querySelector('.table-wrap > .empty')).toHaveTextContent(/^Nothing used\.$/);
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('By agent type');
   });
 });

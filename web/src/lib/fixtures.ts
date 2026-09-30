@@ -2,6 +2,7 @@
 // with the changes a test asks for on top of one plain default.
 
 import type {
+  Agent,
   ApiErrorEvent,
   CostlySession,
   LimitWindow,
@@ -159,6 +160,35 @@ export function summary(changes: Partial<Summary> = {}): Summary {
     scan_errors: [],
     sessions: [],
     costly_sessions: [],
+    ...changes,
+  };
+}
+
+/** The main thread: 10 turns on one model, its context from 10K to 50K, nothing handed back, no calls kept. */
+export function agent(changes: Partial<Agent> = {}): Agent {
+  return {
+    ...usage(),
+    agent_id: null,
+    agent_type: 'main',
+    description: null,
+    workflow_run: null,
+    workflow_phase: null,
+    workflow_name: null,
+    first_ts: '2026-09-30T08:00:00.000Z',
+    last_ts: '2026-09-30T09:00:00.000Z',
+    models: ['claude-opus-5-5'],
+    model_efforts: [],
+    context_first: 10_000,
+    context_last: 50_000,
+    input_total: 1_200,
+    context_per_turn: [],
+    tools: [],
+    compactions: [],
+    overhead: null,
+    rebuilds: { count: 0, lost: 0, cost: null },
+    top_growth: [],
+    returned_chars: null,
+    tool_kinds: null,
     ...changes,
   };
 }

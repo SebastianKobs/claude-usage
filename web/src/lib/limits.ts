@@ -206,12 +206,14 @@ export function eventRows(events: readonly ApiErrorEvent[]): EventRow[] {
   }));
 }
 
-/** The latest failed calls' columns. */
-export const EVENT_COLUMNS: { label: string }[] = [
-  { label: 'When' },
-  { label: 'Error' },
-  { label: 'Quota' },
-  { label: 'Resets' },
-  { label: 'Session' },
-  { label: 'Agent' },
-];
+/** The latest failed calls' columns; the session's only where `withSession` (a session's own view leaves it out). */
+export function eventColumns(withSession: boolean): { label: string }[] {
+  return [
+    { label: 'When' },
+    { label: 'Error' },
+    { label: 'Quota' },
+    { label: 'Resets' },
+    ...(withSession ? [{ label: 'Session' }] : []),
+    { label: 'Agent' },
+  ];
+}

@@ -10,6 +10,7 @@ import OverTime from './components/OverTime.svelte';
 import RangeFilter from './components/RangeFilter.svelte';
 import RateLimits from './components/RateLimits.svelte';
 import SessionsList from './components/SessionsList.svelte';
+import SessionView from './components/SessionView.svelte';
 import SummaryTiles from './components/SummaryTiles.svelte';
 import UsageTables from './components/UsageTables.svelte';
 import { BannerMessages } from './lib/banner.svelte';
@@ -18,7 +19,6 @@ import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
 import * as live from './lib/live';
-import * as overview from './lib/overview.svelte';
 import * as paging from './lib/paging.svelte';
 import * as payload from './lib/payload.svelte';
 import * as prefs from './lib/prefs.svelte';
@@ -41,17 +41,18 @@ import * as themes from './lib/themes';
 // the paging lib/paging.svelte.ts (the table pagers, mounted for the old scripts, and the page each table is on) and
 // scrolling lib/scroll.ts (keeping the reader's place while a view is redrawn), the page's payload
 // lib/payload.svelte.ts (the summary loaded, or that loading it failed: `setPayload` hands the old scripts' summary to
-// the components and draws at once) and the session view's tile rows lib/overview.svelte.ts (`mountSessionKpis` and
-// `mountSessionRuntime`, rows the old scripts put into the page) and the page's range lib/range.ts (the ranges on
-// offer, the query a range becomes, the day the Daily range shows) and lib/range.svelte.ts (`range`, the days and day
-// shown as reactive state, which the old scripts reload the data on through its `onchange`). `tablePages`,
+// the components and draws at once: its `session` is the open session, null closing the view) and the page's range
+// lib/range.ts (the ranges on offer, the query a range becomes, the day the Daily range shows) and
+// lib/range.svelte.ts (`range`, the days and day shown as reactive state, which the old scripts reload the data on
+// through its `onchange`). `tablePages`,
 // `mountPager`, `payload` and the like reach the old scripts as globals, like everything else here. Their names must
 // stay apart: a shared one would be handed
 // over twice, the second silently winning. The overview's two tile rows, `#kpis` and `#runtime`, the live sessions,
 // `#live-card`, the over-time section, `#trend-card`, the by-model section, `#chart-card`, the cost-per-session
 // section, `#costly-card`, the rate-limits section, `#limits-card`, the usage tables, `#usage-cards`, the sessions
-// list, `#sessions-card`, and the range filter, `#filters`, are mounted here from the payload, which `setPayload`
-// sets.
+// list, `#sessions-card`, the range filter, `#filters`, and the session view's frame, `#session-card`, are mounted
+// here from the payload, which `setPayload` sets. The old scripts fill what has not moved into the view's three
+// slots, `#session-top`, `#session-mid` and `#session-end`.
 type Formatters = typeof format;
 type Colors = typeof colors;
 type Compacting = typeof compact;
@@ -64,7 +65,6 @@ type Prefs = typeof prefs;
 type Paging = typeof paging;
 type Scroll = typeof scroll;
 type Payload = typeof payload;
-type Overview = typeof overview;
 type RangeLib = typeof rangeLib;
 type RangeStateModule = typeof rangeState;
 
@@ -82,7 +82,6 @@ const MODULES = [
   paging,
   scroll,
   payload,
-  overview,
   rangeLib,
   rangeState,
 ];
@@ -101,7 +100,6 @@ declare global {
       Paging,
       Scroll,
       Payload,
-      Overview,
       RangeLib,
       RangeStateModule {
     /** Sets a source's banner message (empty removes it), drawn at once. */
@@ -145,6 +143,8 @@ export function bridge(target: Window): Bridge {
   if (!sessionsContainer) throw new Error('The page has no #sessions-card container for the sessions list');
   const filtersContainer = target.document.getElementById('filters');
   if (!filtersContainer) throw new Error('The page has no #filters container for the range filter');
+  const sessionContainer = target.document.getElementById('session-card');
+  if (!sessionContainer) throw new Error('The page has no #session-card container for the session view');
   // Mounted before the placeholder, which then goes, so the banner keeps its place and there is one alert.
   const banner = mount(Banner, { target: placeholder.parentElement, anchor: placeholder, props: { messages } });
   placeholder.remove();
@@ -170,6 +170,8 @@ export function bridge(target: Window): Bridge {
   const sessions = mount(SessionsList, { target: sessionsContainer });
   // And the range filter.
   const filters = mount(RangeFilter, { target: filtersContainer });
+  // And the session view's frame, which draws nothing until a session is open.
+  const sessionView = mount(SessionView, { target: sessionContainer });
 
   target.showError = (source: string, message: string): void => {
     messages.show(source, message);
@@ -193,6 +195,7 @@ export function bridge(target: Window): Bridge {
       void unmount(usage);
       void unmount(sessions);
       void unmount(filters);
+      void unmount(sessionView);
       // Reflect, since the Window interface declares them always there, which a plain delete refuses.
       Reflect.deleteProperty(target, 'showError');
       Reflect.deleteProperty(target, 'hasError');

@@ -2,7 +2,8 @@
 @component
 TableView's test bench: rows of a name and a number, the number in a `num` cell, a row with `sub` a sub-row of the one
 above, a row with `group` a group head. `withHeading`, `withIntro` and `empty` turn on the heading, the note and the
-text for no rows. Only the tests use it.
+text for no rows, `withRowClass` a class "flagged" on the rows whose name ends in 1, `withTitle` a title on the Amount
+column. Only the tests use it.
 -->
 <script lang="ts" module>
   /** A row of the bench. */
@@ -26,6 +27,8 @@ text for no rows. Only the tests use it.
     withGroup = false,
     withHeading = false,
     withIntro = false,
+    withRowClass = false,
+    withTitle = false,
     empty,
     labelledby,
   }: {
@@ -36,6 +39,8 @@ text for no rows. Only the tests use it.
     withGroup?: boolean;
     withHeading?: boolean;
     withIntro?: boolean;
+    withRowClass?: boolean;
+    withTitle?: boolean;
     empty?: string;
     labelledby?: string;
   } = $props();
@@ -44,12 +49,13 @@ text for no rows. Only the tests use it.
 <TableView
   key={tableKey}
   {noun}
-  columns={[{ label: 'Name' }, { label: 'Amount', numeric: true }]}
+  columns={[{ label: 'Name' }, { label: 'Amount', numeric: true, title: withTitle ? 'what it comes to' : undefined }]}
   {rows}
   rowKey={(row) => row.id}
   {cells}
   sub={withSub ? (row) => row.sub === true : undefined}
   group={withGroup ? (row) => row.group === true : undefined}
+  rowClass={withRowClass ? (row) => (row.name.endsWith('1') ? 'flagged' : undefined) : undefined}
   heading={withHeading ? heading : undefined}
   intro={withIntro ? intro : undefined}
   {empty}

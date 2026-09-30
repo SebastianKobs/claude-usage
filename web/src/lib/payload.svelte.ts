@@ -1,10 +1,10 @@
 // What the page has loaded, for the components that draw it: the summary of the range shown, the live sessions and
-// their cards' states, or that loading one failed. The old classic scripts fetch it and hand it over through
-// `setPayload`, until the app fetches it itself.
+// their cards' states, the session open, or that loading one failed. The old classic scripts fetch it and hand it over
+// through `setPayload`, until the app fetches it itself.
 
 import { flushSync } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
-import type { Live, SessionState, Summary } from './api';
+import type { Live, SessionDetail, SessionState, Summary } from './api';
 
 /** The parts of the payload. */
 export interface PayloadParts {
@@ -18,6 +18,8 @@ export interface PayloadParts {
   liveFailed: boolean;
   /** When the newest live answer came, in ms since the epoch, even one unchanged: the cards' "ago" counts from it. */
   liveAt: number;
+  /** The session the view shows, /api/session's answer; null closes the view. */
+  session: SessionDetail | null;
 }
 
 /** The page's payload as reactive state. */
@@ -29,6 +31,8 @@ export class Payload {
   #live = $state.raw<Live | null>(null);
   #liveFailed = $state(false);
   #liveAt = $state<number | null>(null);
+  // The open session, replaced whole by each refresh, which comes every few seconds while it is live.
+  #session = $state.raw<SessionDetail | null>(null);
   // A live card's state by session: a map that is reactive per key, so one card's state moving redraws that card only.
   #liveStates = new SvelteMap<string, SessionState>();
 
@@ -57,6 +61,11 @@ export class Payload {
     return this.#liveAt;
   }
 
+  /** The session the view shows, null while none is open. */
+  get session(): SessionDetail | null {
+    return this.#session;
+  }
+
   /** A live card's state, undefined until it is loaded or once its session is no longer live. */
   liveState(sessionId: string): SessionState | undefined {
     return this.#liveStates.get(sessionId);
@@ -76,7 +85,7 @@ export class Payload {
   }
 
   /** Sets the parts given. A summary also clears the failure: it is what the failure was about; so does a live
-   *  answer for the live one. */
+   *  answer for the live one. A session of null closes the view. */
   set(parts: Partial<PayloadParts>): void {
     if (parts.summary !== undefined) {
       this.#summary = parts.summary;
@@ -89,6 +98,7 @@ export class Payload {
     }
     if (parts.liveFailed !== undefined) this.#liveFailed = parts.liveFailed;
     if (parts.liveAt !== undefined) this.#liveAt = parts.liveAt;
+    if (parts.session !== undefined) this.#session = parts.session;
   }
 
   /** Back to nothing loaded, as at the page's start: for the tests, which share the singleton. */
@@ -98,6 +108,7 @@ export class Payload {
     this.#live = null;
     this.#liveFailed = false;
     this.#liveAt = null;
+    this.#session = null;
     this.#liveStates.clear();
   }
 }

@@ -72,10 +72,8 @@ async function loadLive() {
     if (key !== liveKey) {
       liveKey = key;
       setPayload({live, liveAt: Date.now()});
-      if (state.session) {                                  // the open session hides the list, not the waits
-        showSessionWaits(state.session);
-        if (sessionShown() && waitChanged(state.session, live.sessions)) refreshSession();
-      }
+      // the open session's waits follow the list by themselves (SessionWaits); a changed one asks at once
+      if (state.session && sessionShown() && waitChanged(state.session, live.sessions)) refreshSession();
     } else {
       setPayload({liveAt: Date.now()});    // the cards' "12 s ago" run on
     }
@@ -143,8 +141,6 @@ const SESSION_HASH = /^#session\/([A-Za-z0-9_-]{1,128})$/;
 let sessionRequest = 0;
 let sessionKey = null;
 let sessionTimer = null;
-// the link that opened the session, and where the page was scrolled: closing the session returns to both
-let opener = null;
 
 async function loadSession() {
   const request = ++sessionRequest;                       // a late answer for a session left since doesn't render
@@ -152,15 +148,9 @@ async function loadSession() {
   const match = location.hash.match(SESSION_HASH);
   if (!match) {
     showError("session", location.hash.startsWith("#session/") ? "Not a session link." : "");
-    const wasOpen = state.session !== null;
     state.session = null;
-    renderDrilldown(null);
-    if (wasOpen) returnToOpener();
+    renderDrilldown(null);                                 // the view returns focus and scroll to its link
     return;
-  }
-  if (state.session === null && opener === null) {
-    const active = document.activeElement;
-    opener = {href: active && active.getAttribute("href"), element: active, scroll: window.scrollY};
   }
   try {
     const session = await fetchJson(`/api/session/${encodeURIComponent(match[1])}`);
@@ -168,9 +158,7 @@ async function loadSession() {
     showError("session", "");
     state.session = session;
     sessionKey = drawnKey(session);
-    renderDrilldown(session);
-    document.getElementById("drilldown").scrollIntoView({block: "start"});
-    document.getElementById("drilldown-title").focus({preventScroll: true});
+    renderDrilldown(session);                              // the view takes focus and the top of the window
     pollSession();
   } catch (error) {
     if (request === sessionRequest) showError("session", error.message);
@@ -216,18 +204,6 @@ async function refreshSession() {
   pollSession();
 }
 
-function returnToOpener() {
-  if (!opener) return;
-  const {href, element, scroll} = opener;
-  opener = null;
-  window.scrollTo(0, scroll);
-  // the summary may have been drawn again meanwhile: then the same link in the new render
-  const target = element && element.isConnected ? element
-               : href ? [...document.querySelectorAll("a[href]")].find(link => link.getAttribute("href") === href)
-               : null;
-  if (target) target.focus({preventScroll: true});
-}
-
 // --- controls ------------------------------------------------------------------------------------------------
 
 function setup() {
@@ -238,14 +214,11 @@ function setup() {
     applyTheme();
   });
   window.addEventListener("hashchange", loadSession);
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && state.session && !event.defaultPrevented) location.hash = "";
-  });
   document.addEventListener("visibilitychange", pollWhileVisible);
   const resize = new ResizeObserver(() => {
     if (state.session) renderContext(state.session);
   });
-  resize.observe(document.getElementById("drilldown"));
+  resize.observe(document.getElementById("session-card"));
 
   loadSession();
   pollWhileVisible();

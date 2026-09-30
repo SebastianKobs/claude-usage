@@ -347,10 +347,11 @@ class SecretAccessTest(unittest.TestCase):
         self.assertIsNone(run_function("secrets.ts", "secretVia", {"via": None}))
 
     def test_the_warning_comes_after_the_tiles_and_before_the_call_to_compact(self):
-        source = read(STATIC / "js" / "drilldown.js")
-        render = source[source.index("function renderDrilldown("):source.index("\n}\n", source.index(
-            "function renderDrilldown("))]
-        self.assertLess(render.index("mountSessionRuntime("), render.index("secretAccesses(detail"))
+        # the tiles are the session view's component, which leaves the slot the warning is drawn into right after them
+        view = read(COMPONENTS / "SessionView.svelte")
+        self.assertLess(view.index("<RuntimeTiles"), view.index('id="session-top"'))
+        render = function_body("drilldown.js", "renderDrilldown")
+        self.assertLess(render.index('getElementById("session-top")'), render.index("secretAccesses(detail"))
         self.assertLess(render.index("secretAccesses(detail"), render.index("compactCall(detail)"))
 
     def test_the_warning_is_edged_in_the_critical_color(self):
@@ -676,7 +677,7 @@ class PagingTest(unittest.TestCase):
         self.assertRegex(module, r"export const PAGE_SIZES = \[10, 25, 50\];")
 
     def test_every_table_is_paged(self):
-        sites = {"tables.js": 1, "drilldown.js": 9, "chartkit.js": 1}
+        sites = {"tables.js": 1, "drilldown.js": 4, "chartkit.js": 1}
         for script, count in sites.items():
             with self.subTest(script=script):
                 self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)
@@ -1068,17 +1069,17 @@ class SessionWaitTest(unittest.TestCase):
         self.assertFalse(run_function("live.ts", "waitChanged", detail, []))
 
     def test_the_waits_come_first_under_the_sessions_heading(self):
-        body = function_body("drilldown.js", "renderDrilldown")
-        self.assertLess(body.index('id: "drilldown-title"'), body.index('id: "session-waits"'))
-        self.assertLess(body.index('id: "session-waits"'), body.index("mountSessionKpis("))
-        self.assertIn('role: "status"', body[body.index('id: "session-waits"') - 80:])
-        self.assertIn("showSessionWaits(detail)", body)
+        view = read(COMPONENTS / "SessionView.svelte")
+        self.assertLess(view.index('id="drilldown-title"'), view.index("<SessionWaits"))
+        self.assertLess(view.index("<SessionWaits"), view.index("<KpiTiles"))
+        self.assertIn('role="status"', read(COMPONENTS / "SessionWaits.svelte"))
 
-    def test_each_live_answer_draws_the_waits_again(self):
+    def test_each_live_answer_asks_for_the_session_where_its_wait_changed(self):
+        # the notice itself follows the payload's live answer
         body = function_body("main.js", "loadLive")
         self.assertIn("setPayload({live, liveAt", body)
-        self.assertIn("showSessionWaits(state.session)", body)
-        self.assertIn("if (sessionShown() && waitChanged(state.session, live.sessions)) refreshSession()", body)
+        self.assertIn("if (state.session && sessionShown() && waitChanged(state.session, live.sessions)) refreshSession()",
+                      body)
 
     def test_a_wait_asks_for_the_open_session_only_while_no_other_one_loads(self):
         # a refresh of the open one would drop the answer of the one loading
@@ -1086,12 +1087,11 @@ class SessionWaitTest(unittest.TestCase):
         self.assertIn("location.hash.match(SESSION_HASH)", body)
         self.assertIn("match[1] === state.session.session_id", body)
 
-    def test_the_waits_are_drawn_again_only_where_they_changed(self):
-        # a screen reader hears a new wait once, not every five seconds
-        body = function_body("drilldown.js", "showSessionWaits")
-        self.assertIn("slot.dataset.shown === key", body)
-        self.assertIn("sessionLink(", body)
-        self.assertIn("liveIcon(wait.kind)", body)
+    def test_the_waits_are_keyed_so_a_screen_reader_hears_a_new_one_once(self):
+        notice = read(COMPONENTS / "SessionWaits.svelte")
+        self.assertRegex(notice, r"\{#each \w+ as \w+ \([^)]+\)\}")
+        self.assertIn("<LiveIcon", notice)
+        self.assertIn("sessionHref(", notice)
 
     def test_the_notice_is_in_the_waiting_tone(self):
         # blue, like the live cards' icons: nothing is wrong, a session only waits

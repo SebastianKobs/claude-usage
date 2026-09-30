@@ -6,6 +6,7 @@ import {
   LIMIT_CHART_HEIGHT,
   LIMIT_COLOR,
   LIMIT_PLOT,
+  eventColumns,
   eventRows,
   limitBar,
   limitChartLabel,
@@ -235,5 +236,20 @@ describe('the latest errors', () => {
     expect(row?.session.name).toBe('Untitled session');
     expect(row?.resets).toBe('–');
     expect(row?.quota).toBe('–');
+  });
+
+  test('are headed by the time, the error, the quota, its reset, the session and the agent', () => {
+    expect(eventColumns(true).map((column) => column.label)).toEqual([
+      'When',
+      'Error',
+      'Quota',
+      'Resets',
+      'Session',
+      'Agent',
+    ]);
+  });
+
+  test('leave out the session column where the session is the one shown', () => {
+    expect(eventColumns(false).map((column) => column.label)).toEqual(['When', 'Error', 'Quota', 'Resets', 'Agent']);
   });
 });

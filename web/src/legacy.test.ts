@@ -8,9 +8,16 @@ import * as charts from './lib/charts';
 import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
-import { apiErrorEvent, costlySession, live as liveAnswer, sessionItem, summary, usage } from './lib/fixtures';
+import {
+  apiErrorEvent,
+  costlySession,
+  live as liveAnswer,
+  sessionDetail,
+  sessionItem,
+  summary,
+  usage,
+} from './lib/fixtures';
 import * as live from './lib/live';
-import * as overview from './lib/overview.svelte';
 import * as paging from './lib/paging.svelte';
 import * as payload from './lib/payload.svelte';
 import * as prefs from './lib/prefs.svelte';
@@ -34,7 +41,6 @@ const MODULES = [
   paging,
   scroll,
   payload,
-  overview,
   rangeLib,
   rangeState,
 ];
@@ -72,7 +78,8 @@ test("the banner takes the placeholder's place", () => {
   expect(document.getElementById('error')).toBeNull();
   expect(banner).toHaveClass('banner');
   expect(banner.previousElementSibling?.outerHTML).toBe(placeholder?.previousElementSibling?.outerHTML);
-  expect(banner.nextElementSibling?.outerHTML).toBe(placeholder?.nextElementSibling?.outerHTML);
+  // by its id: the container that follows has a mounted view in it, which draws nothing but leaves a marker
+  expect(banner.nextElementSibling?.id).toBe(placeholder?.nextElementSibling?.id);
 });
 
 test("the old scripts' showError shows at once in the banner", () => {
@@ -106,7 +113,6 @@ test.each([
   ['paging', paging, 'mountPager'],
   ['scrolling', scroll, 'scrollAnchor'],
   ['payload', payload, 'setPayload'],
-  ['overview tiles', overview, 'mountSessionKpis'],
   ['range helpers', rangeLib, 'visibleRanges'],
   ['range state', rangeState, 'range'],
 ])("the old scripts' %s are the module's exports", (_kind, module, sample) => {
@@ -118,6 +124,12 @@ test.each([
 test('no export name is in two modules', () => {
   const names = MODULES.flatMap((module) => Object.keys(module));
   expect(names.filter((name, index) => names.indexOf(name) !== index)).toEqual([]);
+});
+
+test('the session view`s tile rows are no longer handed to the old scripts', () => {
+  expect('mountSessionKpis' in window).toBe(false);
+  expect('mountSessionRuntime' in window).toBe(false);
+  expect('releaseDetachedTiles' in window).toBe(false);
 });
 
 test('the formatters answer as the old scripts call them', () => {
@@ -395,6 +407,34 @@ test('a page without the filters container fails loudly and mounts nothing', () 
   expect(document.getElementById('kpis')?.children).toHaveLength(0);
   expect(document.getElementById('sessions-card')?.children).toHaveLength(0);
   bridged = { stop() {} };
+});
+
+test('a page without the session container fails loudly and mounts nothing', () => {
+  bridged.stop();
+  document.body.replaceChildren(pageBody());
+  document.getElementById('session-card')?.remove();
+  expect(() => bridge(window)).toThrow('The page has no #session-card container for the session view');
+  expect(document.getElementById('error')).not.toBeNull();
+  expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  expect(document.getElementById('filters')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('an open session is drawn into its container with the old scripts` slots, and stopping takes it away', () => {
+  window.setPayload({ session: sessionDetail() });
+  const card = tilesOf('session-card');
+  expect(card.querySelector('section#drilldown')).not.toBeNull();
+  expect(card.querySelectorAll('.legacy-slot')).toHaveLength(3);
+  expect(document.getElementById('session-top')).not.toBeNull();
+  bridged.stop();
+  expect(card.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('closing the session empties its container again', () => {
+  window.setPayload({ session: sessionDetail() });
+  window.setPayload({ session: null });
+  expect(tilesOf('session-card').children).toHaveLength(0);
 });
 
 test('stopping takes the range filter away too', () => {

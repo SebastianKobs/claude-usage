@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'vitest';
-import { live, summary } from './fixtures';
+import { live, sessionDetail, summary } from './fixtures';
 import { Payload, payload, setPayload } from './payload.svelte.ts';
 
 afterEach(() => {
@@ -123,6 +123,36 @@ test('reset forgets the live answer, its failure, its time and the states', () =
   fresh.reset();
   const left = [fresh.live, fresh.liveFailed, fresh.liveAt, fresh.liveState('live-1')];
   expect(left).toEqual([null, false, null, undefined]);
+});
+
+test('a new payload has no session open', () => {
+  expect(new Payload().session).toBeNull();
+});
+
+test('the session set is given back as it is, and null closes it', () => {
+  const fresh = new Payload();
+  const detail = sessionDetail();
+  fresh.set({ session: detail });
+  expect(fresh.session).toBe(detail);
+  fresh.set({ session: null });
+  expect(fresh.session).toBeNull();
+});
+
+test('the session is set apart from the summary and the live answer', () => {
+  const fresh = new Payload();
+  const detail = sessionDetail();
+  fresh.set({ session: detail });
+  fresh.set({ summary: summary(), live: live() });
+  expect(fresh.session).toBe(detail);
+  fresh.set({ session: null });
+  expect([fresh.summary, fresh.live]).not.toContain(null);
+});
+
+test('reset closes the session', () => {
+  const fresh = new Payload();
+  fresh.set({ session: sessionDetail() });
+  fresh.reset();
+  expect(fresh.session).toBeNull();
 });
 
 test('setPayload sets the singleton', () => {
