@@ -46,15 +46,9 @@ function renderDrilldown(detail, refresh = false) {
     // what waits for you first: the live list, whose cards show it otherwise, is hidden while a session is open
     el("div", {class: "card wait-notice", id: "session-waits", role: "status", hidden: true}),
     // the page's tile rows with this session's numbers: its whole usage, main thread, subagents and background
-    el("div", {class: "kpis session-kpis"},
-       ...kpiTiles(detail, "this session", detail.context, detail.compact_hint_tokens,
-                 detail.compaction_savings)),
+    mountSessionKpis(detail),
     // from the cost record Claude Code writes when its process exits, until then estimated from the transcripts
-    detail.runtime ? el("div", {class: "kpis session-kpis"},
-                        ...runtimeTiles(detail.runtime, detail.runtime.source === "cost_record"
-                                          ? "from its cost record" : "estimated from the transcripts",
-                                        sessionCostPer100Lines(detail)))
-                   : null,
+    detail.runtime ? mountSessionRuntime(detail) : null,
     secretAccesses(detail, key("secrets")),
     compactCall(detail),
     delegateCall(detail),
@@ -290,12 +284,6 @@ function sessionModelTable(detail) {
   return modelEffortTable(detail.models, detail.model_effort, row =>
     el("span", {}, el("span", {class: "swatch", style: `background:${slotColor(slots.get(row.model) ?? null)}`}),
        row.model));
-}
-
-// the session's whole cost per 100 lines changed, as the summary computes it for a range
-function sessionCostPer100Lines(detail) {
-  const lines = detail.runtime.lines_added + detail.runtime.lines_removed;
-  return detail.cost === null || lines === 0 ? null : detail.cost / lines * 100;
 }
 
 // --- context per turn: what each turn sent, stacked by part, for one agent at a time ----------------------------

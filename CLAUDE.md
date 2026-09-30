@@ -120,8 +120,15 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              (`cursorStep`), where the tooltip sits, which x labels show, the gridline's pixel
                              (not handed to the old scripts yet: the components use it)
   src/lib/scroll.ts          keeping the reader's place while a view is redrawn (`scrollAnchor`, `keepScroll`)
-  src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, and the chart kit: `Chart`, `ChartTooltip`, `YAxis`,
-                             `XLabels`, `AreaLine`, `PointDot`), each with its Testing Library test
+  src/lib/tiles.ts           what the KPI and runtime tiles say: the range in words, the cost's notes, what compacting
+                             saved so far, the input split's parts, the runtime's notes (used by the components)
+  src/lib/payload.svelte.ts  what the page has loaded, as reactive state (`payload`: the summary, or that loading it
+                             failed), which the old scripts fill through `setPayload`
+  src/lib/overview.svelte.ts the session view's tile rows, mounted for the old scripts (`mountSessionKpis`,
+                             `mountSessionRuntime`, `releaseDetachedTiles`)
+  src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
+                             `YAxis`, `XLabels`, `AreaLine`, `PointDot`, and the tiles: `StatTile`, `InputSplit`,
+                             `KpiTiles`, `RuntimeTiles`, `SummaryTiles`), each with its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)

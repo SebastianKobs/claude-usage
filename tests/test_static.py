@@ -359,7 +359,7 @@ class SecretAccessTest(unittest.TestCase):
         source = read(STATIC / "js" / "drilldown.js")
         render = source[source.index("function renderDrilldown("):source.index("\n}\n", source.index(
             "function renderDrilldown("))]
-        self.assertLess(render.index("runtimeTiles("), render.index("secretAccesses(detail"))
+        self.assertLess(render.index("mountSessionRuntime("), render.index("secretAccesses(detail"))
         self.assertLess(render.index("secretAccesses(detail"), render.index("compactCall(detail)"))
 
     def test_the_warning_is_edged_in_the_critical_color(self):
@@ -1135,7 +1135,7 @@ class SessionWaitTest(unittest.TestCase):
     def test_the_waits_come_first_under_the_sessions_heading(self):
         body = function_body("drilldown.js", "renderDrilldown")
         self.assertLess(body.index('id: "drilldown-title"'), body.index('id: "session-waits"'))
-        self.assertLess(body.index('id: "session-waits"'), body.index("session-kpis"))
+        self.assertLess(body.index('id: "session-waits"'), body.index("mountSessionKpis("))
         self.assertIn('role: "status"', body[body.index('id: "session-waits"') - 80:])
         self.assertIn("showSessionWaits(detail)", body)
 
@@ -1217,7 +1217,7 @@ class StyleTest(unittest.TestCase):
         # light.css and common.css apply in every theme; the others only override
         defaults = set(re.findall(r"(--[\w-]+):", read(STATIC / "css" / "themes" / "light.css")
                                   + read(STATIC / "css" / "common.css")))
-        sources = STYLESHEETS + OWN_SCRIPTS + [COLORS]
+        sources = STYLESHEETS + OWN_SCRIPTS + [COLORS, LIB / "tiles.ts"]
         used = {name for path in sources for name in re.findall(r"var\((--[\w-]+)", read(path))}
         # a --series-N or --shade-step-N built in a script counts for every slot
         used = {name for name in used if not name.endswith("-")}
@@ -1247,8 +1247,8 @@ class CopyTest(unittest.TestCase):
         return set(re.findall(r'^\s+"([^"]+)":', block, re.MULTILINE))
 
     def labels(self):
-        """The labels the page themes: data-label in the markup, themed() and tile() in the scripts, and the
-        by-model chart's title per time unit."""
+        """The labels the page themes: data-label in the markup, themed() and tile() in the scripts, hype() and
+        StatTile's label and themed note in the components, the tiles' parts in lib/tiles.ts, and the by-model chart's title per time unit."""
         found = set(re.findall(r'data-label="([^"]+)"', dashboard()))
         for path in OWN_SCRIPTS:
             text = read(path)
@@ -1256,6 +1256,11 @@ class CopyTest(unittest.TestCase):
             found |= set(re.findall(r'\btile\("([^"]+)"', text))
             for template in re.findall(r"`(Per \$\{buckets\.unit\}, [^`]+)`", text):
                 found |= {template.replace("${buckets.unit}", unit) for unit in ("day", "hour")}
+        for path in sorted(COMPONENTS.glob("*.svelte")):
+            found |= set(re.findall(r"\bhype\('([^']+)'\)", read(path)))
+            found |= set(re.findall(r'\bnote="([^"]+)" themedNote', read(path)))
+            found |= set(re.findall(r'<StatTile\s+label="([^"]+)"', read(path)))
+        found |= set(re.findall(r"\blabel: '([^']+)'", read(LIB / "tiles.ts")))
         return found
 
     def test_every_label_has_each_themes_wording(self):

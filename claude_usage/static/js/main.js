@@ -48,7 +48,7 @@ async function loadSummary() {
   } catch (error) {
     if (request !== summaryRequest) return;
     showError("summary", error.message);
-    if (!state.summary) placeholder("kpis", "Could not load the summary.");
+    if (!state.summary) setPayload({summaryFailed: true});
   } finally {
     if (request === summaryRequest) container.classList.remove("loading");
   }
@@ -57,8 +57,7 @@ async function loadSummary() {
 function renderSummary() {
   const summary = state.summary;
   if (!summary) return;
-  renderKpis(summary);
-  renderRuntime(summary);
+  setPayload({summary});
   renderDayNav();
   renderTrend(summary);
   renderChart(summary);
@@ -331,7 +330,6 @@ function setup() {
   resize.observe(document.getElementById("limits"));
   resize.observe(document.getElementById("drilldown"));
 
-  placeholder("kpis", "Loading…");
   placeholder("live", "Loading…");
   loadSession();
   pollWhileVisible();

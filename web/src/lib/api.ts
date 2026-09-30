@@ -203,7 +203,7 @@ export interface Summary {
   api_errors: SummaryErrors;
   context: ContextStats;
   compact_hint_tokens: number;
-  compaction_savings: CompactionSavings;
+  compaction_savings: CompactionSavings | null;
   scan_errors: string[];
   sessions: SessionListItem[];
   costly_sessions: CostlySession[];

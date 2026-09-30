@@ -7,15 +7,32 @@ import * as charts from './lib/charts';
 import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
+import { summary } from './lib/fixtures';
 import * as live from './lib/live';
+import * as overview from './lib/overview.svelte';
 import * as paging from './lib/paging.svelte';
+import * as payload from './lib/payload.svelte';
 import * as prefs from './lib/prefs.svelte';
 import * as scroll from './lib/scroll';
 import * as secrets from './lib/secrets';
 import * as tables from './lib/tables';
 import * as themes from './lib/themes';
 
-const MODULES = [format, colors, compact, secrets, live, tables, charts, themes, prefs, paging, scroll];
+const MODULES = [
+  format,
+  colors,
+  compact,
+  secrets,
+  live,
+  tables,
+  charts,
+  themes,
+  prefs,
+  paging,
+  scroll,
+  payload,
+  overview,
+];
 
 // a path, not a URL: the simulated DOM's URL class isn't node's
 const PAGE = join(import.meta.dirname, '../../claude_usage/static/dashboard.html');
@@ -39,6 +56,7 @@ beforeEach(() => {
 
 afterEach(() => {
   bridged.stop();
+  payload.payload.reset();
 });
 
 test("the banner takes the placeholder's place", () => {
@@ -80,6 +98,8 @@ test.each([
   ['preferences', prefs, 'savedOption'],
   ['paging', paging, 'mountPager'],
   ['scrolling', scroll, 'scrollAnchor'],
+  ['payload', payload, 'setPayload'],
+  ['overview tiles', overview, 'mountSessionKpis'],
 ])("the old scripts' %s are the module's exports", (_kind, module, sample) => {
   const names = Object.keys(module) as (keyof typeof module & keyof Window)[];
   expect(names).toContain(sample);
@@ -121,6 +141,62 @@ test("the old scripts' preferences are the module's own state, and hype follows 
     prefs.preferences.theme = null;
     localStorage.clear();
   }
+});
+
+function tilesOf(id: string): HTMLElement {
+  const container = document.getElementById(id);
+  if (!container) throw new Error(`no #${id}`);
+  return container;
+}
+
+test('the overview rows say loading until the old scripts hand over a summary', () => {
+  expect(tilesOf('kpis')).toHaveTextContent(/^Loading…$/);
+  expect(tilesOf('runtime').children).toHaveLength(0);
+});
+
+test('the rows are drawn at once by setPayload, in the page containers with their classes', () => {
+  window.setPayload({ summary: summary() });
+  expect(tilesOf('kpis')).toHaveClass('kpis', 'stack');
+  expect([...tilesOf('kpis').querySelectorAll('.label')].map((label) => label.textContent)).toEqual([
+    'Estimated cost, last 7 days',
+    'Input tokens',
+    'Turns',
+    'Output tokens',
+  ]);
+  expect(tilesOf('runtime').querySelectorAll('.card')).toHaveLength(4);
+  expect(tilesOf('runtime')).toHaveAttribute('aria-label', 'Time and lines changed');
+});
+
+test('a failed summary shows the failure in the kpis row, and a summary replaces it', () => {
+  window.setPayload({ summaryFailed: true });
+  expect(tilesOf('kpis')).toHaveTextContent(/^Could not load the summary\.$/);
+  window.setPayload({ summary: summary() });
+  expect(tilesOf('kpis')).not.toHaveTextContent('Could not load');
+  expect(tilesOf('kpis').querySelectorAll('.card')).toHaveLength(4);
+});
+
+test('the payload the old scripts read is the same state the tiles draw', () => {
+  window.setPayload({ summary: summary() });
+  expect(window.payload.summary?.days).toBe(7);
+  expect(window.payload.summaryFailed).toBe(false);
+});
+
+test('a page without the tile containers fails loudly and mounts nothing', () => {
+  bridged.stop();
+  document.body.replaceChildren(pageBody());
+  document.getElementById('runtime')?.remove();
+  expect(() => bridge(window)).toThrow('The page has no #runtime container for the tiles');
+  expect(document.getElementById('error')).not.toBeNull();
+  expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('stopping takes the tiles away too', () => {
+  window.setPayload({ summary: summary() });
+  bridged.stop();
+  expect(tilesOf('kpis').children).toHaveLength(0);
+  expect(tilesOf('runtime').children).toHaveLength(0);
+  bridged = { stop() {} };
 });
 
 test('stopping takes the banner and the globals away', () => {
