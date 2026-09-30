@@ -156,6 +156,13 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              tiles and the compactions' rows and total (used by the components)
   src/lib/clock.svelte.ts    the cache's expiry as a reactive clock (`cacheClock`, `createSubscriber`, its timer
                              cleared when nothing reads it), which draws the gauge again when the cache runs out
+  src/lib/conversation.ts    the conversation's frame: its URL, the picker's choices (a workflow run's agents in one
+                             group), the reminder note and the notices, whether two answers are the same, and keeping
+                             an unchanged entry's object across a refresh (used by the component)
+  src/lib/legacy-entry.ts    an entry drawn by the old script's `chatEntry` into a node of the component's own, with
+                             its open details and focus kept when it is drawn again; goes with 3.30
+  src/lib/http.ts            `fetchJson`: the server's JSON, or the reason it gave (the old scripts have their own
+                             until the app fetches)
   src/lib/opening.ts         opening and closing the session view (`opening`, an attachment): the page's other sections
                              step aside, focus goes to the heading, closing returns focus and scroll to the link
   src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
@@ -168,9 +175,9 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              filter: `RangeFilter`, and the session view's frame: `SessionView` with `SessionWaits`,
                              `AgentsTable`, `ToolsTable` and `EventsTable`, the secret accesses: `SecretAccesses`, and
                              the gauge with the calls above it: `ContextGauge`, `CompactCall`, `DelegateCall`, the
-                             context per turn: `ContextPerTurn` with `ContextChart` and `ContextDetails`, which
-                             leaves two slots for the conversation, drawn by the old scripts), each with its
-                             Testing Library test
+                             context per turn: `ContextPerTurn` with `ContextChart` and `ContextDetails`, and the
+                             conversation's frame: `Conversation`, whose entries the old script still draws), each
+                             with its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
@@ -723,9 +730,10 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     (`renderDrilldown(detail, true)`):
     the conversation's nodes move into the new view, and the components keep their own state (the table view, the
     folds open: a workflow run's agents, an inline script's interpreters in the Tools table), focus and the element at
-    the top of the window are kept. A conversation shown is read again and drawn only if it changed,
-    keeping its open entries (by time, kind and position) and, once scrolled into, the entry at the top. It reads
-    the transcript itself, so a reply the scan hasn't reached yet may show plain xhigh until the next change.
+    the top of the window are kept. A conversation shown (`Conversation`) reads itself again when the session's
+    payload changes, and is drawn only if it changed: an unchanged entry keeps its node (`reuseEntries`), a changed one
+    its open parts and focus (`legacyEntry`), and, once scrolled into, the entry at the top stays put. It reads the
+    transcript itself, so a reply the scan hasn't reached yet may show plain xhigh until the next change.
   - The range buttons stop at `retention_days` (`RangeFilter`, `visibleRanges`): the summary cuts a longer `days` to it
     and returns `retention_days` and `history_since` (the first stored day); the page leaves the longer buttons out,
     falls back from a saved longer range (`range.fit`), and says "history since" when a range starts before the
@@ -770,15 +778,17 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     80), but where exploration runs can. Against the main thread carrying a subagent's exploration itself (its
     results through the calls still ahead, and each of its rounds reading the main context), delegating was cheaper
     in 89 of 106 subagents, 52 of 53 with 60 to 150 calls ahead, and about even with 20 to 60.
-  - The conversation is its own framed section (`chatSection`), its head sticky while scrolling through it. It lists
+  - The conversation is its own framed section (`Conversation`), its head sticky while scrolling through it. It lists
     newest first: the calls in reverse, each call's entries (one `message_id`) in their order above its usage badge. The
     order is an arrow button (`aria-label` "Oldest first", `aria-pressed`, kept as a preference): down for newest first,
-    turned up for oldest first, the transcript's order; it draws the loaded conversation again. Close (`closeChat`)
-    empties it, drops a load under way and stops its refresh, and returns focus to "Show conversation".
+    turned up for oldest first, the transcript's order; it moves the entries, which keep their nodes. Close
+    empties it, drops a load under way and stops its refresh, and returns focus to "Show conversation". A skip button
+    (out of sight until it has focus) moves focus past a long list to a note at its end, `#chat-end`. The frame keeps
+    its state while the session refreshes; another session starts over (the view's key).
   - While the main transcript exists (`transcript` in `/api/session`), the conversation takes the Tools table's
-    place, after the agents, and the tools go last (`SessionView` puts `ToolsTable` after the API errors, the old
-    scripts the conversation into `#session-mid`); without it the tools stay there and the conversation, which can only
-    say it is gone, comes last (`#session-end`).
+    place, after the agents, and the tools go last (`SessionView` puts `ToolsTable` after the API errors); without it the
+    tools stay there and the conversation, which can only say it is gone, comes last. A transcript that comes or goes
+    mounts the conversation in its other place, which starts it over.
   - Tables page (`paged(key, table)` in `tables.js`, every table and chart table view): past 10 groups of rows (a
     sub-row, an effort level or a workflow run's agent, stays with the row above it) a pager goes right-aligned into
     the row of the table's heading (`placePager`; above the table where there is none, like a chart's table view): 10,

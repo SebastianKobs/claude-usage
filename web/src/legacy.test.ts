@@ -416,13 +416,11 @@ test('a page without the session container fails loudly and mounts nothing', () 
   bridged = { stop() {} };
 });
 
-test('an open session is drawn into its container with the old scripts` slots, and stopping takes it away', () => {
+test('an open session is drawn into its container, conversation included, and stopping takes it away', () => {
   window.setPayload({ session: sessionDetail() });
   const card = tilesOf('session-card');
   expect(card.querySelector('section#drilldown')).not.toBeNull();
-  expect(card.querySelectorAll('.legacy-slot')).toHaveLength(2);
-  expect(document.getElementById('session-mid')).not.toBeNull();
-  expect(document.getElementById('session-end')).not.toBeNull();
+  expect(card.querySelector('section#chat-section')).not.toBeNull();
   bridged.stop();
   expect(card.children).toHaveLength(0);
   bridged = { stop() {} };

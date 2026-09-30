@@ -5,12 +5,11 @@ session's heading (with its close link), prompt and facts, what waits for the us
 calls above it (`ContextGauge`), the secret accesses (`SecretAccesses`, before the gauge), the context per turn
 (`ContextPerTurn`, after the gauge) and its tables: usage by model, the main thread and subagents, by skill, by MCP
 server, the API errors and the tools (`ToolsTable`: after the agents, or, with the main transcript there, after the
-API errors, since the conversation then takes its place). The part that has not moved to a component yet (the
-conversation) is drawn by the old script into one of two empty slots, `#session-mid` with a transcript and
-`#session-end` without, which stay the same nodes while the session's data is refreshed.
-Another session gets a new view (folds, slots and all), which takes the page over while it is there: the range's
-filters and summary step aside, focus goes to its heading, and closing it (the link or Escape, which clears the
-address's hash) puts the page back.
+API errors, since the conversation then takes its place) and the conversation (`Conversation`: its frame, which
+comes after the agents with a transcript, else last; its entries are still drawn by the old script's `chatEntry`).
+Another session gets a new view (folds, the conversation and all), which takes the page over while it is there: the
+range's filters and summary step aside, focus goes to its heading, and closing it (the link or Escape, which clears
+the address's hash) puts the page back.
 -->
 <script lang="ts">
   import { modelSlots } from '../lib/colors';
@@ -25,6 +24,7 @@ address's hash) puts the page back.
   import AgentsTable from './AgentsTable.svelte';
   import ContextGauge from './ContextGauge.svelte';
   import ContextPerTurn from './ContextPerTurn.svelte';
+  import Conversation from './Conversation.svelte';
   import EventsTable from './EventsTable.svelte';
   import KpiTiles from './KpiTiles.svelte';
   import RuntimeTiles from './RuntimeTiles.svelte';
@@ -52,7 +52,7 @@ address's hash) puts the page back.
 {#if session}
   {@const id = session.session_id}
   {@const runtime = session.runtime}
-  <!-- keyed, so another session is a new view: its folds, slots and the opening all start over -->
+  <!-- keyed, so another session is a new view: its folds, the conversation and the opening all start over -->
   {#key id}
     <section
       id="drilldown"
@@ -107,7 +107,9 @@ address's hash) puts the page back.
       {#if !session.transcript}
         <ToolsTable agents={session.agents} pagerKey="{id}-tools" />
       {/if}
-      <div class="legacy-slot" id="session-mid"></div>
+      {#if session.transcript}
+        <Conversation />
+      {/if}
       <div class="grid-2">
         <div>
           <UsageTable
@@ -143,7 +145,9 @@ address's hash) puts the page back.
       {#if session.transcript}
         <ToolsTable agents={session.agents} pagerKey="{id}-tools" />
       {/if}
-      <div class="legacy-slot" id="session-end"></div>
+      {#if !session.transcript}
+        <Conversation />
+      {/if}
     </section>
   {/key}
 {/if}

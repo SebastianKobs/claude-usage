@@ -48,8 +48,8 @@ import * as themes from './lib/themes';
 // section, `#trend-card`, the by-model section, `#chart-card`, the cost-per-session section, `#costly-card`, the
 // rate-limits section, `#limits-card`, the usage tables, `#usage-cards`, the sessions list, `#sessions-card`, the range
 // filter, `#filters`, and the session view's frame, `#session-card`, are mounted here from the payload, which
-// `setPayload` sets. The old scripts fill what has not moved into the view's two slots, `#session-mid` and
-// `#session-end`.
+// `setPayload` sets. The view's conversation frame is a component too; it draws its entries through the old
+// script's `chatEntry`, which is all the old scripts leave in the view.
 type Formatters = typeof format;
 type Colors = typeof colors;
 type Compacting = typeof compact;

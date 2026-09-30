@@ -541,34 +541,38 @@ class CompactedGaugeTest(unittest.TestCase):
 
 
 class ChatOrderTest(unittest.TestCase):
+    def setUp(self):
+        self.component = read(COMPONENTS / "Conversation.svelte")
+
     def test_the_order_switch_is_a_toggle_kept_as_a_preference(self):
-        script = read(STATIC / "js" / "chat.js")
-        self.assertRegex(script, r'id: "chat-order", "aria-pressed"')
+        self.assertRegex(self.component, r'id="chat-order"\s+aria-pressed=\{preferences.oldestFirst\}')
         # saved and read by the bundle's preferences (prefs.svelte.test.ts holds the key and the round trip)
-        self.assertIn("preferences.oldestFirst = !preferences.oldestFirst;", script)
+        self.assertIn("preferences.oldestFirst = !preferences.oldestFirst", self.component)
         self.assertIn("chat-oldest-first", read(LIB / "prefs.svelte.ts"))
 
     def test_the_order_switch_is_an_arrow_turning_with_the_order(self):
-        script = read(STATIC / "js" / "chat.js")
-        self.assertIn('class: "chat-order-arrow"', script)
-        self.assertIn('"aria-label": "Oldest first"', script)
+        self.assertIn('class="chat-order-arrow"', self.component)
+        self.assertIn('aria-label="Oldest first"', self.component)
         rule = css_block(read(STATIC / "css" / "common.css"), '#chat-order[aria-pressed="true"] .chat-order-arrow')
         self.assertIn("rotate(180deg)", rule)
 
     def test_the_conversation_is_its_own_framed_section(self):
-        script = read(STATIC / "js" / "chat.js")
-        self.assertIn('el("section", {class: "chat-section", id: "chat-section"', script)
+        self.assertIn('<section class="chat-section" id="chat-section"', self.component)
         self.assertIn("border", css_block(read(STATIC / "css" / "common.css"), ".chat-section {"))
-        self.assertIn('document.getElementById("chat-section")', read(STATIC / "js" / "drilldown.js"))
 
     def test_a_shown_conversation_can_be_closed(self):
-        script = read(STATIC / "js" / "chat.js")
-        self.assertIn('id: "chat-close"', script)
-        closing = script[script.index("function closeChat"):]
-        closing = closing[:closing.index("\n}\n")]
-        self.assertIn("chatRequest++", closing)
-        self.assertIn("shownChat = null", closing)
+        self.assertIn('id="chat-close"', self.component)
+        closing = self.component[self.component.index("function close()"):]
+        closing = closing[:closing.index("\n  }\n")]
+        self.assertIn("request++", closing)
+        self.assertIn("chat = null", closing)
         self.assertIn("focus()", closing)
+
+    def test_a_keyboard_can_skip_the_conversation(self):
+        self.assertIn('class="skip-link"', self.component)
+        self.assertIn('id="chat-end"', self.component)
+        rule = css_block(read(STATIC / "css" / "common.css"), ".skip-link:not(:focus)")
+        self.assertIn("clip-path", rule)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_newest_first_keeps_each_calls_entries_in_their_order(self):
@@ -1086,10 +1090,12 @@ class SessionPollTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn("clearTimeout(sessionTimer)", self.function_body(name))
 
-    def test_a_changed_session_is_drawn_in_place_with_its_conversation(self):
+    def test_a_changed_session_is_drawn_in_place_and_the_conversation_reads_itself_again(self):
         body = self.function_body("refreshSession")
         self.assertIn("renderDrilldown(session, true)", body)
-        self.assertIn("refreshChat(session.session_id)", body)
+        self.assertNotIn("refreshChat", body)
+        # the conversation's effect follows the payload's session, which renderDrilldown sets
+        self.assertIn("void payload.session;", read(COMPONENTS / "Conversation.svelte"))
 
 
 class BannerTest(unittest.TestCase):

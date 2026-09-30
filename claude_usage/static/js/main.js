@@ -180,8 +180,8 @@ function pollSession() {
   sessionTimer = setTimeout(refreshSession, state.session.live ? LIVE_INTERVAL_MS : SUMMARY_INTERVAL_MS);
 }
 
-// An unchanged session isn't drawn again. A changed one is drawn in place (renderDrilldown's refresh), and a
-// conversation shown is read again with it.
+// An unchanged session isn't drawn again. A changed one is drawn in place (renderDrilldown's refresh), and the
+// conversation shown reads itself again with it (Conversation).
 async function refreshSession() {
   const open = state.session;
   if (!open) return;
@@ -195,7 +195,6 @@ async function refreshSession() {
       sessionKey = key;
       state.session = session;
       renderDrilldown(session, true);
-      refreshChat(session.session_id);
     }
   } catch (error) {
     if (request !== sessionRequest) return;

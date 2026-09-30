@@ -4,6 +4,8 @@
 import type {
   Agent,
   ApiErrorEvent,
+  Chat,
+  ChatEntry,
   Compaction,
   CompactEstimate,
   CompactNow,
@@ -439,6 +441,40 @@ export function compaction(changes: Partial<Compaction> = {}): Compaction {
     duration_ms: 30_000,
     next_context: 20_000,
     versus_keeping: versusKeeping(),
+    ...changes,
+  };
+}
+
+/** A conversation entry: Claude's text, without a call's usage. */
+export function chatEntry(changes: Partial<ChatEntry> = {}): ChatEntry {
+  return {
+    kind: 'text',
+    timestamp: '2026-09-30T08:00:00.000Z',
+    text: 'Hello',
+    model: 'claude-opus-5-5',
+    tool: null,
+    summary: null,
+    tool_fields: [],
+    result: null,
+    result_chars: 0,
+    is_error: false,
+    effort: null,
+    message_id: null,
+    usage: null,
+    items: [],
+    compaction: null,
+    ...changes,
+  };
+}
+
+/** /api/session/<id>/chat's answer: the main thread's transcript is there, with the entries given and no reminders. */
+export function chatAnswer(entries: ChatEntry[] = [chatEntry()], changes: Partial<Chat> = {}): Chat {
+  return {
+    session_id: 'abc123',
+    agent_id: null,
+    available: true,
+    entries,
+    reminders: { calls: 0, chars: 0 },
     ...changes,
   };
 }

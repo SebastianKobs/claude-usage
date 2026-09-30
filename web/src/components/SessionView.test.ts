@@ -209,11 +209,11 @@ describe('opening and closing', () => {
   test('does not open again, or move focus, when the same session is refreshed', () => {
     render(SessionView);
     setPayload({ session: fullSession() });
-    const section = screen.getByRole('region');
+    const section = screen.getByRole('region', { name: 'Checkout: split payment step' });
     const close = screen.getByRole('link', { name: 'Close' });
     close.focus();
     setPayload({ session: fullSession({ turns: 11 }) });
-    expect(screen.getByRole('region')).toBe(section);
+    expect(screen.getByRole('region', { name: 'Checkout: split payment step' })).toBe(section);
     expect(close).toHaveFocus();
     expect(document.getElementById('summary')?.hidden).toBe(true);
   });
@@ -221,9 +221,9 @@ describe('opening and closing', () => {
   test('opens again for another session, without the page coming back in between', () => {
     render(SessionView);
     setPayload({ session: fullSession() });
-    const section = screen.getByRole('region');
+    const section = screen.getByRole('region', { name: 'Checkout: split payment step' });
     setPayload({ session: fullSession({ session_id: 'other', title: 'Another one' }) });
-    expect(screen.getByRole('region')).not.toBe(section);
+    expect(screen.getByRole('region', { name: 'Another one' })).not.toBe(section);
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Another one');
     expect(screen.getByRole('heading', { level: 2 })).toHaveFocus();
     expect(document.getElementById('summary')?.hidden).toBe(true);
@@ -444,61 +444,54 @@ function toolsWrap(): Element | null {
   return node;
 }
 
-describe('the slots for the old scripts', () => {
-  const ids = () => [...document.querySelectorAll('.legacy-slot')].map((slot) => slot.id);
+describe('the conversation', () => {
+  const sections = () => [...document.querySelectorAll('#chat-section')];
 
-  test('are two empty divs, in order, the tools before the first, the API errors before the last', () => {
-    render(SessionView);
-    setPayload({ session: fullSession() });
-    expect(ids()).toEqual(['session-mid', 'session-end']);
-    for (const slot of document.querySelectorAll('.legacy-slot')) {
-      expect(slot.tagName).toBe('DIV');
-      expect(slot).toBeEmptyDOMElement();
-    }
-    const mid = document.getElementById('session-mid') as HTMLElement;
-    expect(mid.previousElementSibling).toBe(toolsWrap());
-    expect(mid.nextElementSibling).toHaveClass('grid-2');
-    expect(document.getElementById('session-end')?.nextElementSibling).toBeNull();
-    expect(document.getElementById('session-end')?.previousElementSibling).toBe(
-      screen.getByRole('table', { name: 'Rate limits and API errors' }).parentElement,
-    );
-  });
-
-  test('are the same two with a transcript, the tools between the API errors and the end', () => {
+  test('is one section, after the agents and before the skills and servers, with a transcript', () => {
     render(SessionView);
     setPayload({ session: fullSession({ transcript: true, agents: toolAgents() }) });
-    expect(ids()).toEqual(['session-mid', 'session-end']);
-    for (const slot of document.querySelectorAll('.legacy-slot')) expect(slot).toBeEmptyDOMElement();
-    const mid = document.getElementById('session-mid') as HTMLElement;
+    expect(sections()).toHaveLength(1);
+    const section = sections()[0] as HTMLElement;
     const agentsTable = screen.getByRole('table', { name: 'Main thread and subagents' });
-    expect(mid.previousElementSibling).toBe(agentsTable.parentElement);
-    expect(mid.nextElementSibling).toHaveClass('grid-2');
-    const end = document.getElementById('session-end') as HTMLElement;
-    expect(end.previousElementSibling).toBe(toolsWrap());
-    expect(end.nextElementSibling).toBeNull();
+    expect(section.previousElementSibling).toBe(agentsTable.parentElement);
+    expect(section.nextElementSibling).toBe(document.getElementById('chat-end'));
+    expect(document.getElementById('chat-end')?.nextElementSibling).toHaveClass('grid-2');
   });
 
-  test('stay the same nodes with what the old scripts put into them across a refresh of the same session', () => {
+  test('is last, after the API errors, without a transcript', () => {
+    render(SessionView);
+    setPayload({ session: fullSession({ agents: toolAgents() }) });
+    expect(sections()).toHaveLength(1);
+    const section = sections()[0] as HTMLElement;
+    const errors = screen.getByRole('table', { name: 'Rate limits and API errors' });
+    expect(section.previousElementSibling).toBe(errors.parentElement);
+    expect(section.nextElementSibling).toBe(document.getElementById('chat-end'));
+    expect(document.getElementById('chat-end')?.nextElementSibling).toBeNull();
+  });
+
+  test('is the same node across a refresh of the same session, with what the reader opened', async () => {
     render(SessionView);
     setPayload({ session: fullSession() });
-    const slots = ids().map((id) => document.getElementById(id) as HTMLElement);
-    const children = slots.map((slot) => slot.appendChild(document.createElement('section')));
+    const section = sections()[0] as HTMLElement;
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Conversation of' }), 'a-1');
     setPayload({ session: fullSession({ turns: 11, agents: [agent(), inRun('w-1')] }) });
-    expect(ids().map((id) => document.getElementById(id))).toEqual(slots);
-    expect(slots.map((slot) => [...slot.children])).toEqual(children.map((child) => [child]));
+    expect(sections()[0]).toBe(section);
   });
 
-  test('are new for another session', () => {
+  test('is new for another session, with its picker at the main thread', async () => {
     render(SessionView);
     setPayload({ session: fullSession() });
-    const slots = ids().map((id) => document.getElementById(id) as HTMLElement);
-    slots[0]?.appendChild(document.createElement('section'));
+    const section = sections()[0] as HTMLElement;
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Conversation of' }), 'a-1');
     setPayload({ session: fullSession({ session_id: 'other' }) });
-    const fresh = ids().map((id) => document.getElementById(id) as HTMLElement);
-    for (const [index, slot] of fresh.entries()) {
-      expect(slot).not.toBe(slots[index]);
-      expect(slot).toBeEmptyDOMElement();
-    }
+    expect(sections()[0]).not.toBe(section);
+    expect(screen.getByRole('combobox', { name: 'Conversation of' })).toHaveValue('');
+  });
+
+  test('has no slot left for the old scripts', () => {
+    render(SessionView);
+    setPayload({ session: fullSession() });
+    expect(document.querySelectorAll('.legacy-slot')).toHaveLength(0);
   });
 });
 
@@ -514,9 +507,10 @@ describe('the tables', () => {
       'By skill',
       'By MCP server',
       'Rate limits and API errors',
+      'Conversation',
     ]);
     expect(screen.getAllByRole('table')).toHaveLength(6);
-    for (const name of headings(3).slice(1)) expect(screen.getByRole('table', { name })).toBeInTheDocument();
+    for (const name of headings(3).slice(1, -1)) expect(screen.getByRole('table', { name })).toBeInTheDocument();
   });
 
   test('come in order with a transcript too, the tools after the API errors', () => {
@@ -525,6 +519,7 @@ describe('the tables', () => {
     expect(headings(3).slice(1)).toEqual([
       'By model',
       'Main thread and subagents',
+      'Conversation',
       'By skill',
       'By MCP server',
       'Rate limits and API errors',
@@ -532,23 +527,23 @@ describe('the tables', () => {
     ]);
   });
 
-  test('have the tools between the agents and the slot without a transcript', () => {
+  test('have the tools between the agents and the conversation without a transcript', () => {
     render(SessionView);
     setPayload({ session: fullSession({ agents: toolAgents() }) });
     const tools = screen.getByRole('table', { name: 'Tools' });
     const agents = screen.getByRole('table', { name: 'Main thread and subagents' });
     expect(agents.parentElement?.nextElementSibling).toBe(document.getElementById('session-tools-title'));
     expect(tools.parentElement).toBe(toolsWrap());
-    expect(tools.parentElement?.nextElementSibling).toBe(document.getElementById('session-mid'));
+    expect(tools.parentElement?.nextElementSibling).toHaveClass('grid-2');
   });
 
-  test('have the tools after the API errors table and before the end slot with a transcript', () => {
+  test('have the tools after the API errors table, last in the card, with a transcript', () => {
     render(SessionView);
     setPayload({ session: fullSession({ transcript: true, agents: toolAgents() }) });
     const errors = screen.getByRole('table', { name: 'Rate limits and API errors' });
     const tools = screen.getByRole('table', { name: 'Tools' });
     expect(errors.parentElement?.nextElementSibling).toBe(document.getElementById('session-tools-title'));
-    expect(tools.parentElement?.nextElementSibling).toBe(document.getElementById('session-end'));
+    expect(tools.parentElement?.nextElementSibling).toBeNull();
   });
 
   test('say there are no tool calls where the transcripts hold none', () => {
@@ -560,7 +555,8 @@ describe('the tables', () => {
   test('are no cards of their own: the session card holds them, the skills and servers side by side', () => {
     render(SessionView);
     setPayload({ session: fullSession() });
-    expect(screen.getAllByRole('region')).toHaveLength(1);
+    // the conversation is a section of its own inside it, named by its heading
+    expect(screen.getAllByRole('region').map((region) => region.id)).toEqual(['drilldown', 'chat-section']);
     const grid = document.querySelector('.grid-2') as HTMLElement;
     expect([...grid.children].map((child) => child.tagName)).toEqual(['DIV', 'DIV']);
     expect(within(grid.children[0] as HTMLElement).getByRole('heading', { name: 'By skill' })).toBeInTheDocument();
