@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 STATIC = Path(server.__file__).resolve().parent / "static"
 BUNDLE = STATIC / "js" / "app.js"                       # built from web/ (make build), not written by hand
 OWN_SCRIPTS = sorted(path for path in (STATIC / "js").glob("*.js") if path != BUNDLE)
+FORMAT = ROOT / "web" / "src" / "lib" / "format.ts"     # the formatters, moved out of util.js
 STYLESHEETS = sorted((STATIC / "css").rglob("*.css"))
 GIMMICK_THEMES = ("hacker", "startup", "rgb")
 # variables a gimmick theme defines for its own file only
@@ -52,11 +53,19 @@ def definition(script, name):
 
 def run_function(script, name, *arguments, uses=()):
     """Calls a script's top-level function in node, with the page's functions and constants it uses named in uses
-    ("script.js:name"), which must use nothing else of the page; its result."""
-    helpers = [definition(*use.split(":")) for use in uses]
-    program = "\n".join([*helpers, definition(script, name),
+    ("script.js:name"), which must use nothing else of the page; its result. A use named "format.ts:name" is that
+    function of web/src/lib/format.ts, which node runs as it is (skipped where node can't read TypeScript)."""
+    moved = [use.split(":")[1] for use in uses if use.startswith("format.ts:")]
+    helpers = [definition(*use.split(":")) for use in uses if not use.startswith("format.ts:")]
+    imports = [f"import {{ {', '.join(moved)} }} from {json.dumps(FORMAT.as_uri())};"] if moved else []
+    program = "\n".join([*imports, *helpers, definition(script, name),
                          f"process.stdout.write(JSON.stringify({name}(...{json.dumps(arguments)})));"])
-    result = subprocess.run(["node", "-e", program], capture_output=True, text=True, check=True, timeout=30)
+    result = subprocess.run(["node", "--input-type=module", "-e", program], capture_output=True, text=True,
+                            timeout=30)
+    if result.returncode and "ERR_UNKNOWN_FILE_EXTENSION" in result.stderr:
+        raise unittest.SkipTest("this node can't run TypeScript")
+    if result.returncode:
+        raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
     return json.loads(result.stdout)
 
 
@@ -416,8 +425,8 @@ class PayoffToneTest(unittest.TestCase):
     def estimate_words(self, name, *arguments):
         """A pay-off wording function of drilldown.js called with these arguments."""
         return run_function("drilldown.js", name, *arguments,
-                            uses=("util.js:compactFormat", "util.js:wholeFormat", "util.js:compact", "util.js:whole",
-                                  "util.js:money", "drilldown.js:spread", "drilldown.js:PAYOFF_WORDS"))
+                            uses=("format.ts:compact", "format.ts:whole", "format.ts:money", "drilldown.js:spread",
+                                  "drilldown.js:PAYOFF_WORDS"))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_not_yet_says_when_compacting_would_pay_off(self):
@@ -517,7 +526,7 @@ class CompactCallTest(unittest.TestCase):
 
 
 class CompactedGaugeTest(unittest.TestCase):
-    USES = ("util.js:compactFormat", "util.js:compact")
+    USES = ("format.ts:compact",)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_after_a_compaction_without_a_call_since_the_gauge_gives_the_context_before_it(self):
@@ -758,9 +767,9 @@ class LiveRangeTest(unittest.TestCase):
 class LiveStateTest(unittest.TestCase):
     NOW = "2026-09-28T12:00:00.000+00:00"
     EXPIRED = "2026-09-28T11:00:00.000+00:00"
-    USES = ("util.js:compactFormat", "util.js:wholeFormat", "util.js:compact", "util.js:whole", "util.js:money",
-            "drilldown.js:compactCallKind", "drilldown.js:payoffTone", "drilldown.js:PAYOFF_WORDS",
-            "figures.js:liveSecretBadge", "figures.js:liveCompactBadge")
+    USES = ("format.ts:compact", "format.ts:whole", "format.ts:money", "drilldown.js:compactCallKind",
+            "drilldown.js:payoffTone", "drilldown.js:PAYOFF_WORDS", "figures.js:liveSecretBadge",
+            "figures.js:liveCompactBadge")
 
     def badges(self, secrets=None, context=150_000, warm_until="2026-09-28T12:30:00.000+00:00", estimate=True,
                current=True, compacted=None, **fields):
@@ -884,7 +893,7 @@ class LiveStateTest(unittest.TestCase):
 
     def wait_badge(self, waiting):
         """liveWaitBadge of a live session's waiting."""
-        return run_function("figures.js", "liveWaitBadge", waiting, uses=("util.js:when",))
+        return run_function("figures.js", "liveWaitBadge", waiting, uses=("format.ts:when",))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_question_without_an_answer_waits_for_the_user(self):
@@ -1054,7 +1063,7 @@ class SessionWaitTest(unittest.TestCase):
     NOW = "2026-09-29T20:11:17.932+00:00"
     QUESTION = {"kind": "question", "tool": "AskUserQuestion", "since": NOW, "agent_type": None}
     PERMISSION = {"kind": "permission", "tool": "Write", "since": NOW, "agent_type": None}
-    USES = ("figures.js:liveWaitBadge", "util.js:when")
+    USES = ("figures.js:liveWaitBadge", "format.ts:when")
 
     def waits(self, waiting, sessions):
         """sessionWaits of the open session s1 waiting so, with these live sessions."""

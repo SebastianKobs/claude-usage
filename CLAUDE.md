@@ -99,6 +99,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              where the checkout differs
   src/lib/api.ts             the types of the server's answers: test_api_types.py checks the demo's against them,
                              so a field added in server.py or queries.py is added there too
+  src/lib/format.ts          number, money, duration, day, hour and moment formatting, handed to the classic scripts
+                             as globals; test_static.py's node tests import it as it is (node runs TypeScript)
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)

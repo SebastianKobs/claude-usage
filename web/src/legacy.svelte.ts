@@ -4,9 +4,13 @@
 import { flushSync, mount, unmount } from 'svelte';
 import Banner from './components/Banner.svelte';
 import { BannerMessages } from './lib/banner.svelte';
+import * as format from './lib/format';
+
+// Typed from the module itself, so what Window declares can't drift from what the old scripts are handed.
+type Formatters = typeof format;
 
 declare global {
-  interface Window {
+  interface Window extends Formatters {
     /** Sets a source's banner message (empty removes it), drawn at once. */
     showError(source: string, message: string): void;
     /** Whether a source has a banner message now. */
@@ -36,6 +40,9 @@ export function bridge(target: Window): Bridge {
     flushSync();
   };
   target.hasError = (source: string): boolean => messages.has(source);
+  // Every export, so a function added to lib/format.ts reaches the old scripts without touching the bridge. Handed
+  // over as they are: the old scripts call them with their own arguments, never as an array callback.
+  Object.assign(target, format);
 
   return {
     stop(): void {
@@ -43,6 +50,7 @@ export function bridge(target: Window): Bridge {
       // Reflect, since the Window interface declares them always there, which a plain delete refuses.
       Reflect.deleteProperty(target, 'showError');
       Reflect.deleteProperty(target, 'hasError');
+      for (const name of Object.keys(format)) Reflect.deleteProperty(target, name);
     },
   };
 }

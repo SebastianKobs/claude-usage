@@ -448,8 +448,8 @@ class CompactStatesTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_the_states_agree_with_the_live_cards_icon(self):
-        uses = ("util.js:compactFormat", "util.js:wholeFormat", "util.js:compact", "util.js:whole", "util.js:money",
-                "drilldown.js:compactCallKind", "drilldown.js:payoffTone", "drilldown.js:PAYOFF_WORDS")
+        uses = ("format.ts:compact", "format.ts:whole", "format.ts:money", "drilldown.js:compactCallKind",
+                "drilldown.js:payoffTone", "drilldown.js:PAYOFF_WORDS")
         for fields, states in COMPACT_CASES:
             with self.subTest(fields=fields):
                 badge = run_function("figures.js", "liveCompactBadge", gauge(**fields), NOW.isoformat(), uses=uses)

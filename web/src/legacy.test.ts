@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { bridge, type Bridge } from './legacy.svelte';
+import * as format from './lib/format';
 
 // a path, not a URL: the simulated DOM's URL class isn't node's
 const PAGE = join(import.meta.dirname, '../../claude_usage/static/dashboard.html');
@@ -55,9 +56,23 @@ test('hasError tells whether a source is failing', () => {
   expect(window.hasError('summary')).toBe(false);
 });
 
+test("the old scripts' formatters are the module's functions", () => {
+  const names = Object.keys(format) as (keyof typeof format)[];
+  expect(names).toContain('money');
+  for (const name of names) expect(window[name], name).toBe(format[name]);
+});
+
+test('the formatters answer as the old scripts call them', () => {
+  expect(window.money(1500)).toBe('$1.5K');
+  expect(window.duration(123000)).toBe('2 min 3 s');
+  expect(window.ago(null)).toBe('–');
+});
+
 test('stopping takes the banner and the globals away', () => {
   bridged.stop();
   expect(screen.queryByRole('alert')).toBeNull();
   expect('showError' in window).toBe(false);
+  expect('hasError' in window).toBe(false);
+  for (const name of Object.keys(format)) expect(name in window, name).toBe(false);
   bridged = { stop() {} };
 });
