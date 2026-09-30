@@ -1,0 +1,13 @@
+{
+  "sources": {
+    "web/package-lock.json": "a4c499001d8d60541bd11b832e64746e07866d901ae7979b417f334e166188ee",
+    "web/package.json": "f8e1725af6c59a8aea0a0735bc465bb9feaa7bbe5f30e86f70f72bc6f9d3f786",
+    "web/src/main.ts": "6c642da2066fadefff5150586d43af8e3fa1663982af815bf5185391d56b436c",
+    "web/svelte.config.js": "3e0d2411358605a176fc80eee6b368d3c2f71fba851cdc4ce4123f193c049337",
+    "web/tsconfig.json": "a632cb699eef2c31bb691c0081d6e7e18088bbb74a4bd7836a39443eb6c4963a",
+    "web/vite.config.ts": "6a33b18e305f671c3a4041f2c16a4b14c9b22756da0aa7d79a8d770f0271a5cc"
+  },
+  "outputs": {
+    "claude_usage/static/js/app.js": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

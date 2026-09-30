@@ -1,3 +1,4 @@
 # built from web/ by make build, committed so a checkout and an installed copy need no node
 claude_usage/static/js/app.js linguist-generated=true
 claude_usage/static/css/app.css linguist-generated=true
+web/build.json linguist-generated=true

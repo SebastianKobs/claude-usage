@@ -92,6 +92,8 @@ claude_usage/
                              3.4.16 (MPL-2.0 or Apache-2.0), each with its license
 web/                         the page's Svelte 5 + TypeScript sources, which take over static/js section by
                              section; node only to build and test them, never to run the dashboard
+  build.json                 what the last build read and wrote, by sha256: test_web.py says "run make build"
+                             where the checkout differs
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
