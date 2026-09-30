@@ -116,8 +116,12 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              written back in their setters, and `hype`, which words a label for the theme chosen
   src/lib/paging.svelte.ts   the page each table is on (`tablePages`, the first unit shown, reactive) and the pager
                              mounted for the old scripts (`mountPager`, `releaseDetachedPagers`)
+  src/lib/chartkit.ts        the chart kit's maths: the drawing width and scale, the pointer's x, how the cursor steps
+                             (`cursorStep`), where the tooltip sits, which x labels show, the gridline's pixel
+                             (not handed to the old scripts yet: the components use it)
   src/lib/scroll.ts          keeping the reader's place while a view is redrawn (`scrollAnchor`, `keepScroll`)
-  src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`), each with its Testing Library test
+  src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, and the chart kit: `Chart`, `ChartTooltip`, `YAxis`,
+                             `XLabels`, `AreaLine`, `PointDot`), each with its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
