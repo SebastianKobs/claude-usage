@@ -7,7 +7,20 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
 ## Working rules
 - **TDD:** write the test first, then the implementation.
 - **Stdlib only:** Python ≥ 3.12, no dependencies (`sqlite3`, `http.server`, `json`, `tomllib`, `argparse`,
-  `unittest`).
+  `unittest`). The page is TypeScript and Svelte 5, built from `web/` into one committed bundle: node and npm build
+  and test it (`make build`), and the dashboard never needs them to run.
+- **The page** (`web/`), for every change to it:
+  - Runes only (`$state.raw` for payloads, `$derived` over `$effect`, typed `createContext`, `{@attach}`), keyed
+    `{#each}`; load the `svelte:svelte-core-bestpractices` skill first, the documentation comes from
+    `npx @sveltejs/mcp get-documentation "<section>"`, and the `dataviz` skill is loaded for a chart.
+  - `.svelte` and `.svelte.ts` files are written by the `svelte:svelte-file-editor` agent, even for a comment.
+  - Each touched component goes through `npx @sveltejs/mcp svelte-autofixer <path>` (no issues left), then
+    `npm run check` (svelte-check, no warnings); its Testing Library test goes with it, through `pagePerTest` where it
+    needs the app's state.
+  - The logic lives in plain `.ts` modules that the components only draw (tested without a DOM where it needs none);
+    text goes into the DOM as text, and a new place a string becomes markup needs a Trusted Types policy the CSP names.
+  - 120 columns, no prettier; `make build` after a source changes, and the bundle and `web/build.json` are committed
+    with it (`test_web.py` fails otherwise).
 - **Tests:** `make test` runs `python3 -m unittest discover -s tests`, then the page's svelte-check and Vitest where
   `web/node_modules` exists (`make build` installs it); the Python tests never need node.
 - **The guard** (`.claude/hooks/project-guard/`) is a git submodule of
@@ -90,10 +103,17 @@ claude_usage/
                              (Svelte, and the libraries below)
 web/                         the page's Svelte 5 + TypeScript sources; node only to build and test them, never to
                              run the dashboard
+  package.json               exact versions, dev dependencies only (the bundle holds them); `npm run build`, `check`
+                             (svelte-check) and `test` (Vitest: happy-dom, jsdom where a test needs a real
+                             `<select>` or DOMPurify); `vite.config.ts` builds the one module, `svelte.config.js`
+                             sets the compiler (no injected CSS, `fragments: 'tree'`)
+  src/main.ts                mounts `App` on `<main>`
   build.json                 what the last build read and wrote, by sha256: test_web.py says "run make build"
                              where the checkout differs
   src/lib/api.ts             the types of the server's answers: test_api_types.py checks the demo's against them,
                              so a field added in server.py or queries.py is added there too
+  src/lib/fixtures.ts        made-up answers of the server for the component tests: a usage, a summary and a session's
+                             detail, each with the changes a test asks for on top of one plain default
   src/lib/format.ts          number, money, duration, day, hour and moment formatting; test_static.py's node tests
                              import it as it is (node runs TypeScript)
   src/lib/colors.ts          the by-model chart's model slots, effort order, shades and hatches
@@ -173,6 +193,7 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
                              and Claude's answers as sanitized markdown (`markdown`, an attachment), on highlight.js,
                              marked and DOMPurify from npm, each through a Trusted Types policy (`highlight`, and
                              DOMPurify's own) which the CSP names
+  src/lib/banner.svelte.ts   the error banner's messages (`BannerMessages`): one per source, shown once when alike
   src/lib/http.ts            `fetchJson`: the server's JSON, or the reason it gave
   src/lib/opening.ts         opening and closing the session view (`opening`, an attachment): the page's other sections
                              step aside, focus goes to the heading, closing returns focus and scroll to the link

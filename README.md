@@ -82,7 +82,8 @@ claude-usage serve
 
 ### Requirements
 
-- **Python 3.12 or newer.** Nothing else: no packages, no build step, no network access.
+- **Python 3.12 or newer.** Nothing else: no packages, no build step, no network access. The page is built
+  already and in the repository; node is only for [working on it](#development).
 - **Linux, macOS or WSL.** On Windows itself the dashboard can't show permission prompts, which need a Unix socket.
 - **`curl`**, only for the optional [permission hook](#see-permission-prompts).
 
@@ -201,10 +202,19 @@ The store updates itself, and no history is lost. For an installed copy, and for
 
 ## Development
 
-The project uses the standard library only and is developed test first. `make test` runs the tests (`python3 -m
-unittest discover -s tests`). `make demo` serves the made-up data the screenshots show, on port 8799. The guard hook in `.claude/hooks/project-guard/` is a git submodule: clone with
-`--recurse-submodules`, or run `git submodule update --init`. [CLAUDE.md](CLAUDE.md) holds the working rules, the
-style, the transcript format and the design rules.
+The Python side uses the standard library only and is developed test first. The dashboard's page is a Svelte 5 app
+in TypeScript, in `web/`; it is built into one file, `claude_usage/static/js/app.js`, which is committed, so running
+the dashboard never needs node.
+
+| Command | What it does |
+|---|---|
+| `make test` | The Python tests, then the page's type check (svelte-check) and Vitest tests where `web/node_modules` exists |
+| `make build` | Installs the page's packages (`npm ci`, exact versions) and builds the bundle; needs node 22.22 or 24.15+ and npm. Run it after a change under `web/`, and commit the bundle and `web/build.json` with it: a test fails where they differ from the sources |
+| `make demo` | Serves made-up data on port 8799: what the screenshots in `docs/images/` show |
+
+The guard hook in `.claude/hooks/project-guard/` is a git submodule: clone with `--recurse-submodules`, or run
+`git submodule update --init`. [CLAUDE.md](CLAUDE.md) holds the working rules (also for changes to the page), the
+layout, the style, the transcript format and the design rules.
 
 ## License
 
