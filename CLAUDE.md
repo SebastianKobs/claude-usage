@@ -88,7 +88,9 @@ claude_usage/
     js/                      classic scripts sharing one scope, loaded in order: util, state, figures, chartkit,
                              charts, tables, limits, highlight.js, marked, DOMPurify, chat, drilldown, themes, main
                              (calls setup())
-      app.js                 the bundle built from web/ (make build, committed): a module loaded before them
+      app.js                 the bundle built from web/ (make build, committed): a module loaded before them,
+                             which hands them what moved (web/src/legacy.svelte.ts); app-licenses.md the
+                             licenses of the packages it holds
       vendor/                highlight.js 11.11.2 (common build, BSD-3), marked 18.0.14 (UMD, MIT), DOMPurify
                              3.4.16 (MPL-2.0 or Apache-2.0), each with its license
 web/                         the page's Svelte 5 + TypeScript sources, which take over static/js section by
@@ -392,7 +394,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - Loopback is open to every local user, so the API (every path but the page and its files, which hold no data)
     answers only a request carrying this start's token in the cookie
     `claude_usage_<port>` (cookies don't tell ports apart), else a JSON 403 that the page's banner shows once
-    (`bannerText`). The token (`UsageApp.token`,
+    (`BannerMessages`, web/src/lib/banner.svelte.ts). The token (`UsageApp.token`,
     `secrets.token_urlsafe`, new per start, compared in constant time) comes with the link `serve` prints:
     `/?token=…` sets the cookie (HttpOnly, SameSite=Strict, Path=/, 400 days) if it is right, and redirects to `/`
     either way, so the token leaves the address bar. The Cookie header is split by hand (`cookie_value`), since

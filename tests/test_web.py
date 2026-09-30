@@ -8,6 +8,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 WEB = REPO / "web"
 MANIFEST = WEB / "build.json"                           # written by make build, committed with the bundle
+BUNDLE = REPO / "claude_usage" / "static" / "js" / "app.js"
+LICENSES = BUNDLE.with_name("app-licenses.md")          # what the bundle holds of other packages, and their licenses
 STALE = "run make build: the bundle was built from other sources"
 # what the build reads besides the modules it bundles: the installed versions and every setting
 SETTINGS = {"web/package.json", "web/package-lock.json", "web/tsconfig.json", "web/svelte.config.js",
@@ -90,6 +92,18 @@ class BuildManifestTest(unittest.TestCase):
 
     def test_the_build_records_the_bundle(self):
         self.assertIn("claude_usage/static/js/app.js", self.recorded()["outputs"])
+
+    def test_the_build_records_the_bundles_licenses(self):
+        self.assertIn(LICENSES.relative_to(REPO).as_posix(), self.recorded()["outputs"])
+
+
+class BundleTest(unittest.TestCase):
+    def test_the_bundle_ships_the_licenses_of_what_it_holds(self):
+        self.assertIn("svelte", read(LICENSES))
+
+    def test_the_bundle_creates_no_trusted_types_policy(self):
+        # fragments: 'tree' builds templates without one; 3.34's CSP names only DOMPurify's and highlight.js's
+        self.assertNotIn("createPolicy", read(BUNDLE))
 
 
 if __name__ == "__main__":

@@ -50,6 +50,11 @@ VENDOR_LINKS = (b"https://github.com/highlightjs/highlight.js/issues/2277",
                 b"https://github.com/markedjs/marked.", b'"http://"',
                 b"http://www.w3.org/1998/Math/MathML", b"http://www.w3.org/1999/xhtml",
                 b"https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE")
+BUNDLE = "/static/js/app.js"
+# the same in the bundle built from web/: the pages Svelte's errors link to (only the prefix: each names its error)
+# and the namespace names of the elements it creates
+BUNDLE_LINKS = (b"https://svelte.dev/e/", b"http://www.w3.org/1998/Math/MathML", b"http://www.w3.org/1999/xhtml",
+                b"http://www.w3.org/1999/xlink")
 
 
 class KeepRedirect(urllib.request.HTTPRedirectHandler):
@@ -316,10 +321,9 @@ class DashboardTest(ServerCase):
         for path in ["/", *self.page_assets()]:
             _, _, body = self.get(path)
             body = body.replace(b"http://www.w3.org/2000/svg", b"")      # the SVG namespace name, not a resource
-            if path.startswith(VENDOR):
-                # text in the vendored file, not resources; the CSP would block any load anyway
-                for link in VENDOR_LINKS:
-                    body = body.replace(link, b"")
+            # text in the vendored files and the bundle, not resources; the CSP would block any load anyway
+            for link in VENDOR_LINKS if path.startswith(VENDOR) else BUNDLE_LINKS if path == BUNDLE else ():
+                body = body.replace(link, b"")
             for external in (b"https://", b"http://", b"@import"):
                 with self.subTest(path=path, external=external):
                     self.assertNotIn(external, body)

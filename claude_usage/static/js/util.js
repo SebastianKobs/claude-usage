@@ -147,15 +147,8 @@ async function fetchJson(path) {
   return payload;
 }
 
-// One message per source (live, summary, session, scan), so one source's success doesn't hide another's failure
-const errors = new Map();
-// each message once: two sources refused alike say the same
-function bannerText(messages) { return [...new Set(messages)].join("\n"); }
-function showError(source, message) {
-  if (message) errors.set(source, message);
-  else errors.delete(source);
-  document.getElementById("error").textContent = bannerText(errors.values());
-}
+// showError(source, message) and hasError(source) come from the bundle (web/src/legacy.svelte.ts): the banner keeps
+// one message per source (live, summary, session, scan), so one source's success doesn't hide another's failure
 
 // Files the last scan skipped, or why it failed: the page still shows the stored history
 function showScanErrors(payload) {

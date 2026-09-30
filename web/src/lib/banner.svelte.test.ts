@@ -34,3 +34,12 @@ test('what reads the text follows it', () => {
   cleanup();
   expect(seen).toEqual(['', 'down', '']);
 });
+
+test('it tells whether a source is failing', () => {
+  const messages = new BannerMessages();
+  messages.show('summary', 'summary failed');
+  expect(messages.has('summary')).toBe(true);
+  expect(messages.has('live')).toBe(false);
+  messages.show('summary', '');
+  expect(messages.has('summary')).toBe(false);
+});

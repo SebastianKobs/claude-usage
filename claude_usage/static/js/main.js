@@ -141,7 +141,7 @@ let summaryTimer = null;
 async function pollLive() {
   const ok = await loadLive();
   // the server is back: the summary needn't wait for its next turn
-  if (ok && errors.has("summary")) pollSummary();
+  if (ok && hasError("summary")) pollSummary();
   clearTimeout(liveTimer);
   if (!document.hidden) liveTimer = setTimeout(pollLive, LIVE_INTERVAL_MS);
 }

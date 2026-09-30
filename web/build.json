@@ -2,12 +2,16 @@
   "sources": {
     "web/package-lock.json": "a4c499001d8d60541bd11b832e64746e07866d901ae7979b417f334e166188ee",
     "web/package.json": "f8e1725af6c59a8aea0a0735bc465bb9feaa7bbe5f30e86f70f72bc6f9d3f786",
-    "web/src/main.ts": "6c642da2066fadefff5150586d43af8e3fa1663982af815bf5185391d56b436c",
+    "web/src/components/Banner.svelte": "d449dc6ef39c779958212c5cc073467795804ded04c1b33d815dc59cc5bbdb36",
+    "web/src/legacy.svelte.ts": "8184f5715dfc71bd52b4d667584966a8626c22dc2aeaf6ddff55eb91a8c1fef9",
+    "web/src/lib/banner.svelte.ts": "2bcc2747224c3bc55c4120fd47e17ad383527684826309e01cda94763bbb67e9",
+    "web/src/main.ts": "829705d889cad3440c39035bd31f5c785930c1fd8edc1d34c6db390868e4cbc3",
     "web/svelte.config.js": "3e0d2411358605a176fc80eee6b368d3c2f71fba851cdc4ce4123f193c049337",
     "web/tsconfig.json": "2601049b254d943443bd30ee2824029ad0867d0e385e992840025450b61dc515",
-    "web/vite.config.ts": "6a33b18e305f671c3a4041f2c16a4b14c9b22756da0aa7d79a8d770f0271a5cc"
+    "web/vite.config.ts": "ca872345989b0ff2d7615516a6f109f5c002f77de0fc0f5cb1c9088cf2425fe5"
   },
   "outputs": {
-    "claude_usage/static/js/app.js": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    "claude_usage/static/js/app-licenses.md": "f2e10bbc0f42e92d7f6fa9f5f2eca6474d286e638703eaf9d9240a3037ae0109",
+    "claude_usage/static/js/app.js": "806f457354790bd389d1a6e80363fcf540eccb22ebb5cb32c044b5e3d083e7f5"
   }
 }

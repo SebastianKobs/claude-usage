@@ -21,4 +21,9 @@ export class BannerMessages {
     if (message) this.#messages.set(source, message);
     else this.#messages.delete(source);
   }
+
+  /** Whether a source has a message now: a failing summary is polled again as soon as the server answers. */
+  has(source: string): boolean {
+    return this.#messages.has(source);
+  }
 }

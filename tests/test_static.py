@@ -1155,10 +1155,16 @@ class SessionPollTest(unittest.TestCase):
 
 
 class BannerTest(unittest.TestCase):
-    @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_the_same_message_from_two_sources_shows_once(self):
-        # without the token, the live sessions and the summary are refused alike
-        self.assertEqual(run_function("util.js", "bannerText", ["a", "b", "a"]), "a\nb")
+    def test_the_banner_and_its_messages_come_from_the_bundle(self):
+        # web/src/lib/banner.svelte.ts keeps one message per source; the old scripts call its showError and hasError
+        moved = r"\bfunction (showError|hasError|bannerText)\b|\berrors\.(has|set|delete)\("
+        for path in OWN_SCRIPTS:
+            with self.subTest(script=path.name):
+                self.assertNotRegex(read(path), moved)
+
+    def test_the_banner_takes_the_placeholders_place(self):
+        # the bridge mounts it there, so it keeps its place in the layout
+        self.assertIn('<div id="error" class="banner" role="alert"></div>', dashboard())
 
     def test_a_refused_request_says_why_without_its_address(self):
         self.assertIn("if (response.status === 403) throw new Error(payload.error", read(STATIC / "js" / "util.js"))
