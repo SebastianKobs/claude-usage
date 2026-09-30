@@ -53,6 +53,21 @@ describe('without a summary', () => {
     expect(container.querySelector('table, .empty, .pager')).toBeNull();
   });
 
+  test('the heading comes first, then the filters, then the table once there are sessions', () => {
+    const { container } = page.render(SessionsList);
+    page.set({ summary: withSessions([SHOP]) });
+    const order = [
+      screen.getByRole('heading', { name: 'Sessions what each used in the range' }),
+      screen.getByRole('search', { name: 'Filter the sessions' }),
+      screen.getByRole('table'),
+    ];
+    expect(container).toContainElement(order[2] as HTMLElement);
+    order.slice(1).forEach((node, index) => {
+      const before = order[index] as HTMLElement;
+      expect(before.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+  });
+
   test('the project picker offers all projects only', () => {
     page.render(SessionsList);
     expect(within(screen.getByRole('combobox', { name: 'Project' })).getAllByRole('option')).toHaveLength(1);

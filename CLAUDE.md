@@ -114,8 +114,7 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
                              so a field added in server.py or queries.py is added there too
   src/lib/fixtures.ts        made-up answers of the server for the component tests: a usage, a summary and a session's
                              detail, each with the changes a test asks for on top of one plain default
-  src/lib/format.ts          number, money, duration, day, hour and moment formatting; test_static.py's node tests
-                             import it as it is (node runs TypeScript)
+  src/lib/format.ts          number, money, duration, day, hour and moment formatting
   src/lib/colors.ts          the by-model chart's model slots, effort order, shades and hatches
   src/lib/compact.ts         when compacting pays off (`payoffTone` and its words), which call to compact or delegate
                              applies, a compaction's verdict (its words, break-even and one-time cost, the rebuild

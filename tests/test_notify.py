@@ -17,9 +17,9 @@ from claude_usage import store
 from helpers import FakeClock
 from helpers import PRICES
 from helpers import TempDirTestCase
+from helpers import run_function
 from helpers import tool_use_block
 from helpers import usage
-from test_static import run_function
 
 NOW = datetime(2026, 9, 28, 12, 0, tzinfo=UTC)
 WARM = "2026-09-28T12:30:00.000+00:00"

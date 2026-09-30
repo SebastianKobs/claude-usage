@@ -58,6 +58,9 @@ test('a possible secret access shows only from medium up, high where one was sen
     text: 'Possible secret access: 2 calls sent out, 3 more returned a result or may still',
   });
   expect(liveSecretBadge({ high: 1 })?.text).toBe('Possible secret access: 1 call sent out');
+  expect(liveSecretBadge({ high: 1, medium: 2 })?.text).toBe(
+    'Possible secret access: 1 call sent out, 2 more returned a result or may still',
+  );
 });
 
 /** An estimate with 40 calls ahead on average and a longest finished stretch of 60 calls, updated by these fields. */
@@ -139,6 +142,18 @@ test('once the cache has expired and compacting cold saves, it says what at once
     text: 'Compacting now saves ~$1.23 at once: the cache has expired.',
     states: ['cold'],
   });
+});
+
+test('an expired cache without a cold saving goes by the cold break-even: soon, else close', () => {
+  const cold = (breakevenCold: number) => estimate({ cold_saving: -0.5, breakeven_cold: breakevenCold });
+  expect(compactBadge(gauge(cold(30), 150_000, EXPIRED))?.tone).toBe('close');
+  expect(compactBadge(gauge(cold(10), 150_000, EXPIRED))?.tone).toBe('soon');
+});
+
+test('a cold saving shows its cents', () => {
+  expect(compactBadge(gauge(estimate({ cold_saving: 1.2 }), 150_000, EXPIRED))?.text).toBe(
+    'Compacting now saves ~$1.20 at once: the cache has expired.',
+  );
 });
 
 test('past the hint the badge adds it to its words and its states', () => {

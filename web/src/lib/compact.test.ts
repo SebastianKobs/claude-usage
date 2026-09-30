@@ -256,6 +256,11 @@ test('the compactions add up, forced ones left out and those without an estimate
   expect(total?.net).toBeCloseTo(0.3);
 });
 
+test('a stretch not paid off yet is summed as it stands', () => {
+  const rows = [row(comparison('saved', 1.25)), row(comparison('open', -0.25)), row(comparison('forced', 9))];
+  expect(compactionTotal(rows)).toEqual({ net: 1, compactions: 2, unknown: 0 });
+});
+
 test('without a compaction to count there is no total', () => {
   expect(compactionTotal([])).toBeNull();
   expect(compactionTotal([row(null), row(comparison('forced', 1))])).toBeNull();

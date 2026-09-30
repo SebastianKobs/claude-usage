@@ -4,6 +4,7 @@ read real transcripts."""
 import json
 import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 import uuid
@@ -18,9 +19,24 @@ from claude_usage import store
 
 TESTS_DIR = Path(__file__).resolve().parent
 TMP_DIR = TESTS_DIR / ".tmp"
+PAGE_LIB = TESTS_DIR.parent / "web" / "src" / "lib"     # the page's TypeScript modules
 START = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
 DEFAULT_MODEL = "claude-sonnet-5"
 DEFAULT_PROJECT = "/home/dev/app"
+
+
+def run_function(module, name, *arguments):
+    """Calls a function of a module of web/src/lib in node, which imports it as it is and runs it as TypeScript
+    (skipped where it can't); its result. For the few checks that the page and the Python side agree."""
+    program = "\n".join([f"import {{ {name} }} from {json.dumps((PAGE_LIB / module).as_uri())};",
+                         f"process.stdout.write(JSON.stringify({name}(...{json.dumps(arguments)})));"])
+    result = subprocess.run(["node", "--input-type=module", "-e", program], capture_output=True, text=True,
+                            timeout=30)
+    if result.returncode and "ERR_UNKNOWN_FILE_EXTENSION" in result.stderr:
+        raise unittest.SkipTest("this node can't run TypeScript")
+    if result.returncode:
+        raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+    return json.loads(result.stdout)
 
 
 def slug(project_path):

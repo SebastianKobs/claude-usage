@@ -258,13 +258,27 @@ test('without the transcript the stored tools show, without what only it tells',
     calls: 3,
     result_chars: 450,
     sub: false,
+    kind: null,
+    detail: null,
+    options: null,
     fold: null,
     parent: null,
     errors: null,
+    result_median: null,
+    result_p90: null,
+    input_median: null,
     carried: null,
     input_cost: null,
     calls_after_median: null,
   });
+});
+
+test('each agent’s rows follow each other, the stored tools of one after the kind rows of another', () => {
+  const rows = toolTableRows([agentOf(null, [kindRow('Read', null, 1)]), agentOf(null, null, 'Explore')]);
+  expect(rows.map((row) => [row.agent, row.tool])).toEqual([
+    ['main', 'Read'],
+    ['Explore', 'Bash'],
+  ]);
 });
 
 test('stored rows have keys of their own, never a kind row’s', () => {
