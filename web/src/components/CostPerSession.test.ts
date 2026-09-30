@@ -390,6 +390,11 @@ describe('the table view', () => {
     return { user, ...view };
   }
 
+  test('is named by the card heading', async () => {
+    await shown();
+    expect(screen.getByRole('table', { name: 'Cost per session' })).toBeInTheDocument();
+  });
+
   test('is not drawn until the toggle is pressed', () => {
     page.render(CostPerSession);
     page.set({ summary: ranking() });

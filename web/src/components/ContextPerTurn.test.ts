@@ -467,6 +467,14 @@ describe('the slider', () => {
 });
 
 describe('the table view', () => {
+  test('is named by the section heading', async () => {
+    const user = userEvent.setup();
+    page.render(ContextPerTurn);
+    page.set({ session: session([main()]) });
+    await user.click(toggle());
+    expect(screen.getByRole('table', { name: 'Context per turn' })).toBeInTheDocument();
+  });
+
   test('is hidden until the toggle is pressed, then a table in a wrap of its id after the chart', async () => {
     const user = userEvent.setup();
     page.render(ContextPerTurn);
@@ -569,6 +577,13 @@ describe('the details', () => {
 });
 
 describe('the growth steps', () => {
+  test('the table is named by its heading', () => {
+    page.render(ContextPerTurn);
+    const top_growth = [{ message_id: 'm1', ts: '2026-09-30T08:01:00.000Z', growth: 9_000, tools: [] }];
+    page.set({ session: session([main({ top_growth })]) });
+    expect(screen.getByRole('table', { name: 'Biggest growth steps' })).toBeInTheDocument();
+  });
+
   test('say so where no turn grew the context', () => {
     page.render(ContextPerTurn);
     page.set({ session: session([main()]) });
@@ -600,6 +615,12 @@ describe('the growth steps', () => {
 });
 
 describe('the compactions', () => {
+  test('the table is named by its heading, total included', () => {
+    page.render(ContextPerTurn);
+    page.set({ session: session([main({ compactions: [compaction()] })]) });
+    expect(compactionsTable()).toHaveAccessibleName(heading().textContent as string);
+  });
+
   const heading = () => screen.getByRole('heading', { level: 3, name: /^Compactions/ });
   /** The compactions' table: the last one, as the growth steps have none where no turn grew. */
   const compactionsTable = () =>

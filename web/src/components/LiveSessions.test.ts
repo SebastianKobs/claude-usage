@@ -60,7 +60,7 @@ describe('without an answer', () => {
     expect(screen.getByRole('region', { name: 'Live sessions' })).toHaveClass('card');
     expect(container.querySelector('h2')).toHaveAttribute('id', 'live-title');
     expect(container.querySelector('h2 .muted')?.textContent).toBe('');
-    expect(container.querySelector('.paged-wrap > .empty')).toHaveTextContent(/^Loading…$/);
+    expect(container.querySelector('section.card > .empty')).toHaveTextContent(/^Loading…$/);
     expect(container.querySelector('.live-grid, .pager')).toBeNull();
   });
 
@@ -68,7 +68,7 @@ describe('without an answer', () => {
     const { container } = page.render(LiveSessions);
     page.app.payload.set({ liveFailed: true });
     flushSync();
-    expect(container.querySelector('.paged-wrap > .empty')).toHaveTextContent(/^Could not load the live sessions\.$/);
+    expect(container.querySelector('section.card > .empty')).toHaveTextContent(/^Could not load the live sessions\.$/);
   });
 
   test('an answer replaces both', () => {
@@ -86,7 +86,7 @@ describe('the card', () => {
     const { container } = page.render(LiveSessions);
     page.app.payload.set({ live: live() });
     flushSync();
-    const grid = container.querySelector('.paged-wrap > .live-grid') as HTMLElement;
+    const grid = container.querySelector('section.card > .live-grid') as HTMLElement;
     expect(grid.children).toHaveLength(1);
     expect(within(grid).getByRole('link', { name: 'Checkout: split payment step' })).toHaveAttribute(
       'href',
@@ -221,7 +221,7 @@ describe('the notes', () => {
     const { container } = page.render(LiveSessions);
     page.app.payload.set({ live: live({ prompts_unavailable: 'no Unix sockets here' }) });
     flushSync();
-    const notes = container.querySelectorAll('.paged-wrap > .note');
+    const notes = container.querySelectorAll('section.card > .note');
     expect(notes).toHaveLength(1);
     expect(notes[0]).toHaveTextContent("Permission prompts can't show here: no Unix sockets here.");
   });
@@ -230,7 +230,7 @@ describe('the notes', () => {
     const { container } = page.render(LiveSessions);
     page.app.payload.set({ live: live({ notifications_unavailable: 'no notifier found' }) });
     flushSync();
-    const notes = container.querySelectorAll('.paged-wrap > .note');
+    const notes = container.querySelectorAll('section.card > .note');
     expect(notes).toHaveLength(1);
     expect(notes[0]).toHaveTextContent("Desktop notifications can't show: no notifier found.");
   });
@@ -239,16 +239,17 @@ describe('the notes', () => {
     const { container } = page.render(LiveSessions);
     page.app.payload.set({ live: live({ prompts_unavailable: 'a', notifications_unavailable: 'b' }) });
     flushSync();
-    const wrap = container.querySelector('.paged-wrap') as HTMLElement;
-    expect([...wrap.children].map((child) => child.className)).toEqual(['note', 'note', 'live-grid']);
-    expect(wrap.children[0]).toHaveTextContent('Permission prompts');
+    const card = container.querySelector('section.card') as HTMLElement;
+    const [, ...below] = card.children; // what follows the heading
+    expect(below.map((child) => child.className)).toEqual(['note', 'note', 'live-grid']);
+    expect(below[0]).toHaveTextContent('Permission prompts');
   });
 
   test('are absent where nothing is wrong', () => {
     const { container } = page.render(LiveSessions);
     page.app.payload.set({ live: live() });
     flushSync();
-    expect(container.querySelector('.paged-wrap > .note')).toBeNull();
+    expect(container.querySelector('section.card > .note')).toBeNull();
   });
 });
 
@@ -257,7 +258,7 @@ describe('without a live session', () => {
     const { container } = page.render(LiveSessions);
     page.app.payload.set({ live: live({ sessions: [] }) });
     flushSync();
-    expect(container.querySelector('.paged-wrap > .empty')).toHaveTextContent(
+    expect(container.querySelector('section.card > .empty')).toHaveTextContent(
       /^No session active in the last 5 minutes\.$/,
     );
     expect(container.querySelector('.live-grid')).toBeNull();
@@ -267,7 +268,7 @@ describe('without a live session', () => {
     const { container } = page.render(LiveSessions);
     page.app.payload.set({ live: live({ sessions: [], since: '2026-09-27', until: '2026-09-27' }) });
     flushSync();
-    expect(container.querySelector('.paged-wrap > .empty')?.textContent).toMatch(
+    expect(container.querySelector('section.card > .empty')?.textContent).toMatch(
       /^No live session was active on .+\.$/,
     );
   });
@@ -276,7 +277,7 @@ describe('without a live session', () => {
     const { container } = page.render(LiveSessions);
     page.app.payload.set({ live: live({ sessions: [], prompts_unavailable: 'x' }) });
     flushSync();
-    expect(container.querySelectorAll('.paged-wrap > .note, .paged-wrap > .empty')).toHaveLength(2);
+    expect(container.querySelectorAll('section.card > .note, section.card > .empty')).toHaveLength(2);
   });
 });
 
@@ -306,7 +307,7 @@ describe('the pager', () => {
     expect(titleRow.firstElementChild).toBe(screen.getByRole('heading'));
     expect(titleRow).toContainElement(screen.getByRole('group', { name: 'Pages' }));
     expect(titleRow.parentElement).toBe(screen.getByRole('region'));
-    expect(titleRow.nextElementSibling).toBe(container.querySelector('.paged-wrap'));
+    expect(titleRow.nextElementSibling).toBe(container.querySelector('.live-grid'));
   });
 
   test('says which sessions show, and shows the first ten', () => {

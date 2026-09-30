@@ -38,6 +38,7 @@ reckoned. Both tables page under `key` (the session's and the transcript's, so a
 
 <TableView
   key="{key}-growth"
+  labelledby="growth-title"
   columns={GROWTH_COLUMNS}
   rows={growth}
   rowKey={(row) => row.key}
@@ -48,6 +49,7 @@ reckoned. Both tables page under `key` (the session's and the transcript's, so a
 
 <TableView
   key="{key}-compactions"
+  labelledby="compactions-title"
   columns={COMPACTION_COLUMNS}
   rows={compactions}
   rowKey={(row) => row.key}
@@ -60,7 +62,7 @@ reckoned. Both tables page under `key` (the session's and the transcript's, so a
 {/if}
 
 {#snippet growthHeading()}
-  <h3>Biggest growth steps</h3>
+  <h3 id="growth-title">Biggest growth steps</h3>
 {/snippet}
 
 {#snippet growthCells(row: ContextRow)}
@@ -70,7 +72,7 @@ reckoned. Both tables page under `key` (the session's and the transcript's, so a
 {/snippet}
 
 {#snippet compactionsHeading()}
-  <h3>
+  <h3 id="compactions-title">
     Compactions{#if total}<span class="compaction-total verdict-{total.tone}" title={total.title}>{total.text}</span
       >{/if}
   </h3>

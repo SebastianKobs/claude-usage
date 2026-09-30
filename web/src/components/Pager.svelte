@@ -2,7 +2,7 @@
 @component
 A table's pager: the page size (kept as a preference, applied to every pager at once), previous and next, and which
 rows show, named by `noun`. It only pages: the table or card grid that owns the rows draws the page it shows
-(`shownWindow`) and renders no others.
+(`shownWindow`).
 -->
 <script lang="ts">
   import { flushSync } from 'svelte';
@@ -35,8 +35,8 @@ rows show, named by `noun`. It only pages: the table or card grid that owns the 
     keepScroll(anchor, root);
   }
 
-  // Every mounted pager reads the preference, so they all page again; only this one is kept in place on the screen
-  //, and each keeps the page holding the first unit it showed.
+  // Every mounted pager reads the preference, so they all page again; only this one is kept in place on the screen,
+  // and each keeps the page holding the first unit it showed.
   function resize(control: HTMLElement, size: number): void {
     const root = control.closest('.pager');
     const anchor = scrollAnchor(root ? [root] : []);

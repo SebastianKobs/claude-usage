@@ -1,6 +1,6 @@
 // The charts' maths: scales and ticks, where a point or a column falls, the time axis, the by-model chart's series and
 // stacks, the rate-limit counts and windows, and the cost per session's split. Plain functions with no state and no
-// drawing (the SVG stays in the old scripts until the components), so the components share them and each is tested.
+// drawing (the components draw the SVG), so the components share them and each is tested.
 // Sizes and the current moment come in as arguments; the page's own values are the defaults or the caller's.
 import type { Effort, Slot } from './colors.ts';
 import {

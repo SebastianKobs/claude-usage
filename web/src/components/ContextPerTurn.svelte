@@ -45,7 +45,7 @@ thread.
 
 {#if session}
   <div class="chart-head">
-    <h3>Context per turn</h3>
+    <h3 id="context-title">Context per turn</h3>
     <span id="context-note" class="muted">{contextNote(agent)}</span>
     <span class="spacer"></span>
     {#if choices.length}
@@ -93,6 +93,7 @@ thread.
   {#if showTable}
     <TableView
       id="context-table"
+      labelledby="context-title"
       key="{pagerKey}-turns"
       columns={TURN_COLUMNS}
       {rows}

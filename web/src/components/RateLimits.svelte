@@ -166,7 +166,14 @@ has its heading and no chart or tables.
 {#snippet tableSnippet()}
   {#if tableView}
     {@const others = tableView.head.slice(1)}
-    <TableView key="limits-table" columns={tableView.head} rows={tableView.rows} rowKey={(row) => row.key} {cells} />
+    <TableView
+      key="limits-table"
+      labelledby="limits-title"
+      columns={tableView.head}
+      rows={tableView.rows}
+      rowKey={(row) => row.key}
+      {cells}
+    />
 
     {#snippet cells(row: BucketRow)}
       <td>{row.cells[0]}</td>
@@ -181,6 +188,7 @@ has its heading and no chart or tables.
   {#if summary}
     <TableView
       key="limit-windows"
+      labelledby="limit-windows-title"
       columns={windowsHead}
       rows={windows}
       rowKey={(row) => row.key}
@@ -202,7 +210,7 @@ has its heading and no chart or tables.
 {/snippet}
 
 {#snippet windowsHeading()}
-  <h3>{hype('5-hour windows that hit the limit')}</h3>
+  <h3 id="limit-windows-title">{hype('5-hour windows that hit the limit')}</h3>
 {/snippet}
 
 {#snippet windowsIntro()}

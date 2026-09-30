@@ -1,7 +1,7 @@
 // What the session view and the live cards say about compacting and delegating: when compacting pays off against the
 // replies still ahead, the call to compact, the hint to delegate exploration, a compaction's verdict and their sum.
-// Plain functions over the server's answers (api.ts), so the old scripts (through the bridge) and the components
-// share them; the wording that carries a tone is here too, since the mark's color never does.
+// Plain functions over the server's answers (api.ts), so the components share them and each is tested; the wording that
+// carries a tone is here too, since the mark's color never does.
 
 import type { Compaction, CompactEstimate, Rebuild, SessionDetail, SessionGauge, VersusKeeping } from './api.ts';
 import { compact, money, whole } from './format.ts';

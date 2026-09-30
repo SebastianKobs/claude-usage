@@ -1,4 +1,4 @@
-// Asking the server for JSON, as the old scripts' `fetchJson` does until the app fetches everything itself (3.32).
+// Asking the server for JSON: what the loader and the conversation fetch through.
 
 /** The server's answer to `path`, parsed. Rejects with the reason the server gave, or the status. */
 export async function fetchJson<T>(path: string): Promise<T> {

@@ -156,6 +156,7 @@ hours), with a slider over the buckets and a table view. Without a summary the c
     {@const [first = '', ...others] = tableView.head}
     <TableView
       key="trend-table"
+      labelledby="trend-title"
       columns={[{ label: first }, ...others.map((label) => ({ label, numeric: true }))]}
       rows={tableView.rows}
       rowKey={(row) => row.key}

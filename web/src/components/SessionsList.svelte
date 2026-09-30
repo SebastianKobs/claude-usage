@@ -33,6 +33,8 @@ its heading and the filters only.
   const shown = $derived(all ? all.filter((session) => sessionMatches(session, project, text)) : []);
   const projects = $derived(sessionProjects(all ?? [], project));
   const count = $derived(all ? sessionCount(shown.length, all.length) : '');
+  // The columns after the last activity and the session's name, which the cells' first two hold.
+  const figureColumns = SESSION_COLUMNS.slice(2);
 </script>
 
 <section class="card" aria-labelledby="sessions-title">
@@ -99,7 +101,7 @@ its heading and the filters only.
   {@const values = sessionCells(session)}
   <td class="num">{values[0]}</td>
   <td><a href={sessionHref(session)}>{sessionName(session)}</a><span class="sub">{session.project}</span></td>
-  {#each values.slice(1) as value, position (position)}
-    <td class="num">{value}</td>
+  {#each figureColumns as column, position (column.label)}
+    <td class="num">{values[position + 1]}</td>
   {/each}
 {/snippet}

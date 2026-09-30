@@ -1,5 +1,5 @@
 // Numbers, money, percentages, durations, days, hours and moments as the dashboard writes them. Plain functions with
-// no state, so the old scripts (through the bridge) and the components share them. A missing value is an en dash.
+// no state, so the components and the tests that import them as they are share them. A missing value is an en dash.
 // `locale` is for the tests: the page leaves it out and gets the browser's.
 
 const MISSING = '–';

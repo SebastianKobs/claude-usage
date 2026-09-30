@@ -1,11 +1,6 @@
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import {
-  Preferences,
-  readPreference,
-  savePreference,
-  savedOption,
-} from './prefs.svelte.ts';
+import { Preferences, readPreference, savePreference } from './prefs.svelte.ts';
 
 function blockStorage(): void {
   vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
@@ -40,27 +35,6 @@ describe('readPreference and savePreference', () => {
     blockStorage();
     expect(readPreference('days')).toBeNull();
     expect(() => savePreference('days', 7)).not.toThrow();
-  });
-});
-
-describe('savedOption', () => {
-  test('a saved value among the options is given', () => {
-    savePreference('metric', 'cost');
-    expect(savedOption('metric', ['cost', 'tokens'])).toBe('cost');
-  });
-
-  test('nothing saved is null', () => {
-    expect(savedOption('metric', ['cost', 'tokens'])).toBeNull();
-  });
-
-  test('a value outside the options is null', () => {
-    savePreference('metric', 'turns');
-    expect(savedOption('metric', ['cost', 'tokens'])).toBeNull();
-  });
-
-  test.each(['toString', 'constructor', '__proto__'])('the object word %s is no option', (word) => {
-    savePreference('metric', word);
-    expect(savedOption('metric', ['cost', 'tokens'])).toBeNull();
   });
 });
 

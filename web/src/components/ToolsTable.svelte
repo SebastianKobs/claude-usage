@@ -71,7 +71,7 @@ and result characters alone.
         >){/if}</span
     >
   </td>
-  {#each row.cells as cell, position (position)}
-    <td class="num">{cell}</td>
+  {#each columns.slice(2) as column, position (column.label)}
+    <td class="num">{row.cells[position]}</td>
   {/each}
 {/snippet}

@@ -484,12 +484,6 @@ describe('the conversation', () => {
     expect(sections()[0]).not.toBe(section);
     expect(screen.getByRole('combobox', { name: 'Conversation of' })).toHaveValue('');
   });
-
-  test('has no slot left for the old scripts', () => {
-    page.render(SessionView);
-    page.set({ session: fullSession() });
-    expect(document.querySelectorAll('.legacy-slot')).toHaveLength(0);
-  });
 });
 
 describe('the tables', () => {

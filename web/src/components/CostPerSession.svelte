@@ -132,6 +132,7 @@ lists the same sessions with their turns, contexts and parts. Without a summary 
     {@const others = tableView.head.slice(1)}
     <TableView
       key="costly-table"
+      labelledby="costly-title"
       columns={tableView.head}
       rows={tableView.rows}
       rowKey={(row) => row.key}

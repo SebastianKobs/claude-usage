@@ -1,5 +1,5 @@
 // The conversation's frame: where it is fetched from, the picker's choices, the words around the entries, and keeping
-// an entry's object where a refresh changed nothing in it. The entries are drawn by the old script until 3.30.
+// an entry's object where a refresh changed nothing in it.
 
 import type { Agent, Chat, Reminders } from './api';
 import { whole } from './format';

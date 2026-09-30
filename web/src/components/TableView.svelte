@@ -1,11 +1,11 @@
 <!--
 @component
-A table of rows a component draws, paged: a chart's table view, later every table of the page. `rows` come in display
+A table of rows a component draws, paged: every table of the page and each chart's table view. `rows` come in display
 order; `cells` draws one row's `<td>`s, `sub` says which rows are sub-rows, which stay with the row above them on a
 page (and get the class `sub-row`), `group` which rows head a group (the class `group-row`); `rowClass` adds classes
 of its own to a row. Past `PAGE_SIZES[0]` groups of rows a pager goes before the table, under `key`, which the page is
 kept under across draws. A column's `title` is set on its heading cell, to say what it counts. Only the rows of the
-page are drawn, none is hidden: unlike the old code's tables this one has no rows off the page to mark.
+page are drawn, none is hidden.
 
 A table with a `heading` has the pager in a title row with it, right-aligned, where there is a pager (the heading alone,
 without a wrapper, where there is none: a flex row would stop its margin collapsing into the note's); `intro` (a note)

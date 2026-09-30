@@ -522,6 +522,11 @@ describe('the table view', () => {
     return { user, ...view };
   }
 
+  test('is named by the card heading', async () => {
+    await shown();
+    expect(screen.getByRole('table', { name: 'Rate limits' })).toBeInTheDocument();
+  });
+
   /** The table view's table: the first one, before the windows' and the errors'. */
   const bucketTable = () => screen.getAllByRole('table')[0] as HTMLElement;
 
@@ -590,6 +595,12 @@ describe('the table view', () => {
 });
 
 describe('the windows table', () => {
+  test('is named by its heading', () => {
+    page.render(RateLimits);
+    page.set({ summary: manyWindows(1) });
+    expect(screen.getByRole('table', { name: '5-hour windows that hit the limit' })).toBeInTheDocument();
+  });
+
   test('has its heading and its note before it, in the theme`s words', () => {
     const { container } = page.render(RateLimits);
     page.set({ summary: manyWindows(1) });

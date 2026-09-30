@@ -42,29 +42,27 @@ card says it is loading, or that loading failed.
   {:else}
     {@render heading()}
   {/if}
-  <div class="paged-wrap">
-    {#if !live}
-      <div class="empty">{payload.liveFailed ? 'Could not load the live sessions.' : 'Loading…'}</div>
-    {:else}
-      {#if live.prompts_unavailable}
-        <!-- the hook's socket couldn't be opened: Claude Code still asks, only no padlock shows it -->
-        <div class="note">Permission prompts can't show here: {live.prompts_unavailable}.</div>
-      {/if}
-      {#if live.notifications_unavailable}
-        <!-- serve found no notifier, or it failed; switched off in the config, they say nothing -->
-        <div class="note">Desktop notifications can't show: {live.notifications_unavailable}.</div>
-      {/if}
-      {#if onPage.length}
-        <div class="live-grid">
-          {#each onPage as session (session.session_id)}
-            <LiveCard {session} sessionState={payload.liveState(session.session_id)} {now} />
-          {/each}
-        </div>
-      {:else}
-        <div class="empty">{liveEmpty(live, today)}</div>
-      {/if}
+  {#if !live}
+    <div class="empty">{payload.liveFailed ? 'Could not load the live sessions.' : 'Loading…'}</div>
+  {:else}
+    {#if live.prompts_unavailable}
+      <!-- the hook's socket couldn't be opened: Claude Code still asks, only no padlock shows it -->
+      <div class="note">Permission prompts can't show here: {live.prompts_unavailable}.</div>
     {/if}
-  </div>
+    {#if live.notifications_unavailable}
+      <!-- serve found no notifier, or it failed; switched off in the config, they say nothing -->
+      <div class="note">Desktop notifications can't show: {live.notifications_unavailable}.</div>
+    {/if}
+    {#if onPage.length}
+      <div class="live-grid">
+        {#each onPage as session (session.session_id)}
+          <LiveCard {session} sessionState={payload.liveState(session.session_id)} {now} />
+        {/each}
+      </div>
+    {:else}
+      <div class="empty">{liveEmpty(live, today)}</div>
+    {/if}
+  {/if}
 </section>
 
 {#snippet heading()}

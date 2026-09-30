@@ -23,13 +23,6 @@ export function savePreference(name: string, value: string | number): void {
   }
 }
 
-/** The saved value if it is one of the options, else null. `includes` on the array, not a lookup in an object: a saved
- *  "toString" is no option. */
-export function savedOption(name: string, options: readonly string[]): string | null {
-  const saved = readPreference(name);
-  return saved !== null && options.includes(saved) ? saved : null;
-}
-
 /** The page's preferences. Each is read from the storage once, when this is made, and saved by its setter. */
 export class Preferences {
   // Primitives, so plain $state. The setters save, not an $effect: a choice is an event, and an effect would also save

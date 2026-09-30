@@ -309,6 +309,11 @@ describe('the table view', () => {
     return { user, ...view };
   }
 
+  test('is named by the card heading', async () => {
+    await shown();
+    expect(screen.getByRole('table', { name: 'Over time' })).toBeInTheDocument();
+  });
+
   test('the toggle shows a table headed Day, then each panel, the numbers aligned right', async () => {
     await shown();
     expect(screen.getByRole('button', { name: 'Table view' })).toHaveAttribute('aria-pressed', 'true');

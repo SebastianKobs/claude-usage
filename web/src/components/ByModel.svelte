@@ -211,6 +211,7 @@ Without a summary the card has its heading and no chart.
     {@const [first = '', ...others] = tableView.head}
     <TableView
       key="chart-table"
+      labelledby="chart-title"
       columns={[{ label: first }, ...others.map((label) => ({ label, numeric: true }))]}
       rows={tableView.rows}
       rowKey={(row) => row.key}

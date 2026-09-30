@@ -777,6 +777,11 @@ describe('the table view', () => {
     return { user, ...view };
   }
 
+  test('is named by the card heading', async () => {
+    await shown();
+    expect(screen.getByRole('table', { name: 'Per day, by model and effort' })).toBeInTheDocument();
+  });
+
   test('is not drawn until the toggle is pressed', () => {
     page.render(ByModel);
     page.set({ summary: week() });
