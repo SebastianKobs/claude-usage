@@ -19,6 +19,7 @@ OWN_SCRIPTS = sorted(path for path in (STATIC / "js").glob("*.js") if path != BU
 FORMAT = ROOT / "web" / "src" / "lib" / "format.ts"     # the formatters, moved out of util.js
 COLORS = ROOT / "web" / "src" / "lib" / "colors.ts"     # the model colors and effort levels, moved out of util.js
 LIB = ROOT / "web" / "src" / "lib"                      # what moved out of the old scripts, as TypeScript
+COMPONENTS = ROOT / "web" / "src" / "components"         # the Svelte components mounted into the page
 STYLESHEETS = sorted((STATIC / "css").rglob("*.css"))
 GIMMICK_THEMES = ("hacker", "startup", "rgb")
 # variables a gimmick theme defines for its own file only
@@ -674,8 +675,10 @@ class PagingTest(unittest.TestCase):
 
     def test_the_page_size_is_a_preference(self):
         script = read(STATIC / "js" / "tables.js")
-        # saved and read by the bundle's preferences (prefs.svelte.test.ts holds the key and the round trip)
-        self.assertIn("preferences.pageSize = Number(size.value);", script)
+        # saved and read by the bundle's preferences (prefs.svelte.test.ts holds the key and the round trip); the
+        # pager component sets it, and every pager reads it
+        self.assertIn("preferences.pageSize = size;", read(COMPONENTS / "Pager.svelte"))
+        self.assertNotIn("pagers", script)
         self.assertIn("page_size", read(LIB / "prefs.svelte.ts"))
         module = read(MODULES["tables.ts"])
         self.assertIn("export const DEFAULT_PAGE_SIZE = 25;", module)
@@ -711,17 +714,18 @@ class PagingTest(unittest.TestCase):
     def test_rows_off_the_page_are_hidden_by_a_class_not_by_hidden(self):
         # a workflow run's agents are shown and hidden with `hidden`, so paging keeps to its own switch
         self.assertIn("display: none", css_block(read(STATIC / "css" / "common.css"), "tr.off-page"))
-        self.assertIn('classList.toggle("off-page"', read(STATIC / "js" / "tables.js"))
+        self.assertIn("classList.toggle('off-page'", read(COMPONENTS / "Pager.svelte"))
+        self.assertNotIn("hidden", read(COMPONENTS / "Pager.svelte").replace("never `hidden`", ""))
 
     def test_a_redrawn_tables_old_pager_is_let_go(self):
         # the live sessions redraw every 5 s: a pager kept for good would keep every old draw's rows alive
         body = re.search(r"^function paged\(.*?^\}$", read(STATIC / "js" / "tables.js"),
                          re.DOTALL | re.MULTILINE).group(0)
-        self.assertIn("queueMicrotask(forgetDetachedPagers)", body)
-        forget = re.search(r"^function forgetDetachedPagers\(.*?^\}$", read(STATIC / "js" / "tables.js"),
-                           re.DOTALL | re.MULTILINE).group(0)
-        self.assertIn("isConnected", forget)
-        self.assertIn("pagers.delete", forget)
+        self.assertIn("queueMicrotask(releaseDetachedPagers)", body)
+        release = re.search(r"^export function releaseDetachedPagers\(.*?^\}$", read(LIB / "paging.svelte.ts"),
+                            re.DOTALL | re.MULTILINE).group(0)
+        self.assertIn("isConnected", release)
+        self.assertIn("unmount(", release)
 
     def test_the_live_sessions_are_paged_as_cards_their_pager_by_the_heading(self):
         figures = read(STATIC / "js" / "figures.js")
@@ -1063,7 +1067,7 @@ class SessionListTest(unittest.TestCase):
                          re.DOTALL | re.MULTILINE).group(0)
         self.assertIn('"sessions-search", "input"', body)
         self.assertIn('"sessions-project", "change"', body)
-        self.assertIn('tablePages.delete("sessions")', body)
+        self.assertIn('tablePages.forget("sessions")', body)
         self.assertIn("setupSessionFilters()", read(STATIC / "js" / "main.js"))
 
     def test_the_search_field_looks_like_the_other_controls_in_every_theme(self):

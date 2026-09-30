@@ -4,16 +4,13 @@
 // --- paging -------------------------------------------------------------------------------------------------
 
 // PAGE_SIZES, pageUnits, pageWindow and pageText come from the bundle (web/src/lib/tables.ts), the page size
-// (preferences.pageSize) from web/src/lib/prefs.svelte.ts
-// the page each table shows, by its key, so a table drawn again (a refresh, another range) stays on it
-const tablePages = new Map();
-// the pagers on the page, so a new page size applies to every table at once
-const pagers = new Set();
+// (preferences.pageSize) from web/src/lib/prefs.svelte.ts, the pager itself and the page each table is on
+// (tablePages) from web/src/lib/paging.svelte.ts and scrollAnchor and keepScroll from web/src/lib/scroll.ts
 
 // A table with more groups of rows than the smallest page, or a grid with more cards (`paged-cards`, each card a
-// group of its own), with a pager above it: the page size (a preference), previous and next, and which rows show,
-// named by `noun`. `node` is the table or grid or an element holding it; the pager goes right before the table or
-// grid. Rows off the page get a class, not `hidden`, which a workflow run's switch uses.
+// group of its own), with a pager above it: the page size (a preference, which every pager follows), previous and
+// next, and which rows show, named by `noun`. `node` is the table or grid or an element holding it; the pager goes
+// right before the table or grid. Rows off the page get a class, not `hidden`, which a workflow run's switch uses.
 function paged(key, node, noun = "rows") {
   const list = node.matches("table, .paged-cards") ? node : node.querySelector("table, .paged-cards");
   let rows = [];
@@ -23,66 +20,21 @@ function paged(key, node, noun = "rows") {
   if (count <= PAGE_SIZES[0]) {
     // a pager left in the title row from a longer draw goes
     queueMicrotask(() => placePager(node, null));
-    queueMicrotask(forgetDetachedPagers);
+    queueMicrotask(releaseDetachedPagers);
     return node;
   }
   const id = `pager-${key}`;
   const refocus = document.activeElement && document.activeElement.id ? document.activeElement.id : null;
-  const size = el("select", {id: `${id}-size`, "aria-label": `${noun[0].toUpperCase()}${noun.slice(1)} per page`},
-    ...PAGE_SIZES.map(option => el("option", {value: option, text: `${option} ${noun}`})));
-  const previous = el("button", {type: "button", id: `${id}-previous`, text: "‹ Previous"});
-  const next = el("button", {type: "button", id: `${id}-next`, text: "Next ›"});
-  const status = el("span", {class: "muted", "aria-live": "polite"});
-  const pager = el("div", {class: "pager", role: "group", "aria-label": "Pages"}, size, previous, status, next);
-  const show = page => {
-    const shown = pageWindow(count, preferences.pageSize, page);
-    tablePages.set(key, shown.page);
-    rows.forEach((row, index) =>
-      row.classList.toggle("off-page", units[index] < shown.first || units[index] >= shown.last));
-    size.value = String(preferences.pageSize);
-    previous.disabled = shown.page === 0;
-    next.disabled = shown.page === shown.pages - 1;
-    status.textContent = pageText(shown, count, noun);
-  };
-  // the pager stays where it was on the screen while the tables above it grow or shrink with the page size
-  const turn = page => {
-    const anchor = scrollAnchor([pager]);
-    show(page);
-    keepScroll(anchor, pager);
-  };
-  previous.addEventListener("click", () => turn(tablePages.get(key) - 1));
-  next.addEventListener("click", () => turn(tablePages.get(key) + 1));
-  size.addEventListener("change", () => {
-    preferences.pageSize = Number(size.value);
-    for (const other of [...pagers]) {
-      if (other.pager.isConnected) other.keepFirst();
-      else pagers.delete(other);
-    }
-  });
-  // at a new page size, the page that holds the first row shown before
-  const keepFirst = () => {
-    const first = rows.findIndex(row => !row.classList.contains("off-page"));
-    turn(Math.floor(Math.max(units[first], 0) / preferences.pageSize));
-  };
-  pagers.add({pager, keepFirst});
-  show(tablePages.get(key) ?? 0);
+  const pager = mountPager({key, noun, rows, units});
   // once the caller has put the table in the page; before the refocus, since moving a control drops its focus
   queueMicrotask(() => placePager(pager, pager));
-  queueMicrotask(forgetDetachedPagers);
-  if (refocus && [size, previous, next].some(control => control.id === refocus)) {
+  queueMicrotask(releaseDetachedPagers);
+  if (refocus && ["size", "previous", "next"].some(control => `${id}-${control}` === refocus)) {
     queueMicrotask(() => document.getElementById(refocus)?.focus({preventScroll: true}));
   }
   if (list === node) return el("div", {class: "paged"}, pager, list);
   list.before(pager);
   return node;
-}
-
-// Once a draw is in the page, the pagers it replaced go: a list drawn again every few seconds (the live sessions, an
-// open live session) would otherwise keep every old draw alive through its pager
-function forgetDetachedPagers() {
-  for (const other of [...pagers]) {
-    if (!other.pager.isConnected) pagers.delete(other);
-  }
 }
 
 // The pager into its table's title row, right-aligned: the heading right before the table's wrap (or a grid's,
@@ -214,7 +166,7 @@ function drawSessions() {
 function setupSessionFilters() {
   for (const [id, event] of [["sessions-project", "change"], ["sessions-search", "input"]]) {
     document.getElementById(id).addEventListener(event, () => {
-      tablePages.delete("sessions");
+      tablePages.forget("sessions");
       drawSessions();
     });
   }

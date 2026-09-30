@@ -3,14 +3,17 @@
     "web/package-lock.json": "a4c499001d8d60541bd11b832e64746e07866d901ae7979b417f334e166188ee",
     "web/package.json": "f8e1725af6c59a8aea0a0735bc465bb9feaa7bbe5f30e86f70f72bc6f9d3f786",
     "web/src/components/Banner.svelte": "d449dc6ef39c779958212c5cc073467795804ded04c1b33d815dc59cc5bbdb36",
-    "web/src/legacy.svelte.ts": "7c57ab8c09e138170885572606b46e3b4dd43d515c3b7b440481861e3e81afc0",
+    "web/src/components/Pager.svelte": "8e8ec01734096cd009083836faaea317edfd101f4c53fab4b49549d0fc19cbf1",
+    "web/src/legacy.svelte.ts": "9ac4dbf6ad886d02720c079e1d66431b77b3cf1084aaa90ea8c644b4dd831ae1",
     "web/src/lib/banner.svelte.ts": "2bcc2747224c3bc55c4120fd47e17ad383527684826309e01cda94763bbb67e9",
     "web/src/lib/charts.ts": "876dae0a41357a84a2425cb7cc8befec574a9605c6fcc9164afabe37bd0b21f7",
     "web/src/lib/colors.ts": "ad3085cf71cbebbdb1a2c54f913c354201056ecab3beba04290602062bfcb54d",
     "web/src/lib/compact.ts": "6ead0048229e475d91baffc135fb21f979c9f4154b5093be50bb410b9fb02d3a",
     "web/src/lib/format.ts": "57d78f4b8bb1c588430a346be6d48b7eae0067fdbaf78adb724b84b244ec81f5",
     "web/src/lib/live.ts": "c77a2a16090835b48c473a24f7b029f4a0d5598f8d870dc0d91b5e215a72c9b2",
+    "web/src/lib/paging.svelte.ts": "b6c5569a9940872b087331a006b87ec84fbaabe283cc515ce53590d0c0b48f4d",
     "web/src/lib/prefs.svelte.ts": "3cef57db6b563e4f2287604140c719fc0c0f2ea90aed136c266b5e4032c055e0",
+    "web/src/lib/scroll.ts": "00e72d7195bb2b1906b7a53b20600025a52fe3b5d7fa984cde9912426a07942f",
     "web/src/lib/secrets.ts": "6f3d9eba95314a859de7032776c1eb77fa29e93949793c51d7ccf4816cca865a",
     "web/src/lib/tables.ts": "c3422d7fe746ce9df51499a2ac2a77150b2fe8751ace554a69df1bc7dbbe4c36",
     "web/src/lib/themes.ts": "ada0027dc8e18c4eb4227e0a4ed92d929de5d10384b097195b2897b612ed94d1",
@@ -21,6 +24,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "f2e10bbc0f42e92d7f6fa9f5f2eca6474d286e638703eaf9d9240a3037ae0109",
-    "claude_usage/static/js/app.js": "02c8f8477bee346274ed7a6f6a74f666f077c4f0eb5cbfee60811c69be25bb99"
+    "claude_usage/static/js/app.js": "67e150e266cbf14475efbacbf04e17a95c86bb1e12f9910d563037eb7aa70e42"
   }
 }

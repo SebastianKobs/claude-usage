@@ -8,12 +8,14 @@ import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
 import * as live from './lib/live';
+import * as paging from './lib/paging.svelte';
 import * as prefs from './lib/prefs.svelte';
+import * as scroll from './lib/scroll';
 import * as secrets from './lib/secrets';
 import * as tables from './lib/tables';
 import * as themes from './lib/themes';
 
-const MODULES = [format, colors, compact, secrets, live, tables, charts, themes, prefs];
+const MODULES = [format, colors, compact, secrets, live, tables, charts, themes, prefs, paging, scroll];
 
 // a path, not a URL: the simulated DOM's URL class isn't node's
 const PAGE = join(import.meta.dirname, '../../claude_usage/static/dashboard.html');
@@ -76,6 +78,8 @@ test.each([
   ['charts helpers', charts, 'niceMax'],
   ['theme wording', themes, 'themeLabel'],
   ['preferences', prefs, 'savedOption'],
+  ['paging', paging, 'mountPager'],
+  ['scrolling', scroll, 'scrollAnchor'],
 ])("the old scripts' %s are the module's exports", (_kind, module, sample) => {
   const names = Object.keys(module) as (keyof typeof module & keyof Window)[];
   expect(names).toContain(sample);

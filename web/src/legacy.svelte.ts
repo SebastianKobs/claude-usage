@@ -9,7 +9,9 @@ import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
 import * as live from './lib/live';
+import * as paging from './lib/paging.svelte';
 import * as prefs from './lib/prefs.svelte';
+import * as scroll from './lib/scroll';
 import * as secrets from './lib/secrets';
 import * as tables from './lib/tables';
 import * as themes from './lib/themes';
@@ -22,9 +24,11 @@ import * as themes from './lib/themes';
 // lib/tables.ts (paging, the sessions filter and count, the Tools table's rows, folds and labels, the conversation's
 // order) and the charts lib/charts.ts (scales and ticks, the time axis, the by-model series and stacks, the rate-limit
 // counts and windows, the cost bars' split), the themes lib/themes.ts (the themes and their wording) and the saved
-// preferences lib/prefs.svelte.ts (the theme, page size and conversation order, the theme's `hype` and footer copy).
-// Their names must stay apart: a shared one would be handed over twice, the
-// second silently winning.
+// preferences lib/prefs.svelte.ts (the theme, page size and conversation order, the theme's `hype` and footer copy),
+// the paging lib/paging.svelte.ts (the table pagers, mounted for the old scripts, and the page each table is on) and
+// scrolling lib/scroll.ts (keeping the reader's place while a view is redrawn). `tablePages` and `mountPager` reach
+// the old scripts as globals, like everything else here. Their names must stay apart: a shared one would be handed
+// over twice, the second silently winning.
 type Formatters = typeof format;
 type Colors = typeof colors;
 type Compacting = typeof compact;
@@ -34,12 +38,25 @@ type Tables = typeof tables;
 type Charts = typeof charts;
 type Themes = typeof themes;
 type Prefs = typeof prefs;
+type Paging = typeof paging;
+type Scroll = typeof scroll;
 
 // Every module handed over: a new one is imported above, typed in Window's extends and listed here.
-const MODULES = [format, colors, compact, secrets, live, tables, charts, themes, prefs];
+const MODULES = [format, colors, compact, secrets, live, tables, charts, themes, prefs, paging, scroll];
 
 declare global {
-  interface Window extends Formatters, Colors, Compacting, Secrets, Live, Tables, Charts, Themes, Prefs {
+  interface Window
+    extends Formatters,
+      Colors,
+      Compacting,
+      Secrets,
+      Live,
+      Tables,
+      Charts,
+      Themes,
+      Prefs,
+      Paging,
+      Scroll {
     /** Sets a source's banner message (empty removes it), drawn at once. */
     showError(source: string, message: string): void;
     /** Whether a source has a banner message now. */
