@@ -2,9 +2,12 @@ import { expect, test } from 'vitest';
 import type { CompactEstimate, Gauge, LiveSession, SecretCounts, SessionDetail, Waiting } from './api.ts';
 import {
   liveCompactBadge,
+  liveEmpty,
   liveSecretBadge,
+  livePastDay,
   liveStateBadges,
   liveWaitBadge,
+  liveWindow,
   sessionWaits,
   waitChanged,
 } from './live.ts';
@@ -217,4 +220,41 @@ test('a wait the live list saw first asks for the session at once, an answered o
 test('a session off the live list says nothing of its wait', () => {
   expect(waitChanged(OPEN, [])).toBe(false);
   expect(waitChanged(OPEN, [listed('s2', null, null)])).toBe(false);
+});
+
+const TODAY = '2026-09-29';
+const NO_SESSIONS: Pick<LiveSession, 'waiting'>[] = [];
+const TODAY_LIVE = { minutes: 5, agent_minutes: 5, days: 1, until: TODAY, sessions: NO_SESSIONS };
+const PAST_LIVE = { ...TODAY_LIVE, until: '2026-09-28' };
+
+test('a past day is the day the live sessions were kept by', () => {
+  expect(livePastDay(PAST_LIVE, TODAY)).toBe('2026-09-28');
+  expect(livePastDay(TODAY_LIVE, TODAY)).toBeNull();
+  expect(livePastDay({ days: 7, until: TODAY }, TODAY)).toBeNull();
+  expect(livePastDay({ days: 7, until: '2026-09-25' }, TODAY)).toBeNull();
+  expect(livePastDay({ days: null, until: null }, TODAY)).toBeNull();
+});
+
+test('the window names the minutes a session stays live', () => {
+  expect(liveWindow(TODAY_LIVE, TODAY)).toBe('· changed in the last 5 min');
+});
+
+test('the window names the longer time agents at work keep a session', () => {
+  expect(liveWindow({ ...TODAY_LIVE, agent_minutes: 180 }, TODAY)).toBe(
+    '· changed in the last 5 min (180 min while agents work)',
+  );
+});
+
+test('the window says a waiting session stays on the list past it', () => {
+  const sessions = [{ waiting: null }, { waiting: QUESTION }];
+  expect(liveWindow({ ...TODAY_LIVE, sessions }, TODAY)).toBe('· changed in the last 5 min or waiting for you');
+});
+
+test('the window names the past day the list was kept by', () => {
+  expect(liveWindow(PAST_LIVE, TODAY)).toMatch(/^· changed in the last 5 min, active on \w{3}, \w{3} 28$/);
+});
+
+test('an empty list says how lately it looked, or which day', () => {
+  expect(liveEmpty(TODAY_LIVE, TODAY)).toBe('No session active in the last 5 minutes.');
+  expect(liveEmpty(PAST_LIVE, TODAY)).toMatch(/^No live session was active on \w{3}, \w{3} 28\.$/);
 });

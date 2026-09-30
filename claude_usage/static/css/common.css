@@ -165,10 +165,8 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
 /* tables */
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; }
-/* rows off a table's page, and cards off a grid's; a workflow run's agents are shown and hidden with
-   `hidden` on their own */
+/* rows off a table's page; a workflow run's agents are shown and hidden with `hidden` on their own */
 tr.off-page { display: none; }
-.paged-cards > .off-page { display: none; }
 /* sticky: it stays in view while a wide table scrolls sideways */
 .pager { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 13px;
          position: sticky; left: 0; }

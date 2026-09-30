@@ -42,13 +42,6 @@ function svg(tag, attributes) {
   return node;
 }
 
-// "12 s ago" that refreshAgo() keeps current, so an unchanged live list needn't be drawn again
-function agoSpan(iso) {
-  return el("span", {"data-ago": iso || "", text: ago(iso)});
-}
-function refreshAgo() {
-  for (const span of document.querySelectorAll("[data-ago]")) span.textContent = ago(span.dataset.ago || null);
-}
 function sessionLink(session) {
   return el("a", {href: `#session/${encodeURIComponent(session.session_id)}`,
                   text: session.title || "Untitled session"});

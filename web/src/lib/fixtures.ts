@@ -5,6 +5,9 @@ import type {
   ApiErrorEvent,
   CostlySession,
   LimitWindow,
+  Live,
+  LiveSession,
+  LiveSubagent,
   RuntimeTotals,
   SessionDetail,
   SessionListItem,
@@ -188,6 +191,53 @@ export function sessionDetail(changes: Partial<SessionDetail> = {}): SessionDeta
     compaction_savings: null,
     transcript: false,
     secret_accesses: [],
+    ...changes,
+  };
+}
+
+/** A subagent at work: a general-purpose one on a Sonnet, 4 turns in, its context at 20K. */
+export function liveSubagent(changes: Partial<LiveSubagent> = {}): LiveSubagent {
+  return {
+    agent_id: 'agent-1',
+    agent_type: 'general-purpose',
+    description: 'Find the callers',
+    model: 'claude-sonnet-5-5',
+    last_activity: '2026-09-29T11:59:30Z',
+    turns: 4,
+    last_context: 20_000,
+    ...changes,
+  };
+}
+
+/** A live session of the shop project on a branch, 10 turns, its last context 60K, without subagents or a wait. */
+export function liveSession(changes: Partial<LiveSession> = {}): LiveSession {
+  return {
+    ...usage(),
+    session_id: 'live-1',
+    project: 'shop',
+    title: 'Checkout: split payment step',
+    git_branch: 'main',
+    last_activity: '2026-09-29T11:59:48Z',
+    last_context: 60_000,
+    last_output: 300,
+    subagents: [],
+    waiting: null,
+    ...changes,
+  };
+}
+
+/** The live answer for today: one session, a 5-minute window, nothing to note. */
+export function live(changes: Partial<Live> = {}): Live {
+  return {
+    minutes: 5,
+    agent_minutes: 5,
+    days: 1,
+    since: '2026-09-29',
+    until: '2026-09-29',
+    sessions: [liveSession()],
+    scan_errors: [],
+    prompts_unavailable: null,
+    notifications_unavailable: null,
     ...changes,
   };
 }

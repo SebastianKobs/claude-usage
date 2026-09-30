@@ -8,14 +8,13 @@
 // (preferences.pageSize) from web/src/lib/prefs.svelte.ts, the pager itself and the page each table is on
 // (tablePages) from web/src/lib/paging.svelte.ts and scrollAnchor and keepScroll from web/src/lib/scroll.ts
 
-// A table with more groups of rows than the smallest page, or a grid with more cards (`paged-cards`, each card a
-// group of its own), with a pager above it: the page size (a preference, which every pager follows), previous and
-// next, and which rows show, named by `noun`. `node` is the table or grid or an element holding it; the pager goes
-// right before the table or grid. Rows off the page get a class, not `hidden`, which a workflow run's switch uses.
+// A table with more groups of rows than the smallest page, with a pager above it: the page size (a preference, which
+// every pager follows), previous and next, and which rows show, named by `noun`. `node` is the table or an element
+// holding it; the pager goes right before the table. Rows off the page get a class, not `hidden`, which a workflow
+// run's switch uses.
 function paged(key, node, noun = "rows") {
-  const list = node.matches("table, .paged-cards") ? node : node.querySelector("table, .paged-cards");
-  let rows = [];
-  if (list) rows = list.tagName === "TABLE" ? [...list.tBodies[0].rows] : [...list.children];
+  const list = node.matches("table") ? node : node.querySelector("table");
+  const rows = list ? [...list.tBodies[0].rows] : [];
   const units = pageUnits(rows.map(row => row.classList.contains("sub-row")));
   const count = units.length ? units[units.length - 1] + 1 : 0;
   if (count <= PAGE_SIZES[0]) {
@@ -38,12 +37,12 @@ function paged(key, node, noun = "rows") {
   return node;
 }
 
-// The pager into its table's title row, right-aligned: the heading right before the table's wrap (or a grid's,
-// `paged-wrap`; a note may sit between them) becomes a row with it. A table without one, such as a chart's table
+// The pager into its table's title row, right-aligned: the heading right before the table's wrap (a note may sit
+// between them) becomes a row with it. A table without one, such as a chart's table
 // view under its chart, keeps the pager above it. A redraw finds the row already made and swaps its pager, or drops
 // it for a table without one (pager null); `node` is what the caller put in the page.
 function placePager(node, pager) {
-  const wrap = node.isConnected ? node.closest(".table-wrap, .paged-wrap") : null;
+  const wrap = node.isConnected ? node.closest(".table-wrap") : null;
   let title = wrap ? wrap.previousElementSibling : null;
   while (title && title.classList.contains("note")) {
     title = title.previousElementSibling;

@@ -676,7 +676,7 @@ class PagingTest(unittest.TestCase):
         self.assertRegex(module, r"export const PAGE_SIZES = \[10, 25, 50\];")
 
     def test_every_table_is_paged(self):
-        sites = {"tables.js": 1, "drilldown.js": 9, "chartkit.js": 1, "figures.js": 1}
+        sites = {"tables.js": 1, "drilldown.js": 9, "chartkit.js": 1}
         for script, count in sites.items():
             with self.subTest(script=script):
                 self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)
@@ -719,13 +719,11 @@ class PagingTest(unittest.TestCase):
         self.assertIn("unmount(", release)
 
     def test_the_live_sessions_are_paged_as_cards_their_pager_by_the_heading(self):
-        figures = read(STATIC / "js" / "figures.js")
-        # paged even when none is live, so a pager left from a longer list goes
-        self.assertRegex(figures, r'paged\("live", live\.sessions\.length')
-        self.assertIn('class: "live-grid paged-cards"', figures)
-        self.assertIn('<div id="live" class="paged-wrap">', dashboard())
-        self.assertIn('".table-wrap, .paged-wrap"', read(STATIC / "js" / "tables.js"))
-        self.assertIn("display: none", css_block(read(STATIC / "css" / "common.css"), ".paged-cards > .off-page"))
+        live = read(COMPONENTS / "LiveSessions.svelte")
+        self.assertIn("pageUnits(", live)
+        self.assertIn('<Pager key={KEY} noun="sessions"', live)
+        self.assertIn('class="title-row"', live)
+        self.assertIn('<div id="live-card"></div>', dashboard())
 
 
 def function_body(script, name):
@@ -760,23 +758,6 @@ class LiveRangeTest(unittest.TestCase):
         body = function_body("main.js", "loadLive")
         self.assertIn("const request = ++liveRequest;", body)
         self.assertEqual(body.count("if (request !== liveRequest) return;"), 2)
-
-    @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_a_past_day_is_the_day_the_live_sessions_were_kept_by(self):
-        past = {"days": 1, "since": "2026-09-28", "until": "2026-09-28"}
-        self.assertEqual(run_function("figures.js", "livePastDay", past, "2026-09-29"), "2026-09-28")
-        today = {"days": 1, "since": "2026-09-29", "until": "2026-09-29"}
-        self.assertIsNone(run_function("figures.js", "livePastDay", today, "2026-09-29"))
-        week = {"days": 7, "since": "2026-09-23", "until": "2026-09-29"}
-        self.assertIsNone(run_function("figures.js", "livePastDay", week, "2026-09-29"))
-        self.assertIsNone(run_function("figures.js", "livePastDay", {"days": None, "since": None, "until": None},
-                                       "2026-09-29"))
-
-    def test_the_live_sessions_name_a_past_day(self):
-        body = function_body("figures.js", "renderLive")
-        self.assertIn("livePastDay(live, dayText(new Date()))", body)
-        self.assertIn("active on ${longDay(pastDay)}", body)
-        self.assertIn("No live session was active on ${longDay(pastDay)}.", body)
 
 
 class LiveStateTest(unittest.TestCase):
@@ -893,15 +874,15 @@ class LiveStateTest(unittest.TestCase):
                 self.assertIn(f"var({color})", rule)
 
     def test_each_kind_has_its_icon_described_on_hover(self):
-        icons = definition("figures.js", "LIVE_ICONS")
-        for kind in ("secret", "compact", "waiting", "permission"):
+        icon = read(COMPONENTS / "LiveIcon.svelte")
+        for kind in ("secret", "waiting", "permission"):
             with self.subTest(kind=kind):
-                self.assertIn(f"{kind}: [", icons)
-        body = function_body("figures.js", "liveBadge")
-        self.assertIn('"aria-label": badge.text, title: badge.text', body)
-        self.assertIn('role: "img"', body)
-        self.assertIn("badges.map(liveBadge)", function_body("figures.js", "showLiveState"))
-        self.assertIn('"aria-hidden": "true"', function_body("figures.js", "liveIcon"))
+                self.assertIn(f"badge.kind === '{kind}'", icon)
+        self.assertIn("{:else}", icon)                  # the trash compactor, the last kind
+        self.assertIn('role="img"', icon)
+        self.assertIn("aria-label={badge.text}", icon)
+        self.assertIn("title={badge.text}", icon)
+        self.assertIn('aria-hidden="true"', icon)
 
     def wait_badge(self, waiting):
         """liveWaitBadge of a live session's waiting."""
@@ -939,44 +920,15 @@ class LiveStateTest(unittest.TestCase):
         # blue, not a warning's or an alarm's hue: nothing is wrong, the session only waits (≥ 3:1 on every card)
         css = read(STATIC / "css" / "common.css")
         self.assertIn("var(--series-1)", re.search(r"\.live-icon-waiting \{([^}]*)\}", css).group(1))
-        body = function_body("figures.js", "renderLive")
-        self.assertLess(body.index('class: "title"'), body.index("liveWaitBadge(session.waiting)"))
-        self.assertLess(body.index("liveWaitBadge(session.waiting)"), body.index("showLiveState("))
-
-    def test_the_live_sessions_note_why_no_desktop_notification_shows(self):
-        # only where they can't show: switched off, they say nothing
-        body = function_body("figures.js", "renderLive")
-        self.assertIn("live.notifications_unavailable", body)
-        self.assertIn("Desktop notifications can't show: ${live.notifications_unavailable}.", body)
-
-    def test_the_live_window_names_the_minutes_agents_at_work_keep_a_session(self):
-        body = function_body("figures.js", "renderLive")
-        self.assertIn("live.agent_minutes > live.minutes", body)
-        self.assertIn("min while agents work", body)
-
-    def test_the_live_sessions_say_why_no_permission_prompt_shows(self):
-        # no Unix sockets (Windows), a folder that takes none, or another dashboard on the socket
-        body = function_body("figures.js", "renderLive")
-        self.assertIn("live.prompts_unavailable", body)
-        self.assertIn("Permission prompts can't show here: ${live.prompts_unavailable}.", body)
-
-    def test_the_live_window_names_the_waiting_sessions(self):
-        # a waiting session stays on the list past the window, as Claude Code writes nothing while it waits
-        body = function_body("figures.js", "renderLive")
-        self.assertIn("live.sessions.some(session => session.waiting)", body)
-        self.assertIn(" or waiting for you", body)
-
-    def test_each_card_has_a_slot_by_its_title_filled_from_the_last_state(self):
-        body = function_body("figures.js", "renderLive")
-        self.assertIn('"data-live-state": session.session_id', body)
-        self.assertLess(body.index('class: "live-head"'), body.index("showLiveState("))
-        self.assertLess(body.index("showLiveState("), body.index('class: "muted"'))
+        card = read(COMPONENTS / "LiveCard.svelte")
+        self.assertLess(card.index('<div class="title">'), card.index("<LiveIcon badge={waitBadge} />"))
+        self.assertLess(card.index("<LiveIcon badge={waitBadge} />"), card.index('class="live-states"'))
 
     def test_the_states_are_asked_for_after_the_list_is_drawn_without_holding_up_the_poll(self):
         body = function_body("main.js", "loadLive")
         self.assertIn("loadLiveStates(live.sessions);", body)
         self.assertNotIn("await loadLiveStates", body)
-        self.assertLess(body.index("renderLive(live)"), body.index("loadLiveStates(live.sessions)"))
+        self.assertLess(body.index("setPayload({live, liveAt"), body.index("loadLiveStates(live.sessions)"))
         self.assertIn("fetchJson(`/api/session/${encodeURIComponent(id)}/state`)",
                       function_body("main.js", "loadLiveState"))
 
@@ -1129,7 +1081,7 @@ class SessionWaitTest(unittest.TestCase):
 
     def test_each_live_answer_draws_the_waits_again(self):
         body = function_body("main.js", "loadLive")
-        self.assertIn("state.live = live", body)
+        self.assertIn("setPayload({live, liveAt", body)
         self.assertIn("showSessionWaits(state.session)", body)
         self.assertIn("if (sessionShown() && waitChanged(state.session, live.sessions)) refreshSession()", body)
 

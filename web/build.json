@@ -11,6 +11,9 @@
     "web/src/components/CostPerSession.svelte": "1503ce4c460fc09044b35a3e02a6526578e0ff59f574effd8642e1fda6dd22b0",
     "web/src/components/InputSplit.svelte": "9e3109148ac593ff0030fac955d90adff10da776dc59362cfb3ca37586793d7e",
     "web/src/components/KpiTiles.svelte": "fcd1604b7a221eb9efd49f6480296d8ea25f6e6e1ea4e40b8684385b9bbab9d5",
+    "web/src/components/LiveCard.svelte": "3f4828923bfa7a6a9587e15b41a63c0df229132db8189f87d657d67ecaf46623",
+    "web/src/components/LiveIcon.svelte": "83b18a434b117b6faf9e3429960b78427dd2cecacfe928c42ce65cc13853eb30",
+    "web/src/components/LiveSessions.svelte": "212b90b0086ed9159ef458d0739db1ea7728678565aca0eadeea746b26edaeca",
     "web/src/components/OverTime.svelte": "ce6594db7f26bebc9aba8f62edda4e94cb88791a6e2f114ec2b2cf3a06a89c88",
     "web/src/components/Pager.svelte": "e8d67a69761af3cda07e41e0c438e0a949c86e8984a15b90bf1220784e8f79d8",
     "web/src/components/PointDot.svelte": "1642f198e1ee52cc1530ec040e5ebcbe74eee3f5800bd76aa933d025ec0b8846",
@@ -25,7 +28,7 @@
     "web/src/components/UsageTables.svelte": "cba57c97cff63ab91652f9f52ff246be7e1b1649aaf488c2c2015127fa676ff5",
     "web/src/components/XLabels.svelte": "3fa5052afc89d04d739c86128fb829419fafbfa5d1ec1775ee0279ab073fb3c5",
     "web/src/components/YAxis.svelte": "a45c8f9d24b1dda129393df88eb58ce4bc58ae38f1d9cc0f9292ff53ea410d07",
-    "web/src/legacy.svelte.ts": "adc3bff996cf4de776af305dae5a63d9bf61c4646a8bde5157c2b2936bee3a27",
+    "web/src/legacy.svelte.ts": "8143e71b50db3eddd1337a10659c01a32885542b2d6d017954717aa32aba4619",
     "web/src/lib/banner.svelte.ts": "2bcc2747224c3bc55c4120fd47e17ad383527684826309e01cda94763bbb67e9",
     "web/src/lib/bymodel.ts": "1f1b26f6ad7515c3473fd90709b3fbdfc0410c5fcc7c406b5e62febabc3554cc",
     "web/src/lib/chartkit.ts": "0abc565531d389285a10e0d8017d1bad67f4acec851289b234dc7d382b1b879f",
@@ -35,10 +38,10 @@
     "web/src/lib/costly.ts": "1564906373ac0d4ee898b3855211dd6eab44976c019cb36187c843fb7472f9e4",
     "web/src/lib/format.ts": "57d78f4b8bb1c588430a346be6d48b7eae0067fdbaf78adb724b84b244ec81f5",
     "web/src/lib/limits.ts": "5a8d6af6d7f4bd6382c95d11938671074d8be0d3f353ce213b8039c26424ea3e",
-    "web/src/lib/live.ts": "c77a2a16090835b48c473a24f7b029f4a0d5598f8d870dc0d91b5e215a72c9b2",
+    "web/src/lib/live.ts": "c47e01bf43760e2a125a3d3b25bb3b4a4fec5157fbfbc0945ab71beb2bbd331f",
     "web/src/lib/overview.svelte.ts": "d314760014d4c8dadd4f216e8616000b7f23a27e9ef7a170f84f801ef43a788e",
     "web/src/lib/paging.svelte.ts": "d8e0ac5ea359473860b02cdea41576d0a968c608ba856d073d0583cd1d9e08ef",
-    "web/src/lib/payload.svelte.ts": "57d615530945293ac4c88f91bb48ab787e39a448ba87b03fd3646c2e97839c47",
+    "web/src/lib/payload.svelte.ts": "7f7fc55e168135480095e3c355a5c0b082b8dc7565f3f890d435cf4e67136513",
     "web/src/lib/prefs.svelte.ts": "3cef57db6b563e4f2287604140c719fc0c0f2ea90aed136c266b5e4032c055e0",
     "web/src/lib/scroll.ts": "00e72d7195bb2b1906b7a53b20600025a52fe3b5d7fa984cde9912426a07942f",
     "web/src/lib/secrets.ts": "6f3d9eba95314a859de7032776c1eb77fa29e93949793c51d7ccf4816cca865a",
@@ -54,6 +57,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "6d80e4fb7b0647d9b9a3ce6ffb2721afbd1d0e8a403c135068f9b3ac4a09b597",
-    "claude_usage/static/js/app.js": "8af37c86853cb5332b84d7541e3dccec0e91e22aa7aa733cc0c2ec501438b221"
+    "claude_usage/static/js/app.js": "5705a824eed400c21391337f131895b2684a4e0256f3258149638613d216683b"
   }
 }

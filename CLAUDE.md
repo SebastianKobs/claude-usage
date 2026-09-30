@@ -105,7 +105,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/compact.ts         when compacting pays off (`payoffTone` and its words), the call to compact, the hint to
                              delegate, a compaction's verdict and their sum; handed over the same way
   src/lib/secrets.ts         how the secret accesses show: the card's tone, a path's script, how far a call got
-  src/lib/live.ts            the live cards' badges (waiting, secret, compacting now) and what waits for the user
+  src/lib/live.ts            the live cards' badges (waiting, secret, compacting now), the live list's words (its
+                             window, the past day, the empty list) and what waits for the user
   src/lib/tables.ts          paging (page units, window and text), the sessions list's filter, count, columns and
                              cells, the Tools table's rows with their keys, folds and labels, the conversation's
                              order and keys, and the usage tables' cells and order
@@ -135,8 +136,9 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              by the component)
   src/lib/usage.ts           the usage tables' rows: a name, the shared cells dearest first, and the by-model table's
                              effort rows under each model with its swatch color (used by the components)
-  src/lib/payload.svelte.ts  what the page has loaded, as reactive state (`payload`: the summary, or that loading it
-                             failed), which the old scripts fill through `setPayload`
+  src/lib/payload.svelte.ts  what the page has loaded, as reactive state (`payload`: the summary and the live answer, or
+                             that loading them failed, when the latest answer came, and each live card's state), which
+                             the old scripts fill through `setPayload`
   src/lib/overview.svelte.ts the session view's tile rows, mounted for the old scripts (`mountSessionKpis`,
                              `mountSessionRuntime`, `releaseDetachedTiles`)
   src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
@@ -144,8 +146,9 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              `KpiTiles`, `RuntimeTiles`, `SummaryTiles`; `ChartCard`, the section a chart lives in, with
                              its table-view toggle; `TableView`, a paged table (`scope` on its headings, named by its
                              heading), its pager in an optional heading row; `OverTime`, `ByModel`, `CostPerSession`,
-                             `RateLimits`, the usage tables: `UsageTable`, `UsageTables`, and the sessions card:
-                             `SessionsList`), each with its Testing Library test
+                             `RateLimits`, the usage tables: `UsageTable`, `UsageTables`, the sessions card:
+                             `SessionsList`, and the live sessions: `LiveSessions`, `LiveCard`, `LiveIcon`), each with
+                             its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
@@ -597,10 +600,10 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     `%LOCALAPPDATA%\claude-usage\icons` under a name with its hash (`icon_file`), since a toast shows local images
     only; the source is the package's folder as Windows sees it (`wslpath -w` on WSL). A failed copy or registration
     costs only the icon or the name.
-  - The icons (`icons/*.png`, `ICON_NAMES`): the live cards' `LIVE_ICONS` and a bar chart for the app, white on their
-    tone's color from the light theme (`--series-1` waiting, `--gain-text`, `--hint-warning-edge`,
+  - The icons (`icons/*.png`, `ICON_NAMES`): the live cards' icons (`LiveIcon`) and a bar chart for the app, white on
+    their tone's color from the light theme (`--series-1` waiting, `--gain-text`, `--hint-warning-edge`,
     `--hint-critical-edge`, `--text-secondary`; white on each ≥ 3:1), 96 px with 20 px corners, the glyph 64 px:
-    rendered once in a browser (the page's `LIVE_ICONS` drawn on a canvas). Render them again when an icon or one of
+    rendered once in a browser (`LiveIcon`'s shapes drawn on a canvas). Render them again when an icon or one of
     those colors changes. A compact state takes its tone's icon (`COMPACT_ICONS`: cold as soon, hint and pays
     neutral).
   - On WSL PowerShell runs from the C: drive's mount (`windows_drive`), so no `\\wsl.localhost` folder is handed to
@@ -679,7 +682,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     thread's own calls don't count (the user's choice: 7 of 55 main threads ended in a call).
   - Each live card's state comes from `/api/session/<id>/state`, asked for after every live answer and not awaited
     (`loadLiveStates`: one request per session at a time, a failed one keeps what is shown), and is kept by session
-    (`liveStates`), so a redrawn list shows it at once. It shows as small icons right of the title (`LIVE_ICONS`,
+    (`payload.liveState`), so a redrawn list shows it at once. It shows as small icons right of the title (`LiveIcon`,
     in currentColor, faintly glowing in the gimmick themes), each described on hover and to screen readers
     (`title`, `aria-label`) and colored as the session view's marks (`--gain-text`, `--hint-warning-edge`,
     `--hint-critical-edge`, else `--text-secondary`; each ≥ 3:1 on the card in every theme). `liveStateBadges`
@@ -751,8 +754,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     "rows 11–20 of 84". Each table keeps its page by key across redraws (the session view's keys carry the session and
     the picked transcript, so another one starts at the first page), and its controls keep focus. Rows off the page
     get the `off-page` class, since a workflow run's switch uses `hidden`. The live sessions' cards page the same way
-    (`paged-cards` in a `paged-wrap`, each card a group, "sessions 1–10 of 300"), most recent first like the sessions
-    list: by the last record's time, then the mtime (`queries.live_sessions`; a copied transcript has a new mtime).
+    (`LiveSessions`: a `Pager` under the key `live`, each card a group, "sessions 1–10 of 300"), most recent first
+    like the sessions list: by the last record's time, then the mtime (`queries.live_sessions`; a copied transcript
+    has a new mtime).
     Each card and subagent shows that time (`queries.activity_time`: the last record's, else the mtime); only
     whether a session is live goes by the mtime.
     Once a draw is in the page, the pagers it replaced are let go (`forgetDetachedPagers`), since a list drawn every

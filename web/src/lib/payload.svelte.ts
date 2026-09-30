@@ -1,8 +1,10 @@
-// What the page has loaded, for the components that draw it: the summary of the range shown, or that loading it failed.
-// The old classic scripts fetch it and hand it over through `setPayload`, until the app fetches it itself.
+// What the page has loaded, for the components that draw it: the summary of the range shown, the live sessions and
+// their cards' states, or that loading one failed. The old classic scripts fetch it and hand it over through
+// `setPayload`, until the app fetches it itself.
 
 import { flushSync } from 'svelte';
-import type { Summary } from './api';
+import { SvelteMap } from 'svelte/reactivity';
+import type { Live, SessionState, Summary } from './api';
 
 /** The parts of the payload. */
 export interface PayloadParts {
@@ -10,6 +12,12 @@ export interface PayloadParts {
   summary: Summary;
   /** Whether loading the first summary failed, so the tiles say so instead of loading. */
   summaryFailed: boolean;
+  /** The live sessions, /api/live's answer. */
+  live: Live;
+  /** Whether loading the live sessions failed, so the card says so instead of loading. */
+  liveFailed: boolean;
+  /** When the newest live answer came, in ms since the epoch, even one unchanged: the cards' "ago" counts from it. */
+  liveAt: number;
 }
 
 /** The page's payload as reactive state. */
@@ -17,6 +25,12 @@ export class Payload {
   // $state.raw: the summary is replaced whole by each load, never changed in place, and is large.
   #summary = $state.raw<Summary | null>(null);
   #summaryFailed = $state(false);
+  // Likewise replaced whole by each answer.
+  #live = $state.raw<Live | null>(null);
+  #liveFailed = $state(false);
+  #liveAt = $state<number | null>(null);
+  // A live card's state by session: a map that is reactive per key, so one card's state moving redraws that card only.
+  #liveStates = new SvelteMap<string, SessionState>();
 
   /** The summary of the range shown, null until one is loaded. */
   get summary(): Summary | null {
@@ -28,19 +42,63 @@ export class Payload {
     return this.#summaryFailed;
   }
 
-  /** Sets the parts given. A summary also clears the failure: it is what the failure was about. */
+  /** The live sessions, null until an answer is loaded. */
+  get live(): Live | null {
+    return this.#live;
+  }
+
+  /** Whether loading the live sessions failed and none was loaded since. */
+  get liveFailed(): boolean {
+    return this.#liveFailed;
+  }
+
+  /** When the newest live answer came (ms since the epoch), null until one has. */
+  get liveAt(): number | null {
+    return this.#liveAt;
+  }
+
+  /** A live card's state, undefined until it is loaded or once its session is no longer live. */
+  liveState(sessionId: string): SessionState | undefined {
+    return this.#liveStates.get(sessionId);
+  }
+
+  /** Keeps a live card's state. */
+  setLiveState(sessionId: string, state: SessionState): void {
+    this.#liveStates.set(sessionId, state);
+  }
+
+  /** Drops the states of every session but these, the ones still live. */
+  keepLiveStates(sessionIds: Iterable<string>): void {
+    const keep = [...sessionIds];
+    for (const sessionId of [...this.#liveStates.keys()]) {
+      if (!keep.includes(sessionId)) this.#liveStates.delete(sessionId);
+    }
+  }
+
+  /** Sets the parts given. A summary also clears the failure: it is what the failure was about; so does a live
+   *  answer for the live one. */
   set(parts: Partial<PayloadParts>): void {
     if (parts.summary !== undefined) {
       this.#summary = parts.summary;
       this.#summaryFailed = false;
     }
     if (parts.summaryFailed !== undefined) this.#summaryFailed = parts.summaryFailed;
+    if (parts.live !== undefined) {
+      this.#live = parts.live;
+      this.#liveFailed = false;
+    }
+    if (parts.liveFailed !== undefined) this.#liveFailed = parts.liveFailed;
+    if (parts.liveAt !== undefined) this.#liveAt = parts.liveAt;
   }
 
   /** Back to nothing loaded, as at the page's start: for the tests, which share the singleton. */
   reset(): void {
     this.#summary = null;
     this.#summaryFailed = false;
+    this.#live = null;
+    this.#liveFailed = false;
+    this.#liveAt = null;
+    this.#liveStates.clear();
   }
 }
 

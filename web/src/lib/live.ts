@@ -2,9 +2,9 @@
 // compacting now. A badge has a kind (its icon), a tone (a class suffix, or null) and the words its icon's hover
 // shows. Also what waits while another session's view hides the live list.
 
-import type { Gauge, LiveSession, SecretCounts, SessionDetail, Waiting } from './api.ts';
+import type { Gauge, Live, LiveSession, SecretCounts, SessionDetail, Waiting } from './api.ts';
 import { compactCallKind, PAYOFF_WORDS, payoffTone } from './compact.ts';
-import { compact, money, when, whole } from './format.ts';
+import { compact, longDay, money, when, whole } from './format.ts';
 
 export type BadgeKind = 'permission' | 'waiting' | 'secret' | 'compact';
 
@@ -14,6 +14,34 @@ export interface LiveBadge {
   text: string;
   /** The compact states it shows, which serve's desktop notifications hold to (`notify.compact_states`). */
   states?: string[];
+}
+
+/**
+ * The day the live sessions were kept by, when the arrows went back to it: a running session shows there only if it
+ * was active on it. Null for a range up to today, or none.
+ */
+export function livePastDay(live: Pick<Live, 'days' | 'until'>, today: string): string | null {
+  return live.days === 1 && live.until && live.until !== today ? live.until : null;
+}
+
+/** The note after the live sessions' heading: how lately a session changed (longer while agents work), that a waiting
+ *  one stays on the list past it, and the past day the list was kept by. */
+export function liveWindow(
+  live: Pick<Live, 'minutes' | 'agent_minutes' | 'days' | 'until'> & { sessions: Pick<LiveSession, 'waiting'>[] },
+  today: string,
+): string {
+  const pastDay = livePastDay(live, today);
+  const agents = live.agent_minutes > live.minutes ? ` (${live.agent_minutes} min while agents work)` : '';
+  const waits = live.sessions.some((session) => session.waiting) ? ' or waiting for you' : '';
+  const day = pastDay ? `, active on ${longDay(pastDay)}` : '';
+  return `· changed in the last ${live.minutes} min${agents}${waits}${day}`;
+}
+
+/** What the list says where no session is live. */
+export function liveEmpty(live: Pick<Live, 'minutes' | 'days' | 'until'>, today: string): string {
+  const pastDay = livePastDay(live, today);
+  if (pastDay) return `No live session was active on ${longDay(pastDay)}.`;
+  return `No session active in the last ${live.minutes} minutes.`;
 }
 
 /**

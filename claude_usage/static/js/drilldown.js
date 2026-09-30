@@ -96,7 +96,7 @@ function renderDrilldown(detail, refresh = false) {
 function showSessionWaits(detail) {
   const slot = document.getElementById("session-waits");
   if (!slot) return;
-  const waits = sessionWaits(detail, state.live ? state.live.sessions : []);
+  const waits = sessionWaits(detail, payload.live ? payload.live.sessions : []);
   const key = JSON.stringify(waits);
   if (slot.dataset.shown === key) return;
   slot.dataset.shown = key;

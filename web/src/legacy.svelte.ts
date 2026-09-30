@@ -5,6 +5,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import Banner from './components/Banner.svelte';
 import ByModel from './components/ByModel.svelte';
 import CostPerSession from './components/CostPerSession.svelte';
+import LiveSessions from './components/LiveSessions.svelte';
 import OverTime from './components/OverTime.svelte';
 import RateLimits from './components/RateLimits.svelte';
 import SessionsList from './components/SessionsList.svelte';
@@ -40,10 +41,10 @@ import * as themes from './lib/themes';
 // the components and draws at once) and the session view's tile rows lib/overview.svelte.ts (`mountSessionKpis` and
 // `mountSessionRuntime`, rows the old scripts put into the page). `tablePages`, `mountPager`, `payload` and the like
 // reach the old scripts as globals, like everything else here. Their names must stay apart: a shared one would be
-// handed over twice, the second silently winning. The overview's two tile rows, `#kpis` and `#runtime`, the
-// over-time section, `#trend-card`, the by-model section, `#chart-card`, the cost-per-session section,
-// `#costly-card`, the rate-limits section, `#limits-card`, the usage tables, `#usage-cards`, and the sessions list,
-// `#sessions-card`, are mounted here from the payload, which `setPayload` sets.
+// handed over twice, the second silently winning. The overview's two tile rows, `#kpis` and `#runtime`, the live
+// sessions, `#live-card`, the over-time section, `#trend-card`, the by-model section, `#chart-card`, the
+// cost-per-session section, `#costly-card`, the rate-limits section, `#limits-card`, the usage tables,
+// `#usage-cards`, and the sessions list, `#sessions-card`, are mounted here from the payload, which `setPayload` sets.
 type Formatters = typeof format;
 type Colors = typeof colors;
 type Compacting = typeof compact;
@@ -115,6 +116,8 @@ export function bridge(target: Window): Bridge {
     if (!container) throw new Error(`The page has no #${id} container for the tiles`);
     return { id, container };
   });
+  const liveContainer = target.document.getElementById('live-card');
+  if (!liveContainer) throw new Error('The page has no #live-card container for the live sessions');
   const trendContainer = target.document.getElementById('trend-card');
   if (!trendContainer) throw new Error('The page has no #trend-card container for the over-time section');
   const byModelContainer = target.document.getElementById('chart-card');
@@ -136,9 +139,11 @@ export function bridge(target: Window): Bridge {
     mount(SummaryTiles, { target: container, props: { rows: id } }),
   );
 
-  // The over-time section, which draws its own card into the container.
+  // The live sessions, which draw their own card into the container.
+  const liveSessions = mount(LiveSessions, { target: liveContainer });
+  // The over-time section likewise.
   const trend = mount(OverTime, { target: trendContainer });
-  // The by-model section likewise.
+  // And the by-model section.
   const byModel = mount(ByModel, { target: byModelContainer });
   // And the cost per session.
   const costly = mount(CostPerSession, { target: costlyContainer });
@@ -163,6 +168,7 @@ export function bridge(target: Window): Bridge {
     stop(): void {
       void unmount(banner);
       for (const row of rows) void unmount(row);
+      void unmount(liveSessions);
       void unmount(trend);
       void unmount(byModel);
       void unmount(costly);

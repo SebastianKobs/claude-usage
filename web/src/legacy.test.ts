@@ -7,7 +7,7 @@ import * as charts from './lib/charts';
 import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
-import { apiErrorEvent, costlySession, sessionItem, summary, usage } from './lib/fixtures';
+import { apiErrorEvent, costlySession, live as liveAnswer, sessionItem, summary, usage } from './lib/fixtures';
 import * as live from './lib/live';
 import * as overview from './lib/overview.svelte';
 import * as paging from './lib/paging.svelte';
@@ -227,6 +227,26 @@ test('the rate-limits section is mounted in its container: a card, drawn from th
   expect(card.querySelectorAll('.legend > span')).toHaveLength(1);
 });
 
+test('the live sessions are mounted in their container: a card, drawn from the payload', () => {
+  const card = tilesOf('live-card');
+  expect(screen.getByRole('region', { name: 'Live sessions' })).toBeInTheDocument();
+  expect(card).toContainElement(screen.getByRole('region', { name: 'Live sessions' }));
+  expect(card).toHaveTextContent('Loading…');
+  expect(card.querySelector('.live-card')).toBeNull();
+  window.setPayload({ live: liveAnswer(), liveAt: Date.now() });
+  expect(card.querySelectorAll('.live-card')).toHaveLength(1);
+  expect(card).toContainElement(screen.getByRole('link', { name: 'Checkout: split payment step' }));
+  expect(card.querySelector('h2 .muted')).toHaveTextContent('· changed in the last 5 min');
+});
+
+test('a failed live answer shows the failure in the card, and an answer replaces it', () => {
+  window.setPayload({ liveFailed: true });
+  expect(tilesOf('live-card')).toHaveTextContent('Could not load the live sessions.');
+  window.setPayload({ live: liveAnswer({ sessions: [], days: null, since: null, until: null }) });
+  expect(tilesOf('live-card')).not.toHaveTextContent('Could not load');
+  expect(tilesOf('live-card').querySelector('.empty')).toHaveTextContent('No session active in the last 5 minutes.');
+});
+
 test('the usage tables are mounted in their container: five headings, tables drawn from the payload', () => {
   const container = tilesOf('usage-cards');
   expect(container.querySelectorAll('section.card')).toHaveLength(5);
@@ -257,6 +277,17 @@ test('a page without the tile containers fails loudly and mounts nothing', () =>
   expect(() => bridge(window)).toThrow('The page has no #runtime container for the tiles');
   expect(document.getElementById('error')).not.toBeNull();
   expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('a page without the live container fails loudly and mounts nothing', () => {
+  bridged.stop();
+  document.body.replaceChildren(pageBody());
+  document.getElementById('live-card')?.remove();
+  expect(() => bridge(window)).toThrow('The page has no #live-card container for the live sessions');
+  expect(document.getElementById('error')).not.toBeNull();
+  expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  expect(document.getElementById('trend-card')?.children).toHaveLength(0);
   bridged = { stop() {} };
 });
 
@@ -352,6 +383,12 @@ test('stopping takes the cost-per-session section away too', () => {
 test('stopping takes the by-model section away too', () => {
   bridged.stop();
   expect(tilesOf('chart-card').children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('stopping takes the live sessions away too', () => {
+  bridged.stop();
+  expect(tilesOf('live-card').children).toHaveLength(0);
   bridged = { stop() {} };
 });
 
