@@ -1,4 +1,4 @@
-// What every chart is built from: the SVG root, axes and gridlines, x labels, the area line, tooltips, the one
+// What every chart is built from: the SVG root, axes and gridlines, x labels, tooltips, the one
 // focusable cursor layer, and the table view's shell.
 "use strict";
 
@@ -33,16 +33,6 @@ function drawXLabels(root, count, xOf, y, text, most = X_LABELS) {
     label.textContent = text(index);
     root.append(label);
   }
-}
-
-// a line over the values with a faint area below it down to bottom
-function drawAreaLine(root, values, xOf, yOf, bottom, color) {
-  const last = values.length - 1;
-  const points = values.map((value, index) => `${xOf(index).toFixed(1)},${yOf(value).toFixed(1)}`);
-  root.append(svg("path", {d: `M${xOf(0)},${bottom}L${points.join("L")}L${xOf(last)},${bottom}Z`,
-                           fill: color, "fill-opacity": 0.1}));
-  root.append(svg("path", {d: `M${points.join("L")}`, fill: "none", stroke: color, "stroke-width": 2,
-                           "stroke-linejoin": "round", "stroke-linecap": "round"}));
 }
 
 // a point on a line, ringed in the surface color; a hidden one is a marker the cursor moves

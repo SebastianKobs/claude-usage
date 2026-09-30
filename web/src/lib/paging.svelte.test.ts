@@ -2,7 +2,7 @@ import { screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { TablePages, mountPager, releaseDetachedPagers, tablePages } from './paging.svelte.ts';
+import { TablePages, mountPager, releaseDetachedPagers, shownWindow, tablePages } from './paging.svelte.ts';
 import { preferences } from './prefs.svelte.ts';
 import { pageUnits } from './tables.ts';
 
@@ -64,6 +64,49 @@ describe('TablePages', () => {
 
   test('the singleton is one TablePages', () => {
     expect(tablePages).toBeInstanceOf(TablePages);
+  });
+});
+
+describe('shownWindow', () => {
+  test('a table without a page shows its first, at the page size of the preference', () => {
+    expect(shownWindow('usage', 60)).toEqual({ page: 0, pages: 3, first: 0, last: 25 });
+    preferences.pageSize = 10;
+    expect(shownWindow('usage', 60)).toEqual({ page: 0, pages: 6, first: 0, last: 10 });
+  });
+
+  test('the page holding the stored first unit shows, on any page size', () => {
+    tablePages.set('usage', 30);
+    expect(shownWindow('usage', 60)).toEqual({ page: 1, pages: 3, first: 25, last: 50 });
+    preferences.pageSize = 10;
+    expect(shownWindow('usage', 60)).toEqual({ page: 3, pages: 6, first: 30, last: 40 });
+  });
+
+  test('a stored page beyond the end shows the last page, without changing what is stored', () => {
+    tablePages.set('usage', 500);
+    expect(shownWindow('usage', 60)).toEqual({ page: 2, pages: 3, first: 50, last: 60 });
+    expect(tablePages.first('usage')).toBe(500);
+  });
+
+  test('another key has its own page', () => {
+    tablePages.set('usage', 25);
+    expect(shownWindow('other', 60).page).toBe(0);
+  });
+
+  test('it is reactive: a turned page and a new page size are both seen by what reads it', () => {
+    const seen: number[] = [];
+    const stop = $effect.root(() => {
+      $effect(() => {
+        const window = shownWindow('usage', 120);
+        seen.push(window.first, window.last);
+      });
+    });
+    flushSync();
+    tablePages.set('usage', 25);
+    flushSync();
+    preferences.pageSize = 50;
+    flushSync();
+    stop();
+    expect(seen).toEqual([0, 25, 25, 50, 0, 50]);
   });
 });
 
@@ -152,6 +195,18 @@ describe('mountPager', () => {
     expect(hidden(left.rows)).toEqual(range(25, 120));
     expect(hidden(right.rows)).toEqual([...range(0, 25), ...range(50, 120)]);
     expect(screen.getAllByRole<HTMLSelectElement>('combobox').map((select) => select.value)).toEqual(['25', '25']);
+  });
+});
+
+describe('a pager without rows', () => {
+  test('it draws and pages, with nothing to mark off the page', async () => {
+    const user = userEvent.setup();
+    const units = pageUnits(Array.from({ length: 60 }, () => false));
+    place(mountPager({ key: 'usage', noun: 'rows', units }));
+    expect(screen.getByText('rows 1–25 of 60')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Next ›' }));
+    expect(screen.getByText('rows 26–50 of 60')).toBeInTheDocument();
+    expect(tablePages.first('usage')).toBe(25);
   });
 });
 

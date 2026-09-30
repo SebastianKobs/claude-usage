@@ -5,6 +5,8 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import Pager from '../components/Pager.svelte';
+import { preferences } from './prefs.svelte';
+import { pageWindow, type PageWindow } from './tables';
 
 /** Which group of rows (unit) each table starts its page at, by the table's key, so a table drawn again (a refresh,
  *  another range) stays on its page. The first unit shown, not a page number: a new page size then keeps the page
@@ -32,14 +34,22 @@ export class TablePages {
 // bridge; it moves into context (3.32) once the components own the page.
 export const tablePages = new TablePages();
 
+/** The page a table shows: the one that holds its stored first unit at the current page size, kept within the
+ *  `count` units there are. Reads the stored page and the page size, both reactive, so what draws from it follows a
+ *  turned page and a new size. */
+export function shownWindow(key: string, count: number): PageWindow {
+  return pageWindow(count, preferences.pageSize, Math.floor(tablePages.first(key) / preferences.pageSize));
+}
+
 /** What a pager pages. */
 export interface PagerProps {
   /** The table's key, which its page is kept under and its controls' ids are made from (`pager-<key>-size`). */
   key: string;
   /** What the rows are called: "rows", or "sessions" for a grid of cards. */
   noun: string;
-  /** The rows the old code drew: a table's, or a card grid's children. */
-  rows: HTMLElement[];
+  /** The rows the old code drew: a table's, or a card grid's children. Missing for a table a component draws, which
+   *  shows only the rows of the page and has none to hide. */
+  rows?: HTMLElement[];
   /** Each row's unit, from `pageUnits`: a sub-row shares the unit of the row above it. */
   units: number[];
 }

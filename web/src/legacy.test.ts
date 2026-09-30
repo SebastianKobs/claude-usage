@@ -181,6 +181,16 @@ test('the payload the old scripts read is the same state the tiles draw', () => 
   expect(window.payload.summaryFailed).toBe(false);
 });
 
+test('the over-time section is mounted in its container: a card, drawn from the payload', () => {
+  const card = tilesOf('trend-card');
+  expect(screen.getByRole('region', { name: 'Over time' })).toBeInTheDocument();
+  expect(card).toContainElement(screen.getByRole('region', { name: 'Over time' }));
+  expect(card.querySelector('svg')).toBeNull();
+  window.setPayload({ summary: summary() });
+  expect(card.querySelector('svg')).not.toBeNull();
+  expect(card.querySelectorAll('.panel-title')).toHaveLength(3);
+});
+
 test('a page without the tile containers fails loudly and mounts nothing', () => {
   bridged.stop();
   document.body.replaceChildren(pageBody());
@@ -188,6 +198,22 @@ test('a page without the tile containers fails loudly and mounts nothing', () =>
   expect(() => bridge(window)).toThrow('The page has no #runtime container for the tiles');
   expect(document.getElementById('error')).not.toBeNull();
   expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('a page without the over-time container fails loudly and mounts nothing', () => {
+  bridged.stop();
+  document.body.replaceChildren(pageBody());
+  document.getElementById('trend-card')?.remove();
+  expect(() => bridge(window)).toThrow('The page has no #trend-card container for the over-time section');
+  expect(document.getElementById('error')).not.toBeNull();
+  expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('stopping takes the over-time section away too', () => {
+  bridged.stop();
+  expect(tilesOf('trend-card').children).toHaveLength(0);
   bridged = { stop() {} };
 });
 

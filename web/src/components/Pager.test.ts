@@ -262,3 +262,31 @@ describe('the page kept across draws', () => {
     expect(hidden(more.rows)).toEqual(range(25, 90));
   });
 });
+
+describe('a pager without rows', () => {
+  test('a table a component draws hands over none: the pager still pages and stores the page', async () => {
+    const user = userEvent.setup();
+    const { units } = makeRows(60);
+    render(Pager, { key: 'usage', noun: 'rows', units });
+    expect(status()).toBe('rows 1–25 of 60');
+    await user.click(screen.getByRole('button', { name: 'Next ›' }));
+    expect(status()).toBe('rows 26–50 of 60');
+    expect(tablePages.first('usage')).toBe(25);
+  });
+
+  test('a stored page beyond the end is clamped and stored, as with rows', () => {
+    tablePages.set('usage', 500);
+    const { units } = makeRows(60);
+    render(Pager, { key: 'usage', noun: 'rows', units });
+    expect(status()).toBe('rows 51–60 of 60');
+    expect(tablePages.first('usage')).toBe(50);
+  });
+
+  test('the page size change pages it again', async () => {
+    const user = userEvent.setup();
+    const { units } = makeRows(120);
+    render(Pager, { key: 'usage', noun: 'rows', units });
+    await user.selectOptions(screen.getByRole('combobox'), '50');
+    expect(status()).toBe('rows 1–50 of 120');
+  });
+});

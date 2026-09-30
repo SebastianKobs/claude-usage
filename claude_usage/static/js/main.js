@@ -59,7 +59,6 @@ function renderSummary() {
   if (!summary) return;
   setPayload({summary});
   renderDayNav();
-  renderTrend(summary);
   renderChart(summary);
   renderTables(summary);
   renderLimits(summary);
@@ -301,7 +300,7 @@ function setup() {
     pressed("metric", "metric", state.metric);
     if (state.summary) renderChart(state.summary);
   });
-  for (const name of ["chart", "trend", "costly", "limits"]) {
+  for (const name of ["chart", "costly", "limits"]) {
     document.getElementById(`${name}-table-toggle`).addEventListener("click", event => {
       const table = document.getElementById(`${name}-table`);
       table.hidden = !table.hidden;
@@ -321,12 +320,10 @@ function setup() {
   const resize = new ResizeObserver(() => {
     if (state.session) renderContext(state.session);
     if (!state.summary) return;
-    renderTrend(state.summary);
     renderChart(state.summary);
     renderLimits(state.summary);
   });
   resize.observe(document.getElementById("chart"));
-  resize.observe(document.getElementById("trend"));
   resize.observe(document.getElementById("limits"));
   resize.observe(document.getElementById("drilldown"));
 

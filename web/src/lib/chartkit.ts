@@ -62,3 +62,12 @@ export function xLabelIndexes(count: number, most = X_LABELS): number[] {
 export function gridY(y: number): number {
   return Math.round(y) + 0.5;
 }
+
+/** Room left of the plot for the y axis' labels. */
+export const LEFT_AXIS = 56;
+
+/** Room right of a line chart's plot for its end label. */
+export const RIGHT_PAD = 64;
+
+/** The band under the plot that holds the x labels. */
+export const AXIS_BAND = 28;

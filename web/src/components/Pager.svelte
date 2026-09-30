@@ -2,11 +2,12 @@
 @component
 A table's pager: the page size (kept as a preference, applied to every pager at once), previous and next, and which
 rows show, named by `noun`. The rows are the old code's, a table's or a card grid's; rows off the page get the class
-`off-page`, never `hidden`, which a workflow run's switch uses.
+`off-page`, never `hidden`, which a workflow run's switch uses. A table a component draws hands over no rows and
+shows only its page itself.
 -->
 <script lang="ts">
   import { flushSync } from 'svelte';
-  import { tablePages, type PagerProps } from '../lib/paging.svelte';
+  import { shownWindow, tablePages, type PagerProps } from '../lib/paging.svelte';
   import { preferences } from '../lib/prefs.svelte';
   import { keepScroll, scrollAnchor } from '../lib/scroll';
   import { PAGE_SIZES, pageText, pageWindow } from '../lib/tables';
@@ -15,9 +16,7 @@ rows show, named by `noun`. The rows are the old code's, a table's or a card gri
 
   const count = $derived((units.at(-1) ?? -1) + 1);
   // The table's stored first unit on the current page size: the page that holds it.
-  const shown = $derived(
-    pageWindow(count, preferences.pageSize, Math.floor(tablePages.first(key) / preferences.pageSize)),
-  );
+  const shown = $derived(shownWindow(key, count));
   const nounLabel = $derived(`${noun.charAt(0).toUpperCase()}${noun.slice(1)}`);
 
   // Drawn again after the rows shrank, the stored page may lie beyond the end: what shows is stored, as the old pager
@@ -47,10 +46,10 @@ rows show, named by `noun`. The rows are the old code's, a table's or a card gri
   }
 
   // The rows belong to the old code, which still draws them, so their class is set on the nodes here. It runs again
-  // when the window moves. Later sections (3.16 on) replace those rows with components that bind the class themselves.
+  // when the window moves. A table drawn by a component has no such rows (it renders the page only): nothing to do.
   function classRows() {
     const { first, last } = shown;
-    rows.forEach((row, index) => {
+    rows?.forEach((row, index) => {
       const unit = units[index];
       if (unit !== undefined) row.classList.toggle('off-page', unit < first || unit >= last);
     });

@@ -3,6 +3,7 @@
 // file, since the payloads the later sections take from the old scripts are $state.raw, which needs runes.
 import { flushSync, mount, unmount } from 'svelte';
 import Banner from './components/Banner.svelte';
+import OverTime from './components/OverTime.svelte';
 import SummaryTiles from './components/SummaryTiles.svelte';
 import { BannerMessages } from './lib/banner.svelte';
 import * as charts from './lib/charts';
@@ -34,8 +35,8 @@ import * as themes from './lib/themes';
 // the components and draws at once) and the session view's tile rows lib/overview.svelte.ts (`mountSessionKpis` and
 // `mountSessionRuntime`, rows the old scripts put into the page). `tablePages`, `mountPager`, `payload` and the like
 // reach the old scripts as globals, like everything else here. Their names must stay apart: a shared one would be
-// handed over twice, the second silently winning. The overview's two tile rows, `#kpis` and `#runtime`, are mounted
-// here from the payload, which `setPayload` sets.
+// handed over twice, the second silently winning. The overview's two tile rows, `#kpis` and `#runtime`, and the
+// over-time section, `#trend-card`, are mounted here from the payload, which `setPayload` sets.
 type Formatters = typeof format;
 type Colors = typeof colors;
 type Compacting = typeof compact;
@@ -107,6 +108,8 @@ export function bridge(target: Window): Bridge {
     if (!container) throw new Error(`The page has no #${id} container for the tiles`);
     return { id, container };
   });
+  const trendContainer = target.document.getElementById('trend-card');
+  if (!trendContainer) throw new Error('The page has no #trend-card container for the over-time section');
   // Mounted before the placeholder, which then goes, so the banner keeps its place and there is one alert.
   const banner = mount(Banner, { target: placeholder.parentElement, anchor: placeholder, props: { messages } });
   placeholder.remove();
@@ -115,6 +118,9 @@ export function bridge(target: Window): Bridge {
   const rows = tileContainers.map(({ id, container }) =>
     mount(SummaryTiles, { target: container, props: { rows: id } }),
   );
+
+  // The over-time section, which draws its own card into the container.
+  const trend = mount(OverTime, { target: trendContainer });
 
   target.showError = (source: string, message: string): void => {
     messages.show(source, message);
@@ -130,6 +136,7 @@ export function bridge(target: Window): Bridge {
     stop(): void {
       void unmount(banner);
       for (const row of rows) void unmount(row);
+      void unmount(trend);
       // Reflect, since the Window interface declares them always there, which a plain delete refuses.
       Reflect.deleteProperty(target, 'showError');
       Reflect.deleteProperty(target, 'hasError');
