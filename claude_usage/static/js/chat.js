@@ -60,19 +60,6 @@ function closeChat(button, close) {
   button.focus();
 }
 
-// Newest first by default: the calls in reverse, each call's entries (one message id) kept in their order, so its
-// thinking, text and tools still lead to its usage badge; prompts, hidden context and markers stand alone
-function orderedEntries(entries, oldest) {
-  if (oldest) return entries;
-  const groups = [];
-  for (const entry of entries) {
-    const last = groups[groups.length - 1];
-    if (entry.message_id && last && last[0].message_id === entry.message_id) last.push(entry);
-    else groups.push([entry]);
-  }
-  return groups.reverse().flat();
-}
-
 // a picker's options: one per transcript, a workflow run's agents in one group per run
 function agentOptions(agents, valueOf, labelOf, picked) {
   const option = agent => el("option", {value: valueOf(agent), selected: agent === picked, text: labelOf(agent)});
@@ -171,14 +158,13 @@ function renderChat(container, chat, agentId) {
     container.replaceChildren(el("div", {class: "empty", text: "No conversation in this transcript yet."}));
     return;
   }
-  const position = new Map(chat.entries.map((entry, index) => [entry, index]));
-  const keyed = entry => {
+  const keyed = ({key, entry}) => {
     const node = chatEntry(entry);
-    node.dataset.key = `${entry.timestamp} ${entry.kind} ${position.get(entry)}`;
+    node.dataset.key = key;
     return node;
   };
   fill(container, reminderNote(chat.reminders),
-       el("div", {class: "chat"}, ...orderedEntries(chat.entries, oldestFirst()).map(keyed)));
+       el("div", {class: "chat"}, ...chatRows(chat.entries, oldestFirst()).map(keyed)));
 }
 
 // Claude Code's token reminder comes before almost every call: summed here once, not shown as a line each

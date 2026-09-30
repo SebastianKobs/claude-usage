@@ -53,7 +53,8 @@ def definition(script, name):
     return source.group(0)
 
 
-MODULES = {name: LIB / name for name in ("format.ts", "colors.ts", "compact.ts", "secrets.ts", "live.ts")}
+MODULES = {name: LIB / name
+           for name in ("format.ts", "colors.ts", "compact.ts", "secrets.ts", "live.ts", "tables.ts")}
 
 
 def run_function(script, name, *arguments, uses=()):
@@ -214,10 +215,10 @@ class ToolTableTest(unittest.TestCase):
 
     def rows(self, agents):
         """toolTableRows of these agents."""
-        return run_function("drilldown.js", "toolTableRows", agents)
+        return run_function("tables.ts", "toolTableRows", agents)
 
     def test_every_command_kind_has_its_words(self):
-        self.assertEqual(object_keys("drilldown.js", "TOOL_KINDS"), set(tool_kinds.KINDS))
+        self.assertEqual(object_keys(MODULES["tables.ts"], "TOOL_KINDS"), set(tool_kinds.KINDS))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_bash_kinds_are_sub_rows_under_bash(self):
@@ -278,7 +279,7 @@ class ToolTableTest(unittest.TestCase):
                  ({"tool": "MCP", "kind": "srv", "detail": "find"}, 2, "option sets")]
         for row, count, noun in cases:
             with self.subTest(row=row):
-                self.assertEqual(run_function("drilldown.js", "detailNoun", row, count), noun)
+                self.assertEqual(run_function("tables.ts", "detailNoun", row, count), noun)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_an_empty_detail_says_what_is_missing(self):
@@ -286,14 +287,14 @@ class ToolTableTest(unittest.TestCase):
                  ({"tool": "Glob", "kind": None}, "no single type"), ({"tool": "Skill", "kind": None}, "no name")]
         for row, text in cases:
             with self.subTest(row=row):
-                self.assertEqual(run_function("drilldown.js", "emptyDetail", row), text)
+                self.assertEqual(run_function("tables.ts", "emptyDetail", row), text)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_kind_is_named_in_words_for_bash_and_as_it_is_for_an_mcp_server(self):
         labels = {"run": "run a program"}
-        self.assertEqual(run_function("drilldown.js", "kindLabel", {"tool": "Bash", "kind": "run"}, labels),
+        self.assertEqual(run_function("tables.ts", "kindLabel", {"tool": "Bash", "kind": "run"}, labels),
                          "run a program")
-        self.assertEqual(run_function("drilldown.js", "kindLabel", {"tool": "MCP", "kind": "run"}, labels), "run")
+        self.assertEqual(run_function("tables.ts", "kindLabel", {"tool": "MCP", "kind": "run"}, labels), "run")
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_without_the_transcript_the_stored_tools_show_without_what_only_it_tells(self):
@@ -590,7 +591,7 @@ class ChatOrderTest(unittest.TestCase):
         entries = [{"kind": "prompt", "message_id": None}, {"kind": "thinking", "message_id": "a"},
                    {"kind": "tool", "message_id": "a"}, {"kind": "injected", "message_id": None},
                    {"kind": "text", "message_id": "b"}, {"kind": "text", "message_id": "c"}]
-        ordered = run_function("chat.js", "orderedEntries", entries, False)
+        ordered = run_function("tables.ts", "orderedEntries", entries, False)
         self.assertEqual([(entry["kind"], entry["message_id"]) for entry in ordered],
                          [("text", "c"), ("text", "b"), ("injected", None), ("thinking", "a"), ("tool", "a"),
                           ("prompt", None)])
@@ -598,18 +599,18 @@ class ChatOrderTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_oldest_first_is_the_transcripts_order(self):
         entries = [{"kind": "prompt", "message_id": None}, {"kind": "text", "message_id": "a"}]
-        self.assertEqual(run_function("chat.js", "orderedEntries", entries, True), entries)
+        self.assertEqual(run_function("tables.ts", "orderedEntries", entries, True), entries)
 
 
 class SessionSectionsTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_the_conversation_takes_the_tools_place_while_its_transcript_exists(self):
-        self.assertEqual(run_function("drilldown.js", "toolsAndChat", True, ["tools"], ["chat"]),
+        self.assertEqual(run_function("tables.ts", "toolsAndChat", True, ["tools"], ["chat"]),
                          [["chat"], ["tools"]])
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_without_a_transcript_the_tools_stay_and_the_conversation_comes_last(self):
-        self.assertEqual(run_function("drilldown.js", "toolsAndChat", False, ["tools"], ["chat"]),
+        self.assertEqual(run_function("tables.ts", "toolsAndChat", False, ["tools"], ["chat"]),
                          [["tools"], ["chat"]])
 
     def test_the_session_view_places_them_by_it(self):
@@ -641,41 +642,42 @@ class CompactionTotalTest(unittest.TestCase):
 class PagingTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_sub_row_stays_on_the_page_of_its_group(self):
-        self.assertEqual(run_function("tables.js", "pageUnits", [False, True, True, False, False, True]),
+        self.assertEqual(run_function("tables.ts", "pageUnits", [False, True, True, False, False, True]),
                          [0, 0, 0, 1, 2, 2])
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_page_covers_its_share_of_the_groups(self):
-        self.assertEqual(run_function("tables.js", "pageWindow", 84, 10, 1),
+        self.assertEqual(run_function("tables.ts", "pageWindow", 84, 10, 1),
                          {"page": 1, "pages": 9, "first": 10, "last": 20})
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_the_last_page_holds_the_rest(self):
-        self.assertEqual(run_function("tables.js", "pageWindow", 84, 25, 3),
+        self.assertEqual(run_function("tables.ts", "pageWindow", 84, 25, 3),
                          {"page": 3, "pages": 4, "first": 75, "last": 84})
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_page_past_the_end_falls_back_to_the_last(self):
-        self.assertEqual(run_function("tables.js", "pageWindow", 30, 25, 5)["page"], 1)
-        self.assertEqual(run_function("tables.js", "pageWindow", 30, 25, -1)["page"], 0)
+        self.assertEqual(run_function("tables.ts", "pageWindow", 30, 25, 5)["page"], 1)
+        self.assertEqual(run_function("tables.ts", "pageWindow", 30, 25, -1)["page"], 0)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_the_pager_names_the_rows_shown(self):
         window = {"page": 1, "pages": 9, "first": 10, "last": 20}
-        self.assertEqual(run_function("tables.js", "pageText", window, 84), "rows 11–20 of 84")
+        self.assertEqual(run_function("tables.ts", "pageText", window, 84), "rows 11–20 of 84")
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_saved_page_size_counts_only_if_offered(self):
-        self.assertEqual(run_function("tables.js", "pageSizeFrom", "50", [10, 25, 50], 25), 50)
-        self.assertEqual(run_function("tables.js", "pageSizeFrom", "7", [10, 25, 50], 25), 25)
-        self.assertEqual(run_function("tables.js", "pageSizeFrom", None, [10, 25, 50], 25), 25)
+        self.assertEqual(run_function("tables.ts", "pageSizeFrom", "50", [10, 25, 50], 25), 50)
+        self.assertEqual(run_function("tables.ts", "pageSizeFrom", "7", [10, 25, 50], 25), 25)
+        self.assertEqual(run_function("tables.ts", "pageSizeFrom", None, [10, 25, 50], 25), 25)
 
     def test_the_page_size_is_a_preference(self):
         script = read(STATIC / "js" / "tables.js")
         self.assertIn("savePreference(PAGE_SIZE_PREFERENCE", script)
-        self.assertIn("const DEFAULT_PAGE_SIZE = 25;", script)
         self.assertIn("readPreference(PAGE_SIZE_PREFERENCE)", script)
-        self.assertRegex(script, r"const PAGE_SIZES = \[10, 25, 50\];")
+        module = read(MODULES["tables.ts"])
+        self.assertIn("export const DEFAULT_PAGE_SIZE = 25;", module)
+        self.assertRegex(module, r"export const PAGE_SIZES = \[10, 25, 50\];")
 
     def test_every_table_is_paged(self):
         sites = {"tables.js": 7, "limits.js": 2, "drilldown.js": 9, "chartkit.js": 1, "figures.js": 1}
@@ -686,7 +688,7 @@ class PagingTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_pager_of_cards_names_what_they_are(self):
         window = {"page": 0, "pages": 30, "first": 0, "last": 10}
-        self.assertEqual(run_function("tables.js", "pageText", window, 300, "sessions"), "sessions 1–10 of 300")
+        self.assertEqual(run_function("tables.ts", "pageText", window, 300, "sessions"), "sessions 1–10 of 300")
 
     def test_the_pager_comes_before_the_table(self):
         script = read(STATIC / "js" / "tables.js")
@@ -997,7 +999,7 @@ class SessionListTest(unittest.TestCase):
     def matching(self, project, text):
         """The ids of the sessions the filter keeps."""
         return [session["session_id"] for session in self.SESSIONS
-                if run_function("tables.js", "sessionMatches", session, project, text)]
+                if run_function("tables.ts", "sessionMatches", session, project, text)]
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_no_filter_keeps_every_session(self):
@@ -1020,19 +1022,19 @@ class SessionListTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_the_projects_to_pick_come_by_name_with_their_sessions(self):
-        self.assertEqual(run_function("tables.js", "sessionProjects", self.SESSIONS, ""),
+        self.assertEqual(run_function("tables.ts", "sessionProjects", self.SESSIONS, ""),
                          [{"project": "/home/dev/app", "count": 2}, {"project": "/home/dev/other", "count": 1}])
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_picked_project_stays_on_offer_in_a_range_without_it(self):
-        self.assertEqual(run_function("tables.js", "sessionProjects", self.SESSIONS[:1], "/home/dev/gone"),
+        self.assertEqual(run_function("tables.ts", "sessionProjects", self.SESSIONS[:1], "/home/dev/gone"),
                          [{"project": "/home/dev/app", "count": 1}, {"project": "/home/dev/gone", "count": 0}])
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_the_count_says_how_many_of_the_ranges_sessions_show(self):
-        self.assertEqual(run_function("tables.js", "sessionCount", 84, 84), "84 sessions")
-        self.assertEqual(run_function("tables.js", "sessionCount", 1, 1), "1 session")
-        self.assertEqual(run_function("tables.js", "sessionCount", 12, 84), "12 of 84 sessions")
+        self.assertEqual(run_function("tables.ts", "sessionCount", 84, 84), "84 sessions")
+        self.assertEqual(run_function("tables.ts", "sessionCount", 1, 1), "1 session")
+        self.assertEqual(run_function("tables.ts", "sessionCount", 12, 84), "12 of 84 sessions")
 
     def test_the_filters_come_between_the_heading_and_the_table(self):
         markup = dashboard()

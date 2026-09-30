@@ -8,8 +8,9 @@ import * as compact from './lib/compact';
 import * as format from './lib/format';
 import * as live from './lib/live';
 import * as secrets from './lib/secrets';
+import * as tables from './lib/tables';
 
-const MODULES = [format, colors, compact, secrets, live];
+const MODULES = [format, colors, compact, secrets, live, tables];
 
 // a path, not a URL: the simulated DOM's URL class isn't node's
 const PAGE = join(import.meta.dirname, '../../claude_usage/static/dashboard.html');
@@ -68,6 +69,7 @@ test.each([
   ['compacting helpers', compact, 'payoffTone'],
   ['secrets helpers', secrets, 'secretTone'],
   ['live helpers', live, 'liveWaitBadge'],
+  ['tables helpers', tables, 'pageWindow'],
 ])("the old scripts' %s are the module's exports", (_kind, module, sample) => {
   const names = Object.keys(module) as (keyof typeof module & keyof Window)[];
   expect(names).toContain(sample);

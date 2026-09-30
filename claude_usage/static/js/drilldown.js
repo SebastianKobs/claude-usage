@@ -113,12 +113,6 @@ function showSessionWaits(detail) {
       : el("span", {}, sessionLink(wait), `: ${wait.text}`))));
 }
 
-// the conversation in the Tools table's place while its transcript exists, the tools at the end then; without it
-// the conversation, which can only say it is gone, stays last
-function toolsAndChat(transcript, tools, chat) {
-  return transcript ? [chat, tools] : [tools, chat];
-}
-
 // What a refresh keeps: the conversation's nodes as they are (moved into the new view, so a loaded conversation
 // and its picker stay), the table view and the folds open (workflow runs, tool details), focus, and the element at
 // the top of the window
@@ -158,36 +152,6 @@ function restoreFocusAndScroll(panel, kept) {
   target.focus({preventScroll: true});
 }
 
-// one row per transcript; a workflow run's agents under one row per run, whose button shows or hides them
-// what a Bash command does, by its programs (tool_kinds.command_class), never by its language; which programs is
-// the fold under it. MCP's kinds are its servers, named as they are.
-const TOOL_KINDS = {
-  search: "search", view: "view", list: "list", edit_in_place: "edit in place", write_file: "write a file",
-  inline_script: "inline script", git: "git", run: "run a program",
-};
-
-// The Tools table's rows, agent by agent: from the transcript (tool_kinds) each tool with its sizes and costs, Bash
-// followed by a sub-row per command kind and MCP by one per server, each kind by one per detail (its programs, a
-// server's tools), a file tool by one per file type (Grep by output mode, Glob by the type it matches, Agent by
-// subagent type, Skill by skill), each detail by one per set of options. A row's fold names
-// it per agent; the rows it splits into carry it as their parent, except the kinds, which are always shown. Once the
-// transcript is gone the stored calls and characters, the rest unknown (null).
-function toolTableRows(agents) {
-  return agents.flatMap(agent => agent.tool_kinds
-    ? agent.tool_kinds.map(row => {
-      const parts = [row.tool, row.kind, row.detail, row.options];
-      const depth = parts.findLastIndex(part => part !== null);
-      const key = keyParts => JSON.stringify([agent.agent_id ?? "", ...keyParts]);
-      const above = parts.map((part, index) => (index === depth ? null : part));
-      return {...row, agent: agent.agent_type, sub: depth > 0, fold: key(parts), parent: depth > 1 ? key(above) : null};
-    })
-    : agent.tools.map(tool => ({agent: agent.agent_type, tool: tool.tool, kind: null, detail: null, options: null,
-                                fold: null, parent: null,
-                                sub: false, calls: tool.calls, errors: null, result_chars: tool.result_chars,
-                                result_median: null, result_p90: null, input_median: null, calls_after_median: null,
-                                carried: null, input_cost: null})));
-}
-
 function toolsTable(agents) {
   const rows = toolTableRows(agents);
   if (!rows.length) return el("div", {class: "empty", text: "No tool calls."});
@@ -200,19 +164,15 @@ function toolsTable(agents) {
                            "compaction"),
     heading("~Carried", "what the later calls paid to have its input and result in their context"),
     heading("~Input cost", "its input at the output price"));
-  const folds = new Map();                                // a row's fold: its row, name, the rows under it
-  const entries = [];                                     // each table row with the folds above it
+  // the rows' folds come from tables.ts: a row shows while every fold above it is open
+  const {above, folds} = toolFolds(rows);
+  const names = rows.map(row => {
+    const name = toolRowName(row);
+    return el("span", {class: name.className, text: name.text});
+  });
   const body = rows.map((row, index) => {
-    // a file tool's details sit one step less deep: they have no kind above them
-    const depth = row.kind === null ? " under-tool" : "";
-    const name = row.options !== null
-      ? el("span", {class: `tool-options${depth}`, text: row.options || "no options"})
-      : row.detail !== null
-        ? el("span", {class: `tool-detail${depth}`, text: row.detail || emptyDetail(row)})
-        : row.sub ? el("span", {class: "tool-kind", text: kindLabel(row, TOOL_KINDS)})
-          : el("span", {text: row.tool});
-    const tr = el("tr", {class: row.sub ? "sub-row" : rows[index + 1]?.sub ? "group-row" : null},
-      el("td", {text: row.sub ? "" : row.agent}), el("td", {}, name),
+    const tr = el("tr", {class: toolRowClass(row, rows[index + 1])},
+      el("td", {text: row.sub ? "" : row.agent}), el("td", {}, names[index]),
       el("td", {class: "num", text: whole(row.calls)}), el("td", {class: "num", text: whole(row.errors)}),
       el("td", {class: "num", text: compact(row.result_chars)}),
       el("td", {class: "num", text: compact(row.result_median)}),
@@ -220,49 +180,22 @@ function toolsTable(agents) {
       el("td", {class: "num", text: compact(row.input_median)}),
       el("td", {class: "num", text: whole(row.calls_after_median)}),
       el("td", {class: "num", text: money(row.carried)}), el("td", {class: "num", text: money(row.input_cost)}));
-    const above = row.parent ? [...folds.get(row.parent).above, row.parent] : [];
-    if (row.parent) folds.get(row.parent).members.push(tr);
-    if (row.fold) folds.set(row.fold, {row, name, members: [], above});
-    entries.push({tr, above});
+    tr.dataset.key = row.key;
     return tr;
   });
-  // a row shows while every fold above it is open, so closing one hides what was open under it too
-  const toggles = new Map();
-  const closed = fold => toggles.get(fold).getAttribute("aria-expanded") !== "true";
+  const open = new Set();
   const update = () => {
-    for (const {tr, above} of entries) tr.hidden = above.some(closed);
+    body.forEach((tr, index) => { tr.hidden = !toolRowShown(above[index], open); });
   };
-  for (const [fold, {row, name, members}] of folds) {
-    if (!members.length) continue;
-    const toggle = foldToggle(fold, `${whole(members.length)} ${detailNoun(row, members.length)}`, update);
-    toggles.set(fold, toggle);
-    name.append(" (", toggle, ")");
+  for (const {fold, row, label} of folds) {
+    const toggle = foldToggle(fold, label, isOpen => {
+      if (isOpen) open.add(fold); else open.delete(fold);
+      update();
+    });
+    names[row].append(" (", toggle, ")");
   }
   update();
   return el("table", {}, el("thead", {}, head), el("tbody", {}, ...body));
-}
-
-// a Bash kind in words (labels: TOOL_KINDS), an MCP server by its name, which may read like a kind
-function kindLabel(row, labels) {
-  return row.tool === "Bash" ? labels[row.kind] || row.kind : row.kind;
-}
-
-// a detail that is empty: a command without a program, a file without a type, a pattern matching more than one, a
-// skill without a name
-function emptyDetail(row) {
-  if (row.kind !== null) return "(none)";
-  return {Glob: "no single type", Skill: "no name"}[row.tool] || "no type";
-}
-
-// what a row's details are, for the count on its fold
-function detailNoun(row, count) {
-  const kindNouns = {inline_script: ["interpreter", "interpreters"], git: ["subcommand", "subcommands"]};
-  const toolNouns = {Grep: ["output mode", "output modes"], Agent: ["subagent type", "subagent types"],
-                     Task: ["subagent type", "subagent types"], Skill: ["skill", "skills"]};
-  const [one, many] = row.detail !== null ? ["option set", "option sets"]
-    : row.kind === null ? toolNouns[row.tool] || ["file type", "file types"]
-      : row.tool === "MCP" ? ["tool", "tools"] : kindNouns[row.kind] || ["program", "programs"];
-  return count === 1 ? one : many;
 }
 
 // A button that opens or closes a fold, closed at first: onToggle(open) shows or hides its rows. A refresh opens it

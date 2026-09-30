@@ -3,42 +3,13 @@
 
 // --- paging -------------------------------------------------------------------------------------------------
 
-const PAGE_SIZES = [10, 25, 50];
-const DEFAULT_PAGE_SIZE = 25;
 const PAGE_SIZE_PREFERENCE = "page_size";
+// PAGE_SIZES, DEFAULT_PAGE_SIZE, pageUnits, pageWindow, pageText and pageSizeFrom come from the bundle
+// (web/src/lib/tables.ts)
 // the page each table shows, by its key, so a table drawn again (a refresh, another range) stays on it
 const tablePages = new Map();
 // the pagers on the page, so a new page size applies to every table at once
 const pagers = new Set();
-
-// the group each row belongs to: a sub-row (an effort level under its model, an agent under its workflow run)
-// stays with the row above it, so a page never splits a group
-function pageUnits(subRows) {
-  const units = [];
-  let unit = -1;
-  for (const sub of subRows) {
-    if (!sub || unit < 0) unit += 1;
-    units.push(unit);
-  }
-  return units;
-}
-
-// the groups a page shows, first to last (exclusive), with the page kept within the pages there are
-function pageWindow(count, size, page) {
-  const pages = Math.max(1, Math.ceil(count / size));
-  const kept = Math.min(Math.max(page, 0), pages - 1);
-  return {page: kept, pages, first: kept * size, last: Math.min(count, (kept + 1) * size)};
-}
-
-function pageText(shown, count, noun = "rows") {
-  return `${noun} ${shown.first + 1}–${shown.last} of ${count}`;
-}
-
-// a saved page size, if it is one on offer
-function pageSizeFrom(saved, sizes, fallback) {
-  const size = Number(saved);
-  return sizes.includes(size) ? size : fallback;
-}
 
 function pageSize() {
   return pageSizeFrom(readPreference(PAGE_SIZE_PREFERENCE), PAGE_SIZES, DEFAULT_PAGE_SIZE);
@@ -198,29 +169,6 @@ function renderTables(summary) {
 }
 
 // --- the sessions list: every session of the range, filtered by project and words ----------------------------
-
-// whether a session is of the project picked ("" for all) and holds every word, in any case, in its title, project
-// or id
-function sessionMatches(session, project, text) {
-  if (project && session.project !== project) return false;
-  const haystack = `${session.title || ""} ${session.project} ${session.session_id}`.toLowerCase();
-  return text.toLowerCase().split(/\s+/).filter(Boolean).every(word => haystack.includes(word));
-}
-
-// the projects to pick from, by name, with their sessions; the one picked stays on offer in a range without it, so
-// the filter still shows
-function sessionProjects(sessions, picked) {
-  const counts = new Map();
-  for (const session of sessions) counts.set(session.project, (counts.get(session.project) || 0) + 1);
-  if (picked && !counts.has(picked)) counts.set(picked, 0);
-  return [...counts].sort(([left], [right]) => left.localeCompare(right))
-    .map(([project, count]) => ({project, count}));
-}
-
-function sessionCount(shown, total) {
-  const sessions = `${total} session${total === 1 ? "" : "s"}`;
-  return shown === total ? sessions : `${shown} of ${sessions}`;
-}
 
 // the range's sessions, drawn again through the filter as it changes; a refresh keeps the filter
 let sessionList = [];

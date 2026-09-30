@@ -9,24 +9,27 @@ import * as compact from './lib/compact';
 import * as format from './lib/format';
 import * as live from './lib/live';
 import * as secrets from './lib/secrets';
+import * as tables from './lib/tables';
 
 // Typed from the modules themselves, so what Window declares can't drift from what the old scripts are handed. The
 // formatters are lib/format.ts (numbers, money, durations, days, hours, moments), the colors lib/colors.ts (the
 // chart palette's slots, models and effort shades), compacting lib/compact.ts (when compacting pays off, the call to
 // compact, the delegate hint, the verdict's tone and the compactions' sum), the secrets lib/secrets.ts (the secret
-// access tone, origin and reach words) and the live cards lib/live.ts (their badges and what waits). Their names
-// must stay apart: a shared one would be handed over twice, the second silently winning.
+// access tone, origin and reach words), the live cards lib/live.ts (their badges and what waits) and the tables
+// lib/tables.ts (paging, the sessions filter and count, the Tools table's rows, folds and labels, the conversation's
+// order). Their names must stay apart: a shared one would be handed over twice, the second silently winning.
 type Formatters = typeof format;
 type Colors = typeof colors;
 type Compacting = typeof compact;
 type Secrets = typeof secrets;
 type Live = typeof live;
+type Tables = typeof tables;
 
 // Every module handed over: a new one is imported above, typed in Window's extends and listed here.
-const MODULES = [format, colors, compact, secrets, live];
+const MODULES = [format, colors, compact, secrets, live, tables];
 
 declare global {
-  interface Window extends Formatters, Colors, Compacting, Secrets, Live {
+  interface Window extends Formatters, Colors, Compacting, Secrets, Live, Tables {
     /** Sets a source's banner message (empty removes it), drawn at once. */
     showError(source: string, message: string): void;
     /** Whether a source has a banner message now. */
