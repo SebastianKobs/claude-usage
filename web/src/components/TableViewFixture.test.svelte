@@ -1,7 +1,8 @@
 <!--
 @component
 TableView's test bench: rows of a name and a number, the number in a `num` cell, a row with `sub` a sub-row of the one
-above. Only the tests use it.
+above, a row with `group` a group head. `withHeading`, `withIntro` and `empty` turn on the heading, the note and the
+text for no rows. Only the tests use it.
 -->
 <script lang="ts" module>
   /** A row of the bench. */
@@ -10,6 +11,7 @@ above. Only the tests use it.
     name: string;
     amount: number;
     sub?: boolean;
+    group?: boolean;
   }
 </script>
 
@@ -21,7 +23,20 @@ above. Only the tests use it.
     tableKey = 'bench',
     noun,
     withSub = false,
-  }: { rows: BenchRow[]; tableKey?: string; noun?: string; withSub?: boolean } = $props();
+    withGroup = false,
+    withHeading = false,
+    withIntro = false,
+    empty,
+  }: {
+    rows: BenchRow[];
+    tableKey?: string;
+    noun?: string;
+    withSub?: boolean;
+    withGroup?: boolean;
+    withHeading?: boolean;
+    withIntro?: boolean;
+    empty?: string;
+  } = $props();
 </script>
 
 <TableView
@@ -32,7 +47,19 @@ above. Only the tests use it.
   rowKey={(row) => row.id}
   {cells}
   sub={withSub ? (row) => row.sub === true : undefined}
+  group={withGroup ? (row) => row.group === true : undefined}
+  heading={withHeading ? heading : undefined}
+  intro={withIntro ? intro : undefined}
+  {empty}
 />
+
+{#snippet heading()}
+  <h3>Bench</h3>
+{/snippet}
+
+{#snippet intro()}
+  <p class="note">About the bench</p>
+{/snippet}
 
 {#snippet cells(row: BenchRow)}
   <td>{row.name}</td>

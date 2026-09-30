@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest';
 import type { ToolCount, ToolKindRow } from './api.ts';
+import { usage } from './fixtures.ts';
 import {
+  byCost,
   chatRows,
   detailNoun,
   emptyDetail,
@@ -21,6 +23,8 @@ import {
   toolRowShown,
   toolsAndChat,
   toolTableRows,
+  USAGE_COLUMNS,
+  usageCells,
   type ToolRow,
 } from './tables.ts';
 
@@ -413,4 +417,29 @@ test('the keys of a conversation are all different', () => {
 test('the conversation takes the tools’ place while its transcript exists', () => {
   expect(toolsAndChat(true, 'tools', 'chat')).toEqual(['chat', 'tools']);
   expect(toolsAndChat(false, 'tools', 'chat')).toEqual(['tools', 'chat']);
+});
+
+test('usage rows come dearest first, the busier one first among equals, an unpriced row last', () => {
+  const rows = [
+    { name: 'cheap', ...usage({ cost: 1, turns: 5 }) },
+    { name: 'unpriced', ...usage({ cost: null as unknown as number, turns: 50 }) },
+    { name: 'busy', ...usage({ cost: 2, turns: 9 }) },
+    { name: 'dear', ...usage({ cost: 2, turns: 3 }) },
+  ];
+  expect(rows.sort(byCost).map((row) => row.name)).toEqual(['busy', 'dear', 'cheap', 'unpriced']);
+});
+
+test('a usage table has the turns, the input side, the cache read share, the output and the cost', () => {
+  expect(USAGE_COLUMNS).toEqual([
+    { label: 'Turns', numeric: true },
+    { label: 'Input', numeric: true },
+    { label: 'Cache read %', numeric: true },
+    { label: 'Output', numeric: true },
+    { label: 'Cost', numeric: true },
+  ]);
+});
+
+test('a usage row writes its cells in those columns', () => {
+  const row = usage({ turns: 1234, new_input: 100, cache_write: 200, cache_read: 1700, output: 2500, cost: 3 });
+  expect(usageCells(row)).toEqual(['1,234', '2K', '85%', '2.5K', '$3.00']);
 });

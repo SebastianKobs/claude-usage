@@ -107,7 +107,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/secrets.ts         how the secret accesses show: the card's tone, a path's script, how far a call got
   src/lib/live.ts            the live cards' badges (waiting, secret, compacting now) and what waits for the user
   src/lib/tables.ts          paging (page units, window and text), the sessions list's filter and count, the Tools
-                             table's rows with their keys, folds and labels, the conversation's order and keys
+                             table's rows with their keys, folds and labels, the conversation's order and keys, and
+                             the usage tables' cells and order
   src/lib/charts.ts          the charts' maths: scales and ticks, where a point or column falls, the time axis, the
                              by-model series and stacks, the rate-limit counts and windows, the cost bars' split
   src/lib/themes.ts          the themes and the gimmick themes' wording (`test_static.py` reads its labels): which theme
@@ -129,6 +130,9 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              segments, the hatched fills, the legend, tooltip and table rows (used by the component)
   src/lib/costly.ts          the cost-per-session ranking: its two parts of the cost, the rows, tooltip and table
                              rows (used by the component)
+  src/lib/limits.ts          the rate-limits section: the hits per day or hour, the columns' geometry and words, the
+                             table view, the 5-hour windows' rows (models under each) and the latest errors' rows (used
+                             by the component)
   src/lib/payload.svelte.ts  what the page has loaded, as reactive state (`payload`: the summary, or that loading it
                              failed), which the old scripts fill through `setPayload`
   src/lib/overview.svelte.ts the session view's tile rows, mounted for the old scripts (`mountSessionKpis`,
@@ -136,8 +140,9 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
                              `YAxis`, `XLabels`, `AreaLine`, `PointDot`, and the tiles: `StatTile`, `InputSplit`,
                              `KpiTiles`, `RuntimeTiles`, `SummaryTiles`; `ChartCard`, the section a chart lives in, with
-                             its table-view toggle; `TableView`, a paged table; `OverTime`, `ByModel`,
-                             `CostPerSession`), each with its Testing Library test
+                             its table-view toggle; `TableView`, a paged table, its pager in an optional heading row;
+                             `OverTime`, `ByModel`, `CostPerSession`, `RateLimits`), each with its Testing Library
+                             test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)

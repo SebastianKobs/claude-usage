@@ -60,7 +60,6 @@ function renderSummary() {
   setPayload({summary});
   renderDayNav();
   renderTables(summary);
-  renderLimits(summary);
   const scope = summary.project_filter ? `project ${summary.project_filter}` : "all projects";
   document.getElementById("scope").textContent = `· ${scope}`;
   document.getElementById("footer").textContent = "Estimated cost at Claude API list prices" +
@@ -288,13 +287,6 @@ function setup() {
   });
   document.getElementById("day-prev").addEventListener("click", () => stepDay("previous_day"));
   document.getElementById("day-next").addEventListener("click", () => stepDay("next_day"));
-  for (const name of ["limits"]) {
-    document.getElementById(`${name}-table-toggle`).addEventListener("click", event => {
-      const table = document.getElementById(`${name}-table`);
-      table.hidden = !table.hidden;
-      event.currentTarget.setAttribute("aria-pressed", String(!table.hidden));
-    });
-  }
   setupSessionFilters();
   document.getElementById("theme").addEventListener("change", event => {
     preferences.theme = event.target.value;
@@ -307,10 +299,7 @@ function setup() {
   document.addEventListener("visibilitychange", pollWhileVisible);
   const resize = new ResizeObserver(() => {
     if (state.session) renderContext(state.session);
-    if (!state.summary) return;
-    renderLimits(state.summary);
   });
-  resize.observe(document.getElementById("limits"));
   resize.observe(document.getElementById("drilldown"));
 
   placeholder("live", "Loading…");

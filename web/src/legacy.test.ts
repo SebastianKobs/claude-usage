@@ -7,7 +7,7 @@ import * as charts from './lib/charts';
 import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
-import { costlySession, summary } from './lib/fixtures';
+import { apiErrorEvent, costlySession, summary } from './lib/fixtures';
 import * as live from './lib/live';
 import * as overview from './lib/overview.svelte';
 import * as paging from './lib/paging.svelte';
@@ -212,6 +212,21 @@ test('the cost-per-session section is mounted in its container: a card, drawn fr
   expect(card.querySelectorAll('.legend > span')).toHaveLength(2);
 });
 
+test('the rate-limits section is mounted in its container: a card, drawn from the payload', () => {
+  const card = tilesOf('limits-card');
+  expect(screen.getByRole('region', { name: 'Rate limits' })).toBeInTheDocument();
+  expect(card).toContainElement(screen.getByRole('region', { name: 'Rate limits' }));
+  expect(card.querySelector('svg')).toBeNull();
+  window.setPayload({
+    summary: summary({
+      api_errors: { day: [], hour: [], events: [apiErrorEvent()], windows: [] },
+    }),
+  });
+  expect(card.querySelectorAll('table')).toHaveLength(1);
+  expect(card.querySelectorAll('h3')).toHaveLength(2);
+  expect(card.querySelectorAll('.legend > span')).toHaveLength(1);
+});
+
 test('a page without the tile containers fails loudly and mounts nothing', () => {
   bridged.stop();
   document.body.replaceChildren(pageBody());
@@ -251,6 +266,23 @@ test('a page without the cost-per-session container fails loudly and mounts noth
   expect(document.getElementById('error')).not.toBeNull();
   expect(document.getElementById('kpis')?.children).toHaveLength(0);
   expect(document.getElementById('chart-card')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('a page without the rate-limits container fails loudly and mounts nothing', () => {
+  bridged.stop();
+  document.body.replaceChildren(pageBody());
+  document.getElementById('limits-card')?.remove();
+  expect(() => bridge(window)).toThrow('The page has no #limits-card container for the rate-limits section');
+  expect(document.getElementById('error')).not.toBeNull();
+  expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  expect(document.getElementById('costly-card')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('stopping takes the rate-limits section away too', () => {
+  bridged.stop();
+  expect(tilesOf('limits-card').children).toHaveLength(0);
   bridged = { stop() {} };
 });
 

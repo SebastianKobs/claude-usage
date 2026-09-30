@@ -6,6 +6,7 @@ import Banner from './components/Banner.svelte';
 import ByModel from './components/ByModel.svelte';
 import CostPerSession from './components/CostPerSession.svelte';
 import OverTime from './components/OverTime.svelte';
+import RateLimits from './components/RateLimits.svelte';
 import SummaryTiles from './components/SummaryTiles.svelte';
 import { BannerMessages } from './lib/banner.svelte';
 import * as charts from './lib/charts';
@@ -38,8 +39,9 @@ import * as themes from './lib/themes';
 // `mountSessionRuntime`, rows the old scripts put into the page). `tablePages`, `mountPager`, `payload` and the like
 // reach the old scripts as globals, like everything else here. Their names must stay apart: a shared one would be
 // handed over twice, the second silently winning. The overview's two tile rows, `#kpis` and `#runtime`, the
-// over-time section, `#trend-card`, the by-model section, `#chart-card`, and the cost-per-session section,
-// `#costly-card`, are mounted here from the payload, which `setPayload` sets.
+// over-time section, `#trend-card`, the by-model section, `#chart-card`, the cost-per-session section,
+// `#costly-card`, and the rate-limits section, `#limits-card`, are mounted here from the payload, which `setPayload`
+// sets.
 type Formatters = typeof format;
 type Colors = typeof colors;
 type Compacting = typeof compact;
@@ -117,6 +119,8 @@ export function bridge(target: Window): Bridge {
   if (!byModelContainer) throw new Error('The page has no #chart-card container for the by-model section');
   const costlyContainer = target.document.getElementById('costly-card');
   if (!costlyContainer) throw new Error('The page has no #costly-card container for the cost-per-session section');
+  const limitsContainer = target.document.getElementById('limits-card');
+  if (!limitsContainer) throw new Error('The page has no #limits-card container for the rate-limits section');
   // Mounted before the placeholder, which then goes, so the banner keeps its place and there is one alert.
   const banner = mount(Banner, { target: placeholder.parentElement, anchor: placeholder, props: { messages } });
   placeholder.remove();
@@ -132,6 +136,8 @@ export function bridge(target: Window): Bridge {
   const byModel = mount(ByModel, { target: byModelContainer });
   // And the cost per session.
   const costly = mount(CostPerSession, { target: costlyContainer });
+  // And the rate limits.
+  const limits = mount(RateLimits, { target: limitsContainer });
 
   target.showError = (source: string, message: string): void => {
     messages.show(source, message);
@@ -150,6 +156,7 @@ export function bridge(target: Window): Bridge {
       void unmount(trend);
       void unmount(byModel);
       void unmount(costly);
+      void unmount(limits);
       // Reflect, since the Window interface declares them always there, which a plain delete refuses.
       Reflect.deleteProperty(target, 'showError');
       Reflect.deleteProperty(target, 'hasError');

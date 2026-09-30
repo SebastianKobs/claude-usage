@@ -4,8 +4,9 @@
 // tool row's `key`, a conversation entry's from its place in the transcript, a session's `session_id`, a project's
 // name, never a position in what is shown.
 
-import type { Agent, ChatEntry, SessionListItem } from './api.ts';
-import { whole } from './format.ts';
+import type { Agent, ChatEntry, SessionListItem, Usage } from './api.ts';
+import { inputTotal } from './charts.ts';
+import { compact, money, percent, whole } from './format.ts';
 
 // --- paging ---------------------------------------------------------------------------------------------------
 
@@ -301,4 +302,31 @@ export function chatRows<T extends Pick<ChatEntry, 'message_id' | 'timestamp' | 
  *  without it the conversation, which can only say it is gone, stays last. */
 export function toolsAndChat<T>(transcript: boolean, tools: T, chat: T): T[] {
   return transcript ? [chat, tools] : [tools, chat];
+}
+
+// --- usage tables ---------------------------------------------------------------------------------------------
+
+/** Dearest first, the row with more turns first among equals, a row without a price after the priced ones. */
+export function byCost(
+  left: { cost: number | null; turns: number },
+  right: { cost: number | null; turns: number },
+): number {
+  return (right.cost ?? -1) - (left.cost ?? -1) || right.turns - left.turns;
+}
+
+/** The columns every usage table has after its name. */
+export const USAGE_COLUMNS: { label: string; numeric: boolean }[] = [
+  { label: 'Turns', numeric: true },
+  { label: 'Input', numeric: true },
+  { label: 'Cache read %', numeric: true },
+  { label: 'Output', numeric: true },
+  { label: 'Cost', numeric: true },
+];
+
+/** A usage row's cells in `USAGE_COLUMNS`. */
+export function usageCells(
+  row: Pick<Usage, 'turns' | 'new_input' | 'cache_write' | 'cache_read' | 'output' | 'cost'>,
+): string[] {
+  const input = inputTotal(row);
+  return [whole(row.turns), compact(input), percent(row.cache_read, input), compact(row.output), money(row.cost)];
 }

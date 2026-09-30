@@ -14,14 +14,15 @@
     "web/src/components/OverTime.svelte": "ce6594db7f26bebc9aba8f62edda4e94cb88791a6e2f114ec2b2cf3a06a89c88",
     "web/src/components/Pager.svelte": "e8d67a69761af3cda07e41e0c438e0a949c86e8984a15b90bf1220784e8f79d8",
     "web/src/components/PointDot.svelte": "1642f198e1ee52cc1530ec040e5ebcbe74eee3f5800bd76aa933d025ec0b8846",
+    "web/src/components/RateLimits.svelte": "a7f23e482b82e94d9abdaebe138674bc51515178a363b6433fcc9241598f9102",
     "web/src/components/RuntimeTiles.svelte": "6acbc1390e855f37291433650391daabaea907d2e9448f7dad8a4bb9baa4498c",
     "web/src/components/StatTile.svelte": "5ecd0138f05cfe87e68a69d64ec6a3478e04e1bd1dc141808a5d2e9fd2993b49",
     "web/src/components/SummaryTiles.svelte": "b125eb266c417c3ed3898f5d239bf2cbaebc2b1aa1f025ea5f201aec59637a51",
     "web/src/components/Swatch.svelte": "9fbd95c37c02f0d1ce1c6c27d9cb5efb32167f60456e1037a55d97d1e99e1028",
-    "web/src/components/TableView.svelte": "6f59711d87b6f015c3a301b6b13c11606a4be7a0f1ba1e1028192fce4a679f9b",
+    "web/src/components/TableView.svelte": "9a05053df9a538983990a6e4080c0501bc98b15fd0e85d49fd8a3bae96b726a5",
     "web/src/components/XLabels.svelte": "3fa5052afc89d04d739c86128fb829419fafbfa5d1ec1775ee0279ab073fb3c5",
     "web/src/components/YAxis.svelte": "a45c8f9d24b1dda129393df88eb58ce4bc58ae38f1d9cc0f9292ff53ea410d07",
-    "web/src/legacy.svelte.ts": "1e8a046f3a872885c87b2c025c109e5caddbdf528cfd01492af8a2bac06d3b0c",
+    "web/src/legacy.svelte.ts": "201524c41b1e481c11b661cada43fd0820eebfa1085cae8dab31c87daa44bad1",
     "web/src/lib/banner.svelte.ts": "2bcc2747224c3bc55c4120fd47e17ad383527684826309e01cda94763bbb67e9",
     "web/src/lib/bymodel.ts": "1f1b26f6ad7515c3473fd90709b3fbdfc0410c5fcc7c406b5e62febabc3554cc",
     "web/src/lib/chartkit.ts": "0abc565531d389285a10e0d8017d1bad67f4acec851289b234dc7d382b1b879f",
@@ -30,6 +31,7 @@
     "web/src/lib/compact.ts": "6ead0048229e475d91baffc135fb21f979c9f4154b5093be50bb410b9fb02d3a",
     "web/src/lib/costly.ts": "1564906373ac0d4ee898b3855211dd6eab44976c019cb36187c843fb7472f9e4",
     "web/src/lib/format.ts": "57d78f4b8bb1c588430a346be6d48b7eae0067fdbaf78adb724b84b244ec81f5",
+    "web/src/lib/limits.ts": "5a8d6af6d7f4bd6382c95d11938671074d8be0d3f353ce213b8039c26424ea3e",
     "web/src/lib/live.ts": "c77a2a16090835b48c473a24f7b029f4a0d5598f8d870dc0d91b5e215a72c9b2",
     "web/src/lib/overview.svelte.ts": "d314760014d4c8dadd4f216e8616000b7f23a27e9ef7a170f84f801ef43a788e",
     "web/src/lib/paging.svelte.ts": "d8e0ac5ea359473860b02cdea41576d0a968c608ba856d073d0583cd1d9e08ef",
@@ -37,7 +39,7 @@
     "web/src/lib/prefs.svelte.ts": "3cef57db6b563e4f2287604140c719fc0c0f2ea90aed136c266b5e4032c055e0",
     "web/src/lib/scroll.ts": "00e72d7195bb2b1906b7a53b20600025a52fe3b5d7fa984cde9912426a07942f",
     "web/src/lib/secrets.ts": "6f3d9eba95314a859de7032776c1eb77fa29e93949793c51d7ccf4816cca865a",
-    "web/src/lib/tables.ts": "c3422d7fe746ce9df51499a2ac2a77150b2fe8751ace554a69df1bc7dbbe4c36",
+    "web/src/lib/tables.ts": "cab1597678a6832ef536f510c8d00b30506cdbfdece2cb2986cfcbcb60b78b08",
     "web/src/lib/themes.ts": "ada0027dc8e18c4eb4227e0a4ed92d929de5d10384b097195b2897b612ed94d1",
     "web/src/lib/tiles.ts": "00e8a9c7419ad33b95ae5f55ec5ebaf5ac1a3476588be3c7f946dd5112c6aa06",
     "web/src/lib/trend.ts": "ae38d2ff93617b24da1d6f5be5edd445513925d2248253f762bbc2537e28ae62",
@@ -48,6 +50,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "6d80e4fb7b0647d9b9a3ce6ffb2721afbd1d0e8a403c135068f9b3ac4a09b597",
-    "claude_usage/static/js/app.js": "475f04caf3d700ed1336eefc1507dd1bab10e9eb31955348b8d7a6c6b0e89a36"
+    "claude_usage/static/js/app.js": "f4e0fd161ab3bb0a2d63a861389c76871b6650cf48b607293af93f28bb0d7c0d"
   }
 }

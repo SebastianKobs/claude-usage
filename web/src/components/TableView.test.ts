@@ -75,6 +75,126 @@ describe('the table', () => {
   });
 });
 
+describe('group rows', () => {
+  test('a group row has the class group-row, the others none', () => {
+    render(TableViewFixture, {
+      rows: makeRows(3).map((row, index) => ({ ...row, group: index === 0, sub: index === 1 })),
+      withGroup: true,
+      withSub: true,
+    });
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(rows.map((row) => row.className)).toEqual(['group-row', 'sub-row', '']);
+  });
+
+  test('without a group function no row is a group', () => {
+    render(TableViewFixture, { rows: makeRows(3).map((row) => ({ ...row, group: true })) });
+    expect(document.querySelector('.group-row')).toBeNull();
+  });
+});
+
+describe('the heading', () => {
+  test('unpaged it stands bare before the wrap, in no title row, the table after it', () => {
+    const { container } = render(TableViewFixture, { rows: makeRows(3), withHeading: true });
+    const [heading, wrap] = [...container.children];
+    expect(heading?.tagName).toBe('H3');
+    expect(heading).toHaveTextContent('Bench');
+    expect(container.querySelector('.title-row')).toBeNull();
+    expect(wrap).toHaveClass('table-wrap');
+    expect(wrap?.querySelector('table')).not.toBeNull();
+  });
+
+  test('paged it goes with the pager in a title row before the wrap', () => {
+    const { container } = render(TableViewFixture, { rows: makeRows(40), withHeading: true });
+    const [titleRow, wrap] = [...container.children];
+    expect(titleRow).toHaveClass('title-row');
+    expect([...(titleRow?.children ?? [])].map((child) => child.tagName)).toEqual(['H3', 'DIV']);
+    expect(wrap).toHaveClass('table-wrap');
+  });
+
+  test('takes the pager into its row, after the heading, past ten groups', () => {
+    const { container } = render(TableViewFixture, { rows: makeRows(40), withHeading: true });
+    const titleRow = container.querySelector('.title-row') as HTMLElement;
+    const pager = screen.getByRole('group', { name: 'Pages' });
+    expect(pager.parentElement).toBe(titleRow);
+    expect(pager.previousElementSibling?.tagName).toBe('H3');
+    expect(container.querySelector('.table-wrap .pager')).toBeNull();
+  });
+
+  test('gives up its title row when the rows shrink to one page', () => {
+    const { container, rerender } = render(TableViewFixture, { rows: makeRows(40), withHeading: true });
+    expect(container.querySelector('.title-row')).not.toBeNull();
+    void rerender({ rows: makeRows(3) });
+    flushSync();
+    expect(container.querySelector('.title-row')).toBeNull();
+    expect(container.firstElementChild?.tagName).toBe('H3');
+  });
+
+  test('without one the wrap is first and holds the pager', () => {
+    const { container } = render(TableViewFixture, { rows: makeRows(40) });
+    expect(container.querySelector('.title-row')).toBeNull();
+    expect(container.firstElementChild).toHaveClass('table-wrap');
+  });
+
+  test('the pager keeps its page when the heading is there', async () => {
+    const user = userEvent.setup();
+    render(TableViewFixture, { rows: makeRows(40), withHeading: true });
+    await user.click(screen.getByRole('button', { name: 'Next ›' }));
+    expect(status()).toBe('rows 26–40 of 40');
+  });
+});
+
+describe('the intro', () => {
+  test('goes between the heading and the wrap', () => {
+    const { container } = render(TableViewFixture, { rows: makeRows(3), withHeading: true, withIntro: true });
+    const [heading, note, wrap] = [...container.children];
+    expect(heading?.tagName).toBe('H3');
+    expect(note).toHaveClass('note');
+    expect(note).toHaveTextContent('About the bench');
+    expect(wrap).toHaveClass('table-wrap');
+  });
+
+  test('shows without a heading, before the wrap', () => {
+    const { container } = render(TableViewFixture, { rows: makeRows(3), withIntro: true });
+    expect(container.firstElementChild).toHaveClass('note');
+    expect(container.lastElementChild).toHaveClass('table-wrap');
+  });
+});
+
+describe('the empty text', () => {
+  test('replaces the table where there are no rows, the heading and intro staying', () => {
+    const { container } = render(TableViewFixture, {
+      rows: [],
+      empty: 'Nothing here.',
+      withHeading: true,
+      withIntro: true,
+    });
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(container.querySelector('.table-wrap > .empty')).toHaveTextContent(/^Nothing here\.$/);
+    expect(container.querySelector(':scope > h3')).not.toBeNull();
+    expect(container.querySelector('.note')).not.toBeNull();
+  });
+
+  test('is not shown where there are rows', () => {
+    render(TableViewFixture, { rows: makeRows(2), empty: 'Nothing here.' });
+    expect(document.querySelector('.empty')).toBeNull();
+    expect(screen.getByRole('table')).toBeInTheDocument();
+  });
+
+  test('without it a table with no rows is its heading only', () => {
+    render(TableViewFixture, { rows: [] });
+    expect(document.querySelector('.empty')).toBeNull();
+    expect(screen.getAllByRole('row')).toHaveLength(1);
+  });
+
+  test('gives way to the table when rows come', () => {
+    const { rerender } = render(TableViewFixture, { rows: [], empty: 'Nothing here.' });
+    void rerender({ rows: makeRows(2), empty: 'Nothing here.' });
+    flushSync();
+    expect(document.querySelector('.empty')).toBeNull();
+    expect(names()).toEqual(['row 0', 'row 1']);
+  });
+});
+
 describe('the pager', () => {
   test('there is none up to ten groups of rows, then it goes before the table in the wrap', () => {
     const { container, rerender } = render(TableViewFixture, { rows: makeRows(10) });

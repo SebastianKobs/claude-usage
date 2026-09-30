@@ -1,7 +1,16 @@
 // Made-up answers of the server for the tests of what draws them: a usage, a summary and a session's detail, each
 // with the changes a test asks for on top of one plain default.
 
-import type { CostlySession, RuntimeTotals, SessionDetail, SessionRuntime, Summary, Usage } from './api';
+import type {
+  ApiErrorEvent,
+  CostlySession,
+  LimitWindow,
+  RuntimeTotals,
+  SessionDetail,
+  SessionRuntime,
+  Summary,
+  Usage,
+} from './api';
 
 /** A usage of 10 turns: 1.5K input in all, 900 of it read from the cache, at a cost of $1.50. */
 export function usage(changes: Partial<Usage> = {}): Usage {
@@ -33,6 +42,37 @@ export function costlySession(changes: Partial<CostlySession> = {}): CostlySessi
     subagents: 2,
     context_avg: 40_000,
     context_peak: 90_000,
+    ...changes,
+  };
+}
+
+/** A failed call: a rate limit of the 5-hour quota in the session "abc-1". */
+export function apiErrorEvent(changes: Partial<ApiErrorEvent> = {}): ApiErrorEvent {
+  return {
+    record_id: 'err-1',
+    ts: '2026-09-29T10:00:00Z',
+    error: 'rate_limit',
+    status: 429,
+    limit_type: 'five_hour',
+    resets_at: '2026-09-29T13:00:00Z',
+    session_id: 'abc-1',
+    project: 'shop',
+    agent_type: 'main',
+    title: 'Checkout: split payment step',
+    ...changes,
+  };
+}
+
+/** A 5-hour window that hit its limit after 3 h 12 min, with no models listed. */
+export function limitWindow(changes: Partial<LimitWindow> = {}): LimitWindow {
+  return {
+    limit_type: 'five_hour',
+    start: '2026-09-29T08:00:00Z',
+    first_hit: '2026-09-29T11:12:00Z',
+    resets_at: '2026-09-29T13:00:00Z',
+    hits: 3,
+    used: usage(),
+    models: [],
     ...changes,
   };
 }

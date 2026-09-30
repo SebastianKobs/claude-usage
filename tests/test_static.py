@@ -160,15 +160,6 @@ class ScriptTest(unittest.TestCase):
         loaded = set(re.findall(r'<script src="/static/js/([^"/]+\.js)"', dashboard()))
         self.assertEqual(loaded, {path.name for path in OWN_SCRIPTS})
 
-    def test_every_table_toggle_has_its_table(self):
-        markup = dashboard()
-        loop = r"for \(const name of (\[[^\]]+\])\) \{\s+document.getElementById\(`\$\{name\}-table-toggle"
-        toggles = re.search(loop, read(STATIC / "js" / "main.js")).group(1)
-        for name in re.findall(r'"([\w-]+)"', toggles):
-            with self.subTest(name=name):
-                self.assertIn(f'id="{name}-table-toggle"', markup)
-                self.assertIn(f'id="{name}-table"', markup)
-
 
 class CompactionWordingTest(unittest.TestCase):
     def test_the_one_time_amount_reads_as_a_cost(self):
@@ -685,7 +676,7 @@ class PagingTest(unittest.TestCase):
         self.assertRegex(module, r"export const PAGE_SIZES = \[10, 25, 50\];")
 
     def test_every_table_is_paged(self):
-        sites = {"tables.js": 7, "limits.js": 2, "drilldown.js": 9, "chartkit.js": 1, "figures.js": 1}
+        sites = {"tables.js": 7, "drilldown.js": 9, "chartkit.js": 1, "figures.js": 1}
         for script, count in sites.items():
             with self.subTest(script=script):
                 self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)
@@ -1206,10 +1197,11 @@ class LimitWindowTest(unittest.TestCase):
     def test_a_window_is_hit_after_the_time_from_its_start(self):
         self.assertEqual(run_function("charts.ts", "windowHitAfter", self.WINDOW), (3 * 60 + 12) * 60 * 1000)
 
-    def test_the_windows_come_between_the_chart_and_the_latest_errors(self):
+    def test_the_rate_limits_section_is_drawn_by_its_component(self):
+        # the chart, the windows and the latest errors, in that order, are RateLimits.svelte's markup
         page = dashboard()
-        self.assertLess(page.index('id="limits-table"'), page.index('id="limit-windows"'))
-        self.assertLess(page.index('id="limit-windows"'), page.index('id="limit-events"'))
+        self.assertIn('<div id="limits-card"></div>', page)
+        self.assertNotIn('id="limit-windows"', page)
 
 
 class StyleTest(unittest.TestCase):
@@ -1217,7 +1209,7 @@ class StyleTest(unittest.TestCase):
         # light.css and common.css apply in every theme; the others only override
         defaults = set(re.findall(r"(--[\w-]+):", read(STATIC / "css" / "themes" / "light.css")
                                   + read(STATIC / "css" / "common.css")))
-        sources = STYLESHEETS + OWN_SCRIPTS + [COLORS, LIB / "tiles.ts", LIB / "costly.ts"]
+        sources = STYLESHEETS + OWN_SCRIPTS + [COLORS, LIB / "tiles.ts", LIB / "costly.ts", LIB / "limits.ts"]
         used = {name for path in sources for name in re.findall(r"var\((--[\w-]+)", read(path))}
         # a --series-N or --shade-step-N built in a script counts for every slot
         used = {name for name in used if not name.endswith("-")}
