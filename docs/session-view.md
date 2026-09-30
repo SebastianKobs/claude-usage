@@ -32,7 +32,7 @@ pay off, marked by a color and said in words:
 |---|---|---|
 | Green | Soon | It pays off within half of the replies you usually still make |
 | Yellow | Close | It pays off within the replies you usually still make |
-| Grey | Not yet | The context is still too small; at its recent pace, compacting would pay off in so many replies |
+| Grey | Not yet | The context is still too small; at its recent pace (right after a compaction, the pace before it), compacting would pay off in so many replies |
 | Red | Likely too late | It pays off only after more replies than you usually make, or never |
 
 How the estimate works: [When compacting pays off](compaction.md).

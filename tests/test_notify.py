@@ -27,10 +27,11 @@ EXPIRED = "2026-09-28T11:00:00.000+00:00"
 
 
 def gauge(context=150_000, warm_until=WARM, estimate=True, compacted=None, last_compaction=None, **fields):
-    """A main thread's gauge with a 200K hint and an estimate with 40 calls ahead on average, updated by the given
-    fields, as LiveStateTest in test_static builds it (no preview once it compacted after its last call)."""
+    """A main thread's gauge with a 200K hint and an estimate with 40 calls ahead on average and a longest finished
+    stretch of 60 calls, updated by the given fields, as LiveStateTest in test_static builds it (no preview once it
+    compacted after its last call)."""
     values = {"breakeven_calls": 10, "breakeven_low": 5, "calls_ahead": 40.0, "cold_saving": -0.5,
-              "breakeven_cold": 10}
+              "breakeven_cold": 10, "calls_after_high": 60}
     values.update(fields)
     return {"context": context, "hint_tokens": 200_000, "compacted": compacted, "last_compaction": last_compaction,
             "compact_now": None if compacted else {"cache_warm_until": warm_until,
@@ -417,6 +418,14 @@ COMPACT_CASES = [
     ({"breakeven_calls": None, "breakeven_low": None}, set()),
     ({"breakeven_calls": 50, "pays_later_in": 5}, set()),
     ({"calls_ahead": None}, {"pays"}),
+    ({"calls_ahead": None, "breakeven_calls": 60}, {"pays"}),
+    # without calls ahead, a break-even beyond every finished stretch, or none at the median estimate (both as
+    # right after a compaction), says nothing
+    ({"calls_ahead": None, "breakeven_calls": 61}, set()),
+    ({"calls_ahead": None, "calls_after_high": None}, set()),
+    ({"calls_ahead": None, "breakeven_calls": None}, set()),
+    ({"calls_ahead": None, "breakeven_calls": 100, "context": 250_000}, {"hint"}),
+    ({"calls_ahead": None, "warm_until": EXPIRED, "breakeven_cold": 100}, set()),
     ({"context": 250_000}, {"soon", "hint"}),
     ({"context": 250_000, "breakeven_calls": 50, "pays_later_in": 5}, {"hint"}),
     ({"context": 250_000, "estimate": False}, {"hint"}),

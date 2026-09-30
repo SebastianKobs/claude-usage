@@ -477,7 +477,8 @@ def compact_states(current: Mapping[str, Any] | None, now: datetime) -> frozense
     """The states of compacting now that the live card's trash compactor shows (liveCompactBadge in figures.js,
     whose states a test holds this to): hint past the compact hint; cold where the cache has expired and compacting
     saves at once; else the pay-off's tone (soon, close, unlikely), or pays where it pays off without one; nothing
-    where it would pay off only once the context has grown, or never. None of them right after a compaction."""
+    where it would pay off only once the context has grown, or never, and without calls ahead to compare with where
+    it doesn't pay off within the longest finished stretch. None of them right after a compaction."""
     preview = current.get("compact_now") if current else None
     if not preview:
         return frozenset()
@@ -493,6 +494,12 @@ def compact_states(current: Mapping[str, Any] | None, now: datetime) -> frozense
     if tone == "later":
         return hint
     breakeven = estimate.get("breakeven_cold") if expired else estimate.get("breakeven_calls")
+    # without calls ahead to compare with, only a break-even within the longest finished stretch is worth a
+    # notification: right after a compaction the context is small, which puts it far off, or out of reach at the
+    # median estimate
+    longest = estimate.get("calls_after_high")
+    if estimate.get("calls_ahead") is None and (breakeven is None or longest is None or breakeven > longest):
+        return hint
     if breakeven is None:
         return hint if expired or estimate.get("breakeven_low") is None else hint | {"unlikely"}
     return hint | {tone or "pays"}

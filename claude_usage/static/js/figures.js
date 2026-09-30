@@ -301,7 +301,8 @@ function liveSecretBadge(secrets) {
 // compacting now, in the tone and words of the session view's estimate (payoffTone, PAYOFF_WORDS): when it pays off
 // against the replies still ahead on average, or what it saves at once where the call to compact says so
 // (compactCallKind "cold"), and past the compact hint; null without a gauge, where it would never pay off or only
-// once the context has grown (too early: nothing to do yet), or below the hint without an estimate
+// once the context has grown (too early: nothing to do yet), without calls ahead to compare with where it doesn't
+// pay off within the longest finished stretch, or below the hint without an estimate
 function liveCompactBadge(current, now) {
   const preview = current ? current.compact_now : null;
   if (!preview) return null;
@@ -322,6 +323,11 @@ function liveCompactBadge(current, now) {
   }
   if (tone === "later") return hintOnly();
   const breakeven = expired ? estimate.breakeven_cold : estimate.breakeven_calls;
+  // without calls ahead to compare with, only a break-even within the longest finished stretch is worth an icon:
+  // right after a compaction the context is small, which puts it far off, or out of reach at the median estimate
+  const known = estimate.calls_ahead !== null && estimate.calls_ahead !== undefined;
+  const longest = estimate.calls_after_high ?? null;
+  if (!known && (breakeven === null || longest === null || breakeven > longest)) return hintOnly();
   if (breakeven === null) {
     if (expired || estimate.breakeven_low === null) return hintOnly();
     return badge("unlikely", "Compacting now would likely not pay off.");

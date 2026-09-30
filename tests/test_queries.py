@@ -1176,6 +1176,7 @@ class ContextPartsTest(StoreCase):
         self.boundary = main.compaction("c1")
         main.user("again")
         main.assistant("m4", [text_block("ok")], usage(cache_5m=3_000, output=10))
+        self.transcript = main
         self.projects.subagent("s1", "a1").assistant("a1-m1", [text_block("found")], usage(cache_5m=5_000))
         self.projects.subagent("s1", "a2", meta=False).assistant("a2-m1", [text_block("x")], usage(cache_5m=10))
         self.scan()
@@ -1240,10 +1241,20 @@ class ContextPartsTest(StoreCase):
         self.assertEqual((current["context"], current["turns_since_compaction"], current["last_compaction"]),
                          (3_000, 1, self.boundary["timestamp"].replace("Z", "+00:00")))
 
-    def test_the_preview_projects_the_context_at_the_gauges_pace(self):
+    def test_at_the_first_call_after_a_compaction_the_preview_projects_at_the_pace_before_it(self):
+        # m4 has no step of its own yet; m2 and m3 took the context from 20,010 to 21,015 and 21,105
         with mock.patch.object(turns, "compact_preview", wraps=turns.compact_preview) as preview:
             current = queries.current_context(self.store, "s1", compact.DEFAULT_COMPACT, PRICES)
-        self.assertEqual(preview.call_args.args[4], current["mean_step"])
+        self.assertIsNone(current["mean_step"])
+        self.assertEqual(preview.call_args.args[4], round((1_005 + 90) / 2))
+
+    def test_the_preview_projects_the_context_at_the_gauges_pace(self):
+        self.transcript.user("more")
+        self.transcript.assistant("m5", [text_block("ok")], usage(cache_5m=500, cache_read=3_000, output=10))
+        self.scan()
+        with mock.patch.object(turns, "compact_preview", wraps=turns.compact_preview) as preview:
+            current = queries.current_context(self.store, "s1", compact.DEFAULT_COMPACT, PRICES)
+        self.assertEqual((current["mean_step"], preview.call_args.args[4]), (500, 500))
 
     def test_no_current_context_without_main_thread_turns(self):
         self.assertIsNone(queries.current_context(self.store, "nope", compact.DEFAULT_COMPACT, PRICES))

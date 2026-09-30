@@ -755,11 +755,11 @@ class LiveStateTest(unittest.TestCase):
 
     def badges(self, secrets=None, context=150_000, warm_until="2026-09-28T12:30:00.000+00:00", estimate=True,
                current=True, compacted=None, **fields):
-        """liveStateBadges at NOW of a state with a 200K hint and an estimate with 40 calls ahead on average,
-        updated by the given fields (no preview once it compacted after its last call), and the secret accesses by
-        severity."""
+        """liveStateBadges at NOW of a state with a 200K hint and an estimate with 40 calls ahead on average and a
+        longest finished stretch of 60 calls, updated by the given fields (no preview once it compacted after its last
+        call), and the secret accesses by severity."""
         values = {"breakeven_calls": 10, "breakeven_low": 5, "calls_ahead": 40.0, "cold_saving": -0.5,
-                  "breakeven_cold": 10}
+                  "breakeven_cold": 10, "calls_after_high": 60}
         values.update(fields)
         gauge = {"context": context, "hint_tokens": 200_000, "compacted": compacted,
                  "compact_now": None if compacted else {"cache_warm_until": warm_until,
@@ -804,6 +804,14 @@ class LiveStateTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_without_calls_ahead_there_is_no_tone(self):
         self.assertEqual(self.badge(calls_ahead=None), ("compact", None, "Compacting now pays off after ~10 replies."))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_without_calls_ahead_only_a_break_even_within_the_longest_finished_stretch_shows(self):
+        # right after a compaction the context is small: the break-even lies far beyond any stretch seen, or at the
+        # median estimate compacting wouldn't pay off yet
+        self.assertEqual(self.badges(calls_ahead=None, breakeven_calls=100), [])
+        self.assertEqual(self.badges(calls_ahead=None, calls_after_high=None), [])
+        self.assertEqual(self.badges(calls_ahead=None, breakeven_calls=None), [])
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_an_expired_cache_goes_by_the_cold_estimate(self):

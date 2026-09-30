@@ -313,7 +313,10 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
       - how many calls followed finished stretches, and how many are still ahead on average (`calls_ahead`);
       - in how many replies compacting would pay off within the calls then still ahead, the context growing by the
         gauge's mean step through the cache (`pays_later_in`, `pays_later_at`: `turns.later_payoff`), since early
-        in a stretch, a session's first too, compacting pays off too late only because the context is still small;
+        in a stretch, a session's first too, compacting pays off too late only because the context is still small.
+        A stretch's first call has no step of its own, so it grows at the mean step before it
+        (`turns.mean_step_before`, the last `GAUGE_STEPS` with growth); without one the first call after every
+        compaction read as too late, and notified so;
       - what compacting right before a break past the cache's lifetime saves at the fastest summary;
       - once the cache has expired, compacting cold against keeping's rewrite of everything (`cold_saving`,
         `breakeven_cold`), which the page switches to, drawing the gauge again when the cache runs out.
@@ -626,7 +629,10 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     picks them: an agent in a black hat for a possible secret access, first and only from medium up (`secretTone`'s
     warning and alert: high where one was sent out), then a trash compactor for compacting now, in `payoffTone`'s
     tone with `PAYOFF_WORDS` where it has a break-even, what it saves at once where `compactCallKind` is cold, and
-    past the compact hint. None where compacting would never pay off, or only once the context has grown (`later`).
+    past the compact hint. None where compacting would never pay off, or only once the context has grown (`later`),
+    and without calls ahead to compare with, where it doesn't pay off within the longest finished stretch
+    (`calls_after_high`): right after a compaction the small context puts the break-even far off, or out of reach
+    at the median estimate, which said nothing worth a notification.
     A card's icons are drawn again only where they changed, which a cache expiring does too.
   - An open session polls too: every 5 s while it is `live` (a transcript changed within `live_minutes`, or waiting
     for the user), else every 60 s, which notices a resumed session. A changed one is drawn in place

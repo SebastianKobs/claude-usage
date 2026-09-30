@@ -271,6 +271,15 @@ def gauge(turns: list[Turn], turn_steps: list[Step], compactions: tuple[datetime
             "turns_left": turns_left}
 
 
+def mean_step_before(turns: list[Turn], turn_steps: list[Step], start: int) -> int | None:
+    """The mean context step over the last GAUGE_STEPS steps before turn start that have growth (so none crosses a
+    compaction): the pace a stretch starting there grows at until it has a step of its own. None without one."""
+    earlier = [index for index in range(start) if turn_steps[index].growth is not None][-GAUGE_STEPS:]
+    if not earlier:
+        return None
+    return round(statistics.mean(turns[index].context - turns[index - 1].context for index in earlier))
+
+
 def output_rates(samples: list[tuple[str, int, float]]) -> dict[str, OutputRate]:
     """Each model's output speed from (model, output tokens, seconds from request to the reply's end) samples: the
     median over replies of at least RATE_MEDIAN_MIN_OUTPUT tokens (over the others if there are none) and the fastest

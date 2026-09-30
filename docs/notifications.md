@@ -59,7 +59,8 @@ While the dashboard runs it also shows desktop notifications, whether or not a p
 - **Claude asks you something:** a question, a plan to approve, or a permission prompt (with the hook set up).
 - **A possible secret access rises to a higher level.**
 - **Compacting now reaches a new state:** past your compact hint, soon, close, likely too late, or the cache expired.
-  Each state notifies once between two compactions.
+  Each state notifies once between two compactions. With fewer than three finished stretches between compactions to
+  compare with, only a pay-off within the longest of them notifies, so a compaction isn't followed by one.
 
 Only changes notify, so a restart sends nothing for what was already so. Each kind has its icon in the live cards'
 colors: blue for a wait, amber or red for a secret access, and the compact state's tone.

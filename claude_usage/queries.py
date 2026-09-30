@@ -503,21 +503,27 @@ def current_context(store: Store, session_id: str, settings: compact.CompactSett
                     past: list[turns.VersusKeeping | None] | None = None) -> Row | None:
     """The gauge of the session's main thread (turns.gauge) with what compacting now would cost and when it would
     pay off (turns.compact_preview, learning from past, by default every stored compaction; None once it compacted
-    after its last call, which leaves nothing to compact), or None without main-thread turns."""
+    after its last call, which leaves nothing to compact), or None without main-thread turns. It projects the
+    context at the gauge's mean step, or at a stretch's first call, which has none yet, at the pace before it."""
     path = transcript_path(store, session_id, None)
     if path is None:
         return None
     history = as_turns(turn_contexts(store, str(path)))
     moments = compaction_times(compaction_rows(store, str(path)))
-    gauge = turns.gauge(history, turns.steps(history, moments, prices), moments, settings)
+    turn_steps = turns.steps(history, moments, prices)
+    gauge = turns.gauge(history, turn_steps, moments, settings)
     if gauge is None:
         return None
     if gauge["compacted"] is not None:
         return {**gauge, "compact_now": None}
     if past is None:
         past = compaction_history(store, prices, settings)
-    return {**gauge, "compact_now": turns.compact_preview(history, past, prices, gauge["turns_since_compaction"],
-                                                          gauge["mean_step"])}
+    since = gauge["turns_since_compaction"]
+    # without a step the first call after a compaction would read as too late for compacting, not too early
+    step = gauge["mean_step"]
+    if step is None:
+        step = turns.mean_step_before(history, turn_steps, len(history) - since)
+    return {**gauge, "compact_now": turns.compact_preview(history, past, prices, since, step)}
 
 
 def compaction_history(store: Store, prices: pricing.Prices,

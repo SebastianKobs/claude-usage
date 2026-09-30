@@ -717,5 +717,32 @@ class GaugeTest(unittest.TestCase):
         self.assertEqual(gauge["context"], 101_000)
 
 
+class MeanStepBeforeTest(unittest.TestCase):
+    def mean_step_before(self, history, compacted, start):
+        """mean_step_before a stretch starting at turn start, in these turns and compaction times."""
+        return turns.mean_step_before(history, turns.steps(history, compacted, PRICES), start)
+
+    def test_the_mean_step_before_the_stretch(self):
+        # contexts 100K, 101K and 104K, then 10K after a compaction: steps of 1K and 3K before it
+        history = spaced((0, 100_000, 0, 0), (0, 1_000, 100_000, 0), (0, 3_000, 101_000, 0), (0, 10_000, 0, 0))
+        self.assertEqual(self.mean_step_before(history, (START + timedelta(seconds=150),), 3), 2_000)
+
+    def test_only_the_last_ten_steps_before_count(self):
+        # a 12K step, then ten of 1K, then a compaction
+        specs = ([(0, 1_000, 0, 0), (0, 12_000, 1_000, 0)]
+                 + [(0, 1_000, 13_000 + 1_000 * index, 0) for index in range(10)] + [(0, 5_000, 0, 0)])
+        self.assertEqual(self.mean_step_before(spaced(*specs), (START + timedelta(seconds=690),), 12), 1_000)
+
+    def test_a_step_across_a_compaction_does_not_count(self):
+        # 100K and 110K, compacted to 20K and 25K, compacted again to 12K: steps of 10K and 5K
+        history = spaced((0, 100_000, 0, 0), (0, 10_000, 100_000, 0), (0, 20_000, 0, 0), (0, 5_000, 20_000, 0),
+                         (0, 12_000, 0, 0))
+        compacted = (START + timedelta(seconds=90), START + timedelta(seconds=210))
+        self.assertEqual(self.mean_step_before(history, compacted, 4), 7_500)
+
+    def test_a_first_turn_has_no_step_before(self):
+        self.assertIsNone(self.mean_step_before(spaced((0, 100_000, 0, 0)), (), 0))
+
+
 if __name__ == "__main__":
     unittest.main()
