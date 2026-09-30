@@ -14,7 +14,8 @@ from claude_usage import turns
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = Path(server.__file__).resolve().parent / "static"
-OWN_SCRIPTS = sorted(path for path in (STATIC / "js").glob("*.js"))
+BUNDLE = STATIC / "js" / "app.js"                       # built from web/ (make build), not written by hand
+OWN_SCRIPTS = sorted(path for path in (STATIC / "js").glob("*.js") if path != BUNDLE)
 STYLESHEETS = sorted((STATIC / "css").rglob("*.css"))
 GIMMICK_THEMES = ("hacker", "startup", "rgb")
 # variables a gimmick theme defines for its own file only
@@ -118,6 +119,14 @@ class ScriptTest(unittest.TestCase):
         names = [name.strip() for name in re.sub(r"\s+", " ", documented).split(",")]
         aliases = {"highlight.js": "highlight", "marked": "marked", "DOMPurify": "purify", "main": "main"}
         self.assertEqual(loaded, [aliases.get(name, name) for name in names])
+
+    def test_the_bundle_loads_first_as_a_module(self):
+        tags = re.findall(r"<script\b[^>]*>", dashboard())
+        self.assertEqual(tags[0], '<script type="module" src="/static/js/app.js">')
+
+    def test_the_classic_scripts_are_deferred_so_they_run_after_the_bundle(self):
+        classic = [tag for tag in re.findall(r"<script\b[^>]*>", dashboard()) if 'type="module"' not in tag]
+        self.assertEqual([tag for tag in classic if not tag.endswith(" defer>")], [])
 
     def test_every_own_script_is_loaded(self):
         loaded = set(re.findall(r'<script src="/static/js/([^"/]+\.js)"', dashboard()))
