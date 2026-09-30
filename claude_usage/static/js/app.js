@@ -7068,8 +7068,12 @@ function Ud(e, t, n, r) {
 		lines: n === null ? "no lines changed" : `${Q(n)} per 100 lines changed`
 	};
 }
-function Wd(e) {
-	return `${Z(e)} ${e === 1 ? "session" : "sessions"} that ended in the range`;
+function Wd(e, t) {
+	let n = (e) => `${Z(e)} ${e === 1 ? "session" : "sessions"}`;
+	if (t === 0) return `${n(e)} that ended in the range`;
+	if (e === 0) return `${n(t)} without a cost record yet (estimated), none ended in the range`;
+	let r = `${Z(t)} more without a cost record yet (estimated)`;
+	return `${n(e)} that ended in the range, and ${r}`;
 }
 function Gd(e) {
 	return e === "cost_record" ? "from its cost record" : "estimated from the transcripts";
@@ -20237,7 +20241,7 @@ function $b(e, t) {
 			}
 		}, o = (e) => {
 			{
-				let t = /* @__PURE__ */ N(() => Wd(H(r).runtime.sessions));
+				let t = /* @__PURE__ */ N(() => Wd(H(r).runtime.sessions, H(r).runtime.estimated_sessions));
 				lb(e, {
 					get runtime() {
 						return H(r).runtime;

@@ -43,7 +43,7 @@
     "web/src/components/SessionWaits.svelte": "40e91aab554014fbf933c0057f0488704d851c1afd89a880849b87be61f8e685",
     "web/src/components/SessionsList.svelte": "c4f4d3a5f31450cfdf97c378d314f392e251214e8224cf60e1b44b57290240a0",
     "web/src/components/StatTile.svelte": "8f4c775b638f94f6154a831814272f31a1859c1277df76261e5e5d056bd9938d",
-    "web/src/components/SummaryTiles.svelte": "bec1c915702be0f9761c3c7864a34d770f980816f2738c612ea0bcc425323cca",
+    "web/src/components/SummaryTiles.svelte": "56c1e03f0e057a3c1f190095b0b4ffdf1be8aa31e998b20c100418e5fe174582",
     "web/src/components/Swatch.svelte": "283225fc43288ddd9ef7cf87810e3e6caf75c256c5eaaea8ce9c4cf34702ac95",
     "web/src/components/TableView.svelte": "1522020173bb037dc0b149fc3e23e556f2c28194fcd7c83fce4f25265c4928ed",
     "web/src/components/ThemePicker.svelte": "4f35181be586beff090fa98567796a00009842381f46ff5c582dc57025f146c6",
@@ -84,7 +84,7 @@
     "web/src/lib/session.ts": "b58370b998e31e977bd45f7cd6b012b1b3a148e6dec851b5ef332db328a82652",
     "web/src/lib/tables.ts": "7e60176447c2b9e6768382714eb977430cd8ac7a85dd00396a9b321ac1d73039",
     "web/src/lib/themes.ts": "ada0027dc8e18c4eb4227e0a4ed92d929de5d10384b097195b2897b612ed94d1",
-    "web/src/lib/tiles.ts": "00e8a9c7419ad33b95ae5f55ec5ebaf5ac1a3476588be3c7f946dd5112c6aa06",
+    "web/src/lib/tiles.ts": "2d36617eaa9f005cb7d1fb16b02464919031d3c6d454bfb6d0fdbdd90f453ee1",
     "web/src/lib/trend.ts": "ae38d2ff93617b24da1d6f5be5edd445513925d2248253f762bbc2537e28ae62",
     "web/src/lib/usage.ts": "fda8412ff9237fdd59c17f13a039688a56aa643f36f42fcc67f744e6b8ebd0c8",
     "web/src/main.ts": "4506cbc283fcd25b48c611a5cbdb6f474b73bbb48ba32cd59a11c1163ddeb3d8",
@@ -94,6 +94,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "3c525a4396da2826db8d4a28b199cc76422a91de952802ae471d7e3caeb749ce",
-    "claude_usage/static/js/app.js": "8cbe7f4ad268cea09c47b1325c233d76a444f2d870ec3fc0e2d02228402a581b"
+    "claude_usage/static/js/app.js": "f93872330726da50096363d4ae9e984fde6e24a874dbff52b591cee38f2d3c85"
   }
 }

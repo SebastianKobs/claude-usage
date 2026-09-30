@@ -370,11 +370,14 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   effort as `ultracode` (`store.EFFORT`), ordered after max.
 - **Run totals:** the latest cost-state per session, filed under its snapshot day. The summary sums the sessions that
   ended in the range, and prices their whole usage for the cost per 100 lines changed.
-  - Without a cost-state (a session still running, or a process that never exited), the session view estimates
-    them from the store: first to last record, each reply's request (the last user record before it, carried
-    across reads in `transcripts.last_user_ts`) to its last record, each tool call to its result, and the edited
-    lines. The API and session times match the cost-state within a few percent. Tool time runs about 3× over,
-    since it includes waiting for permission, so the page says so. Retries are unknown.
+  - Without a cost-state (a session still running, or a process that never exited) they are estimated from the
+    store, for the session view and, for the sessions with usage in the range, added to the summary's totals
+    (`estimated_sessions`, `queries.running_sessions`; a day without an ended session showed zeros while the day's
+    sessions ran). The estimate is: first to last record, each reply's request (the last user record before it,
+    carried across reads in `transcripts.last_user_ts`) to its last record, each tool call to its result, and the
+    edited lines. The API and session times match the cost-state within a few percent. Tool time runs about 3× over,
+    since it includes waiting for permission, so the page says so. Retries are unknown, so in the summary the
+    estimate's API time counts as without them.
 - **API errors:** one row per record uuid in `api_errors`, owned by the file that stored it first. The dashboard
   plots the rate limits in `--status-critical` with an icon and a label; other errors are only listed.
   - The windows that hit a rate limit (`queries.limit_windows`, `api_errors.windows` in `/api/summary`): one per

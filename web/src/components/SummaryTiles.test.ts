@@ -60,6 +60,12 @@ test('a summary draws the four runtime tiles, worded by the sessions that ended'
   expect(container).toHaveTextContent('$2.50 per 100 lines changed');
 });
 
+test('the runtime tiles say where sessions without a cost record are estimated into the totals', () => {
+  const container = row('runtime');
+  page.set({ summary: summary({ runtime: runtimeTotals({ sessions: 0, estimated_sessions: 2 }) }) });
+  expect(container).toHaveTextContent('wall-clock, 2 sessions without a cost record yet (estimated), none ended');
+});
+
 test('a new summary updates the tiles in place', () => {
   // the range's day is "today" only on the day the summary names
   vi.useFakeTimers({ toFake: ['Date'] });

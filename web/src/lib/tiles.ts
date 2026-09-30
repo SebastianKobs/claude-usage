@@ -155,9 +155,15 @@ export function runtimeNotes(
   };
 }
 
-/** Whose totals the overview's runtime tiles show. */
-export function runtimeFrom(sessions: number): string {
-  return `${whole(sessions)} ${sessions === 1 ? 'session' : 'sessions'} that ended in the range`;
+/** Whose totals the overview's runtime tiles show: the sessions that ended in the range (`ended`, from their cost
+ *  records) and those without a record yet (`estimated`: still running, or their process never exited), which the
+ *  server estimates from their transcripts. */
+export function runtimeFrom(ended: number, estimated: number): string {
+  const sessions = (count: number): string => `${whole(count)} ${count === 1 ? 'session' : 'sessions'}`;
+  if (estimated === 0) return `${sessions(ended)} that ended in the range`;
+  if (ended === 0) return `${sessions(estimated)} without a cost record yet (estimated), none ended in the range`;
+  const more = `${whole(estimated)} more without a cost record yet (estimated)`;
+  return `${sessions(ended)} that ended in the range, and ${more}`;
 }
 
 /** Where a session's runtime comes from, in words: the cost record Claude Code writes when its process exits, until

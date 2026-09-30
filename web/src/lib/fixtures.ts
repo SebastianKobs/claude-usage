@@ -114,6 +114,7 @@ export function limitWindow(changes: Partial<LimitWindow> = {}): LimitWindow {
 export function runtimeTotals(changes: Partial<RuntimeTotals> = {}): RuntimeTotals {
   return {
     sessions: 3,
+    estimated_sessions: 0,
     duration_ms: 7_200_000,
     api_ms: 600_000,
     api_ms_without_retries: 540_000,

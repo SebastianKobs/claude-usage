@@ -2,7 +2,8 @@
 @component
 One of the overview's two tile rows, read from the page's payload: the `kpis` row (cost, input, turns, output) or the
 `runtime` row (time and lines changed). Without a summary the kpis row says it is loading, or that it failed; the
-runtime row stays empty.
+runtime row stays empty. The runtime row also counts the range's sessions that have no cost record yet, estimated from
+their transcripts.
 -->
 <script lang="ts">
   import { getApp } from '../lib/app.svelte';
@@ -29,7 +30,7 @@ runtime row stays empty.
   {:else}
     <RuntimeTiles
       runtime={summary.runtime}
-      from={runtimeFrom(summary.runtime.sessions)}
+      from={runtimeFrom(summary.runtime.sessions, summary.runtime.estimated_sessions)}
       costPer100Lines={summary.runtime.cost_per_100_lines}
     />
   {/if}

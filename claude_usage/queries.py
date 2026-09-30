@@ -849,22 +849,45 @@ def session_runtime(store: Store, session_id: str) -> Row | None:
 def runtime_totals(store: Store, since: date | None, prices: pricing.Prices, project: str | None = None,
                    until: date | None = None) -> Row:
     """The run totals of the sessions whose latest cost-state record falls on a local day from since up to until
-    (of one project path if given), with those sessions' whole cost and the cost per 100 lines changed (None
-    without changed lines or a price). A record covers the process that wrote it, so a session filed here counts
-    its whole run."""
+    (of one project path if given, `sessions` of them), plus those of the sessions with usage in the range and no
+    cost record yet, a session still running or one whose process never exited, estimated from their transcripts
+    (`estimated_sessions`; without a range that is every such session). Also those sessions' whole cost and the
+    cost per 100 lines changed (None without changed lines or a price). A record covers the process that wrote it,
+    so a session filed here counts its whole run; the estimate knows no retries, so its API time counts as without
+    them, and the difference stays the records'."""
     in_range, parameters = range_filter(COST_STATE_COLUMNS, since, until, project)
     condition = ("c.session_id IN (SELECT c.session_id FROM cost_states c JOIN transcripts t ON t.path = c.path "
                  f"WHERE {in_range})")
     sums = ", ".join(f"COALESCE(SUM(c.{field}), 0) AS {field}" for field in RUN_FIELDS)
-    row = store.connection.execute(f"SELECT COUNT(*) AS sessions, {sums} FROM cost_states c WHERE {condition}",
-                                   parameters).fetchone()
-    session_ids = tuple(session["session_id"] for session in store.connection.execute(
-        f"SELECT c.session_id AS session_id FROM cost_states c WHERE {condition}", parameters))
-    placeholders = ", ".join("?" for _ in session_ids)
-    cost = usage_where(store, f"u.session_id IN ({placeholders})", session_ids, prices).as_dict()["cost"]
+    row = dict(store.connection.execute(f"SELECT COUNT(*) AS sessions, {sums} FROM cost_states c WHERE {condition}",
+                                        parameters).fetchone())
+    session_ids = [session["session_id"] for session in store.connection.execute(
+        f"SELECT c.session_id AS session_id FROM cost_states c WHERE {condition}", parameters)]
+    running = running_sessions(store, since, until, project)
+    row["estimated_sessions"] = len(running)
+    for session_id in running:
+        estimate = session_runtime(store, session_id)
+        if estimate is None:
+            continue
+        for field in RUN_FIELDS:
+            row[field] += estimate[field] or 0
+        row["api_ms_without_retries"] += estimate["api_ms"]
+    all_ids = session_ids + running
+    placeholders = ", ".join("?" for _ in all_ids)
+    cost = usage_where(store, f"u.session_id IN ({placeholders})", tuple(all_ids), prices).as_dict()["cost"]
     lines = row["lines_added"] + row["lines_removed"]
     per_100_lines = None if cost is None or lines == 0 else cost / lines * 100
-    return {**dict(row), "cost": cost, "cost_per_100_lines": per_100_lines}
+    return {**row, "cost": cost, "cost_per_100_lines": per_100_lines}
+
+
+def running_sessions(store: Store, since: date | None, until: date | None, project: str | None = None) -> list[str]:
+    """The ids of the sessions with usage from the local day since up to until (of one project path if given) and no
+    cost-state record at all: still running, or their process never exited."""
+    days, parameters = range_filter(USAGE_COLUMNS, since, until, project)
+    return [row["session_id"] for row in store.connection.execute(
+        f"SELECT DISTINCT u.session_id AS session_id FROM usage_rows u WHERE {days} "
+        "AND NOT EXISTS (SELECT 1 FROM cost_states c WHERE c.session_id = u.session_id) "
+        "ORDER BY u.session_id", parameters)]
 
 
 def background_detail(store: Store, session_id: str, prices: pricing.Prices) -> list[Row]:

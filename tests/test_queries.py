@@ -66,7 +66,7 @@ class RuntimeTest(StoreCase):
 
     def test_cost_per_100_lines_changed_counts_the_whole_sessions(self):
         totals = queries.runtime_totals(self.store, None, PRICES)
-        self.assertAlmostEqual(totals["cost"], 20.0)
+        self.assertAlmostEqual(totals["cost"], 20.0, places=3)
         self.assertAlmostEqual(totals["cost_per_100_lines"], 20.0 / 210 * 100)
 
     def test_no_lines_changed_means_no_cost_per_line(self):
@@ -79,6 +79,54 @@ class RuntimeTest(StoreCase):
         self.assertEqual(runtime, {"source": "cost_record", "duration_ms": 600000, "api_ms": 240000,
                                    "api_ms_without_retries": 200000, "tool_ms": 90000, "lines_added": 150,
                                    "lines_removed": 50})
+
+
+class RunningRuntimeTest(StoreCase):
+    """A session still running has no cost record: the range's totals estimate it from its transcripts."""
+
+    def setUp(self):
+        super().setUp()
+        ended = self.projects.session("ended", project="/home/dev/app")
+        ended.at(DAY_1).assistant("m1", [text_block("a")], usage(output=MILLION))
+        ended.cost_state({}, totalDuration=600000, totalAPIDuration=240000, totalAPIDurationWithoutRetries=200000,
+                         totalToolDuration=90000, totalLinesAdded=150, totalLinesRemoved=50)
+        running = self.projects.session("running", project="/home/dev/other")
+        running.at(DAY_1).user("fix it")
+        running.at(DAY_1 + timedelta(seconds=4)).assistant(
+            "m2", [thinking_block(), tool_use_block("t1", "Edit")], usage(output=MILLION))
+        running.at(DAY_1 + timedelta(seconds=20)).tool_result("t1", "ok", toolUseResult=edit_result(["+a", "+b", "-c"]))
+        running.at(DAY_1 + timedelta(seconds=30)).assistant("m3", [text_block("done")], usage(output=5))
+        self.scan()
+
+    def test_a_session_without_a_cost_record_is_estimated_into_the_totals(self):
+        totals = queries.runtime_totals(self.store, DAY_1.date(), PRICES, until=DAY_1.date())
+        self.assertEqual((totals["sessions"], totals["estimated_sessions"]), (1, 1))
+        # the estimate: session 12:00:00 to 12:00:30, API 5 s + 10 s, the Edit 15 s
+        self.assertEqual((totals["duration_ms"], totals["api_ms"], totals["tool_ms"]), (630000, 255000, 105000))
+        self.assertEqual((totals["lines_added"], totals["lines_removed"]), (152, 51))
+
+    def test_the_estimate_adds_no_retries(self):
+        # the estimate knows none, so its API time counts as without retries and the difference stays the records'
+        totals = queries.runtime_totals(self.store, None, PRICES)
+        self.assertEqual(totals["api_ms"] - totals["api_ms_without_retries"], 40000)
+
+    def test_the_cost_counts_the_estimated_sessions_too(self):
+        totals = queries.runtime_totals(self.store, None, PRICES)
+        self.assertAlmostEqual(totals["cost"], 20.0, places=3)
+
+    def test_only_a_session_with_usage_in_the_range_counts(self):
+        totals = queries.runtime_totals(self.store, DAY_3.date(), PRICES)
+        self.assertEqual((totals["sessions"], totals["estimated_sessions"], totals["duration_ms"]), (0, 0, 0))
+
+    def test_the_project_filter_applies(self):
+        totals = queries.runtime_totals(self.store, None, PRICES, project="/home/dev/other")
+        self.assertEqual((totals["sessions"], totals["estimated_sessions"]), (0, 1))
+
+    def test_a_cost_record_replaces_the_estimate(self):
+        self.projects.session("running", project="/home/dev/other").cost_state({}, totalDuration=99000)
+        self.scan()
+        totals = queries.runtime_totals(self.store, None, PRICES)
+        self.assertEqual((totals["sessions"], totals["estimated_sessions"]), (2, 0))
 
 
 class EstimatedRuntimeTest(StoreCase):

@@ -138,9 +138,11 @@ export interface LimitWindow {
   models: ModelUsage[];
 }
 
-/** The run totals of the sessions that ended in the range, from Claude Code's cost records. */
+/** The run totals of the sessions that ended in the range, from Claude Code's cost records (`sessions`), plus those
+ *  of the range's sessions without a record yet, estimated from their transcripts (`estimated_sessions`). */
 export interface RuntimeTotals {
   sessions: number;
+  estimated_sessions: number;
   duration_ms: number;
   api_ms: number;
   api_ms_without_retries: number;

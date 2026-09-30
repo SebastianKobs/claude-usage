@@ -124,6 +124,7 @@ test('no turns, or no context, have no note', () => {
 function runtime(changes: Partial<RuntimeTotals> = {}): RuntimeTotals {
   return {
     sessions: 2,
+    estimated_sessions: 0,
     duration_ms: 3_600_000,
     api_ms: 1_800_000,
     api_ms_without_retries: 1_740_000,
@@ -161,9 +162,17 @@ test('estimated totals say the tool time includes waiting for permission, and no
 });
 
 test('the overview names the sessions its run totals sum, one in the singular', () => {
-  expect(runtimeFrom(1)).toBe('1 session that ended in the range');
-  expect(runtimeFrom(0)).toBe('0 sessions that ended in the range');
-  expect(runtimeFrom(1500)).toBe('1,500 sessions that ended in the range');
+  expect(runtimeFrom(1, 0)).toBe('1 session that ended in the range');
+  expect(runtimeFrom(0, 0)).toBe('0 sessions that ended in the range');
+  expect(runtimeFrom(1500, 0)).toBe('1,500 sessions that ended in the range');
+});
+
+test('the overview says which sessions have no cost record yet and are estimated from their transcripts', () => {
+  expect(runtimeFrom(2, 1)).toBe(
+    '2 sessions that ended in the range, and 1 more without a cost record yet (estimated)',
+  );
+  expect(runtimeFrom(0, 3)).toBe('3 sessions without a cost record yet (estimated), none ended in the range');
+  expect(runtimeFrom(0, 1)).toBe('1 session without a cost record yet (estimated), none ended in the range');
 });
 
 test('the source words follow the session runtime: its cost record, or the transcripts', () => {
