@@ -5,17 +5,28 @@ import { flushSync, mount, unmount } from 'svelte';
 import Banner from './components/Banner.svelte';
 import { BannerMessages } from './lib/banner.svelte';
 import * as colors from './lib/colors';
+import * as compact from './lib/compact';
 import * as format from './lib/format';
+import * as live from './lib/live';
+import * as secrets from './lib/secrets';
 
 // Typed from the modules themselves, so what Window declares can't drift from what the old scripts are handed. The
 // formatters are lib/format.ts (numbers, money, durations, days, hours, moments), the colors lib/colors.ts (the
-// chart palette's slots, models and effort shades). Their names must stay apart: a shared one would be handed
-// over twice, the second silently winning.
+// chart palette's slots, models and effort shades), compacting lib/compact.ts (when compacting pays off, the call to
+// compact, the delegate hint, the verdict's tone and the compactions' sum), the secrets lib/secrets.ts (the secret
+// access tone, origin and reach words) and the live cards lib/live.ts (their badges and what waits). Their names
+// must stay apart: a shared one would be handed over twice, the second silently winning.
 type Formatters = typeof format;
 type Colors = typeof colors;
+type Compacting = typeof compact;
+type Secrets = typeof secrets;
+type Live = typeof live;
+
+// Every module handed over: a new one is imported above, typed in Window's extends and listed here.
+const MODULES = [format, colors, compact, secrets, live];
 
 declare global {
-  interface Window extends Formatters, Colors {
+  interface Window extends Formatters, Colors, Compacting, Secrets, Live {
     /** Sets a source's banner message (empty removes it), drawn at once. */
     showError(source: string, message: string): void;
     /** Whether a source has a banner message now. */
@@ -45,9 +56,9 @@ export function bridge(target: Window): Bridge {
     flushSync();
   };
   target.hasError = (source: string): boolean => messages.has(source);
-  // Every export, so a function added to lib/format.ts or lib/colors.ts reaches the old scripts without touching the
-  // bridge. Handed over as they are: the old scripts call them with their own arguments, never as an array callback.
-  Object.assign(target, format, colors);
+  // Every export, so a function added to any of the modules reaches the old scripts without touching the bridge.
+  // Handed over as they are: the old scripts call them with their own arguments, never as an array callback.
+  Object.assign(target, ...MODULES);
 
   return {
     stop(): void {
@@ -55,7 +66,7 @@ export function bridge(target: Window): Bridge {
       // Reflect, since the Window interface declares them always there, which a plain delete refuses.
       Reflect.deleteProperty(target, 'showError');
       Reflect.deleteProperty(target, 'hasError');
-      for (const name of [...Object.keys(format), ...Object.keys(colors)]) Reflect.deleteProperty(target, name);
+      for (const name of MODULES.flatMap((module) => Object.keys(module))) Reflect.deleteProperty(target, name);
     },
   };
 }

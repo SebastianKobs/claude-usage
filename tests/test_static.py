@@ -18,6 +18,7 @@ BUNDLE = STATIC / "js" / "app.js"                       # built from web/ (make 
 OWN_SCRIPTS = sorted(path for path in (STATIC / "js").glob("*.js") if path != BUNDLE)
 FORMAT = ROOT / "web" / "src" / "lib" / "format.ts"     # the formatters, moved out of util.js
 COLORS = ROOT / "web" / "src" / "lib" / "colors.ts"     # the model colors and effort levels, moved out of util.js
+LIB = ROOT / "web" / "src" / "lib"                      # what moved out of the old scripts, as TypeScript
 STYLESHEETS = sorted((STATIC / "css").rglob("*.css"))
 GIMMICK_THEMES = ("hacker", "startup", "rgb")
 # variables a gimmick theme defines for its own file only
@@ -52,7 +53,7 @@ def definition(script, name):
     return source.group(0)
 
 
-MODULES = {"format.ts": FORMAT, "colors.ts": COLORS}     # what moved out of the old scripts, as TypeScript
+MODULES = {name: LIB / name for name in ("format.ts", "colors.ts", "compact.ts", "secrets.ts", "live.ts")}
 
 
 def run_function(script, name, *arguments, uses=()):
@@ -179,14 +180,15 @@ class CompactionWordingTest(unittest.TestCase):
 class VerdictToneTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_saving_is_a_gain_a_proven_loss_a_loss_the_rest_neutral(self):
-        tones = {verdict: run_function("chat.js", "verdictTone", {"verdict": verdict}) for verdict in turns.VERDICTS}
+        tones = {verdict: run_function("compact.ts", "verdictTone", {"verdict": verdict})
+                 for verdict in turns.VERDICTS}
         self.assertEqual(tones, {"saved": "gain", "cost_more": "loss", "even": None, "forced": None, "open": None,
                                  "unknown": None})
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_stretch_not_paid_off_yet_is_a_loss_so_far(self):
-        self.assertEqual(run_function("chat.js", "verdictTone", {"verdict": "open", "net": -0.21}), "loss")
-        self.assertIsNone(run_function("chat.js", "verdictTone", {"verdict": "open", "net": 0.05}))
+        self.assertEqual(run_function("compact.ts", "verdictTone", {"verdict": "open", "net": -0.21}), "loss")
+        self.assertIsNone(run_function("compact.ts", "verdictTone", {"verdict": "open", "net": 0.05}))
 
     def test_a_loss_so_far_shows_its_amount(self):
         body = re.search(r"^function verdictText\(.*?^\}$", read(STATIC / "js" / "chat.js"),
@@ -319,12 +321,12 @@ class SecretAccessTest(unittest.TestCase):
                  (("empty", False), "nothing returned"), (("pending", False), "no result yet")]
         for (reach, sent), text in cases:
             with self.subTest(reach=reach, sent=sent):
-                self.assertEqual(run_function("drilldown.js", "secretReach", {"reach": reach, "sent": sent}), text)
+                self.assertEqual(run_function("secrets.ts", "secretReach", {"reach": reach, "sent": sent}), text)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_returned_test_says_so(self):
         access = {"reach": "returned", "sent": False, "test": True}
-        self.assertEqual(run_function("drilldown.js", "secretReach", access), "into the conversation, likely a test")
+        self.assertEqual(run_function("secrets.ts", "secretReach", access), "into the conversation, likely a test")
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_only_a_high_access_raises_the_alarm_a_medium_one_warns(self):
@@ -334,7 +336,7 @@ class SecretAccessTest(unittest.TestCase):
         for severities, tone in cases:
             with self.subTest(severities=severities):
                 detail = {"secret_accesses": [{"severity": severity} for severity in severities]}
-                self.assertEqual(run_function("drilldown.js", "secretTone", detail), tone)
+                self.assertEqual(run_function("secrets.ts", "secretTone", detail), tone)
 
     def test_the_warning_card_is_edged_in_the_warning_color(self):
         self.assertIn("var(--hint-warning-edge)", css_block(read(STATIC / "css" / "common.css"), ".secret-warning"))
@@ -348,8 +350,8 @@ class SecretAccessTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_path_a_script_named_says_which_script(self):
-        self.assertEqual(run_function("drilldown.js", "secretVia", {"via": "deploy.py"}), "in deploy.py, which it ran")
-        self.assertIsNone(run_function("drilldown.js", "secretVia", {"via": None}))
+        self.assertEqual(run_function("secrets.ts", "secretVia", {"via": "deploy.py"}), "in deploy.py, which it ran")
+        self.assertIsNone(run_function("secrets.ts", "secretVia", {"via": None}))
 
     def test_the_warning_comes_after_the_tiles_and_before_the_call_to_compact(self):
         source = read(STATIC / "js" / "drilldown.js")
@@ -372,7 +374,7 @@ class DelegateCallTest(unittest.TestCase):
 
     def shown(self, detail):
         """delegateCallShown of this detail."""
-        return run_function("drilldown.js", "delegateCallShown", detail)
+        return run_function("compact.ts", "delegateCallShown", detail)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_live_session_with_much_exploration_and_many_calls_ahead_gets_the_hint(self):
@@ -398,7 +400,7 @@ class PayoffToneTest(unittest.TestCase):
         values = {"breakeven_calls": 10, "breakeven_low": 5, "calls_ahead": 40.0, "cold_saving": -0.5,
                   "breakeven_cold": 10}
         values.update(estimate)
-        return run_function("drilldown.js", "payoffTone", values, expired)
+        return run_function("compact.ts", "payoffTone", values, expired)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_within_half_the_calls_ahead_it_pays_back_soon(self):
@@ -439,10 +441,8 @@ class PayoffToneTest(unittest.TestCase):
         self.assertEqual(self.tone(expired=True, cold_saving=0.2, pays_later_in=1), "soon")
 
     def estimate_words(self, name, *arguments):
-        """A pay-off wording function of drilldown.js called with these arguments."""
-        return run_function("drilldown.js", name, *arguments,
-                            uses=("format.ts:compact", "format.ts:whole", "format.ts:money", "drilldown.js:spread",
-                                  "drilldown.js:PAYOFF_WORDS"))
+        """A pay-off wording function of compact.ts called with these arguments."""
+        return run_function("compact.ts", name, *arguments)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_not_yet_says_when_compacting_would_pay_off(self):
@@ -499,7 +499,7 @@ class CompactCallTest(unittest.TestCase):
 
     def kind(self, detail):
         """compactCallKind of this detail at NOW."""
-        return run_function("drilldown.js", "compactCallKind", detail, self.NOW)
+        return run_function("compact.ts", "compactCallKind", detail, self.NOW)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_below_the_hint_a_warm_cache_gets_no_call_even_where_compacting_likely_pays(self):
@@ -626,13 +626,13 @@ class CompactionTotalTest(unittest.TestCase):
     def test_the_nets_are_summed_like_the_estimated_cost_tile(self):
         rows = [self.row("saved", 1.25), self.row("open", -0.25), self.row("forced", 9.0), self.row("unknown", None),
                 {"versus_keeping": None}]
-        self.assertEqual(run_function("drilldown.js", "compactionTotal", rows),
+        self.assertEqual(run_function("compact.ts", "compactionTotal", rows),
                          {"net": 1.0, "compactions": 2, "unknown": 1})
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_nothing_to_sum_gives_none(self):
         rows = [self.row("forced", 2.0), {"versus_keeping": None}]
-        self.assertIsNone(run_function("drilldown.js", "compactionTotal", rows))
+        self.assertIsNone(run_function("compact.ts", "compactionTotal", rows))
 
     def test_the_compactions_heading_carries_the_total(self):
         self.assertIn("compactionTotal(agent.compactions)", read(STATIC / "js" / "drilldown.js"))
@@ -783,9 +783,6 @@ class LiveRangeTest(unittest.TestCase):
 class LiveStateTest(unittest.TestCase):
     NOW = "2026-09-28T12:00:00.000+00:00"
     EXPIRED = "2026-09-28T11:00:00.000+00:00"
-    USES = ("format.ts:compact", "format.ts:whole", "format.ts:money", "drilldown.js:compactCallKind",
-            "drilldown.js:payoffTone", "drilldown.js:PAYOFF_WORDS", "figures.js:liveSecretBadge",
-            "figures.js:liveCompactBadge")
 
     def badges(self, secrets=None, context=150_000, warm_until="2026-09-28T12:30:00.000+00:00", estimate=True,
                current=True, compacted=None, **fields):
@@ -800,7 +797,7 @@ class LiveStateTest(unittest.TestCase):
                                                         "estimate": values if estimate else None}}
         state = {"current": gauge if current else None,
                  "secrets": {"high": 0, "medium": 0, "low-medium": 0, "low": 0, **(secrets or {})}}
-        return run_function("figures.js", "liveStateBadges", state, self.NOW, uses=self.USES)
+        return run_function("live.ts", "liveStateBadges", state, self.NOW)
 
     def badge(self, **arguments):
         """The only badge of badges(**arguments) as (kind, tone, text)."""
@@ -909,7 +906,7 @@ class LiveStateTest(unittest.TestCase):
 
     def wait_badge(self, waiting):
         """liveWaitBadge of a live session's waiting."""
-        return run_function("figures.js", "liveWaitBadge", waiting, uses=("format.ts:when",))
+        return run_function("live.ts", "liveWaitBadge", waiting)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_question_without_an_answer_waits_for_the_user(self):
@@ -1079,12 +1076,10 @@ class SessionWaitTest(unittest.TestCase):
     NOW = "2026-09-29T20:11:17.932+00:00"
     QUESTION = {"kind": "question", "tool": "AskUserQuestion", "since": NOW, "agent_type": None}
     PERMISSION = {"kind": "permission", "tool": "Write", "since": NOW, "agent_type": None}
-    USES = ("figures.js:liveWaitBadge", "format.ts:when")
 
     def waits(self, waiting, sessions):
         """sessionWaits of the open session s1 waiting so, with these live sessions."""
-        return run_function("drilldown.js", "sessionWaits", {"session_id": "s1", "waiting": waiting}, sessions,
-                            uses=self.USES)
+        return run_function("live.ts", "sessionWaits", {"session_id": "s1", "waiting": waiting}, sessions)
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_the_open_session_says_what_it_waits_for(self):
@@ -1114,20 +1109,20 @@ class SessionWaitTest(unittest.TestCase):
         # a session quiet for minutes is asked for once a minute, the live list every five seconds
         detail = {"session_id": "s1", "waiting": None}
         changed = [{"session_id": "s1", "waiting": self.QUESTION}]
-        self.assertTrue(run_function("drilldown.js", "waitChanged", detail, changed))
-        self.assertFalse(run_function("drilldown.js", "waitChanged", {**detail, "waiting": self.QUESTION}, changed))
-        self.assertFalse(run_function("drilldown.js", "waitChanged", detail, [{"session_id": "s1", "waiting": None}]))
+        self.assertTrue(run_function("live.ts", "waitChanged", detail, changed))
+        self.assertFalse(run_function("live.ts", "waitChanged", {**detail, "waiting": self.QUESTION}, changed))
+        self.assertFalse(run_function("live.ts", "waitChanged", detail, [{"session_id": "s1", "waiting": None}]))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_an_answered_wait_goes_as_soon_as_the_live_list_sees_it(self):
         detail = {"session_id": "s1", "waiting": self.QUESTION}
-        self.assertTrue(run_function("drilldown.js", "waitChanged", detail, [{"session_id": "s1", "waiting": None}]))
+        self.assertTrue(run_function("live.ts", "waitChanged", detail, [{"session_id": "s1", "waiting": None}]))
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_a_session_off_the_live_list_says_nothing_of_its_wait(self):
         # a past day's range leaves it out
         detail = {"session_id": "s1", "waiting": self.QUESTION}
-        self.assertFalse(run_function("drilldown.js", "waitChanged", detail, []))
+        self.assertFalse(run_function("live.ts", "waitChanged", detail, []))
 
     def test_the_waits_come_first_under_the_sessions_heading(self):
         body = function_body("drilldown.js", "renderDrilldown")

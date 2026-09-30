@@ -499,15 +499,6 @@ const VERSUS_KEEPING_NOTE = "Compared with keeping the context: the same later c
   "duration at your output speed; ▲ + (saved, green) holds even at your fastest, ▼ − (cost more, red) even without " +
   "the summary, or so far for the stretch still running. Re-reading files after compacting isn't counted.";
 
-// a saving is a gain, a proven loss a loss, and so is a last stretch still behind as it stands; the rest (about
-// even, forced, unknown) is neutral
-function verdictTone(comparison) {
-  if (comparison.verdict === "saved") return "gain";
-  if (comparison.verdict === "cost_more") return "loss";
-  if (comparison.verdict === "open" && comparison.net < 0) return "loss";
-  return null;
-}
-
 // the verdict with its amount: a gain or loss signed, with an arrow, in green or red (the sign and the arrow carry
 // it, not the color); the other verdicts in words
 function verdictText(comparison) {

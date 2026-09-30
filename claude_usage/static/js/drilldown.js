@@ -97,24 +97,6 @@ function renderDrilldown(detail, refresh = false) {
   scheduleGaugeRefresh(detail);
 }
 
-// what waits for the user while a session is open, whose view hides the live list: the open session's own wait
-// first (its waiting in /api/session), then the other live sessions' (the latest /api/live), each as its wait badge
-// with its session; the open one's entry in the list is left out, since the list may answer before or after it
-function sessionWaits(detail, sessions) {
-  const own = detail.waiting ? [{...liveWaitBadge(detail.waiting), session_id: detail.session_id, title: null}] : [];
-  const others = sessions.filter(session => session.waiting && session.session_id !== detail.session_id)
-    .map(session => ({...liveWaitBadge(session.waiting), session_id: session.session_id,
-                      title: session.title || "Untitled session"}));
-  return [...own, ...others];
-}
-
-// whether the live list says the open session waits otherwise than its view shows (nothing where the list leaves it
-// out): then the view asks at once, not at its next poll, a minute away while the session was quiet
-function waitChanged(detail, sessions) {
-  const entry = sessions.find(session => session.session_id === detail.session_id);
-  return entry !== undefined && JSON.stringify(entry.waiting ?? null) !== JSON.stringify(detail.waiting ?? null);
-}
-
 // the waits in their notice at the top of the session view (a status, so a screen reader hears a new one), each
 // by its icon, another session's by a link to it; drawn again only where they changed, hidden while none waits
 function showSessionWaits(detail) {
@@ -474,24 +456,6 @@ function compactedNote(current) {
          "reply shows the new one: the summary, with the system prompt, tools and CLAUDE.md sent again.";
 }
 
-// whether the session view calls for compacting: "cold" once a live session's cache has expired and compacting
-// first saves at once, else "threshold" where the context is at or past the configured hint, else null. A warm cache
-// below the hint gets no call: replayed on the stored sessions, it added next to nothing (todo 11.3)
-function compactCallKind(detail, now) {
-  const current = detail.live ? detail.current : null;
-  const preview = current ? current.compact_now : null;
-  if (!preview) return null;
-  // past the hint the call comes whatever the savings: how many replies still follow can't be predicted
-  const fallback = current.context >= current.hint_tokens ? "threshold" : null;
-  const estimate = preview.estimate;
-  const until = preview.cache_warm_until;
-  if (estimate && until !== null && Date.parse(until) < Date.parse(now) && estimate.cold_saving !== null &&
-      estimate.cold_saving >= 0) {
-    return "cold";
-  }
-  return fallback;
-}
-
 // Every call that named a possible secret location ([secrets] patterns, matched by the server), the most severe
 // first: the path as the call gave it, the pattern, and how far it got. Open as a warning that draws the eye while
 // one sent its input out (secretTone "alert"); else folded behind its heading, edged in the warning color while one
@@ -548,30 +512,6 @@ function secretAccesses(detail, pagerKey) {
     body);
 }
 
-// how the secret accesses show: "alert" (open, red) while one was sent out, "warning" (folded, yellow) while one
-// returned a result or may still, "quiet" (folded, plain) while each was blocked, returned nothing or returned only
-// in a likely test (low-medium); null for none
-function secretTone(detail) {
-  const severities = (detail.secret_accesses || []).map(access => access.severity);
-  if (!severities.length) return null;
-  if (severities.includes("high")) return "alert";
-  return severities.includes("medium") ? "warning" : "quiet";
-}
-
-// the script a path came from, where the call ran one the transcript wrote; null for a path the call named itself
-function secretVia(access) {
-  return access.via ? `in ${access.via}, which it ran` : null;
-}
-
-// how far a call that named a secret location got (tool_kinds.secret_reach), in words
-function secretReach(access) {
-  const words = {sent: "sent to a service", returned: "into the conversation", empty: "nothing returned",
-                 pending: "no result yet"};
-  if (access.reach === "error") return access.sent ? "error, the service may have got it" : "error: blocked or failed";
-  if (access.reach === "returned" && access.test) return "into the conversation, likely a test";
-  return words[access.reach] || "no result yet";
-}
-
 // the call to compact above the gauge, in plain words, with a button that copies /compact
 function compactCall(detail) {
   const now = new Date().toISOString();
@@ -603,17 +543,6 @@ function compactCall(detail) {
       : "⚠ The cache has expired: compacting now saves money"}),
     ...lines.map(line => el("p", {text: line})),
     el("div", {class: "compact-call-actions"}, button, status));
-}
-
-// whether the session view suggests delegating exploration: a live session whose main thread has read, searched
-// and listed at least delegate_hint_tokens since its last compaction, with at least delegate_calls_ahead calls
-// ahead on average (the compaction estimate's calls_ahead)
-function delegateCallShown(detail) {
-  const current = detail.live ? detail.current : null;
-  const exploration = current ? current.exploration : null;
-  const estimate = current && current.compact_now ? current.compact_now.estimate : null;
-  if (!exploration || !estimate || estimate.calls_ahead === null || estimate.calls_ahead === undefined) return false;
-  return exploration.tokens >= detail.delegate_hint_tokens && estimate.calls_ahead >= detail.delegate_calls_ahead;
 }
 
 // the hint to delegate exploration, above the gauge, in plain words; a heuristic, so it says so
@@ -673,9 +602,6 @@ function copyCompact(status) {
     () => { status.textContent = "Copied: paste it into Claude Code."; }, fallback);
 }
 
-// " (low–high)", or nothing where both ends read the same
-function spread(low, high) { return low === high ? "" : ` (${low}–${high})`; }
-
 // what compacting now would cost: the exact parts (each call's re-read, the cache's lifetime, keeping across a
 // break), then the estimate from past compactions (turns.compact_preview)
 function compactNowNotes(preview) {
@@ -716,65 +642,6 @@ function compactNowNotes(preview) {
     tone ? el("span", {class: `payoff-mark payoff-${tone}`, "aria-hidden": "true"}) : null,
     el("strong", {text: payoffText(estimate, expired)}),
     `. ${after.filter(Boolean).join(" ")}`)];
-}
-
-// how soon compacting now pays off against the replies still ahead on average (calls_ahead): "soon" within half of
-// them, "close" within them; else "later" where it would once the context has grown at its recent pace
-// (pays_later_in: too early, not too late), "unlikely" past them or never; null without calls ahead to compare with
-function payoffTone(estimate, expired) {
-  const ahead = estimate.calls_ahead;
-  let breakeven = estimate.breakeven_calls;
-  if (expired) {
-    if (estimate.cold_saving >= 0) return "soon";
-    breakeven = estimate.breakeven_cold;
-  }
-  const known = ahead !== null && ahead !== undefined;
-  if (breakeven !== null && known && breakeven <= ahead) return breakeven <= ahead / 2 ? "soon" : "close";
-  if ((estimate.pays_later_in ?? null) !== null) return "later";
-  if (breakeven === null) return "unlikely";
-  return known ? "unlikely" : null;
-}
-
-const PAYOFF_WORDS = {soon: "Soon", close: "Close", later: "Not yet", unlikely: "Likely too late"};
-
-// the tone in words, which carry it, not the mark's color: against the replies still ahead on average, or when the
-// context will have grown enough; nothing where the pay-off phrase already says it all (never, likely not, or at
-// once)
-function payoffAhead(tone, estimate, expired) {
-  if (!tone || estimate.calls_ahead === null || estimate.calls_ahead === undefined) return null;
-  if (tone === "later") {
-    const replies = estimate.pays_later_in === 1 ? "1 reply" : `${whole(estimate.pays_later_in)} replies`;
-    return `${PAYOFF_WORDS.later}: growing at its recent pace, the context reaches about ` +
-           `${compact(estimate.pays_later_at)} in ${replies}, and compacting then would pay off within the replies ` +
-           "still ahead on average.";
-  }
-  const breakeven = expired ? (estimate.cold_saving >= 0 ? null : estimate.breakeven_cold) : estimate.breakeven_calls;
-  if (breakeven === null) return null;
-  const ahead = whole(Math.round(estimate.calls_ahead));
-  return `${PAYOFF_WORDS[tone]}: ` + (estimate.ahead_from === "longer"
-    ? `after your past compactions, a stretch this long went on for about ${ahead} more replies on average.`
-    : `after your past compactions you went on for about ${ahead} replies on average.`);
-}
-
-// when compacting now pays off: warm against the next calls' reads; once the cache has expired, cold against
-// keeping's rewrite of everything. A context below what compacting leaves pays off not yet, rather than never,
-// where it will once it has grown (pays_later_in).
-function payoffText(estimate, expired) {
-  const never = (estimate.pays_later_in ?? null) === null ? "would never pay off" : "would not pay off yet";
-  if (expired) {
-    if (estimate.breakeven_cold === null) return `${never}: the context is below what compacting leaves`;
-    return estimate.cold_saving >= 0
-      ? `pays off at once (about ${money(estimate.cold_saving)}), since the next reply sends it all anyway`
-      : `would pay off after about ${whole(estimate.breakeven_cold)} replies`;
-  }
-  const calls = value => (value === null ? "never" : whole(value));
-  if (estimate.breakeven_calls !== null) {
-    return `would pay off after about ${whole(estimate.breakeven_calls)} replies` +
-           spread(calls(estimate.breakeven_low), calls(estimate.breakeven_high));
-  }
-  return estimate.breakeven_low === null
-    ? `${never}: the context is below what compacting leaves`
-    : `would likely not pay off (at best after about ${whole(estimate.breakeven_low)} replies)`;
 }
 
 // the gauge's cache wording turns once the cache expires: draw it again then, if the session is still open
@@ -993,17 +860,6 @@ function renderContextDetails(agent, key) {
     el("h3", {text: "Biggest growth steps"}), el("div", {class: "table-wrap"}, growthTable(agent)),
     el("h3", {}, "Compactions", compactionTotalText(compactionTotal(agent.compactions))),
     el("div", {class: "table-wrap"}, paged(`${key}-compactions`, compactionTable(agent))));
-}
-
-// what this transcript's compactions saved against keeping the context, summed like turns.savings_total: forced
-// ones left out, those without a summary estimate counted but not summed; null without one to count
-function compactionTotal(compactions) {
-  const counted = compactions.map(row => row.versus_keeping)
-    .filter(comparison => comparison && comparison.verdict !== "forced");
-  if (!counted.length) return null;
-  const nets = counted.map(comparison => comparison.net).filter(net => net !== null);
-  const net = nets.reduce((sum, value) => sum + value, 0);
-  return {net, compactions: nets.length, unknown: counted.length - nets.length};
 }
 
 // the total beside the heading, as a gain or a loss (the sign and arrow carry it, like the Estimated cost tile)

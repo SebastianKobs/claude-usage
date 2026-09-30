@@ -102,6 +102,10 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/format.ts          number, money, duration, day, hour and moment formatting, handed to the classic scripts
                              as globals; test_static.py's node tests import it as it is (node runs TypeScript)
   src/lib/colors.ts          the by-model chart's model slots, effort order, shades and hatches, handed over the same way
+  src/lib/compact.ts         when compacting pays off (`payoffTone` and its words), the call to compact, the hint to
+                             delegate, a compaction's verdict and their sum; handed over the same way
+  src/lib/secrets.ts         how the secret accesses show: the card's tone, a path's script, how far a call got
+  src/lib/live.ts            the live cards' badges (waiting, secret, compacting now) and what waits for the user
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)

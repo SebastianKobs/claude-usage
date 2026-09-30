@@ -4,7 +4,12 @@ import { screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { bridge, type Bridge } from './legacy.svelte';
 import * as colors from './lib/colors';
+import * as compact from './lib/compact';
 import * as format from './lib/format';
+import * as live from './lib/live';
+import * as secrets from './lib/secrets';
+
+const MODULES = [format, colors, compact, secrets, live];
 
 // a path, not a URL: the simulated DOM's URL class isn't node's
 const PAGE = join(import.meta.dirname, '../../claude_usage/static/dashboard.html');
@@ -60,10 +65,18 @@ test('hasError tells whether a source is failing', () => {
 test.each([
   ['formatters', format, 'money'],
   ['colors', colors, 'slotColor'],
+  ['compacting helpers', compact, 'payoffTone'],
+  ['secrets helpers', secrets, 'secretTone'],
+  ['live helpers', live, 'liveWaitBadge'],
 ])("the old scripts' %s are the module's exports", (_kind, module, sample) => {
   const names = Object.keys(module) as (keyof typeof module & keyof Window)[];
   expect(names).toContain(sample);
   for (const name of names) expect(window[name], name).toBe(module[name]);
+});
+
+test('no export name is in two modules', () => {
+  const names = MODULES.flatMap((module) => Object.keys(module));
+  expect(names.filter((name, index) => names.indexOf(name) !== index)).toEqual([]);
 });
 
 test('the formatters answer as the old scripts call them', () => {
@@ -78,11 +91,18 @@ test('the colors answer as the old scripts call them', () => {
   expect(window.SLOT_COUNT).toBe(8);
 });
 
+test('the compacting, secrets and live helpers answer as the old scripts call them', () => {
+  expect(window.PAYOFF_WORDS.soon).toBe('Soon');
+  expect(window.secretReach({ reach: 'sent', sent: true, test: false })).toBe('sent to a service');
+  const waiting = { kind: 'question', tool: 'AskUserQuestion', since: null, agent_type: null } as const;
+  expect(window.waitChanged({ session_id: 's', waiting: null }, [{ session_id: 's', waiting }])).toBe(true);
+});
+
 test('stopping takes the banner and the globals away', () => {
   bridged.stop();
   expect(screen.queryByRole('alert')).toBeNull();
   expect('showError' in window).toBe(false);
   expect('hasError' in window).toBe(false);
-  for (const name of [...Object.keys(format), ...Object.keys(colors)]) expect(name in window, name).toBe(false);
+  for (const name of MODULES.flatMap((module) => Object.keys(module))) expect(name in window, name).toBe(false);
   bridged = { stop() {} };
 });
