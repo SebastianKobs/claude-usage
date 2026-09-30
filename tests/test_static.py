@@ -676,7 +676,7 @@ class PagingTest(unittest.TestCase):
         self.assertRegex(module, r"export const PAGE_SIZES = \[10, 25, 50\];")
 
     def test_every_table_is_paged(self):
-        sites = {"tables.js": 2, "drilldown.js": 9, "chartkit.js": 1, "figures.js": 1}
+        sites = {"tables.js": 1, "drilldown.js": 9, "chartkit.js": 1, "figures.js": 1}
         for script, count in sites.items():
             with self.subTest(script=script):
                 self.assertEqual(len(re.findall(r"\bpaged\(", read(STATIC / "js" / script))), count)
@@ -1034,32 +1034,29 @@ class SessionListTest(unittest.TestCase):
         self.assertEqual(run_function("tables.ts", "sessionCount", 12, 84), "12 of 84 sessions")
 
     def test_the_filters_come_between_the_heading_and_the_table(self):
-        markup = dashboard()
-        heading = markup.index('id="sessions-title"')
+        # TableView draws its heading, then its intro (the filters), then the table
+        source = read(COMPONENTS / "SessionsList.svelte")
+        heading = source.index('id="sessions-title"')
         for control in ('id="sessions-project"', 'id="sessions-search"', 'id="sessions-count"'):
             with self.subTest(control=control):
-                self.assertLess(heading, markup.index(control))
-                self.assertLess(markup.index(control), markup.index('id="sessions" class="table-wrap"'))
-        self.assertRegex(markup, r'<select id="sessions-project" aria-label="[^"]+"')
-        self.assertRegex(markup, r'<input type="search" id="sessions-search" aria-label="[^"]+"')
+                self.assertLess(heading, source.index(control))
+        self.assertRegex(source, r'<select\s+id="sessions-project"\s+aria-label="[^"]+"')
+        self.assertRegex(source, r'<input\s+type="search"\s+id="sessions-search"\s+aria-label="[^"]+"')
+        self.assertRegex(source, r"\{heading\}\s+\{intro\}")
 
     def test_the_heading_says_the_amounts_are_the_ranges_and_themes_keep_it(self):
-        self.assertRegex(dashboard(), r'<h2 id="sessions-title"><span data-label="Sessions">Sessions</span>\s+'
-                                      r'<span class="muted">[^<]*in the range</span></h2>')
-
-    def test_the_pager_still_joins_the_heading_past_the_filters(self):
-        body = re.search(r"^function placePager\(.*?^\}$", read(STATIC / "js" / "tables.js"),
-                         re.DOTALL | re.MULTILINE).group(0)
-        self.assertIn('"table-filters"', body)
-        self.assertIn('class="table-filters"', dashboard())
+        self.assertRegex(read(COMPONENTS / "SessionsList.svelte"),
+                         r"<h2 id=\"sessions-title\"><span>\{hype\('Sessions'\)\}</span>\s+"
+                         r'<span class="muted">[^<]*in the range</span></h2>')
 
     def test_a_new_filter_starts_at_the_first_page(self):
-        body = re.search(r"^function setupSessionFilters\(.*?^\}$", read(STATIC / "js" / "tables.js"),
-                         re.DOTALL | re.MULTILINE).group(0)
-        self.assertIn('"sessions-search", "input"', body)
-        self.assertIn('"sessions-project", "change"', body)
-        self.assertIn('tablePages.forget("sessions")', body)
-        self.assertIn("setupSessionFilters()", read(STATIC / "js" / "main.js"))
+        source = read(COMPONENTS / "SessionsList.svelte")
+        self.assertEqual(source.count("tablePages.forget(KEY)"), 2)
+        self.assertIn("const KEY = 'sessions'", source)
+
+    def test_the_page_mounts_the_list_where_the_old_card_was(self):
+        self.assertIn('<div id="sessions-card"></div>', dashboard())
+        self.assertNotIn('id="sessions-project"', dashboard())
 
     def test_the_search_field_looks_like_the_other_controls_in_every_theme(self):
         css = read(STATIC / "css" / "common.css")

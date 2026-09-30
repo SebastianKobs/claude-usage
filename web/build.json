@@ -16,6 +16,7 @@
     "web/src/components/PointDot.svelte": "1642f198e1ee52cc1530ec040e5ebcbe74eee3f5800bd76aa933d025ec0b8846",
     "web/src/components/RateLimits.svelte": "a7f23e482b82e94d9abdaebe138674bc51515178a363b6433fcc9241598f9102",
     "web/src/components/RuntimeTiles.svelte": "6acbc1390e855f37291433650391daabaea907d2e9448f7dad8a4bb9baa4498c",
+    "web/src/components/SessionsList.svelte": "8fcc1f7ab32615344d834b4f5d35c1c69437defd1f770fb2e13140239564f51d",
     "web/src/components/StatTile.svelte": "5ecd0138f05cfe87e68a69d64ec6a3478e04e1bd1dc141808a5d2e9fd2993b49",
     "web/src/components/SummaryTiles.svelte": "b125eb266c417c3ed3898f5d239bf2cbaebc2b1aa1f025ea5f201aec59637a51",
     "web/src/components/Swatch.svelte": "9fbd95c37c02f0d1ce1c6c27d9cb5efb32167f60456e1037a55d97d1e99e1028",
@@ -24,7 +25,7 @@
     "web/src/components/UsageTables.svelte": "cba57c97cff63ab91652f9f52ff246be7e1b1649aaf488c2c2015127fa676ff5",
     "web/src/components/XLabels.svelte": "3fa5052afc89d04d739c86128fb829419fafbfa5d1ec1775ee0279ab073fb3c5",
     "web/src/components/YAxis.svelte": "a45c8f9d24b1dda129393df88eb58ce4bc58ae38f1d9cc0f9292ff53ea410d07",
-    "web/src/legacy.svelte.ts": "4d7e474f3ea6edacd6b8c0726bb74080938d8b203eef706eabc997ad1dc3246f",
+    "web/src/legacy.svelte.ts": "adc3bff996cf4de776af305dae5a63d9bf61c4646a8bde5157c2b2936bee3a27",
     "web/src/lib/banner.svelte.ts": "2bcc2747224c3bc55c4120fd47e17ad383527684826309e01cda94763bbb67e9",
     "web/src/lib/bymodel.ts": "1f1b26f6ad7515c3473fd90709b3fbdfc0410c5fcc7c406b5e62febabc3554cc",
     "web/src/lib/chartkit.ts": "0abc565531d389285a10e0d8017d1bad67f4acec851289b234dc7d382b1b879f",
@@ -41,7 +42,7 @@
     "web/src/lib/prefs.svelte.ts": "3cef57db6b563e4f2287604140c719fc0c0f2ea90aed136c266b5e4032c055e0",
     "web/src/lib/scroll.ts": "00e72d7195bb2b1906b7a53b20600025a52fe3b5d7fa984cde9912426a07942f",
     "web/src/lib/secrets.ts": "6f3d9eba95314a859de7032776c1eb77fa29e93949793c51d7ccf4816cca865a",
-    "web/src/lib/tables.ts": "cab1597678a6832ef536f510c8d00b30506cdbfdece2cb2986cfcbcb60b78b08",
+    "web/src/lib/tables.ts": "7cba049adc9a960b720928a6aee831e70b6ca2bc1a475b865e67c45a327a5bbc",
     "web/src/lib/themes.ts": "ada0027dc8e18c4eb4227e0a4ed92d929de5d10384b097195b2897b612ed94d1",
     "web/src/lib/tiles.ts": "00e8a9c7419ad33b95ae5f55ec5ebaf5ac1a3476588be3c7f946dd5112c6aa06",
     "web/src/lib/trend.ts": "ae38d2ff93617b24da1d6f5be5edd445513925d2248253f762bbc2537e28ae62",
@@ -53,6 +54,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "6d80e4fb7b0647d9b9a3ce6ffb2721afbd1d0e8a403c135068f9b3ac4a09b597",
-    "claude_usage/static/js/app.js": "545a389da4e132db623c98c79b4bad21f92eca5dc95a7e28127f3b9b771ff60f"
+    "claude_usage/static/js/app.js": "8af37c86853cb5332b84d7541e3dccec0e91e22aa7aa733cc0c2ec501438b221"
   }
 }

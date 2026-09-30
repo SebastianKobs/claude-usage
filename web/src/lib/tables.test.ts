@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import type { ToolCount, ToolKindRow } from './api.ts';
-import { usage } from './fixtures.ts';
+import { sessionItem, usage } from './fixtures.ts';
+import { when } from './format.ts';
 import {
   byCost,
   chatRows,
@@ -13,6 +14,8 @@ import {
   pageText,
   pageUnits,
   pageWindow,
+  SESSION_COLUMNS,
+  sessionCells,
   sessionCount,
   sessionMatches,
   sessionProjects,
@@ -119,6 +122,38 @@ test('the count says how many of the ranges sessions show', () => {
     '12 of 84 sessions',
     '0 of 1 session',
   ]);
+});
+
+test('the sessions table has the time and the session first, then what it used, the numbers right-aligned', () => {
+  expect(SESSION_COLUMNS.map((column) => column.label)).toEqual([
+    'Last activity',
+    'Session',
+    'Subagents',
+    'Turns',
+    'Avg context',
+    'Peak context',
+    'Output',
+    'Cost',
+  ]);
+  expect(SESSION_COLUMNS.map((column) => column.numeric ?? false)).toEqual([
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+  ]);
+});
+
+test('a sessions row has the time, then the subagents, turns, contexts, output and cost as they are read', () => {
+  const cells = sessionCells(sessionItem({ subagents: 12, turns: 1234, output: 2500, cost: 0.5 }));
+  expect(cells).toEqual([when('2026-09-29T11:00:00Z'), '12', '1,234', '40K', '90K', '2.5K', '$0.50']);
+});
+
+test('a session without a last record has no time', () => {
+  expect(sessionCells(sessionItem({ last_ts: null }))[0]).toBe('–');
 });
 
 // --- the Tools table ---

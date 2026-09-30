@@ -1,4 +1,5 @@
-// The sessions list, and the usage tables of the session view (the overview's are the UsageTables component).
+// Paging for the old scripts' tables, and the usage tables of the session view (the overview's are the UsageTables
+// component, its sessions list the SessionsList component).
 "use strict";
 
 // --- paging -------------------------------------------------------------------------------------------------
@@ -38,13 +39,13 @@ function paged(key, node, noun = "rows") {
 }
 
 // The pager into its table's title row, right-aligned: the heading right before the table's wrap (or a grid's,
-// `paged-wrap`; a note or the table's filters may sit between them) becomes a row with it. A table without one,
-// such as a chart's table view under its chart, keeps the pager above it. A redraw finds the row already made and
-// swaps its pager, or drops it for a table without one (pager null); `node` is what the caller put in the page.
+// `paged-wrap`; a note may sit between them) becomes a row with it. A table without one, such as a chart's table
+// view under its chart, keeps the pager above it. A redraw finds the row already made and swaps its pager, or drops
+// it for a table without one (pager null); `node` is what the caller put in the page.
 function placePager(node, pager) {
   const wrap = node.isConnected ? node.closest(".table-wrap, .paged-wrap") : null;
   let title = wrap ? wrap.previousElementSibling : null;
-  while (title && ["note", "table-filters"].some(name => title.classList.contains(name))) {
+  while (title && title.classList.contains("note")) {
     title = title.previousElementSibling;
   }
   if (!title) return;
@@ -95,61 +96,4 @@ function modelEffortTable(models, modelEfforts, nameCell) {
     }
   }
   return el("table", {}, el("thead", {}, usageHead("Model")), el("tbody", {}, ...body));
-}
-
-// --- the sessions list: every session of the range, filtered by project and words ----------------------------
-
-// the range's sessions, drawn again through the filter as it changes; a refresh keeps the filter
-let sessionList = [];
-let sessionOptionsKey = null;
-
-function renderSessions(sessions) {
-  sessionList = sessions;
-  const picker = document.getElementById("sessions-project");
-  const picked = picker.value;
-  const projects = sessionProjects(sessions, picked);
-  // the options change only with the projects, so a refresh doesn't close the list while it is open
-  const key = JSON.stringify(projects);
-  if (key !== sessionOptionsKey) {
-    sessionOptionsKey = key;
-    picker.replaceChildren(el("option", {value: "", text: "All projects"}),
-      ...projects.map(({project, count}) => el("option", {value: project, text: `${project} (${whole(count)})`})));
-    picker.value = picked;
-  }
-  drawSessions();
-}
-
-function drawSessions() {
-  const container = document.getElementById("sessions");
-  const project = document.getElementById("sessions-project").value;
-  const text = document.getElementById("sessions-search").value;
-  const sessions = sessionList.filter(session => sessionMatches(session, project, text));
-  document.getElementById("sessions-count").textContent = sessionCount(sessions.length, sessionList.length);
-  const head = el("tr", {}, el("th", {text: "Last activity"}), el("th", {text: "Session"}),
-                  el("th", {class: "num", text: "Subagents"}), el("th", {class: "num", text: "Turns"}),
-                  el("th", {class: "num", text: "Avg context"}), el("th", {class: "num", text: "Peak context"}),
-                  el("th", {class: "num", text: "Output"}), el("th", {class: "num", text: "Cost"}));
-  const rows = sessions.map(session => el("tr", {},
-    el("td", {class: "num", text: when(session.last_ts)}),
-    el("td", {}, sessionLink(session), el("span", {class: "sub", text: session.project})),
-    el("td", {class: "num", text: whole(session.subagents)}), el("td", {class: "num", text: whole(session.turns)}),
-    el("td", {class: "num", text: compact(session.context_avg)}),
-    el("td", {class: "num", text: compact(session.context_peak)}),
-    el("td", {class: "num", text: compact(session.output)}), el("td", {class: "num", text: money(session.cost)})));
-  const empty = sessionList.length ? "No sessions match the filter." : "No sessions in this range.";
-  // paged even when empty, so a pager left from a longer list goes
-  container.replaceChildren(paged("sessions", sessions.length
-    ? el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows))
-    : el("div", {class: "empty", text: empty})));
-}
-
-// the controls are in the markup, outside what a redraw replaces, so typing keeps its focus; a new filter starts
-// at the first page
-function setupSessionFilters() {
-  for (const [id, event] of [["sessions-project", "change"], ["sessions-search", "input"]]) {
-    document.getElementById(id).addEventListener(event, () => {
-      tablePages.forget("sessions");
-      drawSessions();
-    });
-  }
 }

@@ -7,6 +7,7 @@ import type {
   LimitWindow,
   RuntimeTotals,
   SessionDetail,
+  SessionListItem,
   SessionRuntime,
   Summary,
   Usage,
@@ -42,6 +43,23 @@ export function costlySession(changes: Partial<CostlySession> = {}): CostlySessi
     subagents: 2,
     context_avg: 40_000,
     context_peak: 90_000,
+    ...changes,
+  };
+}
+
+/** A row of the sessions list: a session of the project "shop" with 2 subagents, $1.50 in 10 turns. */
+export function sessionItem(changes: Partial<SessionListItem> = {}): SessionListItem {
+  return {
+    session_id: 'abc-1',
+    title: 'Checkout: split payment step',
+    project: 'shop',
+    last_ts: '2026-09-29T11:00:00Z',
+    subagents: 2,
+    turns: 10,
+    context_avg: 40_000,
+    context_peak: 90_000,
+    output: 50,
+    cost: 1.5,
     ...changes,
   };
 }

@@ -59,7 +59,6 @@ function renderSummary() {
   if (!summary) return;
   setPayload({summary});
   renderDayNav();
-  renderSessions(summary.sessions);
   const scope = summary.project_filter ? `project ${summary.project_filter}` : "all projects";
   document.getElementById("scope").textContent = `· ${scope}`;
   document.getElementById("footer").textContent = "Estimated cost at Claude API list prices" +
@@ -287,7 +286,6 @@ function setup() {
   });
   document.getElementById("day-prev").addEventListener("click", () => stepDay("previous_day"));
   document.getElementById("day-next").addEventListener("click", () => stepDay("next_day"));
-  setupSessionFilters();
   document.getElementById("theme").addEventListener("change", event => {
     preferences.theme = event.target.value;
     applyTheme();

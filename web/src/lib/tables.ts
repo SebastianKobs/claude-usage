@@ -6,7 +6,7 @@
 
 import type { Agent, ChatEntry, SessionListItem, Usage } from './api.ts';
 import { inputTotal } from './charts.ts';
-import { compact, money, percent, whole } from './format.ts';
+import { compact, money, percent, when, whole } from './format.ts';
 
 // --- paging ---------------------------------------------------------------------------------------------------
 
@@ -80,6 +80,31 @@ export function sessionProjects(sessions: Pick<SessionListItem, 'project'>[], pi
   return [...counts]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([project, count]) => ({ project, count }));
+}
+
+/** The sessions table's columns: the last activity, the session (its title and project), then what it used. */
+export const SESSION_COLUMNS: { label: string; numeric?: boolean }[] = [
+  { label: 'Last activity' },
+  { label: 'Session' },
+  { label: 'Subagents', numeric: true },
+  { label: 'Turns', numeric: true },
+  { label: 'Avg context', numeric: true },
+  { label: 'Peak context', numeric: true },
+  { label: 'Output', numeric: true },
+  { label: 'Cost', numeric: true },
+];
+
+/** A session's cells but its name: the last activity first, then the columns after the session's. */
+export function sessionCells(session: SessionListItem): string[] {
+  return [
+    when(session.last_ts),
+    whole(session.subagents),
+    whole(session.turns),
+    compact(session.context_avg),
+    compact(session.context_peak),
+    compact(session.output),
+    money(session.cost),
+  ];
 }
 
 /** "84 sessions", "1 session", or "12 of 84 sessions" while a filter holds some back. */

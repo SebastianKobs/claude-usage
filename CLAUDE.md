@@ -106,9 +106,9 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              delegate, a compaction's verdict and their sum; handed over the same way
   src/lib/secrets.ts         how the secret accesses show: the card's tone, a path's script, how far a call got
   src/lib/live.ts            the live cards' badges (waiting, secret, compacting now) and what waits for the user
-  src/lib/tables.ts          paging (page units, window and text), the sessions list's filter and count, the Tools
-                             table's rows with their keys, folds and labels, the conversation's order and keys, and
-                             the usage tables' cells and order
+  src/lib/tables.ts          paging (page units, window and text), the sessions list's filter, count, columns and
+                             cells, the Tools table's rows with their keys, folds and labels, the conversation's
+                             order and keys, and the usage tables' cells and order
   src/lib/charts.ts          the charts' maths: scales and ticks, where a point or column falls, the time axis, the
                              by-model series and stacks, the rate-limit counts and windows, the cost bars' split
   src/lib/themes.ts          the themes and the gimmick themes' wording (`test_static.py` reads its labels): which theme
@@ -144,8 +144,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              `KpiTiles`, `RuntimeTiles`, `SummaryTiles`; `ChartCard`, the section a chart lives in, with
                              its table-view toggle; `TableView`, a paged table (`scope` on its headings, named by its
                              heading), its pager in an optional heading row; `OverTime`, `ByModel`, `CostPerSession`,
-                             `RateLimits`, and the usage tables: `UsageTable`, `UsageTables`), each with its Testing
-                             Library test
+                             `RateLimits`, the usage tables: `UsageTable`, `UsageTables`, and the sessions card:
+                             `SessionsList`), each with its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
@@ -763,9 +763,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     made calls in it and the main thread's context), so a session over several days splits across them, and the list and
     the costliest add up to the range's total; the session view shows it whole. A project picker (the range's projects
     by name, with their sessions; a picked one stays on offer in a range without it) and a text filter (every word, in
-    any case, in the title, project or id: `sessionMatches`) narrow it, counted as "12 of 84 sessions". The controls are
-    markup outside what a redraw replaces, so a refresh keeps the filter and typing keeps its focus; a new filter starts
-    at the first page, and the pager joins the heading past them (`table-filters`).
+    any case, in the title, project or id: `sessionMatches`) narrow it, counted as "12 of 84 sessions". The choice is
+    the component's own state (`SessionsList`), so a refresh keeps the filter and typing keeps its focus; a new filter
+    starts at the first page, and the pager joins the heading past the controls (`table-filters`).
   - All data goes into the DOM via `textContent`. Two exceptions, both in `chat.js`:
     - `highlighted()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans
       with classes.

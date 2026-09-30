@@ -7,7 +7,7 @@ import * as charts from './lib/charts';
 import * as colors from './lib/colors';
 import * as compact from './lib/compact';
 import * as format from './lib/format';
-import { apiErrorEvent, costlySession, summary, usage } from './lib/fixtures';
+import { apiErrorEvent, costlySession, sessionItem, summary, usage } from './lib/fixtures';
 import * as live from './lib/live';
 import * as overview from './lib/overview.svelte';
 import * as paging from './lib/paging.svelte';
@@ -238,6 +238,18 @@ test('the usage tables are mounted in their container: five headings, tables dra
   expect(container.querySelectorAll('table')).toHaveLength(1);
 });
 
+test('the sessions list is mounted in its container: a card with its filters, the table drawn from the payload', () => {
+  const card = tilesOf('sessions-card');
+  expect(screen.getByRole('region', { name: 'Sessions what each used in the range' })).toBeInTheDocument();
+  expect(card).toContainElement(screen.getByRole('region', { name: 'Sessions what each used in the range' }));
+  expect(card.querySelector('#sessions-project')).not.toBeNull();
+  expect(card.querySelector('table')).toBeNull();
+  window.setPayload({ summary: summary({ sessions: [sessionItem()] }) });
+  expect(card.querySelectorAll('tbody tr')).toHaveLength(1);
+  expect(card.querySelector('#sessions-count')).toHaveTextContent('1 session');
+  expect(card).toContainElement(screen.getByRole('link', { name: 'Checkout: split payment step' }));
+});
+
 test('a page without the tile containers fails loudly and mounts nothing', () => {
   bridged.stop();
   document.body.replaceChildren(pageBody());
@@ -299,6 +311,23 @@ test('a page without the usage-tables container fails loudly and mounts nothing'
   expect(document.getElementById('error')).not.toBeNull();
   expect(document.getElementById('kpis')?.children).toHaveLength(0);
   expect(document.getElementById('limits-card')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('a page without the sessions container fails loudly and mounts nothing', () => {
+  bridged.stop();
+  document.body.replaceChildren(pageBody());
+  document.getElementById('sessions-card')?.remove();
+  expect(() => bridge(window)).toThrow('The page has no #sessions-card container for the sessions list');
+  expect(document.getElementById('error')).not.toBeNull();
+  expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  expect(document.getElementById('usage-cards')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('stopping takes the sessions list away too', () => {
+  bridged.stop();
+  expect(tilesOf('sessions-card').children).toHaveLength(0);
   bridged = { stop() {} };
 });
 
