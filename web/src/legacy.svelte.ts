@@ -7,6 +7,7 @@ import ByModel from './components/ByModel.svelte';
 import CostPerSession from './components/CostPerSession.svelte';
 import LiveSessions from './components/LiveSessions.svelte';
 import OverTime from './components/OverTime.svelte';
+import RangeFilter from './components/RangeFilter.svelte';
 import RateLimits from './components/RateLimits.svelte';
 import SessionsList from './components/SessionsList.svelte';
 import SummaryTiles from './components/SummaryTiles.svelte';
@@ -21,6 +22,8 @@ import * as overview from './lib/overview.svelte';
 import * as paging from './lib/paging.svelte';
 import * as payload from './lib/payload.svelte';
 import * as prefs from './lib/prefs.svelte';
+import * as rangeLib from './lib/range';
+import * as rangeState from './lib/range.svelte';
 import * as scroll from './lib/scroll';
 import * as secrets from './lib/secrets';
 import * as tables from './lib/tables';
@@ -39,12 +42,16 @@ import * as themes from './lib/themes';
 // scrolling lib/scroll.ts (keeping the reader's place while a view is redrawn), the page's payload
 // lib/payload.svelte.ts (the summary loaded, or that loading it failed: `setPayload` hands the old scripts' summary to
 // the components and draws at once) and the session view's tile rows lib/overview.svelte.ts (`mountSessionKpis` and
-// `mountSessionRuntime`, rows the old scripts put into the page). `tablePages`, `mountPager`, `payload` and the like
-// reach the old scripts as globals, like everything else here. Their names must stay apart: a shared one would be
-// handed over twice, the second silently winning. The overview's two tile rows, `#kpis` and `#runtime`, the live
-// sessions, `#live-card`, the over-time section, `#trend-card`, the by-model section, `#chart-card`, the
-// cost-per-session section, `#costly-card`, the rate-limits section, `#limits-card`, the usage tables,
-// `#usage-cards`, and the sessions list, `#sessions-card`, are mounted here from the payload, which `setPayload` sets.
+// `mountSessionRuntime`, rows the old scripts put into the page) and the page's range lib/range.ts (the ranges on
+// offer, the query a range becomes, the day the Daily range shows) and lib/range.svelte.ts (`range`, the days and day
+// shown as reactive state, which the old scripts reload the data on through its `onchange`). `tablePages`,
+// `mountPager`, `payload` and the like reach the old scripts as globals, like everything else here. Their names must
+// stay apart: a shared one would be handed
+// over twice, the second silently winning. The overview's two tile rows, `#kpis` and `#runtime`, the live sessions,
+// `#live-card`, the over-time section, `#trend-card`, the by-model section, `#chart-card`, the cost-per-session
+// section, `#costly-card`, the rate-limits section, `#limits-card`, the usage tables, `#usage-cards`, the sessions
+// list, `#sessions-card`, and the range filter, `#filters`, are mounted here from the payload, which `setPayload`
+// sets.
 type Formatters = typeof format;
 type Colors = typeof colors;
 type Compacting = typeof compact;
@@ -58,6 +65,8 @@ type Paging = typeof paging;
 type Scroll = typeof scroll;
 type Payload = typeof payload;
 type Overview = typeof overview;
+type RangeLib = typeof rangeLib;
+type RangeStateModule = typeof rangeState;
 
 // Every module handed over: a new one is imported above, typed in Window's extends and listed here.
 const MODULES = [
@@ -74,6 +83,8 @@ const MODULES = [
   scroll,
   payload,
   overview,
+  rangeLib,
+  rangeState,
 ];
 
 declare global {
@@ -90,7 +101,9 @@ declare global {
       Paging,
       Scroll,
       Payload,
-      Overview {
+      Overview,
+      RangeLib,
+      RangeStateModule {
     /** Sets a source's banner message (empty removes it), drawn at once. */
     showError(source: string, message: string): void;
     /** Whether a source has a banner message now. */
@@ -130,6 +143,8 @@ export function bridge(target: Window): Bridge {
   if (!usageContainer) throw new Error('The page has no #usage-cards container for the usage tables');
   const sessionsContainer = target.document.getElementById('sessions-card');
   if (!sessionsContainer) throw new Error('The page has no #sessions-card container for the sessions list');
+  const filtersContainer = target.document.getElementById('filters');
+  if (!filtersContainer) throw new Error('The page has no #filters container for the range filter');
   // Mounted before the placeholder, which then goes, so the banner keeps its place and there is one alert.
   const banner = mount(Banner, { target: placeholder.parentElement, anchor: placeholder, props: { messages } });
   placeholder.remove();
@@ -153,6 +168,8 @@ export function bridge(target: Window): Bridge {
   const usage = mount(UsageTables, { target: usageContainer });
   // And the sessions list.
   const sessions = mount(SessionsList, { target: sessionsContainer });
+  // And the range filter.
+  const filters = mount(RangeFilter, { target: filtersContainer });
 
   target.showError = (source: string, message: string): void => {
     messages.show(source, message);
@@ -175,6 +192,7 @@ export function bridge(target: Window): Bridge {
       void unmount(limits);
       void unmount(usage);
       void unmount(sessions);
+      void unmount(filters);
       // Reflect, since the Window interface declares them always there, which a plain delete refuses.
       Reflect.deleteProperty(target, 'showError');
       Reflect.deleteProperty(target, 'hasError');

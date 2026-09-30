@@ -10,12 +10,7 @@ function drawnKey(payload) {
   return `${dayText(now)}T${now.getHours()} ${JSON.stringify(payload)}`;
 }
 
-// The range the page shows, as a query: the day only for a single day, which the arrows step through
-function rangeQuery(days, day) {
-  return `days=${days}` + (days === 1 && day !== null ? `&until=${day}` : "");
-}
-
-// A new range: the live sessions follow it too, at once rather than at their next poll
+// A new range (the range filter calls it): the live sessions follow it too, at once rather than at their next poll
 function loadRange() {
   loadSummary();
   loadLive();
@@ -29,11 +24,11 @@ async function loadSummary() {
   // stepping through days quickly overlaps requests: only the newest one may render
   const request = ++summaryRequest;
   try {
-    const summary = await fetchJson(`/api/summary?${rangeQuery(state.days, state.day)}`);
+    const summary = await fetchJson(`/api/summary?${rangeQuery(range.days, range.day)}`);
     if (request !== summaryRequest) return;
     showError("summary", "");
     showScanErrors(summary);
-    applyRetention(summary);
+    range.fit(summary);
     const key = drawnKey(summary);
     if (key !== summaryKey) {
       summaryKey = key;
@@ -53,7 +48,6 @@ function renderSummary() {
   const summary = state.summary;
   if (!summary) return;
   setPayload({summary});
-  renderDayNav();
   const scope = summary.project_filter ? `project ${summary.project_filter}` : "all projects";
   document.getElementById("scope").textContent = `· ${scope}`;
   document.getElementById("footer").textContent = "Estimated cost at Claude API list prices" +
@@ -70,7 +64,7 @@ async function loadLive() {
   // a poll for the range before may answer after a new range's request: only the newest one may render
   const request = ++liveRequest;
   try {
-    const live = await fetchJson(`/api/live?${rangeQuery(state.days, state.day)}`);
+    const live = await fetchJson(`/api/live?${rangeQuery(range.days, range.day)}`);
     if (request !== liveRequest) return;
     showError("live", "");
     showScanErrors(live);
@@ -236,45 +230,9 @@ function returnToOpener() {
 
 // --- controls ------------------------------------------------------------------------------------------------
 
-// No range longer than the store keeps: those buttons hide, and a saved longer range (which the server cut to the
-// retention) becomes the longest one kept
-function applyRetention(summary) {
-  const retention = summary.retention_days;
-  for (const button of document.querySelectorAll("#range button[data-days]")) {
-    button.hidden = Boolean(retention) && Number(button.dataset.days) > retention;
-  }
-  if (summary.days < state.days) {
-    state.days = summary.days;
-    savePreference("days", state.days);
-    pressed("range", "days", state.days);
-  }
-}
-
-function pressed(groupId, attribute, value) {
-  for (const button of document.querySelectorAll(`#${groupId} button[data-${attribute}]`)) {
-    button.setAttribute("aria-pressed", String(button.dataset[attribute] === String(value)));
-  }
-}
-
 function setup() {
-  const days = Number(readPreference("days"));
-  if ([1, 7, 30, 90, 365].includes(days)) state.days = days;
   applyTheme();
-  pressed("range", "days", state.days);
-  renderDayNav();
-
-  document.getElementById("range").addEventListener("click", event => {
-    const button = event.target.closest("button[data-days]");
-    if (!button) return;
-    state.days = Number(button.dataset.days);
-    state.day = null;                                     // Daily starts at today again
-    savePreference("days", state.days);
-    pressed("range", "days", state.days);
-    renderDayNav();
-    loadRange();
-  });
-  document.getElementById("day-prev").addEventListener("click", () => stepDay("previous_day"));
-  document.getElementById("day-next").addEventListener("click", () => stepDay("next_day"));
+  range.onchange = loadRange;
   document.getElementById("theme").addEventListener("change", event => {
     preferences.theme = event.target.value;
     applyTheme();

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { screen } from '@testing-library/svelte';
+import { flushSync } from 'svelte';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { bridge, type Bridge } from './legacy.svelte';
 import * as charts from './lib/charts';
@@ -13,6 +14,8 @@ import * as overview from './lib/overview.svelte';
 import * as paging from './lib/paging.svelte';
 import * as payload from './lib/payload.svelte';
 import * as prefs from './lib/prefs.svelte';
+import * as rangeLib from './lib/range';
+import * as rangeState from './lib/range.svelte';
 import * as scroll from './lib/scroll';
 import * as secrets from './lib/secrets';
 import * as tables from './lib/tables';
@@ -32,6 +35,8 @@ const MODULES = [
   scroll,
   payload,
   overview,
+  rangeLib,
+  rangeState,
 ];
 
 // a path, not a URL: the simulated DOM's URL class isn't node's
@@ -57,6 +62,8 @@ beforeEach(() => {
 afterEach(() => {
   bridged.stop();
   payload.payload.reset();
+  rangeState.range.reset();
+  localStorage.clear();
 });
 
 test("the banner takes the placeholder's place", () => {
@@ -100,6 +107,8 @@ test.each([
   ['scrolling', scroll, 'scrollAnchor'],
   ['payload', payload, 'setPayload'],
   ['overview tiles', overview, 'mountSessionKpis'],
+  ['range helpers', rangeLib, 'visibleRanges'],
+  ['range state', rangeState, 'range'],
 ])("the old scripts' %s are the module's exports", (_kind, module, sample) => {
   const names = Object.keys(module) as (keyof typeof module & keyof Window)[];
   expect(names).toContain(sample);
@@ -270,6 +279,27 @@ test('the sessions list is mounted in its container: a card with its filters, th
   expect(card).toContainElement(screen.getByRole('link', { name: 'Checkout: split payment step' }));
 });
 
+test('the range filter is mounted in its container: the label and buttons, drawn from the payload', () => {
+  const filters = tilesOf('filters');
+  expect(filters.querySelector('.label')).toHaveTextContent('Range');
+  expect(filters.querySelectorAll('.segmented > button')).toHaveLength(5);
+  expect(filters.querySelector('.day-nav')).toBeNull();
+  window.setPayload({ summary: summary({ retention_days: 7 }) });
+  expect([...filters.querySelectorAll('.segmented > button')].map((button) => button.textContent?.trim())).toEqual([
+    'Daily',
+    '7 days',
+  ]);
+});
+
+test('the range the old scripts read is the same state the filter draws', () => {
+  expect(window.range).toBe(rangeState.range);
+  window.range.select(1);
+  flushSync();
+  expect(screen.getByRole('button', { name: 'Daily' })).toHaveAttribute('aria-pressed', 'true');
+  expect(tilesOf('filters').querySelector('.day-nav')).not.toBeNull();
+  expect(window.rangeQuery(window.range.days, window.range.day)).toBe('days=1');
+});
+
 test('a page without the tile containers fails loudly and mounts nothing', () => {
   bridged.stop();
   document.body.replaceChildren(pageBody());
@@ -353,6 +383,23 @@ test('a page without the sessions container fails loudly and mounts nothing', ()
   expect(document.getElementById('error')).not.toBeNull();
   expect(document.getElementById('kpis')?.children).toHaveLength(0);
   expect(document.getElementById('usage-cards')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('a page without the filters container fails loudly and mounts nothing', () => {
+  bridged.stop();
+  document.body.replaceChildren(pageBody());
+  document.getElementById('filters')?.remove();
+  expect(() => bridge(window)).toThrow('The page has no #filters container for the range filter');
+  expect(document.getElementById('error')).not.toBeNull();
+  expect(document.getElementById('kpis')?.children).toHaveLength(0);
+  expect(document.getElementById('sessions-card')?.children).toHaveLength(0);
+  bridged = { stop() {} };
+});
+
+test('stopping takes the range filter away too', () => {
+  bridged.stop();
+  expect(tilesOf('filters').children).toHaveLength(0);
   bridged = { stop() {} };
 });
 

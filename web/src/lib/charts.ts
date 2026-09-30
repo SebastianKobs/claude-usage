@@ -83,7 +83,7 @@ export function peakIndex(values: readonly number[]): number {
 // --- the time axis --------------------------------------------------------------------------------------------
 
 /** The days from `since` to `now`, as the store writes them. */
-export function rangeDays(since: string, now: Date = new Date()): string[] {
+export function daysSince(since: string, now: Date = new Date()): string[] {
   const days: string[] = [];
   for (const day = parseDay(since); day <= now; day.setDate(day.getDate() + 1)) {
     days.push(dayText(day));
@@ -111,7 +111,7 @@ export function timeBuckets(
 ): TimeBuckets {
   if (summary.days !== 1 || !summary.hour_model) {
     return {
-      keys: rangeDays(summary.since, now),
+      keys: daysSince(summary.since, now),
       unit: 'day',
       heading: 'Day',
       short: shortDay,

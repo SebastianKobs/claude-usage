@@ -733,25 +733,20 @@ def function_body(script, name):
 
 
 class LiveRangeTest(unittest.TestCase):
-    @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_the_range_names_its_day_only_for_a_single_day(self):
-        self.assertEqual(run_function("main.js", "rangeQuery", 1, "2026-09-28"), "days=1&until=2026-09-28")
-        self.assertEqual(run_function("main.js", "rangeQuery", 1, None), "days=1")
-        self.assertEqual(run_function("main.js", "rangeQuery", 7, "2026-09-28"), "days=7")
-
     def test_the_live_sessions_ask_for_the_summarys_range(self):
         script = read(STATIC / "js" / "main.js")
-        self.assertIn("fetchJson(`/api/live?${rangeQuery(state.days, state.day)}`)", script)
-        self.assertIn("fetchJson(`/api/summary?${rangeQuery(state.days, state.day)}`)", script)
+        self.assertIn("fetchJson(`/api/live?${rangeQuery(range.days, range.day)}`)", script)
+        self.assertIn("fetchJson(`/api/summary?${rangeQuery(range.days, range.day)}`)", script)
 
     def test_a_new_range_loads_the_live_sessions_at_once(self):
         load = function_body("main.js", "loadRange")
         self.assertIn("loadSummary();", load)
         self.assertIn("loadLive();", load)
-        self.assertIn("loadRange();", function_body("figures.js", "stepDay"))
+        # the range filter (a component) reports a new range, and the summary's load fits it to the retention
         setup = function_body("main.js", "setup")
-        self.assertIn("loadRange();", setup)
+        self.assertIn("range.onchange = loadRange;", setup)
         self.assertNotIn("loadSummary();", setup)
+        self.assertIn("range.fit(summary);", function_body("main.js", "loadSummary"))
 
     def test_only_the_newest_live_request_renders(self):
         # a poll for the range before may answer after the new range's request

@@ -20,7 +20,7 @@ import {
   niceMax,
   NO_USAGE,
   peakIndex,
-  rangeDays,
+  daysSince,
   stackSegments,
   ticks,
   timeBuckets,
@@ -110,13 +110,13 @@ test('the peak is the first largest value, -1 without any', () => {
 });
 
 test('the range is every local day from its start up to now', () => {
-  expect(rangeDays('2026-09-28', local(2026, 8, 30, 12))).toEqual(['2026-09-28', '2026-09-29', '2026-09-30']);
-  expect(rangeDays('2026-09-30', local(2026, 8, 30, 0, 1))).toEqual(['2026-09-30']);
-  expect(rangeDays('2026-10-01', local(2026, 8, 30, 12))).toEqual([]);
+  expect(daysSince('2026-09-28', local(2026, 8, 30, 12))).toEqual(['2026-09-28', '2026-09-29', '2026-09-30']);
+  expect(daysSince('2026-09-30', local(2026, 8, 30, 0, 1))).toEqual(['2026-09-30']);
+  expect(daysSince('2026-10-01', local(2026, 8, 30, 12))).toEqual([]);
 });
 
 test('the range crosses a month and a year', () => {
-  expect(rangeDays('2026-12-30', local(2027, 0, 2, 9))).toEqual([
+  expect(daysSince('2026-12-30', local(2027, 0, 2, 9))).toEqual([
     '2026-12-30',
     '2026-12-31',
     '2027-01-01',

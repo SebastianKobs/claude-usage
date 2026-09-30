@@ -85,7 +85,7 @@ claude_usage/
     css/common.css           layout and components, for every theme
     css/themes/              one file per theme (light, dark, hacker, startup, rgb); the gimmicks share dark's
                              palette, fun.css their other rules
-    js/                      classic scripts sharing one scope, loaded in order: util, state, figures, chartkit,
+    js/                      classic scripts sharing one scope, loaded in order: util, state, chartkit,
                              tables, limits, highlight.js, marked, DOMPurify, chat, drilldown, themes, main
                              (calls setup())
       app.js                 the bundle built from web/ (make build, committed): a module loaded before them,
@@ -139,6 +139,10 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
   src/lib/payload.svelte.ts  what the page has loaded, as reactive state (`payload`: the summary and the live answer, or
                              that loading them failed, when the latest answer came, and each live card's state), which
                              the old scripts fill through `setPayload`
+  src/lib/range.ts           the range filter's logic: the ranges on offer (cut to the retention), the query a range
+                             becomes, the day the Daily range shows and where an arrow goes
+  src/lib/range.svelte.ts    the range shown (`range`: the days and the Daily range's day, reactive, the choice saved as
+                             a preference), which the old scripts load from and reload through `range.onchange`
   src/lib/overview.svelte.ts the session view's tile rows, mounted for the old scripts (`mountSessionKpis`,
                              `mountSessionRuntime`, `releaseDetachedTiles`)
   src/components/            the Svelte components (`Banner`, `Pager`, `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
@@ -147,8 +151,8 @@ web/                         the page's Svelte 5 + TypeScript sources, which tak
                              its table-view toggle; `TableView`, a paged table (`scope` on its headings, named by its
                              heading), its pager in an optional heading row; `OverTime`, `ByModel`, `CostPerSession`,
                              `RateLimits`, the usage tables: `UsageTable`, `UsageTables`, the sessions card:
-                             `SessionsList`, and the live sessions: `LiveSessions`, `LiveCard`, `LiveIcon`), each with
-                             its Testing Library test
+                             `SessionsList`, the live sessions: `LiveSessions`, `LiveCard`, `LiveIcon`, and the range
+                             filter: `RangeFilter`), each with its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
@@ -701,9 +705,10 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     an inline script's interpreters: `data-fold`), focus and the element at the top of the window are kept. A conversation shown is read again and drawn only if it changed,
     keeping its open entries (by time, kind and position) and, once scrolled into, the entry at the top. It reads
     the transcript itself, so a reply the scan hasn't reached yet may show plain xhigh until the next change.
-  - The range buttons stop at `retention_days`: the summary cuts a longer `days` to it and returns
-    `retention_days` and `history_since` (the first stored day); the page hides the longer buttons, falls back
-    from a saved longer range, and says "history since" when a range starts before the history does.
+  - The range buttons stop at `retention_days` (`RangeFilter`, `visibleRanges`): the summary cuts a longer `days` to it
+    and returns `retention_days` and `history_since` (the first stored day); the page leaves the longer buttons out,
+    falls back from a saved longer range (`range.fit`), and says "history since" when a range starts before the
+    history does.
   - The session view takes focus on open; Escape or Close returns focus and scroll to the link that opened it.
   - The session view's context section (`drilldown.js`): the gauge (`current`) as a meter with the compact hint
     marked; the context per turn stacked as cache read, cache write and new input (`--context-read/-write/-new`,
