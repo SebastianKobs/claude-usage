@@ -21,8 +21,14 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
     text goes into the DOM as text, and a new place a string becomes markup needs a Trusted Types policy the CSP names.
   - 120 columns, no prettier; `make build` after a source changes, and the bundle and `web/build.json` are committed
     with it (`test_web.py` fails otherwise).
-- **Tests:** `make test` runs `python3 -m unittest discover -s tests`, then the page's svelte-check and Vitest where
-  `web/node_modules` exists (`make build` installs it); the Python tests never need node.
+- **Tests:** `make test` runs `python3 -m unittest discover -s tests`, then the page's svelte-check, Vitest and the
+  browser check where `web/node_modules` exists (`make build` installs it); the Python tests never need node.
+  - The browser check (`make browser-check`, `web/browser/`): Playwright serves the demo once (`browser/demo.ts`, its
+    own port 8797 and folder) and runs the built page in Chromium, which enforces the CSP's Trusted Types, and
+    Firefox. Each test fails on a console error, an uncaught error or a CSP violation: the overview, and every
+    session with its conversation in both orders; axe finds nothing on the overview and a session view in the light
+    and dark themes, once the page is still (`settled`: a dimmed summary fades back in). Playwright's browsers
+    are installed apart (`cd web && npx playwright install chromium firefox`), for the version in package.json.
 - **The guard** (`.claude/hooks/project-guard/`) is a git submodule of
   github.com/SebastianKobs/claude-project-guard. Clone with `--recurse-submodules`, or run
   `git submodule update --init`.
@@ -68,7 +74,7 @@ README.md                    the overview: highlights, quick start, what to know
 docs/                        the user guide by topic (dashboard, session view, compaction, notifications,
                              configuration, privacy); images/ holds screenshots of demo data only
 Makefile                     start/stop/status of the dashboard, scan, report, session, backup, test, clean,
-                             hook-line, notify-test, cron-line, demo
+                             hook-line, notify-test, cron-line, demo, build, browser-check
 claude_usage/
   __main__.py                CLI: scan | report | serve | backup | hook-settings | notify-test
   report.py                  the report as text (report without --json)
@@ -107,7 +113,10 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
   package.json               exact versions, dev dependencies only (the bundle holds them); `npm run build`, `check`
                              (svelte-check) and `test` (Vitest: happy-dom, jsdom where a test needs a real
                              `<select>` or DOMPurify); `vite.config.ts` builds the one module, `svelte.config.js`
-                             sets the compiler (no injected CSS, `fragments: 'tree'`)
+                             sets the compiler (no injected CSS, `fragments: 'tree'`); `playwright.config.ts` runs
+                             the browser check
+  browser/                   the browser check: `demo.ts` serves the demo, `page.ts` the test that fails on the
+                             page's complaints and the steps through the demo, `console.spec.ts` and `axe.spec.ts`
   src/main.ts                mounts `App` on `<main>`
   build.json                 what the last build read and wrote, by sha256: test_web.py says "run make build"
                              where the checkout differs
@@ -874,7 +883,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     on the wash), not a highlight.js theme.
   - Contrast in every theme: text ≥ 4.5:1, marks ≥ 3:1. Categorical slots 3–5 in light mode are the palette's
     documented exception; the legend and table view carry them. `--text-muted` is darker than the reference
-    palette's in light mode and lighter in dark (#8e8c86: 4.56:1 on the wash over the surface).
+    palette's in light mode and lighter in dark (#8e8c86: 4.56:1 on the wash over the surface), and the browser
+    check's axe holds both themes to it.
   - Documented exception, chosen by the user: the effort shades of two neighbouring models come closer than the
     palette's floor of ΔE 15 (12.8 in light, 9.3 in dark mode). The wider gap between models, the grouped legend,
     the tooltip and the table view carry the combination.

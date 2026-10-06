@@ -6,6 +6,8 @@
 #   make backup FILE=<new file>               a copy of the history, e.g. outside the checkout
 #   make demo [DEMO_PORT=8799]                made-up transcripts and a dashboard on them, for screenshots
 #   make build                                the page's bundle from web/ (needs node; the build is committed)
+#   make browser-check                        that bundle on the demo in Chromium and Firefox (needs Playwright's
+#                                             browsers: cd web && npx playwright install chromium firefox)
 
 PYTHON ?= python3
 CLI := $(PYTHON) -m claude_usage
@@ -23,10 +25,10 @@ ALIVE = [ -f $(PID_FILE) ] && ps -p "$$(cat $(PID_FILE))" -o args= 2>/dev/null |
 
 .DEFAULT_GOAL := help
 .PHONY: help start stop restart status logs scan report session backup test clean hook-line notify-test cron-line \
-	demo build
+	demo build browser-check
 
 help: ## list the targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-12s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-14s %s\n", $$1, $$2}'
 
 start: ## start the dashboard in the background (PORT=, LIVE_MINUTES=)
 	@mkdir -p -m 700 data
@@ -83,9 +85,10 @@ backup: ## copy the history into a new file (FILE=<path>), e.g. outside the chec
 	@if [ -z "$(FILE)" ]; then echo "usage: make backup FILE=<new file>"; exit 2; fi
 	@$(CLI) backup "$(FILE)"
 
-test: ## run the tests, then the page's checks and tests where web/node_modules exists (make build installs it)
+test: ## run the tests, then the page's checks, tests and browser check where web/node_modules exists (make build)
 	@$(PYTHON) -m unittest discover -s tests
-	@if [ -d web/node_modules ]; then cd web && npm run --silent check && npm test --silent; \
+	@if [ -d web/node_modules ]; then cd web && npm run --silent check && npm test --silent \
+		&& PYTHON=$(PYTHON) npx playwright test; \
 	else echo "Skipped the page's checks and tests: no web/node_modules (make build installs it)"; fi
 
 clean: ## remove caches and test scratch folders (never data/)
@@ -103,6 +106,9 @@ cron-line: ## print a crontab line that keeps the history without the dashboard 
 
 build: ## build the page's bundle from web/ into claude_usage/static (needs node and npm)
 	@cd web && npm ci --ignore-scripts && npm run build
+
+browser-check: ## the built page on the demo in Chromium and Firefox: no console error, CSP violation or axe finding
+	@cd web && PYTHON=$(PYTHON) npx playwright test
 
 demo: ## made-up transcripts in tests/.tmp/demo and a dashboard on them, for the docs' screenshots (DEMO_PORT=)
 	@PYTHONPATH=tests $(PYTHON) -m demo $(if $(DEMO_PORT),--port $(DEMO_PORT))

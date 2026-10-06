@@ -1,7 +1,7 @@
 {
   "sources": {
-    "web/package-lock.json": "cb758c1d0f65f620709360caaa7516d04b8489a05cd75925ace36fc66bbfe374",
-    "web/package.json": "acdf0f0b405457458ecaeb6efde03982b2e5db3f3da973d43223eb4bb3e1b3d3",
+    "web/package-lock.json": "b390ffe2853e386425868ddf46292310a461179b883094a0bc2dc4e3e45466e5",
+    "web/package.json": "ae161eede2fbaea25edb857556858c707fc74bab21e4f5636872f740c3b499e2",
     "web/src/components/AgentsTable.svelte": "b6b5df241111a21445d22ae56e9f70f48d914da49c92f3b049fa9b917cc3462b",
     "web/src/components/App.svelte": "5370d252186623ab74db25de509bade032e6fa4c4730b1c03215f1c25941c82e",
     "web/src/components/AreaLine.svelte": "962503ddd079563119b9ec8f115a154f3e0c54949d42e4fdd901ca7ec959f2ff",
@@ -89,7 +89,7 @@
     "web/src/lib/usage.ts": "fda8412ff9237fdd59c17f13a039688a56aa643f36f42fcc67f744e6b8ebd0c8",
     "web/src/main.ts": "4506cbc283fcd25b48c611a5cbdb6f474b73bbb48ba32cd59a11c1163ddeb3d8",
     "web/svelte.config.js": "ae0419e50da9a27b55fba71fe33dfecaf71ed84f90b5ec2277a7132ff5411d2b",
-    "web/tsconfig.json": "2601049b254d943443bd30ee2824029ad0867d0e385e992840025450b61dc515",
+    "web/tsconfig.json": "716bf8dc54fa0da0f76917120d3e2ba0f8ab38614f13f0b798f76fa6e7443714",
     "web/vite.config.ts": "ca872345989b0ff2d7615516a6f109f5c002f77de0fc0f5cb1c9088cf2425fe5"
   },
   "outputs": {

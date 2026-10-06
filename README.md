@@ -208,9 +208,10 @@ the dashboard never needs node.
 
 | Command | What it does |
 |---|---|
-| `make test` | The Python tests, then the page's type check (svelte-check) and Vitest tests where `web/node_modules` exists |
+| `make test` | The Python tests, then the page's type check (svelte-check), Vitest tests and browser check where `web/node_modules` exists |
 | `make build` | Installs the page's packages (`npm ci`, exact versions) and builds the bundle; needs node 22.22 or 24.15+ and npm. Run it after a change under `web/`, and commit the bundle and `web/build.json` with it: a test fails where they differ from the sources |
 | `make demo` | Serves made-up data on port 8799: what the screenshots in `docs/images/` show |
+| `make browser-check` | Serves the demo and opens the built page in Chromium and Firefox with Playwright: fails on a console error, a blocked resource or an accessibility finding (axe). Its browsers are installed once: `cd web && npx playwright install chromium firefox` |
 
 The guard hook in `.claude/hooks/project-guard/` is a git submodule: clone with `--recurse-submodules`, or run
 `git submodule update --init`. [CLAUDE.md](CLAUDE.md) holds the working rules (also for changes to the page), the
