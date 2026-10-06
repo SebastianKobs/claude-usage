@@ -252,7 +252,7 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
                              DOMPurify's own) which the CSP names
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_contract.py checks the server against web/contract.json, test_static.py
-                             what static/ serves and the themes (behaviour is Vitest's); demo.py
+                             the stylesheets' themes (the page's behaviour is Vitest's); demo.py
                              builds the demo for the screenshots and serves it (make demo)
 .claude/hooks/project-guard/  the guard hook: a git submodule, see its README and CLAUDE.md
 .vscode/settings.json        the Svelte extension's TypeScript plugin on (off by default), so VS Code's TypeScript

@@ -1,4 +1,5 @@
 """server.py: the JSON API and the dashboard page, on a real server bound to a free loopback port."""
+import base64
 import collections
 import contextlib
 import http.client
@@ -20,6 +21,7 @@ from datetime import timedelta
 from unittest import mock
 
 from claude_usage import compact
+from claude_usage import notify
 from claude_usage import permissions
 from claude_usage import pricing
 from claude_usage import scan
@@ -276,6 +278,25 @@ class DashboardTest(ServerCase):
         assets = self.page_assets()
         self.assertTrue(any(asset.endswith(".css") for asset in assets))
         self.assertTrue(any(asset.endswith(".js") for asset in assets))
+
+    def test_the_page_is_the_bundle_mounted_on_an_empty_main(self):
+        # the app draws everything, so the page holds only its head and the mount point
+        page = self.get("/")[2].decode("utf-8")
+        self.assertEqual(re.findall(r"<script\b[^>]*>", page), ['<script type="module" src="/static/js/app.js">'])
+        self.assertIn("<main></main>", page)
+        body = page[page.index("<body>"):]
+        self.assertEqual(re.findall(r"<(?!/?(?:body|main|script)\b)[a-z]+", body), [])
+
+    def test_the_tab_icon_is_the_notifications_app_icon_inline(self):
+        # without an icon named the browser asks for /favicon.ico, which the CSP blocks: it lets images in as data: only
+        page = self.get("/")[2].decode("utf-8")
+        icon = re.search(r'<link rel="icon" type="image/png" href="data:image/png;base64,([^"]+)">', page)
+        self.assertIsNotNone(icon)
+        self.assertEqual(base64.b64decode(re.sub(r"\s", "", icon.group(1))),
+                         (notify.ICONS_DIR / f"{notify.APP_ICON}.png").read_bytes())
+
+    def test_no_script_but_the_bundle_is_served(self):
+        self.assertEqual([path for path in server.ASSETS if path.endswith(".js")], ["/static/js/app.js"])
 
     def test_page_has_no_inline_styles_or_scripts(self):
         _, _, body = self.get("/")
