@@ -92,7 +92,7 @@
     "web/src/ui/tables.ts": "51a5179c2401b600700fbecb0e6dafa377ae483f6ecd115d6fba0d9fedf6a504",
     "web/svelte.config.js": "ae0419e50da9a27b55fba71fe33dfecaf71ed84f90b5ec2277a7132ff5411d2b",
     "web/tsconfig.json": "f7feb9aa379ebcfdb3254094d4cb03106cd4be0a8f083521e3ff4eae9106aa14",
-    "web/vite.config.ts": "ca872345989b0ff2d7615516a6f109f5c002f77de0fc0f5cb1c9088cf2425fe5"
+    "web/vite.config.ts": "c61872e1aa8d2abd93f4bbdc7750c3e7b4361d5fe3519e54342fb81ff623727a"
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "3c525a4396da2826db8d4a28b199cc76422a91de952802ae471d7e3caeb749ce",

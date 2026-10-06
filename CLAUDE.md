@@ -20,7 +20,7 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
   - The logic lives in plain `.ts` modules that the components only draw (tested without a DOM where it needs none);
     text goes into the DOM as text, and a new place a string becomes markup needs a Trusted Types policy the CSP names.
   - 120 columns, no prettier; `make build` after a source changes, and the bundle and `web/build.json` are committed
-    with it (`test_web.py` fails otherwise).
+    with it (`src/build.test.ts` fails otherwise).
 - **Tests:** `make test` runs `python3 -m unittest discover -s tests`, then the page's svelte-check, Vitest and the
   browser check where `web/node_modules` exists (`make build` installs it); the Python tests never need node.
   - The Python tests test the server and its API, Vitest and the browser check the page. Where the two meet, the
@@ -122,8 +122,12 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
   browser/                   the browser check: `demo.ts` serves the demo, `page.ts` the test that fails on the
                              page's complaints and the steps through the demo, `console.spec.ts` and `axe.spec.ts`
   src/main.ts                mounts `App` on `<main>`
-  build.json                 what the last build read and wrote, by sha256: test_web.py says "run make build"
-                             where the checkout differs
+  src/build.test.ts          the build: the bundle built from the files as they are (build.json), what it holds and
+                             asks for, the links in it only text, its Trusted Types policies the contract's, the
+                             compiler's settings and the exact versions; src/sources.test.ts the rules over the
+                             sources that the CSP needs (no injected CSS, no style attribute)
+  build.json                 what the last build read and wrote, by sha256: src/build.test.ts says "run make
+                             build" where the checkout differs
   contract.json              what the page expects of the server, written by `make contract` from src/api/contract.ts
                              (a Vitest file snapshot, which fails where it is stale) and committed: api.ts's types as
                              data, the session ids its links take, the Trusted Types policies it creates, the values it
@@ -568,8 +572,9 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - The page is served with a strict CSP: no inline scripts, stylesheets or style attributes (the components set
     colors and sizes with `style:`, through the CSSOM, which a CSP doesn't block), and Trusted Types
     (`require-trusted-types-for 'script'; trusted-types dompurify highlight`): a string can't be assigned to
-    `innerHTML`, and the bundle creates only those two policies (`test_web.py` counts them). A new style attribute, a
-    `<Child --x>` prop or another raw-HTML place breaks the page, not only a test. JSON is `no-store`.
+    `innerHTML`, and the bundle creates only those two policies (`build.test.ts` counts them, the contract's). A new
+    style attribute, a `<Child --x>` prop or another raw-HTML place breaks the page, not only a test. JSON is
+    `no-store`.
   - Only files under `static/css` and `static/js` are served, a list fixed at start: a new one needs a restart.
   - Each request scans at most every 5 s, behind one lock. A failed scan (no projects folder, a locked store)
     or a skipped file doesn't fail the request: the stored history is served with `scan_errors`, and new errors
@@ -912,8 +917,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     Apache-2.0) are npm packages in `web/package.json`, exact versions, built into the bundle (their licenses are in
     `app-licenses.md`); nothing is fetched and no file of theirs is served. To update: bump them, check
     highlight.js's output still escapes `<`, `>` and `&`, run the sanitizing tests (`markup.test.ts`) and add the
-    links their new messages hold to `test_server.BUNDLE_LINKS`. Its token colors are `--code-*` per theme (≥ 4.5:1
-    on the wash), not a highlight.js theme.
+    links their new messages hold to `BUNDLE_LINKS` in `web/src/build.test.ts`. Its token colors are `--code-*` per
+    theme (≥ 4.5:1 on the wash), not a highlight.js theme.
   - Contrast in every theme: text ≥ 4.5:1, marks ≥ 3:1. Categorical slots 3–5 in light mode are the palette's
     documented exception; the legend and table view carry them. `--text-muted` is darker than the reference
     palette's in light mode and lighter in dark (#8e8c86: 4.56:1 on the wash over the surface), and the browser

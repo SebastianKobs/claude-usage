@@ -44,8 +44,8 @@ function removeLeftovers(outDir: string, outputs: Record<string, string>): void 
 }
 
 /**
- * Writes web/build.json: the sha256 of every source under web/ the build read and of every file it wrote. A
- * Python test compares them with the checkout, so a bundle built from other sources can't slip into a commit.
+ * Writes web/build.json: the sha256 of every source under web/ the build read and of every file it wrote.
+ * src/build.test.ts compares them with the checkout, so a bundle built from other sources can't slip into a commit.
  */
 function manifest(): Plugin {
   return {
