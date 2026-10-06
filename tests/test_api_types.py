@@ -1,4 +1,4 @@
-"""web/src/lib/api.ts: the page's types of the server's answers match what the server sends, both ways."""
+"""web/src/api/api.ts: the page's types of the server's answers match what the server sends, both ways."""
 import json
 import re
 import shutil
@@ -19,8 +19,9 @@ from claude_usage import store
 
 import demo
 from helpers import TMP_DIR
+from helpers import page_file
 
-API_TYPES = Path(__file__).resolve().parent.parent / "web" / "src" / "lib" / "api.ts"
+API_TYPES = page_file("api.ts")
 SHARED = types.SimpleNamespace()
 PRIMITIVES = {"string": str, "boolean": bool, "null": type(None)}
 
@@ -180,7 +181,7 @@ class AnswerTest(unittest.TestCase):
     def assertMatches(self, payloads, name):
         """Fail with every difference between the payloads and the named type, each once."""
         found = sorted({message for payload in payloads for message in problems(as_json(payload), name, name)})
-        self.assertEqual(found, [], "web/src/lib/api.ts and the server's answers differ")
+        self.assertEqual(found, [], "web/src/api/api.ts and the server's answers differ")
 
     def test_summary_over_a_day_a_week_and_a_month(self):
         self.assertMatches([SHARED.app.summary(days) for days in (1, 7, 30)], "Summary")

@@ -2,7 +2,7 @@
 // through the demo.
 
 import { test as base, expect, type Page } from '@playwright/test';
-import type { Summary } from '../src/lib/api';
+import type { Summary } from '../src/api/api';
 
 /** A Playwright test that fails where the page wrote an error to the console, threw, or had something blocked by its
  *  CSP: a page that works says nothing. */

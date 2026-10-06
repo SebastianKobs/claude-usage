@@ -17,7 +17,6 @@ from datetime import UTC
 from datetime import date
 from datetime import datetime
 from datetime import timedelta
-from pathlib import Path
 from unittest import mock
 
 from claude_usage import compact
@@ -32,6 +31,7 @@ from claude_usage import turns
 from helpers import FakeClock
 from helpers import MILLION
 from helpers import TempDirTestCase
+from helpers import page_file
 from helpers import text_block
 from helpers import thinking_block
 from helpers import tool_use_block
@@ -1092,7 +1092,7 @@ class SessionStateWithoutPatternsTest(ServerCase):
 
 class PageTest(unittest.TestCase):
     def test_the_page_accepts_exactly_the_servers_session_ids(self):
-        loader = (Path(server.__file__).parents[1] / "web" / "src" / "lib" / "loader.ts").read_text(encoding="utf-8")
+        loader = page_file("loader.ts").read_text(encoding="utf-8")
         page = re.search(r"const SESSION_HASH = /\^#session\\/\((.+?)\)\$/;", loader).group(1)
         self.assertEqual(page, re.search(r"\((.+?)\)", server.SESSION_PATH.pattern).group(1))
 

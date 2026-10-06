@@ -2628,7 +2628,7 @@ function ya(e, t, n) {
 	return !t || n === null ? e : `repeating-linear-gradient(${90 + n}deg, ${t} 0 1.5px, ${e} 1.5px 4px)`;
 }
 //#endregion
-//#region src/lib/format.ts
+//#region src/ui/format.ts
 var ba = "–", xa = new Intl.NumberFormat("en", {
 	notation: "compact",
 	maximumFractionDigits: 1
@@ -2702,7 +2702,7 @@ function La(e, t = Date.now(), n) {
 	return r < 60 ? `${r} s ago` : r < 3600 ? `${Math.floor(r / 60)} min ago` : Ia(e, n);
 }
 //#endregion
-//#region src/lib/charts.ts
+//#region src/charts/charts.ts
 function Ra(e) {
 	return e.new_input + e.cache_write + e.cache_read;
 }
@@ -2882,7 +2882,7 @@ function uo(e, t) {
 	return 100 * (e || 0) / t;
 }
 //#endregion
-//#region src/lib/tables.ts
+//#region src/ui/tables.ts
 var fo = [
 	10,
 	25,
@@ -3143,7 +3143,7 @@ function Ro(e) {
 	];
 }
 //#endregion
-//#region src/lib/themes.ts
+//#region src/app/themes.ts
 var zo = [
 	"light",
 	"dark",
@@ -3264,7 +3264,7 @@ function Go(e) {
 	return Uo(e).footer ?? "";
 }
 //#endregion
-//#region src/lib/prefs.svelte.ts
+//#region src/app/prefs.svelte.ts
 function Ko(e) {
 	try {
 		return localStorage.getItem(`claude-usage.${e}`);
@@ -3343,7 +3343,7 @@ function ts(e, t, n) {
 	if (r) return r === n ? null : r;
 }
 //#endregion
-//#region src/lib/range.svelte.ts
+//#region src/app/range.svelte.ts
 function ns() {
 	return Xo(Number(Ko("days"))) ?? 30;
 }
@@ -3381,7 +3381,7 @@ var rs = class {
 	};
 }, [as, os] = rt();
 //#endregion
-//#region src/lib/scroll.ts
+//#region src/ui/scroll.ts
 function ss(e) {
 	for (let t of e) {
 		let e = t.getBoundingClientRect();
@@ -3396,7 +3396,7 @@ function cs(e, t) {
 	e && t && t.isConnected && window.scrollBy(0, t.getBoundingClientRect().top - e.top);
 }
 //#endregion
-//#region src/lib/kept.ts
+//#region src/app/kept.ts
 var ls = "a[href], button, select, summary, [tabindex]";
 function us(e) {
 	let t = document.activeElement, n = t instanceof HTMLElement && e.contains(t) ? t : null, r = ss([...e.children]);
@@ -3417,7 +3417,7 @@ function fs(e) {
 	e(), Gt(), t && n && ds(t, n);
 }
 //#endregion
-//#region src/lib/http.ts
+//#region src/app/http.ts
 async function ps(e) {
 	let t = await fetch(e, { cache: "no-store" }), n;
 	try {
@@ -3430,7 +3430,7 @@ async function ps(e) {
 	return n;
 }
 //#endregion
-//#region src/lib/compact.ts
+//#region src/context/compact.ts
 var ms = {
 	soon: "Soon",
 	close: "Close",
@@ -3526,7 +3526,7 @@ function Ms(e) {
 	return e.rework_margin !== null && t.push(`Re-reading about ${X(e.rework_margin)} tokens after compacting would cancel the saving`), e.capped_at !== null && t.push(`The kept session would have auto-compacted at call ${Z(e.capped_at)}`), t.join(". ") || null;
 }
 //#endregion
-//#region src/lib/live.ts
+//#region src/live/live.ts
 function Ns(e, t) {
 	return e.days === 1 && e.until && e.until !== t ? e.until : null;
 }
@@ -3616,7 +3616,7 @@ function Vs(e, t) {
 	return n !== void 0 && JSON.stringify(n.waiting ?? null) !== JSON.stringify(e.waiting ?? null);
 }
 //#endregion
-//#region src/lib/loader.ts
+//#region src/app/loader.ts
 var Hs = 5e3, Us = 6e4, Ws = /^#session\/([A-Za-z0-9_-]{1,128})$/;
 function Gs(e) {
 	return e instanceof Error ? e.message : String(e);
@@ -3769,7 +3769,7 @@ var qs = class {
 	}
 };
 //#endregion
-//#region src/lib/page.ts
+//#region src/app/page.ts
 function Js(e) {
 	return e ? `· ${e.project_filter ? `project ${e.project_filter}` : "all projects"}` : "";
 }
@@ -3780,7 +3780,7 @@ function Xs(e, t) {
 	return e ? "Estimated cost at Claude API list prices" + (e.prices_checked ? ` (checked ${e.prices_checked})` : "") + ". “(background)” is usage Claude Code counted but no transcript shows (e.g. Haiku for titles), taken from the cost records it writes during and at the end of a session: it has no turns, is filed under the time of the record that first counted it, and is hatched in the chart." + t : "";
 }
 //#endregion
-//#region src/components/Banner.svelte
+//#region src/app/Banner.svelte
 var Zs = /* @__PURE__ */ U([[
 	"div",
 	{
@@ -3829,7 +3829,7 @@ function oc(e) {
 	return Math.round(e) + .5;
 }
 //#endregion
-//#region src/lib/bymodel.ts
+//#region src/overview/modelchart.ts
 var sc = {
 	cost: {
 		label: "Estimated cost",
@@ -3943,7 +3943,7 @@ function Sc(e) {
 	};
 }
 //#endregion
-//#region src/components/ChartTooltip.svelte
+//#region src/charts/ChartTooltip.svelte
 var Cc = /* @__PURE__ */ U([[
 	"div",
 	{ class: "tooltip" },
@@ -3960,7 +3960,7 @@ function wc(e, t) {
 	hi(L(i), () => t.children), A(i), gi(i, () => r), G(e, i), M();
 }
 //#endregion
-//#region src/components/Chart.svelte
+//#region src/charts/Chart.svelte
 var Tc = /* @__PURE__ */ U([["rect", {
 	class: "hit",
 	tabindex: "0",
@@ -4036,7 +4036,7 @@ function Dc(e, t) {
 }
 Vr(["pointermove", "keydown"]);
 //#endregion
-//#region src/components/ChartCard.svelte
+//#region src/charts/ChartCard.svelte
 var Oc = /* @__PURE__ */ U([[
 	"span",
 	{ class: "muted" },
@@ -4103,7 +4103,7 @@ function Ac(e, t) {
 }
 Vr(["click"]);
 //#endregion
-//#region src/components/Swatch.svelte
+//#region src/ui/Swatch.svelte
 var jc = /* @__PURE__ */ U([["span", { class: "swatch" }]]);
 function Mc(e, t) {
 	var n = jc();
@@ -4111,7 +4111,7 @@ function Mc(e, t) {
 	V(() => r = Di(n, "", r, { background: t.fill })), G(e, n);
 }
 //#endregion
-//#region src/components/Pager.svelte
+//#region src/ui/Pager.svelte
 var Nc = /* @__PURE__ */ U([[
 	"option",
 	null,
@@ -4177,7 +4177,7 @@ function Fc(e, t) {
 }
 Vr(["change", "click"]);
 //#endregion
-//#region src/components/TableView.svelte
+//#region src/ui/TableView.svelte
 var Ic = /* @__PURE__ */ U([[
 	"div",
 	{ class: "title-row" },
@@ -4289,7 +4289,7 @@ function Hc(e, t) {
 	}), A(p), V(() => Y(p, "id", t.id)), G(e, l), M();
 }
 //#endregion
-//#region src/components/XLabels.svelte
+//#region src/charts/XLabels.svelte
 var Uc = /* @__PURE__ */ U([[
 	"text",
 	{
@@ -4309,7 +4309,7 @@ function Wc(e, t) {
 	}), G(e, n), M();
 }
 //#endregion
-//#region src/components/YAxis.svelte
+//#region src/charts/YAxis.svelte
 var Gc = /* @__PURE__ */ U([["line", { "stroke-width": "1" }], [
 	"text",
 	{
@@ -4330,7 +4330,7 @@ function Kc(e, t) {
 	}), G(e, n), M();
 }
 //#endregion
-//#region src/components/ByModel.svelte
+//#region src/overview/ByModel.svelte
 var qc = /* @__PURE__ */ U([[
 	"button",
 	{ type: "button" },
@@ -4721,7 +4721,7 @@ function pl(e, t) {
 }
 Vr(["click"]);
 //#endregion
-//#region src/lib/costly.ts
+//#region src/overview/costly.ts
 var ml = [{
 	label: "Cache reads",
 	color: "var(--split-soft)",
@@ -4813,7 +4813,7 @@ function bl(e) {
 	};
 }
 //#endregion
-//#region src/components/CostPerSession.svelte
+//#region src/overview/CostPerSession.svelte
 var xl = /* @__PURE__ */ U([[
 	"span",
 	null,
@@ -5082,7 +5082,7 @@ function Ml(e, t) {
 }
 Vr(["pointermove"]);
 //#endregion
-//#region src/components/LiveIcon.svelte
+//#region src/live/LiveIcon.svelte
 var Nl = /* @__PURE__ */ U([
 	["path", {
 		d: "M8 10.5V7.8a4 4 0 0 1 8 0v2.7",
@@ -5241,7 +5241,7 @@ function Rl(e, t) {
 	}), G(e, n), M();
 }
 //#endregion
-//#region src/components/LiveCard.svelte
+//#region src/live/LiveCard.svelte
 var zl = /* @__PURE__ */ U([[
 	"div",
 	null,
@@ -5382,7 +5382,7 @@ function Wl(e, t) {
 	]), G(e, a), M();
 }
 //#endregion
-//#region src/components/LiveSessions.svelte
+//#region src/live/LiveSessions.svelte
 var Gl = /* @__PURE__ */ U([[
 	"h2",
 	{ id: "live-title" },
@@ -5508,7 +5508,7 @@ function eu(e, t) {
 	}), A(g), G(e, g), M();
 }
 //#endregion
-//#region src/lib/trend.ts
+//#region src/overview/trend.ts
 var tu = [
 	{
 		label: "Estimated cost",
@@ -5573,7 +5573,7 @@ function uu(e) {
 	};
 }
 //#endregion
-//#region src/components/AreaLine.svelte
+//#region src/charts/AreaLine.svelte
 var du = /* @__PURE__ */ U([["path", { "fill-opacity": "0.1" }], ["path", {
 	fill: "none",
 	"stroke-width": "2",
@@ -5594,7 +5594,7 @@ function fu(e, t) {
 	}), G(e, i), M();
 }
 //#endregion
-//#region src/components/PointDot.svelte
+//#region src/charts/PointDot.svelte
 var pu = /* @__PURE__ */ U([["circle", {
 	r: "4",
 	stroke: "var(--surface)",
@@ -5607,7 +5607,7 @@ function mu(e, t) {
 	}), G(e, n);
 }
 //#endregion
-//#region src/components/OverTime.svelte
+//#region src/overview/OverTime.svelte
 var hu = (e, t = b) => {
 	var n = wu(), r = R(n), i = z(r, !0);
 	J(B(r, 2), 19, () => tu, (e) => e.label, (e, n, r) => {
@@ -5922,7 +5922,7 @@ function Tu(e, t) {
 	M();
 }
 //#endregion
-//#region src/components/RangeFilter.svelte
+//#region src/app/RangeFilter.svelte
 var Eu = /* @__PURE__ */ U([[
 	"div",
 	{
@@ -6139,7 +6139,7 @@ function Uu(e) {
 	];
 }
 //#endregion
-//#region src/components/EventsTable.svelte
+//#region src/overview/EventsTable.svelte
 var Wu = /* @__PURE__ */ U([[
 	"h3",
 	null,
@@ -6242,7 +6242,7 @@ function qu(e, t) {
 	M();
 }
 //#endregion
-//#region src/components/RateLimits.svelte
+//#region src/overview/RateLimits.svelte
 var Ju = (e) => {
 	G(e, ld());
 }, Yu = /* @__PURE__ */ U([[
@@ -6624,7 +6624,7 @@ function pd(e, t) {
 	M();
 }
 //#endregion
-//#region src/components/SessionsList.svelte
+//#region src/overview/SessionsList.svelte
 var md = /* @__PURE__ */ U([[
 	"h2",
 	{ id: "sessions-title" },
@@ -6791,7 +6791,7 @@ function xd(e, t) {
 	}), A(g), G(e, g), M();
 }
 //#endregion
-//#region src/lib/opening.ts
+//#region src/session/opening.ts
 function Sd() {
 	let e = document.activeElement, t = e && e !== document.body ? e : null;
 	return {
@@ -6817,7 +6817,7 @@ function wd(e) {
 	};
 }
 //#endregion
-//#region src/lib/session.ts
+//#region src/session/session.ts
 function Td(e) {
 	let t = e.git_branch ? ` · ${e.git_branch}` : "";
 	return `${e.project}${t} · ${Ia(e.first_ts)} – ${Ia(e.last_ts)} · ${e.session_id}`;
@@ -7010,7 +7010,7 @@ function Fd(e, t) {
 	});
 }
 //#endregion
-//#region src/lib/tiles.ts
+//#region src/tiles/tiles.ts
 function Id(e, t = Aa(/* @__PURE__ */ new Date()), n) {
 	let r = e.history_since, i = r && r > e.since ? ` (history since ${ja(r, n)})` : "";
 	return e.days === 1 ? e.until === t ? "today" : Ma(e.until, n) : `last ${e.days} days${i}`;
@@ -7083,7 +7083,7 @@ function Kd(e) {
 	return e.cost === null || t === 0 ? null : e.cost / t * 100;
 }
 //#endregion
-//#region src/lib/usage.ts
+//#region src/overview/usage.ts
 function qd(e) {
 	return [{ label: e }, ...Lo];
 }
@@ -7118,7 +7118,7 @@ function Yd(e, t, n) {
 	}))]);
 }
 //#endregion
-//#region src/components/AgentsTable.svelte
+//#region src/session/AgentsTable.svelte
 var Xd = (e) => {
 	G(e, Zd());
 }, Zd = /* @__PURE__ */ U([[
@@ -7218,7 +7218,7 @@ function rf(e, t) {
 }
 Vr(["click"]);
 //#endregion
-//#region src/lib/clock.svelte.ts
+//#region src/context/clock.svelte.ts
 var af = 2 ** 31 - 1, of = 1e3;
 function sf(e) {
 	let t = (/* @__PURE__ */ new Date()).toISOString(), n = Yr((n) => {
@@ -7240,7 +7240,7 @@ function sf(e) {
 	};
 }
 //#endregion
-//#region src/lib/gauge.ts
+//#region src/context/gauge.ts
 function cf(e) {
 	return `Before it, the context was ${X(e.context)} of ${X(e.auto_compact)}. The next reply shows the new one: the summary, with the system prompt, tools and CLAUDE.md sent again.`;
 }
@@ -7329,7 +7329,7 @@ function hf(e) {
 	};
 }
 //#endregion
-//#region src/components/CompactCall.svelte
+//#region src/context/CompactCall.svelte
 var gf = /* @__PURE__ */ U([[
 	"p",
 	null,
@@ -7407,7 +7407,7 @@ function yf(e, t) {
 }
 Vr(["click"]);
 //#endregion
-//#region src/components/DelegateCall.svelte
+//#region src/context/DelegateCall.svelte
 var bf = /* @__PURE__ */ U([[
 	"p",
 	null,
@@ -7447,7 +7447,7 @@ function Sf(e, t) {
 	}), G(e, n), M();
 }
 //#endregion
-//#region src/components/ContextGauge.svelte
+//#region src/context/ContextGauge.svelte
 var Cf = /* @__PURE__ */ U([["span", { class: "gauge-hint" }]]), wf = /* @__PURE__ */ U([[
 	"div",
 	{
@@ -7936,7 +7936,7 @@ function fp(e) {
 	});
 }
 //#endregion
-//#region src/components/ContextChart.svelte
+//#region src/context/ContextChart.svelte
 var pp = /* @__PURE__ */ U([["path"], ["path", {
 	fill: "none",
 	stroke: "var(--surface)",
@@ -8191,7 +8191,7 @@ function wp(e, t) {
 	}), M();
 }
 //#endregion
-//#region src/components/StatTile.svelte
+//#region src/tiles/StatTile.svelte
 var Tp = /* @__PURE__ */ U([[
 	"div",
 	{ class: "note" },
@@ -8227,7 +8227,7 @@ function Dp(e, t) {
 	}, [() => i(t.label)]), G(e, a), M();
 }
 //#endregion
-//#region src/components/ContextDetails.svelte
+//#region src/context/ContextDetails.svelte
 var Op = (e) => {
 	G(e, jp());
 }, kp = (e, t = b) => {
@@ -8438,7 +8438,7 @@ function Bp(e, t) {
 	}), G(e, o), M();
 }
 //#endregion
-//#region src/components/ContextPerTurn.svelte
+//#region src/context/ContextPerTurn.svelte
 var Vp = (e, t = b) => {
 	var n = W();
 	J(R(n), 19, () => rp, (e) => e.label, (e, n, r) => {
@@ -8649,7 +8649,7 @@ function Xp(e, t) {
 }
 Vr(["click"]);
 //#endregion
-//#region src/lib/conversation.ts
+//#region src/conversation/chat.ts
 function Zp(e, t) {
 	let n = t ? `?agent=${encodeURIComponent(t)}` : "";
 	return `/api/session/${encodeURIComponent(e)}/chat${n}`;
@@ -8701,7 +8701,7 @@ function im(e, t) {
 	};
 }
 //#endregion
-//#region src/lib/entries.ts
+//#region src/conversation/entries.ts
 var am = {
 	prompt: "You",
 	text: "Claude",
@@ -9002,7 +9002,7 @@ function Bm(e) {
 	};
 }
 //#endregion
-//#region src/components/ChatInjected.svelte
+//#region src/conversation/ChatInjected.svelte
 var Vm = /* @__PURE__ */ U([
 	[
 		"div",
@@ -9049,7 +9049,7 @@ function Um(e, t) {
 	}, [() => Dm(t.entry.items), () => Ia(t.entry.timestamp)]), G(e, n), M();
 }
 //#endregion
-//#region src/components/ChatMarker.svelte
+//#region src/conversation/ChatMarker.svelte
 var Wm = /* @__PURE__ */ U([[
 	"div",
 	{ class: "muted" },
@@ -18260,7 +18260,7 @@ Yv.use = Xv, Yv.walkTokens = function(e, t) {
 	return Jv.walkTokens(e, t);
 }, Yv.parseInline = Jv.parseInline, Yv.Parser = Kv, Yv.parser = Kv.parse, Yv.Renderer = Wv, Yv.TextRenderer = Gv, Yv.Lexer = Uv, Yv.lexer = Uv.lex, Yv.Tokenizer = Hv, Yv.Hooks = qv, Yv.parse = Yv, Yv.options, Yv.setOptions, Yv.walkTokens, Yv.parseInline, Kv.parse, Uv.lex;
 //#endregion
-//#region src/lib/markup.ts
+//#region src/conversation/markup.ts
 var Zv = globalThis.trustedTypes?.createPolicy("highlight", { createHTML: (e) => e });
 function Qv(e) {
 	return !!(e && a_.getLanguage(e));
@@ -18350,7 +18350,7 @@ function ly(e, t = !1) {
 	};
 }
 //#endregion
-//#region src/components/Code.svelte
+//#region src/conversation/Code.svelte
 var uy = /* @__PURE__ */ U([["code", { class: "hljs" }]]), dy = /* @__PURE__ */ U([[
 	"pre",
 	{ class: "code" },
@@ -18373,7 +18373,7 @@ function fy(e, t) {
 	}), G(e, a), M();
 }
 //#endregion
-//#region src/components/Markdown.svelte
+//#region src/conversation/Markdown.svelte
 var py = /* @__PURE__ */ U([["div", { class: "chat-markdown" }]]), my = /* @__PURE__ */ U([[
 	"div",
 	{ class: "chat-markdown chat-text" },
@@ -18394,7 +18394,7 @@ function hy(e, t) {
 	}), G(e, r), M();
 }
 //#endregion
-//#region src/components/ChatMessage.svelte
+//#region src/conversation/ChatMessage.svelte
 var gy = /* @__PURE__ */ U([
 	[
 		"strong",
@@ -18526,7 +18526,7 @@ function Sy(e, t) {
 	}), G(e, o), M();
 }
 //#endregion
-//#region src/components/ChatToolCall.svelte
+//#region src/conversation/ChatToolCall.svelte
 var Cy = (e, t = b) => {
 	var n = W(), r = R(n), i = (e) => {
 		var n = Ey();
@@ -18734,7 +18734,7 @@ function Fy(e, t) {
 	}, [() => Ia(t.entry.timestamp)]), G(e, a), M();
 }
 //#endregion
-//#region src/components/ChatUsage.svelte
+//#region src/conversation/ChatUsage.svelte
 var Iy = /* @__PURE__ */ U([" ", [
 	"span",
 	{ role: "note" },
@@ -18818,7 +18818,7 @@ function By(e, t) {
 	]), G(e, a), M();
 }
 //#endregion
-//#region src/components/ConversationEntry.svelte
+//#region src/conversation/ConversationEntry.svelte
 var Vy = /* @__PURE__ */ U([
 	,
 	,
@@ -18862,7 +18862,7 @@ function Hy(e, t) {
 	}), G(e, n), M();
 }
 //#endregion
-//#region src/components/Conversation.svelte
+//#region src/conversation/Conversation.svelte
 var Uy = /* @__PURE__ */ U([[
 	"option",
 	null,
@@ -19083,7 +19083,7 @@ function Qy(e, t) {
 }
 Vr(["change", "click"]);
 //#endregion
-//#region src/components/InputSplit.svelte
+//#region src/tiles/InputSplit.svelte
 var $y = /* @__PURE__ */ U([["span"]]), eb = /* @__PURE__ */ U([[
 	"div",
 	{ class: "split-row" },
@@ -19185,7 +19185,7 @@ function rb(e, t) {
 	]), G(e, o), M();
 }
 //#endregion
-//#region src/components/KpiTiles.svelte
+//#region src/tiles/KpiTiles.svelte
 var ib = /* @__PURE__ */ U([
 	[
 		"div",
@@ -19306,7 +19306,7 @@ function sb(e, t) {
 	]), G(e, i), M();
 }
 //#endregion
-//#region src/components/RuntimeTiles.svelte
+//#region src/tiles/RuntimeTiles.svelte
 var cb = /* @__PURE__ */ U([
 	,
 	,
@@ -19375,7 +19375,7 @@ function lb(e, t) {
 	G(e, i), M();
 }
 //#endregion
-//#region src/lib/secrets.ts
+//#region src/session/secrets.ts
 function ub(e) {
 	let t = (e.secret_accesses ?? []).map((e) => e.severity);
 	return t.length ? t.includes("high") ? "alert" : t.includes("medium") ? "warning" : "quiet" : null;
@@ -19442,7 +19442,7 @@ function yb(e, t) {
 	return r ? `${n}, ${Z(r)} returned a result only in a likely test` : `${n}, none reached anything`;
 }
 //#endregion
-//#region src/components/SecretAccesses.svelte
+//#region src/session/SecretAccesses.svelte
 var bb = (e, t = b) => {
 	var n = Cb(), r = R(n), i = z(r, !0), a = B(r, 2), o = z(a, !0), s = B(a, 2), c = z(s, !0), l = B(s, 2), u = L(l), d = z(u, !0), f = B(u), p = (e) => {
 		var n = Sb(), r = z(n, !0);
@@ -19622,7 +19622,7 @@ function Eb(e, t) {
 }
 Vr(["click"]);
 //#endregion
-//#region src/components/SessionWaits.svelte
+//#region src/session/SessionWaits.svelte
 var Db = /* @__PURE__ */ U([[
 	"strong",
 	null,
@@ -19674,7 +19674,7 @@ function jb(e, t) {
 	}), A(a), V(() => Y(a, "hidden", H(i).length === 0)), G(e, a), M();
 }
 //#endregion
-//#region src/components/ToolsTable.svelte
+//#region src/session/ToolsTable.svelte
 var Mb = (e) => {
 	G(e, Nb());
 }, Nb = /* @__PURE__ */ U([[
@@ -19773,7 +19773,7 @@ function Rb(e, t) {
 }
 Vr(["click"]);
 //#endregion
-//#region src/components/UsageTable.svelte
+//#region src/overview/UsageTable.svelte
 var zb = /* @__PURE__ */ U([[
 	"h3",
 	null,
@@ -19905,7 +19905,7 @@ function qb(e, t) {
 	}), G(e, l), M();
 }
 //#endregion
-//#region src/components/SessionView.svelte
+//#region src/session/SessionView.svelte
 var Jb = /* @__PURE__ */ U([[
 	"div",
 	{ class: "prompt" },
@@ -20208,7 +20208,7 @@ function Zb(e, t) {
 	}), G(e, u), M();
 }
 //#endregion
-//#region src/components/SummaryTiles.svelte
+//#region src/tiles/SummaryTiles.svelte
 var Qb = /* @__PURE__ */ U([[
 	"div",
 	{ class: "empty" },
@@ -20267,7 +20267,7 @@ function $b(e, t) {
 	}), G(e, i), M();
 }
 //#endregion
-//#region src/components/ThemePicker.svelte
+//#region src/app/ThemePicker.svelte
 var ex = /* @__PURE__ */ U([[
 	"label",
 	{ class: "theme-picker" },
@@ -20343,7 +20343,7 @@ function tx(e, t) {
 }
 Vr(["change"]);
 //#endregion
-//#region src/components/UsageTables.svelte
+//#region src/overview/UsageTables.svelte
 var nx = /* @__PURE__ */ U([
 	[
 		"div",
@@ -20447,7 +20447,7 @@ function rx(e, t) {
 	A(g), G(e, d), M();
 }
 //#endregion
-//#region src/components/App.svelte
+//#region src/app/App.svelte
 var ix = /* @__PURE__ */ U([
 	[
 		"header",

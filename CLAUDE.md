@@ -120,108 +120,114 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
   src/main.ts                mounts `App` on `<main>`
   build.json                 what the last build read and wrote, by sha256: test_web.py says "run make build"
                              where the checkout differs
-  src/lib/api.ts             the types of the server's answers: test_api_types.py checks the demo's against them,
-                             so a field added in server.py or queries.py is added there too
-  src/lib/fixtures.ts        made-up answers of the server for the component tests: a usage, a summary and a session's
-                             detail (the main thread and its background calls, which share a null agent id), each
-                             with the changes a test asks for on top of one plain default
-  src/lib/format.ts          number, money, duration, day, hour and moment formatting
-  src/lib/colors.ts          the by-model chart's model slots, effort order, shades and hatches
-  src/lib/compact.ts         when compacting pays off (`payoffTone` and its words), which call to compact or delegate
-                             applies, a compaction's verdict (its words, break-even and one-time cost, the rebuild
-                             causes) and their sum; handed over the same way
-  src/lib/secrets.ts         how the secret accesses show: the card's tone and words, the table's columns and rows (a
-                             path's script, how far a call got; used by the component)
-  src/lib/live.ts            the live cards' badges (waiting, secret, compacting now), the live list's words (its
-                             window, the past day, the empty list) and what waits for the user
-  src/lib/tables.ts          paging (page units, window and text), the sessions list's filter, count, columns and
-                             cells, the Tools table's rows with their keys, folds and labels (`toolsRows` in
-                             session.ts draws from them), the conversation's order and keys, and the usage tables'
-                             cells and order
-  src/lib/charts.ts          the charts' maths: scales and ticks, where a point or column falls, the time axis, the
-                             by-model series and stacks, the rate-limit counts and windows, the cost bars' split
-  src/lib/themes.ts          the themes and the gimmick themes' wording (`test_static.py` reads its labels): which theme
-                             a saved choice names, what a label and the footer say in a theme
-  src/lib/prefs.svelte.ts    the saved preferences (theme, page size, the conversation's order) as reactive state,
-                             written back in their setters (`Preferences`), and `readPreference`/`savePreference`
-  src/lib/paging.svelte.ts   the page each table is on (`TablePages`: the first unit shown, reactive) and the pager's
-                             props
-  src/lib/app.svelte.ts      the page's shared state in one context (`AppState`: the payload, range, preferences,
-                             table pages and banner messages, `hype` which words a label for the theme chosen,
-                             `footerCopy` and `shownWindow`); components take it with `getApp()`, `App` sets it
-  src/lib/app.testing.ts     `renderApp` and `pagePerTest`: a component's test in a page of its own (AppState) in
+  src/<section>/             a folder per section of the page: its components and the plain modules they draw from, each
+                             with its Testing Library or Vitest test beside it; a module never shares its component's
+                             name ignoring case (macOS and Windows tell no difference), hence modelchart.ts and chat.ts
+  src/api/                   the server's answers: their types, and made-up ones for the tests
+    api.ts                   the types of the server's answers: test_api_types.py checks the demo's against them, so a
+                             field added in server.py or queries.py is added there too
+    fixtures.ts              made-up answers of the server for the component tests: a usage, a summary and a session's
+                             detail (the main thread and its background calls, which share a null agent id), each with
+                             the changes a test asks for on top of one plain default
+  src/app/                   the page: `App`, with `ThemePicker`, `Banner` and the range filter, `RangeFilter`; its
+                             shared state, loading and preferences
+    app.svelte.ts            the page's shared state in one context (`AppState`: the payload, range, preferences, table
+                             pages and banner messages, `hype` which words a label for the theme chosen, `footerCopy`
+                             and `shownWindow`); components take it with `getApp()`, `App` sets it
+    app.testing.ts           `renderApp` and `pagePerTest`: a component's test in a page of its own (AppState) in
                              context, through `AppFixture.test.svelte`
-  src/lib/loader.ts          loading and polling (`Loader`): live every 5 s, the summary every 60 s, the open
-                             session every 5 s while live else 60 s, none in a hidden tab, each after the previous
-                             answer, only the newest answer drawn, an unchanged one not drawn again; the results go
-                             into the payload, the failures into the banner
-  src/lib/kept.ts            `keepingView`: a refresh of the open session keeps focus and the element at the top of
-                             the window
-  src/lib/page.ts            the page's own words: the scope after the heading, when it was updated, the footer
-  src/lib/chartkit.ts        the chart kit's maths: the drawing width and scale, the pointer's x, how the cursor steps
-                             (`cursorStep`), where the tooltip sits, which x labels show, the gridline's pixel
-                             and the plot's margins
-  src/lib/scroll.ts          keeping the reader's place while a view is redrawn (`scrollAnchor`, `keepScroll`)
-  src/lib/tiles.ts           what the KPI and runtime tiles say: the range in words, the cost's notes, what compacting
-                             saved so far, the input split's parts, the runtime's notes (used by the components)
-  src/lib/trend.ts           the over-time panels: their geometry, each bucket's cost, input and output, their words
-                             and table rows (used by the component)
-  src/lib/bymodel.ts         the by-model chart: its metrics (cost, output, input), the stacked columns' geometry and
-                             segments, the hatched fills, the legend, tooltip and table rows (used by the component)
-  src/lib/costly.ts          the cost-per-session ranking: its two parts of the cost, the rows, tooltip and table
-                             rows (used by the component)
-  src/lib/limits.ts          the rate-limits section: the hits per day or hour, the columns' geometry and words, the
-                             table view, the 5-hour windows' rows (models under each) and the latest errors' rows (used
-                             by the component)
-  src/lib/usage.ts           the usage tables' rows: a name, the shared cells dearest first, and the by-model table's
-                             effort rows under each model with its swatch color (used by the components)
-  src/lib/payload.svelte.ts  what the page has loaded, as reactive state (`payload`: the summary and the live answer, or
+    payload.svelte.ts        what the page has loaded, as reactive state (`payload`: the summary and the live answer, or
                              that loading them failed, when the latest answer came, each live card's state, the session
                              open, and a summary loading), which the loader fills
-  src/lib/range.ts           the range filter's logic: the ranges on offer (cut to the retention), the query a range
+    loader.ts                loading and polling (`Loader`): live every 5 s, the summary every 60 s, the open session
+                             every 5 s while live else 60 s, none in a hidden tab, each after the previous answer, only
+                             the newest answer drawn, an unchanged one not drawn again; the results go into the payload,
+                             the failures into the banner
+    kept.ts                  `keepingView`: a refresh of the open session keeps focus and the element at the top of the
+                             window
+    page.ts                  the page's own words: the scope after the heading, when it was updated, the footer
+    http.ts                  `fetchJson`: the server's JSON, or the reason it gave
+    banner.svelte.ts         the error banner's messages (`BannerMessages`): one per source, shown once when alike
+    prefs.svelte.ts          the saved preferences (theme, page size, the conversation's order) as reactive state,
+                             written back in their setters (`Preferences`), and `readPreference`/`savePreference`
+    themes.ts                the themes and the gimmick themes' wording (`test_static.py` reads its labels): which theme
+                             a saved choice names, what a label and the footer say in a theme
+    range.ts                 the range filter's logic: the ranges on offer (cut to the retention), the query a range
                              becomes, the day the Daily range shows and where an arrow goes
-  src/lib/range.svelte.ts    the range shown (`RangeState`: the days and the Daily range's day, reactive, the choice
+    range.svelte.ts          the range shown (`RangeState`: the days and the Daily range's day, reactive, the choice
                              saved as a preference), which the loader reloads the data on through `range.onchange`
-  src/lib/session.ts         the session view's frame: the facts under its heading, the main thread and subagents
+  src/ui/                    the shared pieces: `Pager`, `Swatch`, and `TableView`, a paged table (`scope` on its
+                             headings, named by its heading), its pager in an optional heading row
+    format.ts                number, money, duration, day, hour and moment formatting
+    tables.ts                paging (page units, window and text), the sessions list's filter, count, columns and cells,
+                             the Tools table's rows with their keys, folds and labels (`toolsRows` in session.ts draws
+                             from them), the conversation's order and keys, and the usage tables' cells and order
+    paging.svelte.ts         the page each table is on (`TablePages`: the first unit shown, reactive) and the pager's
+                             props
+    scroll.ts                keeping the reader's place while a view is redrawn (`scrollAnchor`, `keepScroll`)
+  src/charts/                the chart kit: `Chart`, `ChartTooltip`, `YAxis`, `XLabels`, `AreaLine`, `PointDot`, and
+                             `ChartCard`, the section a chart lives in, with its table-view toggle
+    charts.ts                the charts' maths: scales and ticks, where a point or column falls, the time axis, the
+                             by-model series and stacks, the rate-limit counts and windows, the cost bars' split
+    chartkit.ts              the chart kit's maths: the drawing width and scale, the pointer's x, how the cursor steps
+                             (`cursorStep`), where the tooltip sits, which x labels show, the gridline's pixel and the
+                             plot's margins
+    colors.ts                the by-model chart's model slots, effort order, shades and hatches
+  src/tiles/                 the tiles: `StatTile`, `InputSplit`, `KpiTiles`, `RuntimeTiles`, `SummaryTiles`
+    tiles.ts                 what the KPI and runtime tiles say: the range in words, the cost's notes, what compacting
+                             saved so far, the input split's parts, the runtime's notes (used by the components)
+  src/overview/              the overview's sections: `OverTime`, `ByModel`, `CostPerSession`, `RateLimits` with
+                             `EventsTable` (the latest API errors, the session view's too), the usage tables:
+                             `UsageTable`, `UsageTables`, the sessions card: `SessionsList`
+    trend.ts                 the over-time panels: their geometry, each bucket's cost, input and output, their words and
+                             table rows (used by the component)
+    modelchart.ts            the by-model chart: its metrics (cost, output, input), the stacked columns' geometry and
+                             segments, the hatched fills, the legend, tooltip and table rows (used by the component)
+    costly.ts                the cost-per-session ranking: its two parts of the cost, the rows, tooltip and table rows
+                             (used by the component)
+    limits.ts                the rate-limits section: the hits per day or hour, the columns' geometry and words, the
+                             table view, the 5-hour windows' rows (models under each) and the latest errors' rows (used
+                             by the component)
+    usage.ts                 the usage tables' rows: a name, the shared cells dearest first, and the by-model table's
+                             effort rows under each model with its swatch color (used by the components)
+  src/live/                  the live sessions: `LiveSessions`, `LiveCard`, `LiveIcon`
+    live.ts                  the live cards' badges (waiting, secret, compacting now), the live list's words (its
+                             window, the past day, the empty list) and what waits for the user
+  src/session/               the session view's frame: `SessionView` with `SessionWaits`, `AgentsTable` and
+                             `ToolsTable`, and the secret accesses: `SecretAccesses`
+    session.ts               the session view's frame: the facts under its heading, the main thread and subagents
                              table's columns and rows (a workflow run's agents under one row, its fold), the Tools
                              table's columns, note and rows (the rows of a closed fold left out)
-  src/lib/gauge.ts           the gauge's words: the meter or the compaction, the exact and estimated notes, the call to
+    opening.ts               opening and closing the session view (`opening`, an attachment): the page's other sections
+                             step aside, focus goes to the heading, closing returns focus and scroll to the link
+    secrets.ts               how the secret accesses show: the card's tone and words, the table's columns and rows (a
+                             path's script, how far a call got; used by the component)
+  src/context/               the gauge with the calls above it: `ContextGauge`, `CompactCall`, `DelegateCall`, and the
+                             context per turn: `ContextPerTurn` with `ContextChart` and `ContextDetails`
+    compact.ts               when compacting pays off (`payoffTone` and its words), which call to compact or delegate
+                             applies, a compaction's verdict (its words, break-even and one-time cost, the rebuild
+                             causes) and their sum; handed over the same way
+    gauge.ts                 the gauge's words: the meter or the compaction, the exact and estimated notes, the call to
                              compact, the hint to delegate (used by the components)
-  src/lib/context.ts         the context per turn: the picker's choices, the chart's geometry (stacked areas, hint
-                             line, compaction rules, the two direct labels), a turn's words, the table views' rows, the
-                             tiles and the compactions' rows and total (used by the components)
-  src/lib/clock.svelte.ts    the cache's expiry as a reactive clock (`cacheClock`, `createSubscriber`, its timer
-                             cleared when nothing reads it), which draws the gauge again when the cache runs out
-  src/lib/conversation.ts    the conversation's frame: its URL, the picker's choices (a workflow run's agents in one
-                             group), the reminder note and the notices, whether two answers are the same, and keeping
-                             an unchanged entry's object across a refresh (used by the component)
-  src/lib/entries.ts         the conversation's entries before any markup: who speaks and with which model, a prompt's
+    context.ts               the context per turn: the picker's choices, the chart's geometry (stacked areas, hint line,
+                             compaction rules, the two direct labels), a turn's words, the table views' rows, the tiles
+                             and the compactions' rows and total (used by the components)
+    clock.svelte.ts          the cache's expiry as a reactive clock (`cacheClock`, `createSubscriber`, its timer cleared
+                             when nothing reads it), which draws the gauge again when the cache runs out
+  src/conversation/          the conversation: `Conversation` with `ConversationEntry`, which picks `ChatMessage`,
+                             `ChatToolCall`, `ChatInjected` or `ChatMarker` and puts `ChatUsage` under a call's last
+                             entry; `Code` and `Markdown` are their bodies
+    chat.ts                  the conversation's frame: its URL, the picker's choices (a workflow run's agents in one
+                             group), the reminder note and the notices, whether two answers are the same, and keeping an
+                             unchanged entry's object across a refresh (used by the component)
+    entries.ts               the conversation's entries before any markup: who speaks and with which model, a prompt's
                              shape (command, JSON, markdown), a tool call's input and result (Bash, Edit and Write each
                              with their own view), the highlight.js language of a file, hidden context, a compaction's
                              line, a call's usage badge and its chips and hints to compact (used by the components)
-  src/lib/markup.ts          the two places a string becomes markup: highlight.js's output (`highlight`, an attachment)
+    markup.ts                the two places a string becomes markup: highlight.js's output (`highlight`, an attachment)
                              and Claude's answers as sanitized markdown (`markdown`, an attachment), on highlight.js,
                              marked and DOMPurify from npm, each through a Trusted Types policy (`highlight`, and
                              DOMPurify's own) which the CSP names
-  src/lib/banner.svelte.ts   the error banner's messages (`BannerMessages`): one per source, shown once when alike
-  src/lib/http.ts            `fetchJson`: the server's JSON, or the reason it gave
-  src/lib/opening.ts         opening and closing the session view (`opening`, an attachment): the page's other sections
-                             step aside, focus goes to the heading, closing returns focus and scroll to the link
-  src/components/            the Svelte components (`App`, the page, with `ThemePicker` and `Banner`; `Pager`,
-                             `Swatch`, the chart kit: `Chart`, `ChartTooltip`,
-                             `YAxis`, `XLabels`, `AreaLine`, `PointDot`, and the tiles: `StatTile`, `InputSplit`,
-                             `KpiTiles`, `RuntimeTiles`, `SummaryTiles`; `ChartCard`, the section a chart lives in, with
-                             its table-view toggle; `TableView`, a paged table (`scope` on its headings, named by its
-                             heading), its pager in an optional heading row; `OverTime`, `ByModel`, `CostPerSession`,
-                             `RateLimits`, the usage tables: `UsageTable`, `UsageTables`, the sessions card:
-                             `SessionsList`, the live sessions: `LiveSessions`, `LiveCard`, `LiveIcon`, the range
-                             filter: `RangeFilter`, and the session view's frame: `SessionView` with `SessionWaits`,
-                             `AgentsTable`, `ToolsTable` and `EventsTable`, the secret accesses: `SecretAccesses`, and
-                             the gauge with the calls above it: `ContextGauge`, `CompactCall`, `DelegateCall`, the
-                             context per turn: `ContextPerTurn` with `ContextChart` and `ContextDetails`, and the
-                             conversation: `Conversation` with `ConversationEntry`, which picks `ChatMessage`,
-                             `ChatToolCall`, `ChatInjected` or `ChatMarker` and puts `ChatUsage` under a call's last
-                             entry; `Code` and `Markdown` are their bodies), each with its Testing Library test
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
@@ -523,7 +529,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - Loopback is open to every local user, so the API (every path but the page and its files, which hold no data)
     answers only a request carrying this start's token in the cookie
     `claude_usage_<port>` (cookies don't tell ports apart), else a JSON 403 that the page's banner shows once
-    (`BannerMessages`, web/src/lib/banner.svelte.ts). The token (`UsageApp.token`,
+    (`BannerMessages`, web/src/app/banner.svelte.ts). The token (`UsageApp.token`,
     `secrets.token_urlsafe`, new per start, compared in constant time) comes with the link `serve` prints:
     `/?token=…` sets the cookie (HttpOnly, SameSite=Strict, Path=/, 400 days) if it is right, and redirects to `/`
     either way, so the token leaves the address bar. The Cookie header is split by hand (`cookie_value`), since
@@ -864,7 +870,7 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     any case, in the title, project or id: `sessionMatches`) narrow it, counted as "12 of 84 sessions". The choice is
     the component's own state (`SessionsList`), so a refresh keeps the filter and typing keeps its focus; a new filter
     starts at the first page, and the pager joins the heading past the controls (`table-filters`).
-  - All data goes into the DOM as text. Two exceptions, both in `web/src/lib/markup.ts` (a test counts them):
+  - All data goes into the DOM as text. Two exceptions, both in `web/src/conversation/markup.ts` (a test counts them):
     - `highlightInto()` inserts the HTML of highlight.js, which escapes the text it is given and only adds spans
       with classes, through the `highlight` policy (it hands the string over as it is: that is what the escaping
       allows).

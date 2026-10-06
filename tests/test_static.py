@@ -10,12 +10,11 @@ from claude_usage import server
 from claude_usage import store
 from claude_usage import tool_kinds
 from claude_usage import turns
+from helpers import PAGE_SOURCES
+from helpers import page_file
 
-ROOT = Path(__file__).resolve().parent.parent
 STATIC = Path(server.__file__).resolve().parent / "static"
-COLORS = ROOT / "web" / "src" / "lib" / "colors.ts"     # the model colors and effort levels
-LIB = ROOT / "web" / "src" / "lib"                      # the page's TypeScript modules
-COMPONENTS = ROOT / "web" / "src" / "components"         # the Svelte components mounted into the page
+COLORS = page_file("colors.ts")                         # the model colors and effort levels
 STYLESHEETS = sorted((STATIC / "css").rglob("*.css"))
 GIMMICK_THEMES = ("hacker", "startup", "rgb")
 # variables a gimmick theme defines for its own file only
@@ -34,7 +33,7 @@ def dashboard():
 
 def page_sources():
     """The page's own sources (web/src, without the tests): its TypeScript and its Svelte components."""
-    return sorted(path for path in (ROOT / "web" / "src").rglob("*")
+    return sorted(path for path in PAGE_SOURCES.rglob("*")
                   if path.suffix in (".ts", ".svelte") and ".test." not in path.name)
 
 
@@ -58,19 +57,19 @@ def object_keys(source_file, name):
 
 class ScriptTest(unittest.TestCase):
     def test_every_rebuild_cause_has_its_words(self):
-        self.assertEqual(object_keys(LIB / "compact.ts", "REBUILD_CAUSES"), {"model", "idle", "prefix"})
+        self.assertEqual(object_keys(page_file("compact.ts"), "REBUILD_CAUSES"), {"model", "idle", "prefix"})
 
     def test_every_injected_kind_that_is_no_attachment_type_has_its_words(self):
-        self.assertEqual(object_keys(LIB / "entries.ts", "INJECTED_KINDS"), {"meta", "skill", "summary"})
+        self.assertEqual(object_keys(page_file("entries.ts"), "INJECTED_KINDS"), {"meta", "skill", "summary"})
 
     def test_every_compaction_verdict_has_its_words(self):
-        self.assertEqual(object_keys(LIB / "compact.ts", "COMPACTION_VERDICTS"), set(turns.VERDICTS))
+        self.assertEqual(object_keys(page_file("compact.ts"), "COMPACTION_VERDICTS"), set(turns.VERDICTS))
 
     def test_every_compaction_trigger_has_its_words(self):
-        self.assertEqual(object_keys(LIB / "context.ts", "COMPACTION_TRIGGERS"), {"manual", "auto"})
+        self.assertEqual(object_keys(page_file("context.ts"), "COMPACTION_TRIGGERS"), {"manual", "auto"})
 
     def test_the_context_chart_stacks_the_three_parts_of_a_turn(self):
-        body = re.search(r"const CONTEXT_PARTS\b[^=]*= \[(.*?)\];", read(LIB / "context.ts"), re.DOTALL).group(1)
+        body = re.search(r"const CONTEXT_PARTS\b[^=]*= \[(.*?)\];", read(page_file("context.ts")), re.DOTALL).group(1)
         self.assertEqual(re.findall(r"field: '(\w+)'", body), ["cache_read", "cache_write", "new_input"])
 
     def test_the_page_orders_effort_levels_like_the_report(self):
@@ -97,7 +96,7 @@ class ScriptTest(unittest.TestCase):
         self.assertEqual({name: count for name, count in uses.items() if count}, {"markup.ts": 2})
 
     def test_the_page_is_the_bundle_mounted_on_an_empty_main(self):
-        # the app (web/src/components/App.svelte) draws everything, so the page holds only its head and the mount point
+        # the app (web/src/app/App.svelte) draws everything, so the page holds only its head and the mount point
         page = dashboard()
         self.assertEqual(re.findall(r"<script\b[^>]*>", page), ['<script type="module" src="/static/js/app.js">'])
         self.assertIn("<main></main>", page)
@@ -137,7 +136,7 @@ class VerdictToneTest(unittest.TestCase):
 class ToolTableTest(unittest.TestCase):
 
     def test_every_command_kind_has_its_words(self):
-        self.assertEqual(object_keys(LIB / "tables.ts", "TOOL_KINDS"), set(tool_kinds.KINDS))
+        self.assertEqual(object_keys(page_file("tables.ts"), "TOOL_KINDS"), set(tool_kinds.KINDS))
 
 
 class SecretAccessTest(unittest.TestCase):
@@ -221,7 +220,7 @@ class LiveStateTest(unittest.TestCase):
 class SessionListTest(unittest.TestCase):
 
     def test_the_app_mounts_the_list_in_its_card(self):
-        self.assertIn('<div id="sessions-card"><SessionsList /></div>', read(COMPONENTS / "App.svelte"))
+        self.assertIn('<div id="sessions-card"><SessionsList /></div>', read(page_file("App.svelte")))
         self.assertNotIn('id="sessions-project"', dashboard())
 
     def test_the_search_field_looks_like_the_other_controls_in_every_theme(self):
@@ -247,7 +246,7 @@ class LimitWindowTest(unittest.TestCase):
 
     def test_the_rate_limits_section_is_drawn_by_its_component(self):
         # the chart, the windows and the latest errors, in that order, are RateLimits.svelte's markup
-        self.assertIn('<div id="limits-card"><RateLimits /></div>', read(COMPONENTS / "App.svelte"))
+        self.assertIn('<div id="limits-card"><RateLimits /></div>', read(page_file("App.svelte")))
         self.assertNotIn('id="limit-windows"', dashboard())
 
 
@@ -256,7 +255,7 @@ class StyleTest(unittest.TestCase):
         # light.css and common.css apply in every theme; the others only override
         defaults = set(re.findall(r"(--[\w-]+):", read(STATIC / "css" / "themes" / "light.css")
                                   + read(STATIC / "css" / "common.css")))
-        sources = STYLESHEETS + [COLORS, LIB / "tiles.ts", LIB / "costly.ts", LIB / "limits.ts"]
+        sources = STYLESHEETS + [COLORS, page_file("tiles.ts"), page_file("costly.ts"), page_file("limits.ts")]
         used = {name for path in sources for name in re.findall(r"var\((--[\w-]+)", read(path))}
         # a --series-N or --shade-step-N built in a script counts for every slot
         used = {name for name in used if not name.endswith("-")}
@@ -282,18 +281,18 @@ class CopyTest(unittest.TestCase):
 
     def copy(self, theme):
         """A gimmick theme's label -> wording."""
-        block = re.search(rf"\n  {theme}: \{{(.*?)\n  \}},", read(LIB / "themes.ts"), re.DOTALL).group(1)
+        block = re.search(rf"\n  {theme}: \{{(.*?)\n  \}},", read(page_file("themes.ts")), re.DOTALL).group(1)
         return set(re.findall(r'^\s+"([^"]+)":', block, re.MULTILINE))
 
     def labels(self):
         """The labels the page themes: hype() and StatTile's label and themed note in the components, the tiles' parts
-        in lib/tiles.ts, and the by-model chart's title per time unit."""
+        in tiles.ts, and the by-model chart's title per time unit."""
         found = set()
-        for path in sorted(COMPONENTS.glob("*.svelte")):
+        for path in sorted(PAGE_SOURCES.rglob("*.svelte")):
             found |= set(re.findall(r"\bhype\('([^']+)'\)", read(path)))
             found |= set(re.findall(r'\bnote="([^"]+)" themedNote', read(path)))
             found |= set(re.findall(r'<StatTile\s+label="([^"]+)"', read(path)))
-        found |= set(re.findall(r"\blabel: '([^']+)'", read(LIB / "tiles.ts")))
+        found |= set(re.findall(r"\blabel: '([^']+)'", read(page_file("tiles.ts"))))
         return found
 
     def test_every_label_has_each_themes_wording(self):

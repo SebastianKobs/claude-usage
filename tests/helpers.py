@@ -19,16 +19,24 @@ from claude_usage import store
 
 TESTS_DIR = Path(__file__).resolve().parent
 TMP_DIR = TESTS_DIR / ".tmp"
-PAGE_LIB = TESTS_DIR.parent / "web" / "src" / "lib"     # the page's TypeScript modules
+PAGE_SOURCES = TESTS_DIR.parent / "web" / "src"        # the page's modules and components, a folder per section
 START = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
 DEFAULT_MODEL = "claude-sonnet-5"
 DEFAULT_PROJECT = "/home/dev/app"
 
 
+def page_file(name):
+    """A file of the page's sources by its name, in whichever section's folder it is (the names are unique)."""
+    found = sorted(PAGE_SOURCES.rglob(name))
+    if len(found) != 1:
+        raise FileNotFoundError(f"{len(found)} files named {name} under {PAGE_SOURCES}")
+    return found[0]
+
+
 def run_function(module, name, *arguments):
-    """Calls a function of a module of web/src/lib in node, which imports it as it is and runs it as TypeScript
-    (skipped where it can't); its result. For the few checks that the page and the Python side agree."""
-    program = "\n".join([f"import {{ {name} }} from {json.dumps((PAGE_LIB / module).as_uri())};",
+    """Calls a function of a module of the page (web/src) in node, which imports it as it is and runs it as
+    TypeScript (skipped where it can't); its result. For the few checks that the page and the Python side agree."""
+    program = "\n".join([f"import {{ {name} }} from {json.dumps(page_file(module).as_uri())};",
                          f"process.stdout.write(JSON.stringify({name}(...{json.dumps(arguments)})));"])
     result = subprocess.run(["node", "--input-type=module", "-e", program], capture_output=True, text=True,
                             timeout=30)
