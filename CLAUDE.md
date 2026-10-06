@@ -94,7 +94,8 @@ claude_usage/
   readers.py                 who besides you can read the projects folder: serve's warnings at start
   icons/                     the desktop notifications' icons, PNG (notify.ICON_NAMES)
   static/                    the page: a Svelte app built from web/, inline SVG, no external resources
-    dashboard.html           the head and an empty `<main>` the app mounts on
+    dashboard.html           the head (with the tab icon, `icons/app.png` inline) and an empty `<main>` the app
+                             mounts on
     css/common.css           layout and components, for every theme
     css/themes/              one file per theme (light, dark, hacker, startup, rgb); the gimmicks share dark's
                              palette, fun.css their other rules
@@ -675,7 +676,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     `--hint-critical-edge`, `--text-secondary`; white on each ≥ 3:1), 96 px with 20 px corners, the glyph 64 px:
     rendered once in a browser (`LiveIcon`'s shapes drawn on a canvas). Render them again when an icon or one of
     those colors changes. A compact state takes its tone's icon (`COMPACT_ICONS`: cold as soon, hint and pays
-    neutral).
+    neutral). The app's is also the page's tab icon, inline in `dashboard.html` as a `data:` URI (the CSP lets
+    images in only so; without one named the browser asks for `/favicon.ico`), which a test holds to the file.
   - On WSL PowerShell runs from the C: drive's mount (`windows_drive`), so no `\\wsl.localhost` folder is handed to
     it, and with a live interop socket (`interop_socket`, per send): `make start` detaches serve, and the terminal's
     socket goes when it closes; init's `1_interop` outlives it. PowerShell comes from PATH, else the C: drive.

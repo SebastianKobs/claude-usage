@@ -1,8 +1,10 @@
 """static/: checks over the page's scripts, stylesheets and markup that don't need a browser."""
+import base64
 import re
 import unittest
 from pathlib import Path
 
+from claude_usage import notify
 from claude_usage import queries
 from claude_usage import server
 from claude_usage import store
@@ -101,6 +103,13 @@ class ScriptTest(unittest.TestCase):
         self.assertIn("<main></main>", page)
         body = page[page.index("<body>"):]
         self.assertEqual(re.findall(r"<(?!/?(?:body|main|script)\b)[a-z]+", body), [])
+
+    def test_the_tab_icon_is_the_notifications_app_icon_inline(self):
+        # without an icon named the browser asks for /favicon.ico, which the CSP blocks: it lets images in as data: only
+        icon = re.search(r'<link rel="icon" type="image/png" href="data:image/png;base64,([^"]+)">', dashboard())
+        self.assertIsNotNone(icon)
+        self.assertEqual(base64.b64decode(re.sub(r"\s", "", icon.group(1))),
+                         (notify.ICONS_DIR / f"{notify.APP_ICON}.png").read_bytes())
 
     def test_no_script_but_the_bundle_is_served(self):
         self.assertEqual([path.name for path in (STATIC / "js").glob("*.js")], ["app.js"])
