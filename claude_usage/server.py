@@ -421,7 +421,8 @@ class UsageApp:
         compactions saved so far, what it waits for (waiting, as in /api/live, whose list the open session hides),
         whether the session is live (the page polls it faster then; a wait counts, as Claude Code writes nothing
         meanwhile), whether its main transcript still exists (the page shows the conversation higher up then), each
-        transcript's tools by kind (tool_kinds, None once its file is gone), with the gauge the main thread's
+        transcript's tools by kind (tool_kinds, None once its file is gone and for the background calls, which have
+        none), with the gauge the main thread's
         exploration since its last compaction (for the hint to delegate it), and every call of the transcripts still
         there that named a possible secret location (secret_accesses, the most severe first, then by time); None for
         an unknown id."""
@@ -443,6 +444,9 @@ class UsageApp:
         prompt = None if path is None else transcripts.first_prompt(path)
         secrets = []
         for agent in detail["agents"]:
+            if agent["agent_type"] == store.BACKGROUND:     # no transcript; its agent_id None is the main thread's
+                agent["tool_kinds"] = None
+                continue
             agent_path = paths.get(agent["agent_id"])
             tools = None if agent_path is None else self.tool_reader.tools(agent_path)
             agent["tool_kinds"] = None if tools is None else tools["rows"]

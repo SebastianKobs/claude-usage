@@ -541,7 +541,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
   - `serve` prints "Serving …" before its first scan (a new store's reads every file), since `make start` waits
     for that line; SIGTERM (`make stop`) stops it like Ctrl+C.
   - `/api/session/<id>` gives each agent `tool_kinds`, read from its transcript (counts only), None once the file is
-    gone; the Tools table then shows the stored `tools`.
+    gone; the Tools table then shows the stored `tools`. The background calls have no transcript (None), though
+    their `agent_id` is None like the main thread's.
     - Each transcript has a reader (`tool_kinds.CallReader`) that goes on from where its last read stopped once the
       file's size or mtime changed, as the scan does: complete lines only, from the start again once the file was
       rewritten (shorter than what was read, or another first line: `transcripts.head_hash`). A test checks that

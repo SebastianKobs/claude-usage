@@ -78,7 +78,7 @@ function agentCells(agent: Agent, searches: boolean): string[] {
 function agentRow(agent: Agent, searches: boolean, kind: 'agent' | 'member'): AgentRow {
   const phase = agent.workflow_phase ? ` · ${agent.workflow_phase}` : '';
   return {
-    key: agent.agent_id ?? 'main',
+    key: agent.agent_id ?? agent.agent_type, // no id: the main thread ("main") or the background calls
     kind,
     name: agent.agent_type,
     detail: `${agent.description || ''}${phase}`,

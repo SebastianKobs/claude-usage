@@ -81,7 +81,7 @@
     "web/src/lib/range.ts": "8e396db74a4cd66bd8c859bebdf11e7ff9b1fb6c4b40b26fd529e70658b30b84",
     "web/src/lib/scroll.ts": "00e72d7195bb2b1906b7a53b20600025a52fe3b5d7fa984cde9912426a07942f",
     "web/src/lib/secrets.ts": "5214e06f859fc50793f34e874017364d70c65a14d85ac6f2d762b0e9c56d1ae7",
-    "web/src/lib/session.ts": "b58370b998e31e977bd45f7cd6b012b1b3a148e6dec851b5ef332db328a82652",
+    "web/src/lib/session.ts": "7c8c6a76721abfaf27650fe726f5b312fd9ddcbc680c5377b8af9dc7b809256b",
     "web/src/lib/tables.ts": "7e60176447c2b9e6768382714eb977430cd8ac7a85dd00396a9b321ac1d73039",
     "web/src/lib/themes.ts": "ada0027dc8e18c4eb4227e0a4ed92d929de5d10384b097195b2897b612ed94d1",
     "web/src/lib/tiles.ts": "2d36617eaa9f005cb7d1fb16b02464919031d3c6d454bfb6d0fdbdd90f453ee1",
@@ -94,6 +94,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "3c525a4396da2826db8d4a28b199cc76422a91de952802ae471d7e3caeb749ce",
-    "claude_usage/static/js/app.js": "f93872330726da50096363d4ae9e984fde6e24a874dbff52b591cee38f2d3c85"
+    "claude_usage/static/js/app.js": "a72535c682c6cf33502f23a8dd2cf61891eb70e967e8980f3c3740a9de596708"
   }
 }

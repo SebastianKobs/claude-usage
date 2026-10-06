@@ -94,6 +94,12 @@ describe('the table', () => {
     expect(first.querySelector('td > strong + span.sub')).toHaveTextContent(/^Find the callers$/);
   });
 
+  test('has a row for the background calls beside the main thread, though neither has an agent id', () => {
+    const background = agent({ agent_type: '(background)', models: [], turns: 0 });
+    page.render(AgentsTable, { ...DEFAULTS, agents: [agent(), helper, background] });
+    expect(names()).toEqual(['main', 'Explore', '(background)']);
+  });
+
   test('has a line per model in its own div, then the numbers', () => {
     page.render(AgentsTable, { ...DEFAULTS, agents: [helper] });
     const cells = within(screen.getAllByRole('row')[1] as HTMLElement).getAllByRole('cell');

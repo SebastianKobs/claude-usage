@@ -917,6 +917,17 @@ class ToolKindsTest(ServerCase):
                          (1, len("{}") + 3))
         self.assertEqual((payload["delegate_hint_tokens"], payload["delegate_calls_ahead"]), (20_000, 60))
 
+    def test_the_background_calls_have_no_tools_by_kind(self):
+        self.main.cost_state({"claude-sonnet-5": (100, 5000, 5000, 500, 0.1)})
+        _, payload = self.get_json("/api/session/s1")
+        background = payload["agents"][-1]
+        self.assertEqual((background["agent_type"], background["tool_kinds"]), (store.BACKGROUND, None))
+
+    def test_the_background_calls_leave_the_main_threads_exploration(self):
+        self.main.cost_state({"claude-sonnet-5": (100, 5000, 5000, 500, 0.1)})
+        _, payload = self.get_json("/api/session/s1")
+        self.assertEqual(payload["current"]["exploration"]["calls"], 1)
+
     def test_without_its_transcript_the_gauge_has_no_exploration(self):
         self.get_json("/api/summary?days=7")
         self.main.path.unlink()
@@ -980,6 +991,11 @@ class SecretAccessTest(ServerCase):
 
     def test_a_session_without_one_lists_none(self):
         self.assertEqual(self.accesses(), [])
+
+    def test_a_session_with_background_calls_lists_each_access_once(self):
+        self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": ".env"})], usage(output=1))
+        self.main.cost_state({"claude-sonnet-5": (100, 5000, 5000, 500, 0.1)})
+        self.assertEqual([access["agent_type"] for access in self.accesses()], ["main"])
 
     def test_once_the_transcript_is_gone_its_calls_are_not_listed(self):
         self.main.assistant("m8", [tool_use_block("t8", "Read", {"file_path": ".env"})], usage(output=1))

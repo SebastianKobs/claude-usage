@@ -106,6 +106,12 @@ describe('agentRows', () => {
     expect(rows[1]!.detail).toBe('Find the callers');
   });
 
+  test('key the background calls apart from the main thread, since neither has an agent id', () => {
+    const background = agent({ agent_type: '(background)', models: [], turns: 0 });
+    const rows = agentRows([main, helper, background], []);
+    expect(rows.map((row) => row.key)).toEqual(['main', 'a-1', '(background)']);
+  });
+
   test('have the turns, context, input, cache read share, output, returned and cost as cells', () => {
     const cells = agentRows([helper], [])[0]!.cells;
     expect(cells).toEqual(['4', '5K → 20K', '1.2K', '75%', '50', '1.5K', '$0.25']);

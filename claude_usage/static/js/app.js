@@ -6885,7 +6885,7 @@ function kd(e, t) {
 function Ad(e, t, n) {
 	let r = e.workflow_phase ? ` · ${e.workflow_phase}` : "";
 	return {
-		key: e.agent_id ?? "main",
+		key: e.agent_id ?? e.agent_type,
 		kind: n,
 		name: e.agent_type,
 		detail: `${e.description || ""}${r}`,
