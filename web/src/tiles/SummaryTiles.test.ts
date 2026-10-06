@@ -1,4 +1,3 @@
-import { render } from '@testing-library/svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import { pagePerTest } from '../app/app.testing';
 import { runtimeTotals, summary, usage } from '../api/fixtures';

@@ -1,4 +1,3 @@
-import { render } from '@testing-library/svelte';
 import { expect, test } from 'vitest';
 import { pagePerTest } from '../app/app.testing';
 import type { RuntimeTotals, SessionRuntime } from '../api/api';

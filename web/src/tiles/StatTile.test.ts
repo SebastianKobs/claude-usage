@@ -1,4 +1,3 @@
-import { render } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { afterEach, expect, test } from 'vitest';
 import StatTile from './StatTile.svelte';

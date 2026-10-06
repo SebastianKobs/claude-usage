@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { pagePerTest } from '../app/app.testing';

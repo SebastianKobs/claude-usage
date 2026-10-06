@@ -1,4 +1,3 @@
-import { render } from '@testing-library/svelte';
 import { afterEach, expect, test } from 'vitest';
 import { pagePerTest } from '../app/app.testing';
 import type { CompactionSavings, Usage } from '../api/api';

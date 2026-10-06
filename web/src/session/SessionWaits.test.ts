@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { screen } from '@testing-library/svelte';
 import { describe, expect, test } from 'vitest';
 import { pagePerTest } from '../app/app.testing';
 import type { Waiting } from '../api/api';

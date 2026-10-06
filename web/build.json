@@ -24,8 +24,8 @@
     "web/src/charts/PointDot.svelte": "1642f198e1ee52cc1530ec040e5ebcbe74eee3f5800bd76aa933d025ec0b8846",
     "web/src/charts/XLabels.svelte": "2b35fb2d1be0a051972ee3ba720a7acbee040975b5a5caa7083398fa11d61f90",
     "web/src/charts/YAxis.svelte": "a23d99b714f7b141ed94f307ac5e127762cffc94e7438ac12f43550f6f0da2b5",
-    "web/src/charts/chartkit.ts": "0abc565531d389285a10e0d8017d1bad67f4acec851289b234dc7d382b1b879f",
-    "web/src/charts/charts.ts": "29a67b92883c3883faffe8923bfa085eb0533498f72e34aa61d10adae7ff9fd8",
+    "web/src/charts/chartkit.ts": "0bad1bfb20d48d28bb17ebdb800b27c50ad4b68f60ea62188dc72bf660e0fa25",
+    "web/src/charts/charts.ts": "160c9253ea37964b0a435177e4c0eb2bf4daa548e737a2401f10a92f0f4ca076",
     "web/src/charts/colors.ts": "ad3085cf71cbebbdb1a2c54f913c354201056ecab3beba04290602062bfcb54d",
     "web/src/context/CompactCall.svelte": "4b51afb50e8f973357b3c32d87c943930c76797de5cf0295e61aab18893ad455",
     "web/src/context/ContextChart.svelte": "bf1aaff1768ace0447640ce09396abd941264cb4fc6f420eedb4f719d38be359",
@@ -35,7 +35,7 @@
     "web/src/context/DelegateCall.svelte": "d26380ecaac54fe055ea56742fc85891dc332bdc10fea3cb180f7e2137b5a76e",
     "web/src/context/clock.svelte.ts": "d9bee166d4fe2291e025f6681325d6e24758cc8dec96a4c6937abceb46078d0f",
     "web/src/context/compact.ts": "ea85f49641d3b2062da182b46f55b6f985d854550496f2835bbe67f7b87db744",
-    "web/src/context/context.ts": "13f5692c0046587a3973cd1871f1376d20a46970c0c0dcd23a9118c5beef6ad5",
+    "web/src/context/context.ts": "8ca70e6157faba9185ab4032154ce2ab7cf9f8261264394969a2cda61afaf419",
     "web/src/context/gauge.ts": "482a7c51c6babbac5fcd907692054b17b2876db98324b9f1429c0cb5c0467b40",
     "web/src/conversation/ChatInjected.svelte": "35a96cb38b5c51a8c36db46dc0472bc4c3ccc9e871796d471d63029109b87b7b",
     "web/src/conversation/ChatMarker.svelte": "be6eaa75c4545ad5efb8e785a7902780cca5165a1ec3bf0025eca90b65e1a57c",
@@ -47,7 +47,7 @@
     "web/src/conversation/ConversationEntry.svelte": "c026b4f632aa9a0ba2dd91268b65f55a39436c05d1d3703279bab3e36feadd40",
     "web/src/conversation/Markdown.svelte": "8bcab0e0886414a2c8daf4da604d697ac0a0451fa7f8925e9719545eb7c7a0f6",
     "web/src/conversation/chat.ts": "d1e4c8c425dc5ae4ebb86b4d975edf42b5d119ebeb5a48b5d66d56edadf7785a",
-    "web/src/conversation/entries.ts": "2697078cb745d8aa8b314fc94480b47372e0fc1b70560a3aba82274deb104bf9",
+    "web/src/conversation/entries.ts": "7a8e9e25144ed4f1aa5ed023225ee963ffb31cf2aa3757e3ccaa3e20c427f4b2",
     "web/src/conversation/markup.ts": "988b94969605f501ff7e2d1dbeb532e67bc1d0acea31cc59b0694084612f0e2d",
     "web/src/live/LiveCard.svelte": "2cc4caffe096c0f678dfede9d14fff00433a8cf9d3e20033d8280e73c60ddb36",
     "web/src/live/LiveIcon.svelte": "f5e6c268b0bd9da88f6fa84632ebf88bf37c69136ad41e6fca4de4e5cf7d6baf",
@@ -89,11 +89,11 @@
     "web/src/ui/scroll.ts": "00e72d7195bb2b1906b7a53b20600025a52fe3b5d7fa984cde9912426a07942f",
     "web/src/ui/tables.ts": "51a5179c2401b600700fbecb0e6dafa377ae483f6ecd115d6fba0d9fedf6a504",
     "web/svelte.config.js": "ae0419e50da9a27b55fba71fe33dfecaf71ed84f90b5ec2277a7132ff5411d2b",
-    "web/tsconfig.json": "716bf8dc54fa0da0f76917120d3e2ba0f8ab38614f13f0b798f76fa6e7443714",
+    "web/tsconfig.json": "f7feb9aa379ebcfdb3254094d4cb03106cd4be0a8f083521e3ff4eae9106aa14",
     "web/vite.config.ts": "ca872345989b0ff2d7615516a6f109f5c002f77de0fc0f5cb1c9088cf2425fe5"
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "3c525a4396da2826db8d4a28b199cc76422a91de952802ae471d7e3caeb749ce",
-    "claude_usage/static/js/app.js": "75487597df4c4e1269d952335f279897e3055725c3c2744a8f3ec35d771b9f29"
+    "claude_usage/static/js/app.js": "2435efd5556a27cb7da26a8bbfadfe2bdf0ff5f754717bc0f4d902bc96311e73"
   }
 }

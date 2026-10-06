@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { screen } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { pagePerTest } from '../app/app.testing';

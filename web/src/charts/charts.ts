@@ -284,7 +284,7 @@ export function stackSegments(
 // --- rate limits ----------------------------------------------------------------------------------------------
 
 /** The error kind of a rate limit, which the dashboard plots in the status color. */
-export const RATE_LIMIT = 'rate_limit';
+const RATE_LIMIT = 'rate_limit';
 
 /** The mark before a rate limit's words, so its color never carries it alone. */
 export const LIMIT_ICON = '⚠';

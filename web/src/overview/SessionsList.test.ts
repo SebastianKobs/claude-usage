@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // happy-dom does not know the :checked option that Svelte's select binding reads, so the picker needs jsdom.
-import { render, screen, within } from '@testing-library/svelte';
+import { screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';

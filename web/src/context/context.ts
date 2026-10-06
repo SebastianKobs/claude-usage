@@ -46,7 +46,7 @@ export const CONTEXT_PARTS: readonly ContextPart[] = [
 ];
 
 /** How a compaction's trigger reads. */
-export const COMPACTION_TRIGGERS: Record<string, string> = { manual: '/compact', auto: 'auto-compact' };
+const COMPACTION_TRIGGERS: Record<string, string> = { manual: '/compact', auto: 'auto-compact' };
 
 export const NO_TURNS = 'No turns with usage.';
 export const NO_GROWTH = 'No turn grew the context.';

@@ -5,7 +5,7 @@
 export const MIN_CHART_WIDTH = 320;
 
 /** At most about this many labels under the x axis. */
-export const X_LABELS = 8;
+const X_LABELS = 8;
 
 /** The tooltip's gap right of its anchor. */
 const TOOLTIP_GAP = 12;

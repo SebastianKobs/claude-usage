@@ -95,7 +95,7 @@ export function fenceLanguage(name: string | undefined): string | null {
 // --- tool calls -----------------------------------------------------------------------------------------------
 
 /** A call's input fields by name. */
-export function fieldMap(entry: Pick<ChatEntry, 'tool_fields'>): Record<string, ToolField> {
+function fieldMap(entry: Pick<ChatEntry, 'tool_fields'>): Record<string, ToolField> {
   return Object.fromEntries((entry.tool_fields ?? []).map((field) => [field.name, field]));
 }
 

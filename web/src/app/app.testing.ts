@@ -9,7 +9,7 @@ import type { PayloadParts } from './payload.svelte';
 
 /** Renders `component` with `props` in the context of `app` (a new page where none is given). What comes back is
  *  Testing Library's, with `app` added and `rerender` taking the component's props, merged into the ones it has. */
-export function renderApp(
+function renderApp(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   component: Component<any>,
   props: Record<string, unknown> = {},
