@@ -1,4 +1,5 @@
-"""static/: checks over the page's scripts, stylesheets and markup that don't need a browser."""
+"""The page without a browser or node: the words and levels it shares with the server, what static/ serves, and
+the stylesheets' themes. How the page behaves is the Vitest tests' and the browser check's."""
 import base64
 import re
 import unittest
@@ -68,10 +69,6 @@ class ScriptTest(unittest.TestCase):
     def test_every_compaction_trigger_has_its_words(self):
         self.assertEqual(object_keys(page_file("context.ts"), "COMPACTION_TRIGGERS"), {"manual", "auto"})
 
-    def test_the_context_chart_stacks_the_three_parts_of_a_turn(self):
-        body = re.search(r"const CONTEXT_PARTS\b[^=]*= \[(.*?)\];", read(page_file("context.ts")), re.DOTALL).group(1)
-        self.assertEqual(re.findall(r"field: '(\w+)'", body), ["cache_read", "cache_write", "new_input"])
-
     def test_the_page_orders_effort_levels_like_the_report(self):
         body = re.search(r"const EFFORT_ORDER[^=]*= \[(.*?)\];", read(COLORS)).group(1)
         self.assertEqual(tuple(re.findall(r"'(\w+)'", body)), queries.EFFORT_ORDER)
@@ -79,12 +76,6 @@ class ScriptTest(unittest.TestCase):
     def test_every_hatched_effort_level_has_a_shade(self):
         self.assertLessEqual(object_keys(COLORS, "HATCH_SHADES"), object_keys(COLORS, "EFFORT_SHADES"))
         self.assertIn(store.ULTRACODE, object_keys(COLORS, "HATCH_SHADES"))
-
-    def test_every_hatched_effort_level_has_an_angle_of_its_own(self):
-        body = re.search(r"const HATCH_TURNS[^=]*= \{(.*?)\};", read(COLORS)).group(1)
-        turns_by_level = dict(re.findall(r"(\w+): (-?\d+)", body))
-        self.assertEqual(set(turns_by_level), object_keys(COLORS, "HATCH_SHADES"))
-        self.assertEqual(len(set(turns_by_level.values())), len(turns_by_level))
 
     def test_the_page_knows_the_background_effort_level(self):
         self.assertIn(f"const BACKGROUND_EFFORT = '{store.BACKGROUND_EFFORT}';", read(COLORS))
@@ -137,120 +128,6 @@ class ToolTableTest(unittest.TestCase):
 
     def test_every_command_kind_has_its_words(self):
         self.assertEqual(object_keys(page_file("tables.ts"), "TOOL_KINDS"), set(tool_kinds.KINDS))
-
-
-class SecretAccessTest(unittest.TestCase):
-
-    def test_the_warning_card_is_edged_in_the_warning_color(self):
-        self.assertIn("var(--hint-warning-edge)", css_block(read(STATIC / "css" / "common.css"), ".secret-warning"))
-
-    def test_each_severity_has_its_mark_color(self):
-        css = read(STATIC / "css" / "common.css")
-        for severity, color in (("high", "--hint-critical-edge"), ("medium", "--hint-warning-edge"),
-                                ("low-medium", "--series-1"), ("low", "--text-secondary")):
-            with self.subTest(severity=severity):
-                self.assertIn(f"var({color})", css_block(css, f".secret-severity-{severity}"))
-
-    def test_the_warning_is_edged_in_the_critical_color(self):
-        self.assertIn("var(--status-critical)", css_block(read(STATIC / "css" / "common.css"), ".secret-alert"))
-
-
-class PayoffStyleTest(unittest.TestCase):
-
-    def test_each_tone_has_its_mark_color(self):
-        css = read(STATIC / "css" / "common.css")
-        for tone, color in (("soon", "--gain-text"), ("close", "--hint-warning-edge"),
-                            ("unlikely", "--hint-critical-edge"), ("later", "--text-secondary")):
-            with self.subTest(tone=tone):
-                self.assertIn(f"var({color})", css_block(css, f".payoff-{tone}"))
-
-    def test_the_estimate_is_full_size_text_under_a_divider_its_pay_off_in_the_primary_color(self):
-        css = read(STATIC / "css" / "common.css")
-        block = css_block(css, ".compact-estimate {")
-        self.assertIn("border-top: 1px solid var(--border)", block)
-        self.assertIn("var(--text-secondary)", block)
-        self.assertNotIn("font-size", block)
-        self.assertIn("var(--text-primary)", css_block(css, ".compact-estimate strong"))
-
-
-class ConversationStyleTest(unittest.TestCase):
-
-    def test_the_order_arrow_turns_with_the_order(self):
-        rule = css_block(read(STATIC / "css" / "common.css"), '#chat-order[aria-pressed="true"] .chat-order-arrow')
-        self.assertIn("rotate(180deg)", rule)
-
-    def test_the_conversation_is_framed(self):
-        self.assertIn("border", css_block(read(STATIC / "css" / "common.css"), ".chat-section {"))
-
-    def test_the_skip_link_is_out_of_sight_until_it_has_focus(self):
-        rule = css_block(read(STATIC / "css" / "common.css"), ".skip-link:not(:focus)")
-        self.assertIn("clip-path", rule)
-
-
-class PagingTest(unittest.TestCase):
-
-    def test_the_pager_comes_before_the_table(self):
-        # where it goes (TableView.test.ts); here only the room it leaves
-        self.assertIn("margin-bottom: 8px", css_block(read(STATIC / "css" / "common.css"), ".pager"))
-
-    def test_the_pager_joins_the_title_row(self):
-        css = read(STATIC / "css" / "common.css")
-        self.assertIn("display: flex", css_block(css, ".title-row {"))
-        self.assertIn("margin-left: auto", css_block(css, ".title-row .pager"))
-
-
-class LiveStateTest(unittest.TestCase):
-
-    def test_each_tone_has_the_session_views_mark_color(self):
-        css = read(STATIC / "css" / "common.css")
-        for tone, color in (("soon", "--gain-text"), ("close", "--hint-warning-edge"),
-                            ("medium", "--hint-warning-edge"), ("unlikely", "--hint-critical-edge"),
-                            ("high", "--hint-critical-edge")):
-            with self.subTest(tone=tone):
-                self.assertIn(f".live-icon-{tone}", css)
-                rule = re.search(rf"[^}}]*\.live-icon-{tone}\b[^{{]*\{{([^}}]*)\}}", css).group(1)
-                self.assertIn(f"var({color})", rule)
-
-    def test_waiting_is_blue(self):
-        # blue, not a warning's or an alarm's hue: nothing is wrong, the session only waits (≥ 3:1 on every card)
-        css = read(STATIC / "css" / "common.css")
-        self.assertIn("var(--series-1)", re.search(r"\.live-icon-waiting \{([^}]*)\}", css).group(1))
-
-
-class SessionListTest(unittest.TestCase):
-
-    def test_the_app_mounts_the_list_in_its_card(self):
-        app = read(page_file("App.svelte"))
-        guarded = '<SectionGuard name="Sessions"><SessionsList /></SectionGuard>'
-        self.assertIn(f'<div id="sessions-card">{guarded}</div>', app)
-        self.assertNotIn('id="sessions-project"', dashboard())
-
-    def test_the_search_field_looks_like_the_other_controls_in_every_theme(self):
-        css = read(STATIC / "css" / "common.css")
-        self.assertIn("var(--surface)", css_block(css, 'input[type="search"] {'))
-        self.assertIn("var(--text-muted)", css_block(css, 'input[type="search"]::placeholder'))
-        for theme in GIMMICK_THEMES:
-            with self.subTest(theme=theme):
-                self.assertIn(f'[data-theme="{theme}"] input[type="search"]',
-                              read(STATIC / "css" / "themes" / f"{theme}.css"))
-
-
-class SessionWaitTest(unittest.TestCase):
-
-    def test_the_notice_is_in_the_waiting_tone(self):
-        # blue, like the live cards' icons: nothing is wrong, a session only waits
-        css = read(STATIC / "css" / "common.css")
-        self.assertIn("var(--series-1)", css_block(css, ".wait-notice {"))
-        self.assertIn("var(--series-1)", css_block(css, ".wait-icon {"))
-
-
-class LimitWindowTest(unittest.TestCase):
-
-    def test_the_rate_limits_section_is_drawn_by_its_component(self):
-        # the chart, the windows and the latest errors, in that order, are RateLimits.svelte's markup
-        app = read(page_file("App.svelte"))
-        self.assertIn('<div id="limits-card"><SectionGuard name="Rate limits"><RateLimits /></SectionGuard></div>', app)
-        self.assertNotIn('id="limit-windows"', dashboard())
 
 
 class StyleTest(unittest.TestCase):

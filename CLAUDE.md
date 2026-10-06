@@ -233,8 +233,9 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
                              marked and DOMPurify from npm, each through a Trusted Types policy (`highlight`, and
                              DOMPurify's own) which the CSP names
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
-                             module; test_static.py checks static/ without a browser; demo.py builds the demo for
-                             the screenshots and serves it (make demo)
+                             module; test_static.py checks, without a browser or node, what the page shares with
+                             the server, what static/ serves and the themes (behaviour is Vitest's); demo.py
+                             builds the demo for the screenshots and serves it (make demo)
 .claude/hooks/project-guard/  the guard hook: a git submodule, see its README and CLAUDE.md
 .vscode/settings.json        the Svelte extension's TypeScript plugin on (off by default), so VS Code's TypeScript
                              server reads a `.svelte` import in a `.ts` file, as svelte-check does
