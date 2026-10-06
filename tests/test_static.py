@@ -220,7 +220,9 @@ class LiveStateTest(unittest.TestCase):
 class SessionListTest(unittest.TestCase):
 
     def test_the_app_mounts_the_list_in_its_card(self):
-        self.assertIn('<div id="sessions-card"><SessionsList /></div>', read(page_file("App.svelte")))
+        app = read(page_file("App.svelte"))
+        guarded = '<SectionGuard name="Sessions"><SessionsList /></SectionGuard>'
+        self.assertIn(f'<div id="sessions-card">{guarded}</div>', app)
         self.assertNotIn('id="sessions-project"', dashboard())
 
     def test_the_search_field_looks_like_the_other_controls_in_every_theme(self):
@@ -246,7 +248,8 @@ class LimitWindowTest(unittest.TestCase):
 
     def test_the_rate_limits_section_is_drawn_by_its_component(self):
         # the chart, the windows and the latest errors, in that order, are RateLimits.svelte's markup
-        self.assertIn('<div id="limits-card"><RateLimits /></div>', read(page_file("App.svelte")))
+        app = read(page_file("App.svelte"))
+        self.assertIn('<div id="limits-card"><SectionGuard name="Rate limits"><RateLimits /></SectionGuard></div>', app)
         self.assertNotIn('id="limit-windows"', dashboard())
 
 

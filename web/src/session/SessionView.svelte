@@ -6,7 +6,8 @@ calls above it (`ContextGauge`), the secret accesses (`SecretAccesses`, before t
 (`ContextPerTurn`, after the gauge) and its tables: usage by model, the main thread and subagents, by skill, by MCP
 server, the API errors and the tools (`ToolsTable`: after the agents, or, with the main transcript there, after the
 API errors, since the conversation then takes its place) and the conversation (`Conversation`: its frame, which
-comes after the agents with a transcript, else last).
+comes after the agents with a transcript, else last). Each part is drawn in a `SectionGuard` of its own, so one
+that fails leaves the others drawn.
 Another session gets a new view (folds, the conversation and all), which takes the page over while it is there: the
 range's filters and summary step aside, focus goes to its heading, and closing it (the link or Escape, which clears
 the address's hash) puts the page back.
@@ -28,6 +29,7 @@ the address's hash) puts the page back.
   import KpiTiles from '../tiles/KpiTiles.svelte';
   import RuntimeTiles from '../tiles/RuntimeTiles.svelte';
   import SecretAccesses from './SecretAccesses.svelte';
+  import SectionGuard from '../ui/SectionGuard.svelte';
   import SessionWaits from './SessionWaits.svelte';
   import ToolsTable from './ToolsTable.svelte';
   import UsageTable from '../overview/UsageTable.svelte';
@@ -72,82 +74,96 @@ the address's hash) puts the page back.
         <div class="prompt">{session.prompt}</div>
       {/if}
       <div class="muted">{sessionFacts(session)}</div>
-      <SessionWaits />
-      <div class="kpis session-kpis">
-        <KpiTiles
-          totals={session}
-          scope="this session"
-          context={session.context}
-          hintTokens={session.compact_hint_tokens}
-          savings={session.compaction_savings}
-        />
-      </div>
-      {#if runtime}
-        <!-- the cost record Claude Code writes when its process ends, until then estimated from the transcripts -->
-        <div class="kpis session-kpis" role="group" aria-label="Time and lines changed">
-          <RuntimeTiles
-            {runtime}
-            from={runtimeSource(runtime.source)}
-            costPer100Lines={sessionCostPer100Lines({ cost: session.cost, runtime })}
+      <SectionGuard name="What the session waits for"><SessionWaits /></SectionGuard>
+      <SectionGuard name="Totals">
+        <div class="kpis session-kpis">
+          <KpiTiles
+            totals={session}
+            scope="this session"
+            context={session.context}
+            hintTokens={session.compact_hint_tokens}
+            savings={session.compaction_savings}
           />
         </div>
+      </SectionGuard>
+      {#if runtime}
+        <!-- the cost record Claude Code writes when its process ends, until then estimated from the transcripts -->
+        <SectionGuard name="Time and lines changed">
+          <div class="kpis session-kpis" role="group" aria-label="Time and lines changed">
+            <RuntimeTiles
+              {runtime}
+              from={runtimeSource(runtime.source)}
+              costPer100Lines={sessionCostPer100Lines({ cost: session.cost, runtime })}
+            />
+          </div>
+        </SectionGuard>
       {/if}
-      <SecretAccesses />
-      <ContextGauge />
-      <ContextPerTurn />
-      <UsageTable
-        inline
-        id="session-models"
-        title={hype('By model')}
-        nameLabel="Model"
-        rows={models}
-        empty="No usage in this range."
-        pagerKey="{id}-models"
-      />
-      <AgentsTable agents={session.agents} pagerKey="{id}-agents" />
+      <SectionGuard name="Secret accesses"><SecretAccesses /></SectionGuard>
+      <SectionGuard name="Context gauge"><ContextGauge /></SectionGuard>
+      <SectionGuard name="Context per turn"><ContextPerTurn /></SectionGuard>
+      <SectionGuard name="By model">
+        <UsageTable
+          inline
+          id="session-models"
+          title={hype('By model')}
+          nameLabel="Model"
+          rows={models}
+          empty="No usage in this range."
+          pagerKey="{id}-models"
+        />
+      </SectionGuard>
+      <SectionGuard name="Main thread and subagents">
+        <AgentsTable agents={session.agents} pagerKey="{id}-agents" />
+      </SectionGuard>
       {#if !session.transcript}
-        <ToolsTable agents={session.agents} pagerKey="{id}-tools" />
+        <SectionGuard name="Tools"><ToolsTable agents={session.agents} pagerKey="{id}-tools" /></SectionGuard>
       {/if}
       {#if session.transcript}
-        <Conversation />
+        <SectionGuard name="Conversation"><Conversation /></SectionGuard>
       {/if}
       <div class="grid-2">
         <div>
-          <UsageTable
-            inline
-            id="session-skills"
-            title={hype('By skill')}
-            nameLabel="Skill"
-            rows={skills}
-            empty="No turns attributed to a skill."
-            pagerKey="{id}-skills"
-          />
+          <SectionGuard name="By skill">
+            <UsageTable
+              inline
+              id="session-skills"
+              title={hype('By skill')}
+              nameLabel="Skill"
+              rows={skills}
+              empty="No turns attributed to a skill."
+              pagerKey="{id}-skills"
+            />
+          </SectionGuard>
         </div>
         <div>
-          <UsageTable
-            inline
-            id="session-mcp-servers"
-            title={hype('By MCP server')}
-            nameLabel="MCP server"
-            rows={servers}
-            empty="No turns attributed to an MCP server."
-            pagerKey="{id}-mcp-servers"
-          />
+          <SectionGuard name="By MCP server">
+            <UsageTable
+              inline
+              id="session-mcp-servers"
+              title={hype('By MCP server')}
+              nameLabel="MCP server"
+              rows={servers}
+              empty="No turns attributed to an MCP server."
+              pagerKey="{id}-mcp-servers"
+            />
+          </SectionGuard>
         </div>
       </div>
-      <EventsTable
-        id="session-api-errors"
-        title={hype('Rate limits and API errors')}
-        rows={errors}
-        empty="No API errors in this session."
-        pagerKey="{id}-api-errors"
-        withSession={false}
-      />
+      <SectionGuard name="Rate limits and API errors">
+        <EventsTable
+          id="session-api-errors"
+          title={hype('Rate limits and API errors')}
+          rows={errors}
+          empty="No API errors in this session."
+          pagerKey="{id}-api-errors"
+          withSession={false}
+        />
+      </SectionGuard>
       {#if session.transcript}
-        <ToolsTable agents={session.agents} pagerKey="{id}-tools" />
+        <SectionGuard name="Tools"><ToolsTable agents={session.agents} pagerKey="{id}-tools" /></SectionGuard>
       {/if}
       {#if !session.transcript}
-        <Conversation />
+        <SectionGuard name="Conversation"><Conversation /></SectionGuard>
       {/if}
     </section>
   {/key}

@@ -2,7 +2,7 @@
 import { screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, onTestFinished, test, vi } from 'vitest';
 import { pagePerTest } from '../app/app.testing';
 import type { SecretAccess, SessionDetail, Waiting } from '../api/api';
 import {
@@ -130,6 +130,21 @@ describe('without a session', () => {
     page.render(SessionView);
     expect(document.getElementById('filters')?.hidden).toBe(false);
     expect(document.getElementById('summary')?.hidden).toBe(false);
+  });
+});
+
+describe('a part that can`t be drawn', () => {
+  test('says so in its place and in the banner, and the rest of the view is drawn', () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => logged.mockRestore());
+    page.render(SessionView);
+    page.set({ session: sessionDetail({ skills: null as never }) });
+    const failed = /^“By skill” couldn't be drawn: \S/;
+    const failures = [...document.querySelectorAll('#drilldown .draw-failed')];
+    expect(failures.map((failure) => failure.textContent)).toEqual([expect.stringMatching(failed)]);
+    expect(page.app.messages.text).toMatch(failed);
+    expect(headings(3)).toContain('Main thread and subagents');
+    expect(document.getElementById('session-mcp-servers-title')).not.toBeNull();
   });
 });
 

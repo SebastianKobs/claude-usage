@@ -17,6 +17,7 @@ what they draw. `loaderOptions` are for the tests (a fetcher, timers).
   import OverTime from '../overview/OverTime.svelte';
   import RangeFilter from './RangeFilter.svelte';
   import RateLimits from '../overview/RateLimits.svelte';
+  import SectionGuard from '../ui/SectionGuard.svelte';
   import SessionsList from '../overview/SessionsList.svelte';
   import SessionView from '../session/SessionView.svelte';
   import SummaryTiles from '../tiles/SummaryTiles.svelte';
@@ -65,29 +66,29 @@ what they draw. `loaderOptions` are for the tests (a fetcher, timers).
 
 <Banner messages={app.messages} />
 
-<div id="session-card"><SessionView /></div>
+<div id="session-card"><SectionGuard name="Session view"><SessionView /></SectionGuard></div>
 
 <div class="filters" id="filters" role="group" aria-label="Filters"><RangeFilter /></div>
 
 <div id="summary" class:loading={payload.summaryLoading}>
-  <div class="kpis stack" id="kpis"><SummaryTiles rows="kpis" /></div>
+  <div class="kpis stack" id="kpis"><SectionGuard name="Totals"><SummaryTiles rows="kpis" /></SectionGuard></div>
   <div class="kpis stack" id="runtime" role="group" aria-label="Time and lines changed">
-    <SummaryTiles rows="runtime" />
+    <SectionGuard name="Time and lines changed"><SummaryTiles rows="runtime" /></SectionGuard>
   </div>
 
-  <div id="live-card"><LiveSessions /></div>
+  <div id="live-card"><SectionGuard name="Live sessions"><LiveSessions /></SectionGuard></div>
 
-  <div id="trend-card"><OverTime /></div>
+  <div id="trend-card"><SectionGuard name="Over time"><OverTime /></SectionGuard></div>
 
-  <div id="chart-card"><ByModel /></div>
+  <div id="chart-card"><SectionGuard name="By model"><ByModel /></SectionGuard></div>
 
-  <div id="costly-card"><CostPerSession /></div>
+  <div id="costly-card"><SectionGuard name="Cost per session"><CostPerSession /></SectionGuard></div>
 
-  <div id="limits-card"><RateLimits /></div>
+  <div id="limits-card"><SectionGuard name="Rate limits"><RateLimits /></SectionGuard></div>
 
-  <div id="usage-cards"><UsageTables /></div>
+  <div id="usage-cards"><SectionGuard name="Usage tables"><UsageTables /></SectionGuard></div>
 
-  <div id="sessions-card"><SessionsList /></div>
+  <div id="sessions-card"><SectionGuard name="Sessions"><SessionsList /></SectionGuard></div>
 </div>
 
 <footer id="footer">{footerText(payload.summary, footerCopy())}</footer>

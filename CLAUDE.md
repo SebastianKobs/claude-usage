@@ -14,9 +14,9 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
     `{#each}`; load the `svelte:svelte-core-bestpractices` skill first, the documentation comes from
     `npx @sveltejs/mcp get-documentation "<section>"`, and the `dataviz` skill is loaded for a chart.
   - `.svelte` and `.svelte.ts` files are written by the `svelte:svelte-file-editor` agent, even for a comment.
-  - Each touched component goes through `npx @sveltejs/mcp svelte-autofixer <path>` (no issues left), then
-    `npm run check` (svelte-check, no warnings); its Testing Library test goes with it, through `pagePerTest` where it
-    needs the app's state.
+  - Each touched component goes through `npx @sveltejs/mcp svelte-autofixer <path>` (no issues left; pinned in
+    package.json, so npx runs that copy), then `npm run check` (svelte-check, no warnings); its Testing Library test
+    goes with it, through `pagePerTest` where it needs the app's state.
   - The logic lives in plain `.ts` modules that the components only draw (tested without a DOM where it needs none);
     text goes into the DOM as text, and a new place a string becomes markup needs a Trusted Types policy the CSP names.
   - 120 columns, no prettier; `make build` after a source changes, and the bundle and `web/build.json` are committed
@@ -110,7 +110,8 @@ claude_usage/
                              (Svelte, and the libraries below)
 web/                         the page's Svelte 5 + TypeScript sources; node only to build and test them, never to
                              run the dashboard
-  package.json               exact versions, dev dependencies only (the bundle holds them); `npm run build`, `check`
+  package.json               exact versions, dev dependencies only (the bundle holds them; `@sveltejs/mcp` is the
+                             autofixer and the docs); `npm run build`, `check`
                              (svelte-check) and `test` (Vitest: happy-dom, jsdom where a test needs a real
                              `<select>` or DOMPurify); `vite.config.ts` builds the one module, `svelte.config.js`
                              sets the compiler (no injected CSS, `fragments: 'tree'`); `playwright.config.ts` runs
@@ -156,8 +157,11 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
                              becomes, the day the Daily range shows and where an arrow goes
     range.svelte.ts          the range shown (`RangeState`: the days and the Daily range's day, reactive, the choice
                              saved as a preference), which the loader reloads the data on through `range.onchange`
-  src/ui/                    the shared pieces: `Pager`, `Swatch`, and `TableView`, a paged table (`scope` on its
-                             headings, named by its heading), its pager in an optional heading row
+  src/ui/                    the shared pieces: `Pager`, `Swatch`, `TableView`, a paged table (`scope` on its
+                             headings, named by its heading), its pager in an optional heading row, and
+                             `SectionGuard`, a section that can fail on its own (`<svelte:boundary>`)
+    guard.ts                 what a section that couldn't be drawn says, in its place and in the banner
+                             (`drawFailure`, `announceFailure`)
     format.ts                number, money, duration, day, hour and moment formatting
     tables.ts                paging (page units, window and text), the sessions list's filter, count, columns and cells,
                              the Tools table's rows with their keys, folds and labels (`toolsRows` in session.ts draws
@@ -232,6 +236,8 @@ tests/                       helpers.py (projects-folder and transcript builders
                              module; test_static.py checks static/ without a browser; demo.py builds the demo for
                              the screenshots and serves it (make demo)
 .claude/hooks/project-guard/  the guard hook: a git submodule, see its README and CLAUDE.md
+.vscode/settings.json        the Svelte extension's TypeScript plugin on (off by default), so VS Code's TypeScript
+                             server reads a `.svelte` import in a `.ts` file, as svelte-check does
 ```
 
 ## Transcript format
@@ -725,7 +731,14 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     usage (`previous_day`, `next_day`); › always reaches today.
   - Polling: live every 5 s, the summary every 60 s, each after the previous answer, none while the tab is hidden.
     An unchanged payload isn't drawn again, so focus stays put. The banner keeps one message per source (live,
-    summary, session, scan), and a response only renders if it answers the newest request.
+    summary, session, scan, each section that couldn't be drawn), and a response only renders if it answers the
+    newest request.
+  - Each overview card, the session view and each part of it draws inside a `SectionGuard`, so a payload of a
+    shape the page doesn't expect breaks only its section: in its place a card names the section and the error
+    (`.draw-failed`, edged in `--status-critical` like the banner) with a Try again button, the banner says the
+    same while that card shows, and the error goes to the console with its stack (which fails the browser
+    check, as an uncaught one did). It stays failed until Try again or another session; errors in event
+    handlers and async work aren't caught there (the loader catches its own).
   - The live sessions follow the range shown: both requests carry it (`rangeQuery`), a new range loads both at once
     (`Loader.loadRange`), and the server cuts both to the retention (`UsageApp.date_range`). `/api/live` then keeps the
     live sessions active in the range (`queries.live_sessions` with since and until): with usage in it, as the

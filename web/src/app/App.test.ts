@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, onTestFinished, test, vi } from 'vitest';
 import { AppState } from './app.svelte';
 import { live, liveSession, sessionDetail, summary } from '../api/fixtures';
 import type { LoaderOptions } from './loader';
@@ -115,6 +115,21 @@ describe('the page', () => {
     await settle();
     expect(screen.getByRole('alert').textContent).toBe('HTTP 500');
     expect(container.querySelector('#kpis')?.textContent).toContain('Could not load the summary.');
+  });
+
+  test('draws the other sections where one can`t be drawn, which says so in its place and in the banner', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => logged.mockRestore());
+    // a shape the page doesn't expect, as a store older or newer than the page could give
+    const answers = { ...ANSWERS(), '/api/summary': summary({ api_errors: null as never }) };
+    const { container } = mountApp(answers);
+    await settle();
+    const failed = /^“Rate limits” couldn't be drawn: \S/;
+    expect(container.querySelector('#limits-card .draw-failed')?.textContent).toMatch(failed);
+    expect(screen.getByRole('alert').textContent).toMatch(failed);
+    expect(container.querySelector('#live-card')?.textContent).toContain('Live one');
+    expect(container.querySelector('#sessions-card h2')?.textContent).toContain('Sessions');
+    expect(container.querySelectorAll('.draw-failed')).toHaveLength(1);
   });
 
   test('words the heading and the footer in the theme chosen', async () => {

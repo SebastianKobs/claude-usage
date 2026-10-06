@@ -51,6 +51,10 @@ button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-seconda
   background: var(--surface); white-space: pre-line; overflow-wrap: anywhere; }
 .banner:empty { display: none; }
 .kpis > .empty { grid-column: 1 / -1; }
+/* a section that couldn't be drawn (SectionGuard): edged like the banner that names it, across a row of tiles */
+.draw-failed { border-left: 3px solid var(--status-critical); }
+.draw-failed p { margin: 0 0 8px; overflow-wrap: anywhere; }
+.kpis > .draw-failed { grid-column: 1 / -1; }
 
 /* figures */
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
