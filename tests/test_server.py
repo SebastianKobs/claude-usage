@@ -320,16 +320,14 @@ class DashboardTest(ServerCase):
                 self.assertEqual(status, 404)
 
     def test_dashboard_is_self_contained(self):
-        # the bundle's own links are text, which the page's build test checks; the CSP would block any load anyway
-        _, headers, _ = self.get("/")
+        # what the bundle and its stylesheet hold, the page's build test checks; the CSP would block any load anyway
+        _, headers, body = self.get("/")
         policy = headers["Content-Security-Policy"]
         self.assertIn("default-src 'none'", policy)
         self.assertIn("script-src 'self';", policy)
-        for path in ["/", *(asset for asset in self.page_assets() if asset.endswith(".css"))]:
-            _, _, body = self.get(path)
-            for external in (b"https://", b"http://", b"@import"):
-                with self.subTest(path=path, external=external):
-                    self.assertNotIn(external, body)
+        for external in (b"https://", b"http://", b"@import"):
+            with self.subTest(external=external):
+                self.assertNotIn(external, body)
 
     def test_the_policy_allows_no_style_attribute_and_no_untrusted_markup(self):
         # styles are set through the CSSOM, which a CSP doesn't block; markup only through the policies named

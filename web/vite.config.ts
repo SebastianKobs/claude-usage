@@ -68,14 +68,16 @@ function manifest(): Plugin {
 }
 
 // One ES module without hashes, and its CSS as one file, into the package's static folder, which the
-// Python server serves from a fixed list: no chunks, no source maps, no public folder. The licenses file isn't
-// served (the server serves only scripts and stylesheets) but ships with the package.
+// Python server serves from a fixed list: no chunks, no source maps, no public folder. The CSS stays as written,
+// comments and all (its reasons are in them; a few kB unminified for a page served from this machine). The
+// licenses file isn't served (the server serves only scripts and stylesheets) but ships with the package.
 export default defineConfig({
   plugins: [svelte(), manifest()],
   build: {
     outDir: '../claude_usage/static',
-    emptyOutDir: false, // the folder holds the old scripts, the stylesheets and the page
+    emptyOutDir: false, // the folder holds the page
     sourcemap: false,
+    cssMinify: false,
     copyPublicDir: false,
     license: { fileName: 'js/app-licenses.md' }, // the bundled packages' licenses, shipped with the bundle
     lib: {

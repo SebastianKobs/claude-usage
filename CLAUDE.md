@@ -19,8 +19,8 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
     goes with it, through `pagePerTest` where it needs the app's state.
   - The logic lives in plain `.ts` modules that the components only draw (tested without a DOM where it needs none);
     text goes into the DOM as text, and a new place a string becomes markup needs a Trusted Types policy the CSP names.
-  - 120 columns, no prettier; `make build` after a source changes, and the bundle and `web/build.json` are committed
-    with it (`src/build.test.ts` fails otherwise).
+  - 120 columns, no prettier; `make build` after a source changes (a stylesheet too), and the bundle, its stylesheet
+    and `web/build.json` are committed with it (`src/build.test.ts` fails otherwise).
 - **Tests:** `make test` runs `python3 -m unittest discover -s tests`, then the page's svelte-check, Vitest and the
   browser check where `web/node_modules` exists (`make build` installs it); the Python tests never need node.
   - The Python tests test the server and its API, Vitest and the browser check the page. Where the two meet, the
@@ -105,9 +105,8 @@ claude_usage/
   static/                    the page: a Svelte app built from web/, inline SVG, no external resources
     dashboard.html           the head (with the tab icon, `icons/app.png` inline) and an empty `<main>` the app
                              mounts on
-    css/common.css           layout and components, for every theme
-    css/themes/              one file per theme (light, dark, hacker, startup, rgb); the gimmicks share dark's
-                             palette, fun.css their other rules
+    css/app.css              the stylesheets built from web/src/styles (make build, committed), as written, in
+                             main.ts's order
     js/app.js                the bundle built from web/ (make build, committed), the page's only script: a module
                              that mounts `App` on `<main>`; app-licenses.md the licenses of the packages it holds
                              (Svelte, and the libraries below)
@@ -121,7 +120,12 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
                              `fragments: 'tree'`); `playwright.config.ts` runs the browser check
   browser/                   the browser check: `demo.ts` serves the demo, `page.ts` the test that fails on the
                              page's complaints and the steps through the demo, `console.spec.ts` and `axe.spec.ts`
-  src/main.ts                mounts `App` on `<main>`
+  src/main.ts                mounts `App` on `<main>`, and imports the stylesheets in their order
+  src/styles/                common.css (layout and components, for every theme) and themes/, one file per theme
+                             (light, dark, hacker, startup, rgb; the gimmicks share dark's palette, fun.css their other
+                             rules), which the build joins into css/app.css; themes.test.ts: every variable the page
+                             reads defined in every theme, dark the same picked or automatic, the gimmicks on its
+                             palette
   src/build.test.ts          the build: the bundle built from the files as they are (build.json), what it holds and
                              asks for, the links in it only text, its Trusted Types policies the contract's, the
                              compiler's settings and the exact versions; src/sources.test.ts the rules over the
@@ -251,8 +255,8 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
                              marked and DOMPurify from npm, each through a Trusted Types policy (`highlight`, and
                              DOMPurify's own) which the CSP names
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
-                             module; test_contract.py checks the server against web/contract.json, test_static.py
-                             the stylesheets' themes (the page's behaviour is Vitest's); demo.py
+                             module; test_contract.py checks the server against web/contract.json (the page is
+                             Vitest's and the browser check's); demo.py
                              builds the demo for the screenshots and serves it (make demo)
 .claude/hooks/project-guard/  the guard hook: a git submodule, see its README and CLAUDE.md
 .vscode/settings.json        the Svelte extension's TypeScript plugin on (off by default), so VS Code's TypeScript

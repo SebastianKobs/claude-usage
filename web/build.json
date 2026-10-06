@@ -53,7 +53,7 @@
     "web/src/live/LiveIcon.svelte": "f5e6c268b0bd9da88f6fa84632ebf88bf37c69136ad41e6fca4de4e5cf7d6baf",
     "web/src/live/LiveSessions.svelte": "006fed12842d9fce89f9a9f8ac97c8b7116fbdd60cfb2a9e897e3ba7684b0ac3",
     "web/src/live/live.ts": "d010e0a130d8078aa5c8a6565717e4bada8e479eec4cb2ad02a558ca5845cc0a",
-    "web/src/main.ts": "34482b15a4a60519253d8e67f8db0e7c56d0b9eeb15c0124bdc8a1e0ad21fe42",
+    "web/src/main.ts": "371aa5168398049429fa67944147d071cac8e3252085e7334d963e4aacb75f63",
     "web/src/overview/ByModel.svelte": "83350ff558701327efda81e741c9f0ac41ca602c486814344ae570eca2515fe4",
     "web/src/overview/CostPerSession.svelte": "0ae42d863b437323e5870ea5f092cc1932670b67ebe02022352c242dd4937ead",
     "web/src/overview/EventsTable.svelte": "f859b86fb3f03839e02cb15e2111b9c059fd096d6e93ba579159071cdd294ebb",
@@ -75,6 +75,13 @@
     "web/src/session/opening.ts": "a88ceed4e028873b66fee5fde3d07bc8455f4994218d0c95ce5c54aec8c056d8",
     "web/src/session/secrets.ts": "098fb1b6a5112ecff39065172d58e3e5bca3645141978e226955e0566103654f",
     "web/src/session/session.ts": "df5d4ae452ac5b779384d27379fd8d89137aa071761420315d7f43585bd09b19",
+    "web/src/styles/common.css": "6d008027ac4f643eeedcef3a74ff3ce797faa15277fb196c059e1e6a73000264",
+    "web/src/styles/themes/dark.css": "484df6ab5de777e5a793e364a783f7f99a75f968a2fdc4f86fa8ce04cbc1e7f6",
+    "web/src/styles/themes/fun.css": "9d41573d84336e9c9b9454202928594bbced5ca45d2be7027cb29914fa5681f7",
+    "web/src/styles/themes/hacker.css": "f9584e93c146ff6593923846f567a64f826d59b002de9212afba07a1fca29bbc",
+    "web/src/styles/themes/light.css": "f2a1fc8b939a7a13da6ba2dfcd2b0f3bfa98dcca0237db3feef8d38d5c68c8f6",
+    "web/src/styles/themes/rgb.css": "49ac6c59c2b4815711c8e89fa64b76e6770e39aab78eed3213bc5b8128086f0c",
+    "web/src/styles/themes/startup.css": "0dd4604aab1fc9494d3bb707c87fada7ca2a422603432ceeb75a9d697b41c9a1",
     "web/src/tiles/InputSplit.svelte": "f805e002da56150d3fbee09d146be79a92ad76f70fc4a5f1c6848bcb63489656",
     "web/src/tiles/KpiTiles.svelte": "4b614a6208843dee1b4d888c7d53163cdee9a895ec3793ebe40a42bcb22883cb",
     "web/src/tiles/RuntimeTiles.svelte": "ca987e813a85e8fcf4c6a6c278dda822acdb093bdf92c18522f5207259c54d6f",
@@ -92,9 +99,10 @@
     "web/src/ui/tables.ts": "51a5179c2401b600700fbecb0e6dafa377ae483f6ecd115d6fba0d9fedf6a504",
     "web/svelte.config.js": "ae0419e50da9a27b55fba71fe33dfecaf71ed84f90b5ec2277a7132ff5411d2b",
     "web/tsconfig.json": "f7feb9aa379ebcfdb3254094d4cb03106cd4be0a8f083521e3ff4eae9106aa14",
-    "web/vite.config.ts": "c61872e1aa8d2abd93f4bbdc7750c3e7b4361d5fe3519e54342fb81ff623727a"
+    "web/vite.config.ts": "284324cb97ba62bac94db0161102b47eb891dd5e72c1983f65f95d17faf618b2"
   },
   "outputs": {
+    "claude_usage/static/css/app.css": "71e740bff39cd492ec083058dac59330d9090869ae322da97335ffe0e29060e9",
     "claude_usage/static/js/app-licenses.md": "3c525a4396da2826db8d4a28b199cc76422a91de952802ae471d7e3caeb749ce",
     "claude_usage/static/js/app.js": "c6e3cdad83dc1995f9e0c190f07607dfb8ec125302131187ba62cfb49049c78e"
   }

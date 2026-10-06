@@ -1,0 +1,637 @@
+/* The light theme, and the defaults of every color role the page uses. */
+
+/* Color roles from the validated reference palette (dataviz skill, references/palette.md). The categorical order
+   passes the adjacent CVD and normal-vision checks in both modes; three light slots are below 3:1 contrast, so
+   the chart always has a legend and a table view. */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #6f6e69;          /* darker than the reference palette's #898781, for 4.5:1 on small text */
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --wash: rgba(11, 11, 11, 0.04);
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+  --series-5: #e87ba4; --series-6: #008300; --series-7: #4a3aa7; --series-8: #e34948;
+  --series-other: #898781;
+  --status-good: #0ca30c;
+  --status-critical: #d03b3b;
+  --status-warning: #fab219;
+  --hint-warning-edge: #a86f00;  /* the warning hue, darkened to clear 3:1 as an edge on the light surface */
+  --gain-text: #0a7d0a;          /* ≥ 4.7:1 on the surface, the page and the hover wash */
+  --loss-text: #b53030;          /* ≥ 5.4:1 there */
+  --hint-critical-edge: #d03b3b;  /* 4.3:1 on the warning wash; dark mode lightens it to clear 3:1 */
+  --split-strong: #184f95;
+  --split-soft: #3987e5;
+  /* the context chart's parts, cache read to new input: blue 400, 550, 700, validated as an ordinal ramp */
+  --context-read: #3987e5; --context-write: #1c5cab; --context-new: #0d366b;
+  /* effort shades: each model's color mixed toward --shade-ink by its step per effort level, steps sized for a
+     lightness gap of 0.065 (validated with --ordinal; every shade clears 3:1 but slots 3-5 at their own color) */
+  /* code in the conversation: highlight.js's classes on the wash, every token >= 4.5:1 as text */
+  --code-keyword: #4a3aa7; --code-string: #006d00; --code-number: #b04c24; --code-comment: #5f5e59;
+  --code-title: #1c5cab; --code-attr: #7e4057; --code-addition: #006d00; --code-deletion: #a63332;
+  --shade-ink: #000000;
+  --shade-step-1: 11.3%; --shade-step-2: 9.7%; --shade-step-3: 9.7%; --shade-step-4: 13%; --shade-step-5: 9.1%;
+  --shade-step-6: 12.3%; --shade-step-7: 15%; --shade-step-8: 10.4%; --shade-step-other: 10.4%;
+}
+/* The dark theme: for "auto" on a dark system, and when picked. */
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8e8c86;          /* lighter than the reference palette's #898781, for 4.5:1 on the wash */
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --wash: rgba(255, 255, 255, 0.05);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+    --series-other: #6b6a64;
+    --split-strong: #86b6ef;
+    --split-soft: #256abf;
+    --context-read: #256abf; --context-write: #5598e7; --context-new: #9ec5f4;
+    --hint-warning-edge: #fab219;
+    --hint-critical-edge: #e05a5a;
+    --gain-text: #4fbf4f;
+    --loss-text: #ef7070;
+    /* effort shades: mixed toward white, away from the dark surface; every shade clears 3:1 */
+    /* code in the conversation: every token >= 4.5:1 on the wash of the dark and fun themes */
+    --code-keyword: #b9b5f4; --code-string: #7eb779; --code-number: #ec9577; --code-comment: #a3a29b;
+    --code-title: #80b2f1; --code-attr: #f1adc0; --code-addition: #7eb779; --code-deletion: #f5a5a1;
+    --shade-ink: #ffffff;
+    --shade-step-1: 17.2%; --shade-step-2: 17.2%; --shade-step-3: 17.2%; --shade-step-4: 19.7%; --shade-step-5: 17.2%;
+    --shade-step-6: 13.8%; --shade-step-7: 19.7%; --shade-step-8: 19.7%; --shade-step-other: 13.6%;
+  }
+}
+/* The same palette when picked, and under the gimmick themes: they restyle the chrome (their files come later) and
+   keep these validated series, split, hint and code colors, so the numbers stay readable. Keep it equal to the block
+   above (a test checks). */
+:root[data-theme="dark"], :root[data-theme="hacker"], :root[data-theme="startup"], :root[data-theme="rgb"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #8e8c86;          /* lighter than the reference palette's #898781, for 4.5:1 on the wash */
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --wash: rgba(255, 255, 255, 0.05);
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+  --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+  --series-other: #6b6a64;
+  --split-strong: #86b6ef;
+  --split-soft: #256abf;
+  --context-read: #256abf; --context-write: #5598e7; --context-new: #9ec5f4;
+  --hint-warning-edge: #fab219;
+  --hint-critical-edge: #e05a5a;
+  --gain-text: #4fbf4f;
+  --loss-text: #ef7070;
+  --code-keyword: #b9b5f4; --code-string: #7eb779; --code-number: #ec9577; --code-comment: #a3a29b;
+  --code-title: #80b2f1; --code-attr: #f1adc0; --code-addition: #7eb779; --code-deletion: #f5a5a1;
+  --shade-ink: #ffffff;
+  --shade-step-1: 17.2%; --shade-step-2: 17.2%; --shade-step-3: 17.2%; --shade-step-4: 19.7%; --shade-step-5: 17.2%;
+  --shade-step-6: 13.8%; --shade-step-7: 19.7%; --shade-step-8: 19.7%; --shade-step-other: 13.6%;
+}
+/* What the gimmick themes share. */
+
+/* Gimmick themes ("Just for fun" in the theme picker). Each restyles the chrome around the data in its own file; the
+   series and the other data colors are dark.css's. */
+
+/* the live cards' icons glow faintly in their own color, like the live dot, without drawing more eye than it */
+[data-theme="hacker"] .live-icon svg, [data-theme="startup"] .live-icon svg, [data-theme="rgb"] .live-icon svg {
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="hacker"] *, [data-theme="hacker"] *::after, [data-theme="rgb"] *, [data-theme="startup"] * {
+    animation: none !important;
+  }
+}
+/* Terminal hacker: phosphor green on black, amber labels, monospace, shell-prompt headings */
+:root[data-theme="hacker"] {
+  --page: #000000;
+  --surface: #030805;
+  --text-primary: #c6ffe2;
+  --text-secondary: #7fdcae;
+  --text-muted: #4f9b76;
+  --grid: #0e2a1b;
+  --axis: #1d4a33;
+  --border: rgba(0, 255, 156, 0.35);
+  --wash: rgba(0, 255, 156, 0.08);
+  --term-green: #00ff9c;
+  --term-amber: #ffb000;
+}
+[data-theme="hacker"] body { font-family: ui-monospace, "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace; }
+[data-theme="hacker"] body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 10;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.28) 2px 3px);
+}
+[data-theme="hacker"] h1 { color: var(--term-green); text-shadow: 0 0 8px rgba(0, 255, 156, 0.6); }
+[data-theme="hacker"] h1::before { content: "$ "; color: var(--term-amber); }
+[data-theme="hacker"] h1::after { content: "█"; margin-left: 4px; animation: term-blink 1s steps(1) infinite; }
+[data-theme="hacker"] h2::before { content: "> "; color: var(--term-amber); }
+[data-theme="hacker"] .card { border-radius: 0; border-color: var(--border); box-shadow: inset 0 0 24px rgba(0, 255, 156, 0.05); }
+[data-theme="hacker"] .label { color: var(--term-amber); }
+[data-theme="hacker"] .hero, [data-theme="hacker"] .tile-value {
+  color: var(--term-green); text-shadow: 0 0 10px rgba(0, 255, 156, 0.55);
+}
+[data-theme="hacker"] button, [data-theme="hacker"] select,
+[data-theme="hacker"] input[type="search"] { border-radius: 0; border-color: var(--border); }
+[data-theme="hacker"] button[aria-pressed="true"] { background: var(--term-green); color: #000000; }
+[data-theme="hacker"] .dot { background: var(--term-green); box-shadow: 0 0 8px var(--term-green);
+  animation: term-blink 1s steps(1) infinite; }
+@keyframes term-blink { 50% { opacity: 0; } }
+[data-theme="hacker"] .chart svg path[stroke] {
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.35));
+}
+/* Startup flex: black and white, frosted cards with a thin violet-to-blue edge, small mono labels */
+:root[data-theme="startup"] {
+  --page: #000000;
+  --surface: #0a0a0c;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #85858e;
+  --grid: #1f1f23;
+  --axis: #2e2e33;
+  --border: rgba(255, 255, 255, 0.10);
+  --wash: rgba(255, 255, 255, 0.05);
+  --flex-violet: #7c5cff;
+  --flex-blue: #3b82f6;
+}
+[data-theme="startup"] body {
+  background: radial-gradient(900px 420px at 50% -8%, rgba(124, 92, 255, 0.28), transparent 70%), var(--page);
+  background-attachment: fixed;
+}
+[data-theme="startup"] h1, [data-theme="startup"] h2 { letter-spacing: -0.02em; }
+[data-theme="startup"] .card {
+  border: 1px solid transparent; border-radius: 14px;
+  background: linear-gradient(rgba(10, 10, 12, 0.82), rgba(10, 10, 12, 0.82)) padding-box,
+              linear-gradient(135deg, rgba(124, 92, 255, 0.7), rgba(59, 130, 246, 0.25) 40%, rgba(255, 255, 255, 0.06)) border-box;
+  backdrop-filter: blur(12px);
+}
+[data-theme="startup"] .label {
+  font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-muted);
+}
+[data-theme="startup"] .hero {
+  font-weight: 600; letter-spacing: -0.04em;
+  background: linear-gradient(180deg, #ffffff, #a1a1aa); -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+[data-theme="startup"] button, [data-theme="startup"] select,
+[data-theme="startup"] input[type="search"] { border-radius: 8px; background: #111114; }
+[data-theme="startup"] button:hover, [data-theme="startup"] select:hover,
+[data-theme="startup"] input[type="search"]:hover { border-color: var(--flex-violet); }
+[data-theme="startup"] button[aria-pressed="true"] { border-color: var(--flex-violet); color: #ffffff;
+  box-shadow: 0 0 0 1px var(--flex-violet); }
+[data-theme="startup"] .dot { background: var(--flex-violet); box-shadow: 0 0 10px var(--flex-violet); }
+/* RGB battlestation: navy, a cycling magenta/cyan/lime edge like a gaming keyboard, a glitching hero number */
+:root[data-theme="rgb"] {
+  --page: #050716;
+  --surface: #0b0f2e;
+  --text-primary: #ffffff;
+  --text-secondary: #c7d2fe;
+  --text-muted: #8b93c9;
+  --grid: #1a2050;
+  --axis: #2b3378;
+  --border: rgba(0, 229, 255, 0.35);
+  --wash: rgba(0, 229, 255, 0.10);
+  --rgb-magenta: #ff00e5;
+  --rgb-cyan: #00e5ff;
+  --rgb-lime: #aaff00;
+}
+[data-theme="rgb"] body {
+  background: radial-gradient(1000px 560px at 0% -10%, rgba(255, 0, 229, 0.20), transparent 60%),
+              radial-gradient(900px 520px at 100% 0%, rgba(0, 229, 255, 0.18), transparent 60%), var(--page);
+  background-attachment: fixed;
+}
+[data-theme="rgb"] h1 {
+  font: 900 30px/1.1 Impact, Haettenschweiler, "Arial Narrow Bold", system-ui, sans-serif;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  background: linear-gradient(90deg, var(--rgb-magenta), var(--rgb-cyan), var(--rgb-lime), var(--rgb-magenta));
+  background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: rgb-text 6s linear infinite;
+}
+[data-theme="rgb"] h2 { text-transform: uppercase; letter-spacing: 0.05em; font-weight: 800; }
+[data-theme="rgb"] .card {
+  border: 2px solid transparent;
+  background: linear-gradient(var(--surface), var(--surface)) padding-box,
+              linear-gradient(90deg, var(--rgb-magenta), var(--rgb-cyan), var(--rgb-lime), var(--rgb-magenta)) border-box;
+  background-size: 100% 100%, 300% 100%;
+  animation: rgb-edge 6s linear infinite;
+  box-shadow: 0 0 22px rgba(0, 229, 255, 0.18);
+}
+[data-theme="rgb"] .label { color: var(--rgb-lime); text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; }
+[data-theme="rgb"] .hero {
+  font: 900 56px/1.05 Impact, Haettenschweiler, "Arial Narrow Bold", system-ui, sans-serif; color: #ffffff;
+  text-shadow: 2px 0 var(--rgb-magenta), -2px 0 var(--rgb-cyan);
+  animation: rgb-glitch 3.2s steps(1) infinite;
+}
+[data-theme="rgb"] .tile-value { font-weight: 900; text-shadow: 0 0 14px rgba(0, 229, 255, 0.6); }
+[data-theme="rgb"] .dot { background: #ff0033; box-shadow: 0 0 10px #ff0033; animation: rgb-pulse 1.2s infinite; }
+[data-theme="rgb"] button, [data-theme="rgb"] select, [data-theme="rgb"] input[type="search"] {
+  border-radius: 999px; border-color: var(--rgb-magenta); font-weight: 700;
+  box-shadow: 0 0 12px rgba(255, 0, 229, 0.35);
+}
+[data-theme="rgb"] button[aria-pressed="true"] { background: var(--rgb-magenta); color: #050716; }
+[data-theme="rgb"] .tooltip { border-color: var(--rgb-cyan); box-shadow: 0 0 18px rgba(0, 229, 255, 0.35); }
+[data-theme="rgb"] .chart svg path[stroke] {
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.35));
+}
+@keyframes rgb-edge { to { background-position: 0 0, 300% 0; } }
+@keyframes rgb-text { to { background-position: 300% 0; } }
+@keyframes rgb-pulse { 50% { transform: scale(1.35); opacity: 0.6; } }
+@keyframes rgb-glitch {
+  0%, 88%, 100% { transform: none; text-shadow: 2px 0 var(--rgb-magenta), -2px 0 var(--rgb-cyan); }
+  90% { transform: translateX(-3px) skewX(-6deg); text-shadow: -4px 0 var(--rgb-magenta), 4px 0 var(--rgb-cyan); }
+  93% { transform: translateX(2px); text-shadow: 3px 1px var(--rgb-lime), -3px -1px var(--rgb-magenta); }
+}
+/* Layout and components, for every theme; the themes only set the color roles and restyle the chrome. */
+
+:root { --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+h1 { font-size: 20px; font-weight: 600; margin: 0; }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+h3 { font-size: 14px; font-weight: 600; margin: 16px 0 8px; }
+a { color: inherit; }
+.muted { color: var(--text-muted); }
+.secondary { color: var(--text-secondary); }
+.spacer { flex: 1; }
+button {
+  font: inherit; color: var(--text-primary); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+}
+button:hover { background: var(--wash); }
+button:disabled { opacity: 0.45; cursor: default; background: var(--surface); }
+select {
+  font: inherit; color: var(--text-primary); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer;
+}
+input[type="search"] {
+  font: inherit; color: var(--text-primary); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; min-width: min(18em, 100%);
+}
+input[type="search"]::placeholder { color: var(--text-muted); opacity: 1; }
+.theme-picker { display: inline-flex; align-items: center; gap: 6px; }
+button[aria-pressed="true"] { font-weight: 600; border-color: var(--text-secondary); }
+.filters { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.segmented { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.day-nav { display: inline-flex; gap: 4px; align-items: center; margin-right: 8px; }
+.filters[hidden] { display: none; }
+/* wide enough for the longest date, so the arrows don't move while stepping */
+.day-nav output { min-width: 11ch; text-align: center; font-variant-numeric: tabular-nums; }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; margin-bottom: 16px; min-width: 0;
+}
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 16px; }
+.grid-2 > .card { margin-bottom: 0; }
+.stack { margin-bottom: 16px; }
+.banner { border-left: 3px solid var(--status-critical); padding: 8px 12px; margin-bottom: 16px;
+  background: var(--surface); white-space: pre-line; overflow-wrap: anywhere; }
+.banner:empty { display: none; }
+.kpis > .empty { grid-column: 1 / -1; }
+/* a section that couldn't be drawn (SectionGuard): edged like the banner that names it, across a row of tiles */
+.draw-failed { border-left: 3px solid var(--status-critical); }
+.draw-failed p { margin: 0 0 8px; overflow-wrap: anywhere; }
+.kpis > .draw-failed { grid-column: 1 / -1; }
+
+/* figures */
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .kpis { grid-template-columns: minmax(0, 1fr); } }
+.kpis .card { margin-bottom: 0; }
+.label { color: var(--text-secondary); font-size: 13px; }
+.hero { font-size: 48px; font-weight: 600; line-height: 1.1; margin-top: 4px; }
+.tile-value { font-size: 24px; font-weight: 600; margin-top: 4px; }
+.note { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+.split { display: flex; gap: 2px; height: 8px; margin: 10px 0 6px; }
+.split span { min-width: 3px; }
+.split span:first-child { border-radius: 4px 0 0 4px; }
+.split span:last-child { border-radius: 0 4px 4px 0; }
+.split span:only-child { border-radius: 4px; }
+.split-row { display: grid; grid-template-columns: 10px 1fr repeat(3, max-content); column-gap: 8px;
+  align-items: baseline; font-size: 12px; margin-top: 3px; cursor: default; }
+.split-row .swatch { margin-right: 0; }
+.split-number { text-align: right; font-variant-numeric: tabular-nums; }
+
+
+/* live */
+.live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+.live-card { border: 1px solid var(--border); border-radius: 8px; padding: 12px; background: var(--page); }
+.live-card .title { font-weight: 600; overflow-wrap: anywhere; }
+.live-card .numbers { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+.live-card .numbers div span { display: block; }
+.live-card ul { margin: 8px 0 0; padding-left: 18px; }
+/* waiting for the user (liveWaitBadge), the security and the compact state (liveStateBadges) as small icons by the
+   title, in the session view's mark colors; a badge without a tone stays secondary */
+.live-head { display: flex; align-items: flex-start; gap: 8px; }
+.live-head .title { flex: 1; min-width: 0; }
+.live-states { display: flex; gap: 6px; flex: none; }
+.live-icon { display: inline-flex; width: 20px; height: 20px; color: var(--text-secondary); cursor: help; }
+.live-icon svg { width: 100%; height: 100%; }
+.live-icon-soon { color: var(--gain-text); }
+.live-icon-close, .live-icon-medium { color: var(--hint-warning-edge); }
+.live-icon-unlikely, .live-icon-high { color: var(--hint-critical-edge); }
+/* waiting for the user's answer: blue, since nothing is wrong (≥ 3:1 on the card in every theme) */
+.live-icon-waiting { color: var(--series-1); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--status-good);
+  margin-right: 6px; vertical-align: middle; }
+
+/* chart */
+.chart-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 8px; color: var(--text-secondary);
+  font-size: 13px; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px;
+  vertical-align: -1px; }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart .hit { fill: transparent; cursor: default; outline: none; }
+/* the cursor layer stays clear: the crosshair, or a column's highlight, shows where it is */
+.chart .column-mark { fill: var(--wash); pointer-events: none; }
+/* the keyboard focus: an outline around the plot, the cursor layer being clear */
+.chart .hit:focus-visible { stroke: var(--text-secondary); stroke-width: 2; }
+.crosshair { stroke: var(--text-muted); stroke-width: 1; }
+.reference-line { stroke: var(--text-secondary); stroke-width: 1; stroke-dasharray: 2 3; }
+.compaction-rule { stroke: var(--text-muted); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.legend-rule { display: inline-block; width: 0; height: 10px; margin: 0 6px -1px 4px;
+  border-left: 2px dashed var(--text-muted); }
+.gauge-card { margin: 16px 0 0; }
+.gauge { position: relative; height: 8px; margin: 10px 0 6px; border-radius: 4px; background: var(--grid); }
+.gauge-fill { position: absolute; left: 0; top: 0; bottom: 0; min-width: 3px; border-radius: 4px;
+  background: var(--split-strong); }
+.gauge-hint { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px;
+  background: var(--text-secondary); }
+/* the estimate of compacting now: full-size text set off by a hairline, quieter than the gauge's value; only the
+   pay-off phrase in the primary color */
+.compact-estimate { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--border);
+  color: var(--text-secondary); line-height: 1.5; }
+.compact-estimate strong { color: var(--text-primary); }
+/* how soon it pays off, before the pay-off phrase; the words after it carry the tone */
+.payoff-mark { display: inline-block; width: 0.7em; height: 0.7em; margin-right: 6px; border-radius: 50%; }
+.payoff-soon { background: var(--gain-text); }
+.payoff-close { background: var(--hint-warning-edge); }
+.payoff-unlikely { background: var(--hint-critical-edge); }
+.payoff-later { background: var(--text-secondary); }
+.panel-title { fill: var(--text-secondary); font-size: 12px; }
+.axis-text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.value-text { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tooltip {
+  position: absolute; pointer-events: none; z-index: 2; min-width: 170px; padding: 8px 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); font-size: 12px;
+}
+.tooltip[hidden] { display: none; }
+.tooltip .when { color: var(--text-secondary); margin-bottom: 4px; }
+.tooltip .row { display: flex; align-items: center; gap: 8px; }
+.tooltip .row strong { font-variant-numeric: tabular-nums; min-width: 64px; }
+.tooltip .key { display: inline-block; width: 12px; height: 2px; border-radius: 1px; }
+.tooltip .name { color: var(--text-secondary); }
+.tooltip .swatch { margin-right: 0; }
+
+/* ranked bars: one row per session, a link to its drilldown; the row is the hit target */
+.bars { display: grid; gap: 2px; }
+.bar-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 64px; column-gap: 12px;
+  align-items: center; padding: 4px 6px; border-radius: 6px; color: inherit; text-decoration: none; }
+.bar-row:hover, .bar-row:focus-visible { background: var(--wash); }
+.bar-row:focus-visible { outline: 2px solid var(--text-secondary); outline-offset: -2px; }
+.bar-name { min-width: 0; }
+.bar-name strong { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar { display: flex; gap: 2px; height: 12px; }
+.bar span { min-width: 3px; }
+.bar span:last-child { border-radius: 0 4px 4px 0; }     /* the data end; the baseline end stays square */
+.bar-value { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+@media (max-width: 560px) { .bar-row { grid-template-columns: minmax(0, 1fr) 64px; }
+  .bar-row .bar-track { grid-column: 1 / -1; grid-row: 2; margin-top: 4px; } }
+
+/* tables */
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+/* sticky: it stays in view while a wide table scrolls sideways */
+.pager { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 13px;
+         position: sticky; left: 0; }
+.pager span { font-variant-numeric: tabular-nums; }
+/* a table's heading with its pager, right-aligned; the heading keeps its margins, the pager sits on its baseline */
+.title-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; }
+.title-row .pager { margin-left: auto; margin-bottom: 0; position: static; }
+/* a table's filters, between its heading and the table; a long project path doesn't widen the page */
+.table-filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 8px; }
+.table-filters select { max-width: 100%; text-overflow: ellipsis; }
+th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--text-secondary); font-weight: 500; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tbody tr:hover { background: var(--wash); }
+.sub { display: block; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.loading { opacity: 0.55; transition: opacity 0.2s; }
+.empty { color: var(--text-muted); padding: 8px 0; }
+.prompt { color: var(--text-secondary); font-style: italic; overflow-wrap: anywhere; }
+footer { color: var(--text-muted); font-size: 12px; margin-top: 24px; }
+/* the tile rows inside a session's view */
+.session-kpis { margin-top: 12px; }
+/* a session's conversation: text tokens only, the roles told apart by label and a rule, not by color alone */
+.chat { display: flex; flex-direction: column; gap: 8px; }
+/* the conversation apart from the tables around it; its head stays in view while scrolling through it */
+.chat-section { margin: 24px 0; border: 1px solid var(--border); border-top: 3px solid var(--text-secondary);
+  border-radius: 10px; padding: 0 16px 6px; }
+.chat-section-head { position: sticky; top: 0; z-index: 2; background: var(--surface); padding: 10px 0;
+  border-bottom: 1px solid var(--border); }
+#chat { margin: 12px 0 10px; }
+.chat-section-head h3 { margin: 0; font-size: 16px; }
+.chat-section-head button[hidden] { display: none; }
+#chat:empty { display: none; }
+/* the way past the conversation for a keyboard: out of sight until it has focus */
+.skip-link:not(:focus) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.chat-end:focus { outline: none; }
+#chat-order { min-width: 2.4em; font-size: 16px; line-height: 1.2; font-weight: 600; }
+.chat-order-arrow { display: inline-block; transition: transform 0.2s ease; }
+#chat-order[aria-pressed="true"] .chat-order-arrow { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .chat-order-arrow { transition: none; } }
+.chat-entry { padding: 8px 12px; border-radius: 8px; border-left: 3px solid var(--border); }
+.chat-user { background: var(--wash); border-left-color: var(--split-strong); }
+.chat-head { display: flex; gap: 8px; align-items: baseline; font-size: 13px; margin-bottom: 4px; }
+.chat-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-thinking summary, .chat-tool summary { cursor: pointer; }
+/* the head beside the disclosure triangle, not under it (a block would put the triangle on a line of its own) */
+.chat-thinking summary .chat-head { display: inline-flex; margin-bottom: 0; }
+.chat-thinking .chat-text { color: var(--text-secondary); margin-top: 4px; }
+.chat-tool { padding: 4px 12px; font-size: 13px; overflow-wrap: anywhere; }
+.chat-tool pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; margin: 4px 0 8px;
+                 padding: 8px; background: var(--wash); border-radius: 6px; font-size: 12px; }
+.chat-marker { text-align: center; color: var(--text-muted); font-size: 12px; padding: 4px 0; }
+/* a model's row and its usage per effort level below it */
+.group-row td:first-child { font-weight: 600; }
+.sub-row td { color: var(--text-secondary); }
+.sub-row .effort, .sub-row .tool-kind, .sub-row .window-model { padding-left: 20px; }
+.sub-row .tool-detail { display: block; padding-left: 40px; }
+.sub-row .tool-options { display: block; padding-left: 60px; }
+.sub-row .tool-detail.under-tool { padding-left: 20px; }
+.sub-row .tool-options.under-tool { padding-left: 40px; }
+.workflow-member td:first-child { padding-left: 20px; }
+.link-button { border: none; background: none; padding: 0; color: inherit; text-decoration: underline;
+  cursor: pointer; font: inherit; }
+.link-button:hover { background: none; }
+/* the by-model tooltip: a line per model with its effort levels indented below, values in one right-aligned column */
+.tip-line { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; line-height: 1.5; }
+.tip-value { font-variant-numeric: tabular-nums; }
+.tip-model { color: var(--text-primary); font-weight: 600; }
+.tip-model:not(:nth-child(2)) { margin-top: 4px; }
+.tip-effort { color: var(--text-secondary); padding-left: 12px; }
+.tooltip .tip-effort .swatch { margin-right: 6px; }
+.tip-total { color: var(--text-primary); font-weight: 600; border-top: 1px solid var(--border); margin-top: 6px;
+  padding-top: 4px; }
+/* the by-model legend: a model's name, then its effort levels */
+.legend-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.legend-group strong { color: var(--text-primary); font-weight: 600; }
+/* an API call's usage under its last entry: a full-width band on the wash that separates one call from the next,
+   text tokens only, left-aligned, the cost in bold */
+.chat-usage { display: block; margin-top: 6px; padding: 4px 12px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--wash); color: var(--text-secondary); font-size: 12px; text-align: left;
+  font-variant-numeric: tabular-nums; }
+.chat-usage strong { color: var(--text-primary); font-weight: 600; font-size: 13px; }
+.chat-reminders { font-size: 12px; margin-bottom: 8px; }
+/* a tool call's parts, and highlight.js's token classes on the theme's code colors */
+.tool-description { color: var(--text-primary); margin: 6px 0 2px; overflow-wrap: anywhere; }
+.tool-fields { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; margin: 4px 0 8px; }
+.tool-fields dt { color: var(--text-secondary); }
+.tool-fields dd { margin: 0; overflow-wrap: anywhere; }
+.tool-fields dd pre { margin: 0; }
+.chat-tool code.hljs { font-family: var(--mono); }
+.hljs-keyword, .hljs-built_in, .hljs-type, .hljs-selector-tag, .hljs-doctag { color: var(--code-keyword); }
+.hljs-string, .hljs-regexp, .hljs-symbol, .hljs-template-tag, .hljs-link { color: var(--code-string); }
+.hljs-number, .hljs-literal, .hljs-bullet { color: var(--code-number); }
+.hljs-comment, .hljs-quote, .hljs-meta { color: var(--code-comment); font-style: italic; }
+.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class { color: var(--code-title); }
+.hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable, .hljs-params, .hljs-property {
+  color: var(--code-attr); }
+.hljs-addition { color: var(--code-addition); }
+.hljs-deletion { color: var(--code-deletion); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }
+/* Claude's answers as markdown: text tokens only, links in the strong split color (>= 4.5:1 in every theme) */
+.chat-markdown { overflow-wrap: anywhere; line-height: 1.5; }
+.chat-markdown > :first-child { margin-top: 0; }
+.chat-markdown > :last-child { margin-bottom: 0; }
+.chat-markdown p, .chat-markdown ul, .chat-markdown ol, .chat-markdown blockquote, .chat-markdown table,
+.chat-markdown pre { margin: 6px 0; }
+.chat-markdown h1, .chat-markdown h2, .chat-markdown h3, .chat-markdown h4, .chat-markdown h5, .chat-markdown h6 {
+  margin: 12px 0 4px; font-size: 14px; font-weight: 600; }
+.chat-markdown h1 { font-size: 17px; }
+.chat-markdown h2 { font-size: 15px; }
+.chat-markdown ul, .chat-markdown ol { padding-left: 22px; }
+.chat-markdown li + li { margin-top: 2px; }
+.chat-markdown blockquote { border-left: 3px solid var(--border); padding-left: 10px; color: var(--text-secondary); }
+.chat-markdown hr { border: 0; border-top: 1px solid var(--border); margin: 10px 0; }
+.chat-markdown a { color: var(--split-strong); }
+.chat-markdown :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--wash); font-size: 12px;
+  font-family: var(--mono); }
+.chat-markdown pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; padding: 8px;
+  background: var(--wash); border-radius: 6px; font-size: 12px; }
+.chat-markdown pre code.hljs { font-family: var(--mono); }
+.chat-markdown table { border-collapse: collapse; display: block; overflow-x: auto; }
+.chat-markdown th, .chat-markdown td { border: 1px solid var(--border); padding: 3px 8px; text-align: left; }
+.chat-markdown th { font-weight: 600; }
+/* hints to compact under a call's usage, in the reserved status colors: the soft one in warning amber, the one near
+   auto-compaction in critical red and larger. The status color tints the background and draws the edge; the text
+   stays in text tokens (>= 6:1 on the tints in every theme), and the icon and heading carry the meaning. */
+.compact-hint { margin-top: 8px; padding: 8px 12px; border: 1px solid var(--hint-warning-edge); border-left-width: 5px;
+  border-radius: 6px; background: color-mix(in srgb, var(--status-warning) 16%, var(--surface));
+  color: var(--text-secondary); font-size: 13px; }
+.compact-hint strong { display: block; margin-bottom: 2px; color: var(--text-primary); font-size: 14px; }
+.compact-auto { border-color: var(--status-critical); background: color-mix(in srgb, var(--status-critical) 14%,
+  var(--surface)); color: var(--text-primary); font-size: 14px; padding: 10px 14px; }
+.compact-auto strong { font-size: 16px; }
+/* a compaction's gain or loss against keeping: the sign and arrow carry it, the color follows */
+.verdict-gain { color: var(--gain-text); font-weight: 600; }
+.verdict-loss { color: var(--loss-text); font-weight: 600; }
+.compaction-total { margin-left: 12px; font-size: 14px; }
+/* compacting likely pays: a notch sterner than the soft hint, the critical edge on the warning wash */
+.compact-pays { border-color: var(--hint-critical-edge); color: var(--text-primary); font-size: 14px; }
+/* a reminder at a milestone past a hint already shown: a chip at the end of the usage badge, in the same tints */
+.compact-chip { display: inline-block; margin-left: 10px; padding: 0 8px; border: 1px solid var(--hint-warning-edge);
+  border-radius: 999px; background: color-mix(in srgb, var(--status-warning) 16%, var(--surface));
+  color: var(--text-primary); font-size: 12px; white-space: nowrap; }
+.compact-chip-auto { border-color: var(--status-critical);
+  background: color-mix(in srgb, var(--status-critical) 14%, var(--surface)); font-weight: 600; }
+/* a badge with a reminder takes the reminder's status tint and edge; the chip in it keeps only its bold text */
+.chat-usage-remind { border-color: var(--hint-warning-edge); border-left-width: 5px;
+  background: color-mix(in srgb, var(--status-warning) 16%, var(--surface)); }
+.chat-usage-remind-auto { border-color: var(--status-critical); border-left-width: 5px;
+  background: color-mix(in srgb, var(--status-critical) 14%, var(--surface)); }
+.compact-chip-pays { border-color: var(--hint-critical-edge); font-weight: 600; }
+.chat-usage-remind-pays { border-color: var(--hint-critical-edge); border-left-width: 5px;
+  background: color-mix(in srgb, var(--status-warning) 16%, var(--surface)); }
+.chat-usage-remind .compact-chip, .chat-usage-remind-auto .compact-chip, .chat-usage-remind-pays .compact-chip {
+  border: 0; background: none; padding: 0; font-weight: 600; }
+/* a cache rebuild: a neutral chip at the end of the usage badge, the icon and words carry it (no status color: it
+   costs, but needs no action) */
+.rebuild-chip { display: inline-block; margin-left: 10px; padding: 0 8px; border: 1px solid var(--border);
+  border-radius: 999px; background: var(--surface); color: var(--text-primary); font-size: 12px; white-space: nowrap; }
+/* hidden context added to a request: quieter than a tool call, as one comes before almost every call */
+.chat-injected { color: var(--text-secondary); font-size: 12px; }
+.chat-injected strong { color: var(--text-primary); font-weight: 600; }
+/* a prompt that was a slash command, as typed */
+.chat-command code { padding: 1px 6px; border-radius: 4px; background: var(--wash); font-size: 13px;
+  font-family: var(--mono); }
+.chat-user pre.code { background: var(--surface); }
+/* the session view's call to compact: the pays warning's tints, larger, with the copy button */
+.compact-call { margin: 16px 0 0; border: 1px solid var(--hint-critical-edge); border-left-width: 5px;
+  background: color-mix(in srgb, var(--status-warning) 16%, var(--surface)); color: var(--text-primary); }
+.compact-call strong { display: block; margin-bottom: 4px; font-size: 16px; }
+.compact-call p { margin: 4px 0; font-size: 14px; }
+.compact-call-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
+.compact-call-status { color: var(--text-secondary); font-size: 13px; }
+.compact-call-field { width: 9em; font: inherit; }
+/* the calls that named a possible secret location: the critical edge, and a heading on its wash with a ! mark */
+.secret-alert { margin: 16px 0 0; border: 1px solid var(--status-critical); border-left-width: 5px;
+  color: var(--text-primary); }
+.secret-alert-head { display: flex; align-items: center; gap: 10px; margin: -16px -16px 8px; padding: 10px 16px;
+  border-radius: 6px 9px 0 0; background: color-mix(in srgb, var(--status-critical) 14%, var(--surface));
+  font-size: 16px; }
+.secret-alert-icon { display: inline-grid; place-items: center; flex: none; width: 1.5em; height: 1.5em;
+  border: 2px solid var(--status-critical); border-radius: 50%; font-weight: 700; }
+.secret-alert p { margin: 4px 0; font-size: 14px; }
+.secret-path { font-family: var(--mono); overflow-wrap: anywhere; }
+.secret-via { display: block; color: var(--text-secondary); font-size: 13px; }
+/* the same calls folded when none was sent out: a plain card, edged in the warning color while one returned a
+   result */
+.secret-folded { margin: 16px 0 0; color: var(--text-primary); }
+.secret-folded-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.secret-folded-head { margin: 0; font-size: 15px; font-weight: 500; }
+.secret-folded p { margin: 4px 0; font-size: 14px; }
+.secret-folded .table-wrap { margin-top: 8px; }
+.secret-warning { border: 1px solid var(--hint-warning-edge); border-left-width: 5px; }
+/* how severe each call's reach is, before its words, which carry it */
+.secret-severity { display: inline-block; width: 0.7em; height: 0.7em; margin-right: 6px; border-radius: 50%; }
+.secret-severity-high { background: var(--hint-critical-edge); }
+.secret-severity-medium { background: var(--hint-warning-edge); }
+.secret-severity-low { background: var(--text-secondary); }
+.secret-severity-low-medium { background: var(--series-1); }        /* returned, but likely a test */
+/* what waits for you while a session is open: the live cards' waiting tone, nothing is wrong */
+.wait-notice { margin: 16px 0 0; border: 1px solid var(--series-1); border-left-width: 5px;
+  color: var(--text-primary); }
+.wait-line { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 14px; }
+.wait-line strong { font-size: 16px; }
+.wait-icon { display: inline-flex; flex: none; width: 22px; height: 22px; color: var(--series-1); }
+.wait-icon svg { width: 100%; height: 100%; }
+/* the hint to delegate exploration: advice, so the warning's edge without its wash */
+.delegate-call { margin: 16px 0 0; border: 1px solid var(--hint-warning-edge); border-left-width: 5px;
+  color: var(--text-primary); }
+.delegate-call strong { display: block; margin-bottom: 4px; font-size: 16px; }
+.delegate-call p { margin: 4px 0; font-size: 14px; }
+/*$vite$:1*/

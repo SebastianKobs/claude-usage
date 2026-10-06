@@ -20,5 +20,5 @@ packages = ["claude_usage"]
 version = {attr = "claude_usage.__version__"}
 
 [tool.setuptools.package-data]
-claude_usage = ["static/*.html", "static/css/*.css", "static/css/themes/*.css", "static/js/*.js", "static/js/*.md",
+claude_usage = ["static/*.html", "static/css/*.css", "static/js/*.js", "static/js/*.md",
                 "icons/*.png", "config.toml"]

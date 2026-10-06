@@ -13,6 +13,7 @@ const STALE = 'run make build: the bundle was built from other sources';
 // what the build reads besides the modules it bundles: the installed versions and every setting
 const SETTINGS = ['package.json', 'package-lock.json', 'tsconfig.json', 'svelte.config.js', 'vite.config.ts'];
 const BUNDLE = 'claude_usage/static/js/app.js';
+const STYLESHEET = 'claude_usage/static/css/app.css';
 // what the bundle holds of other packages, and their licenses
 const LICENSES = 'claude_usage/static/js/app-licenses.md';
 // what the bundle holds as text, not as resources: the pages Svelte's errors link to (only the prefix: each names its
@@ -71,8 +72,8 @@ describe('the build', () => {
     expect(outside).toEqual([]);
   });
 
-  test('records the bundle and its licenses', () => {
-    expect(Object.keys(recorded().outputs)).toEqual(expect.arrayContaining([BUNDLE, LICENSES]));
+  test('records the bundle, its licenses and its stylesheet', () => {
+    expect(Object.keys(recorded().outputs)).toEqual(expect.arrayContaining([BUNDLE, LICENSES, STYLESHEET]));
   });
 });
 
@@ -104,6 +105,13 @@ describe('the bundle', () => {
     // the CSP would block any load anyway
     const bundle = BUNDLE_LINKS.reduce((text, link) => text.replaceAll(link, ''), read(BUNDLE));
     for (const external of ['https://', 'http://', '@import']) expect(bundle).not.toContain(external);
+  });
+});
+
+describe('the stylesheet', () => {
+  test('loads nothing from elsewhere', () => {
+    const stylesheet = read(STYLESHEET);
+    for (const external of ['https://', 'http://', '@import', 'url(']) expect(stylesheet).not.toContain(external);
   });
 });
 
