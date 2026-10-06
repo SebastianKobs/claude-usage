@@ -16,7 +16,7 @@
     "web/src/app/prefs.svelte.ts": "2b5a454e1229f487277ec51ec2abfa4f75c971e1985d113a2282aef53bd47354",
     "web/src/app/range.svelte.ts": "8701a2b52a369dd3bc4dcf2f76128e5468c762efe3855e38ea6c817b07902886",
     "web/src/app/range.ts": "00256d1e5e26f23a1b5fe9993bd42cf2fd414b0e3988dfaa5ed6a27716ec714d",
-    "web/src/app/themes.ts": "483600cd7bbd466f051beec503c1f72052d93ccf0ad481b909ae746811582875",
+    "web/src/app/themes.ts": "02d3932d9ba7c1235eb460aa890bf06e4c43129e2de35425b17a94f9d62ede3b",
     "web/src/charts/AreaLine.svelte": "962503ddd079563119b9ec8f115a154f3e0c54949d42e4fdd901ca7ec959f2ff",
     "web/src/charts/Chart.svelte": "70980ed4ad432135d042828bca1013d4dd48306a50c5ca384934d497e2a8997c",
     "web/src/charts/ChartCard.svelte": "570d5846f11aca804669332357a369017bf33e1f6698b7b83c27aa4c41f147b8",

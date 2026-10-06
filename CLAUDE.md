@@ -125,7 +125,8 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
   src/build.test.ts          the build: the bundle built from the files as they are (build.json), what it holds and
                              asks for, the links in it only text, its Trusted Types policies the contract's, the
                              compiler's settings and the exact versions; src/sources.test.ts the rules over the
-                             sources that the CSP needs (no injected CSS, no style attribute)
+                             sources: none the CSP refuses (injected CSS, a style attribute, markup outside
+                             markup.ts), no "one-time", and every label the page themes worded in each gimmick theme
   build.json                 what the last build read and wrote, by sha256: src/build.test.ts says "run make
                              build" where the checkout differs
   contract.json              what the page expects of the server, written by `make contract` from src/api/contract.ts
@@ -167,8 +168,9 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
     banner.svelte.ts         the error banner's messages (`BannerMessages`): one per source, shown once when alike
     prefs.svelte.ts          the saved preferences (theme, page size, the conversation's order) as reactive state,
                              written back in their setters (`Preferences`), and `readPreference`/`savePreference`
-    themes.ts                the themes and the gimmick themes' wording (`test_static.py` reads its labels): which theme
-                             a saved choice names, what a label and the footer say in a theme
+    themes.ts                the themes and the gimmick themes' wording (`sources.test.ts` holds it to the labels the
+                             components theme): which theme a saved choice names, what a label and the footer say in a
+                             theme, the labels a theme words (`themedLabels`)
     range.ts                 the range filter's logic: the ranges on offer (cut to the retention), the query a range
                              becomes, the day the Daily range shows and where an arrow goes
     range.svelte.ts          the range shown (`RangeState`: the days and the Daily range's day, reactive, the choice

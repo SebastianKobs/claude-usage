@@ -10,8 +10,8 @@ const RENAMED_THEMES: Record<string, string> = { techbro: 'rgb' };
 /** A theme's wording: a label (as data-label or themed() gives it) to what it says there; `footer` ends the page. */
 type Copy = Record<string, string>;
 
-// Copy of the gimmick themes; everything not listed keeps its normal label. Double quotes, since test_static.py reads
-// the labels off these lines.
+// Copy of the gimmick themes; everything not listed keeps its normal label. Double quotes: the wording has
+// apostrophes.
 const COPY: Record<string, Copy> = {
   hacker: {
     "Claude usage": "claude-usage --watch",
@@ -128,6 +128,11 @@ function copyOf(theme: string | null): Copy {
 export function themeLabel(theme: string | null, label: string): string {
   const copy = copyOf(theme);
   return Object.hasOwn(copy, label) ? (copy[label] ?? label) : label;
+}
+
+/** The labels a theme words its own way (the footer is none). */
+export function themedLabels(theme: string): string[] {
+  return Object.keys(copyOf(theme)).filter((label) => label !== 'footer');
 }
 
 /** The sentence a gimmick theme adds to the page's footer, or empty. */
