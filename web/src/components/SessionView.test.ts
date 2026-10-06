@@ -8,6 +8,7 @@ import type { SecretAccess, SessionDetail, Waiting } from '../lib/api';
 import {
   agent,
   apiErrorEvent,
+  backgroundCalls,
   contextTurn,
   gauge,
   live,
@@ -40,7 +41,8 @@ function inRun(id: string) {
   });
 }
 
-/** A session with a model, the main thread and a helper, a skill and an MCP server, and an API error. */
+/** A session with a model, the main thread, a helper and the background calls, a skill and an MCP server, and an
+ *  API error. */
 function fullSession(changes: Partial<SessionDetail> = {}): SessionDetail {
   return sessionDetail({
     title: 'Checkout: split payment step',
@@ -50,7 +52,11 @@ function fullSession(changes: Partial<SessionDetail> = {}): SessionDetail {
     skills: [{ skill: 'review', ...usage({ cost: 1 }) }],
     mcp_servers: [{ mcp_server: 'index', ...usage({ cost: 2 }) }],
     api_errors: [apiErrorEvent()],
-    agents: [agent(), agent({ agent_id: 'a-1', agent_type: 'Explore', description: 'Find the callers' })],
+    agents: [
+      agent(),
+      agent({ agent_id: 'a-1', agent_type: 'Explore', description: 'Find the callers' }),
+      backgroundCalls(),
+    ],
     ...changes,
   });
 }
@@ -572,12 +578,12 @@ describe('the tables', () => {
     expect(within(screen.getByRole('table', { name: 'By MCP server' })).getByText('index')).toBeInTheDocument();
   });
 
-  test('have the main thread and the helper as agent rows', () => {
+  test('have the main thread, the helper and the background calls as agent rows', () => {
     page.render(SessionView);
     page.set({ session: fullSession() });
     const table = screen.getByRole('table', { name: 'Main thread and subagents' });
     const names = within(table).getAllByRole('row').slice(1).map((row) => row.querySelector('strong')?.textContent);
-    expect(names).toEqual(['main', 'Explore']);
+    expect(names).toEqual(['main', 'Explore', '(background)']);
   });
 
   test('have the API errors without the session column', () => {

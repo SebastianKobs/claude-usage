@@ -225,7 +225,22 @@ export function agent(changes: Partial<Agent> = {}): Agent {
   };
 }
 
-/** A session's detail with a cost record, without agents, models or a transcript. */
+/** The background calls' row, as the server sends it: no transcript, no turns, and no agent id, like the main
+ *  thread. */
+export function backgroundCalls(changes: Partial<Agent> = {}): Agent {
+  return agent({
+    agent_type: '(background)',
+    description: 'calls Claude Code counted that no transcript shows, e.g. Haiku for titles',
+    models: ['claude-haiku-4-5'],
+    turns: 0,
+    context_first: null,
+    context_last: null,
+    ...changes,
+  });
+}
+
+/** A session's detail with a cost record: the main thread and its background calls, as most sessions have; no
+ *  models, no transcript. */
 export function sessionDetail(changes: Partial<SessionDetail> = {}): SessionDetail {
   return {
     ...usage(),
@@ -243,7 +258,7 @@ export function sessionDetail(changes: Partial<SessionDetail> = {}): SessionDeta
     skills: [],
     mcp_servers: [],
     api_errors: [],
-    agents: [],
+    agents: [agent(), backgroundCalls()],
     compact_hint_tokens: 200_000,
     current: null,
     delegate_hint_tokens: 20_000,

@@ -114,7 +114,8 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
   src/lib/api.ts             the types of the server's answers: test_api_types.py checks the demo's against them,
                              so a field added in server.py or queries.py is added there too
   src/lib/fixtures.ts        made-up answers of the server for the component tests: a usage, a summary and a session's
-                             detail, each with the changes a test asks for on top of one plain default
+                             detail (the main thread and its background calls, which share a null agent id), each
+                             with the changes a test asks for on top of one plain default
   src/lib/format.ts          number, money, duration, day, hour and moment formatting
   src/lib/colors.ts          the by-model chart's model slots, effort order, shades and hatches
   src/lib/compact.ts         when compacting pays off (`payoffTone` and its words), which call to compact or delegate
