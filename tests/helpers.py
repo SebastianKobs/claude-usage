@@ -18,18 +18,9 @@ from claude_usage import store
 
 TESTS_DIR = Path(__file__).resolve().parent
 TMP_DIR = TESTS_DIR / ".tmp"
-PAGE_SOURCES = TESTS_DIR.parent / "web" / "src"        # the page's modules and components, a folder per section
 START = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
 DEFAULT_MODEL = "claude-sonnet-5"
 DEFAULT_PROJECT = "/home/dev/app"
-
-
-def page_file(name):
-    """A file of the page's sources by its name, in whichever section's folder it is (the names are unique)."""
-    found = sorted(PAGE_SOURCES.rglob(name))
-    if len(found) != 1:
-        raise FileNotFoundError(f"{len(found)} files named {name} under {PAGE_SOURCES}")
-    return found[0]
 
 
 def slug(project_path):
