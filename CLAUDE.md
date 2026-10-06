@@ -873,7 +873,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     links their new messages hold to `test_server.BUNDLE_LINKS`. Its token colors are `--code-*` per theme (≥ 4.5:1
     on the wash), not a highlight.js theme.
   - Contrast in every theme: text ≥ 4.5:1, marks ≥ 3:1. Categorical slots 3–5 in light mode are the palette's
-    documented exception; the legend and table view carry them.
+    documented exception; the legend and table view carry them. `--text-muted` is darker than the reference
+    palette's in light mode and lighter in dark (#8e8c86: 4.56:1 on the wash over the surface).
   - Documented exception, chosen by the user: the effort shades of two neighbouring models come closer than the
     palette's floor of ΔE 15 (12.8 in light, 9.3 in dark mode). The wider gap between models, the grouped legend,
     the tooltip and the table view carry the combination.
