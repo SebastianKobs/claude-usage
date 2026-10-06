@@ -1,7 +1,7 @@
 {
   "sources": {
     "web/package-lock.json": "f6926176413ecfefe1ec79c1daf0c8897953c5f4449202d0cd448e77563a9923",
-    "web/package.json": "63c9b463503e7d8a9b54165faa1da1fd98d7a882a056f47fbc72cd1972f1aade",
+    "web/package.json": "f2c3a72ddf1942e6fc2a8fb5e2d20d7feebfdb7fa3ef48298a9c6a5f99c5142f",
     "web/src/app/App.svelte": "9b03bdb8228676aee24b86d607ad0da1b97db8933fc6e3a523ddec2253dae21d",
     "web/src/app/Banner.svelte": "5752de020f00af7a40b743f7629fe66f53de49d4d39a3cb102e70e4e53dfb9bc",
     "web/src/app/RangeFilter.svelte": "205ab36b3884c1a7806ff2626eeecf93044ee1e2edff5d14f64e42943f688b85",
@@ -10,7 +10,7 @@
     "web/src/app/banner.svelte.ts": "2bcc2747224c3bc55c4120fd47e17ad383527684826309e01cda94763bbb67e9",
     "web/src/app/http.ts": "ebc45f441678a8b94005b03de4ab9cc51546b11643a8177973484eddb87e707a",
     "web/src/app/kept.ts": "5cabe4752ddbc4d3d178d1a8387fe9df45274d9edbcec54fc20136bf472378a0",
-    "web/src/app/loader.ts": "1955e80bcd7d5437673438f102c5a54be901ac28afafc3a5486ae79cfe61e898",
+    "web/src/app/loader.ts": "43e4283b889223f72dc6d6cf01c50cb592840f8bd49cb53f36d3e24db45db53b",
     "web/src/app/page.ts": "a8f8944a287b093fc040efd36cc945c50f0eec8614a08d6928657cae1388707d",
     "web/src/app/payload.svelte.ts": "e942d5488b5b09b4f94e1a12ae3c3bb78ad01840e09e2abf3fa6ddfe5ea3e5ef",
     "web/src/app/prefs.svelte.ts": "2b5a454e1229f487277ec51ec2abfa4f75c971e1985d113a2282aef53bd47354",
@@ -48,7 +48,7 @@
     "web/src/conversation/Markdown.svelte": "8bcab0e0886414a2c8daf4da604d697ac0a0451fa7f8925e9719545eb7c7a0f6",
     "web/src/conversation/chat.ts": "d1e4c8c425dc5ae4ebb86b4d975edf42b5d119ebeb5a48b5d66d56edadf7785a",
     "web/src/conversation/entries.ts": "7a8e9e25144ed4f1aa5ed023225ee963ffb31cf2aa3757e3ccaa3e20c427f4b2",
-    "web/src/conversation/markup.ts": "988b94969605f501ff7e2d1dbeb532e67bc1d0acea31cc59b0694084612f0e2d",
+    "web/src/conversation/markup.ts": "5d9e1ac3ca1b9320f24346e79bbfc8d3e9bb45be792ea43f4d1ce16aa22e8083",
     "web/src/live/LiveCard.svelte": "2cc4caffe096c0f678dfede9d14fff00433a8cf9d3e20033d8280e73c60ddb36",
     "web/src/live/LiveIcon.svelte": "f5e6c268b0bd9da88f6fa84632ebf88bf37c69136ad41e6fca4de4e5cf7d6baf",
     "web/src/live/LiveSessions.svelte": "006fed12842d9fce89f9a9f8ac97c8b7116fbdd60cfb2a9e897e3ba7684b0ac3",
@@ -96,6 +96,6 @@
   },
   "outputs": {
     "claude_usage/static/js/app-licenses.md": "3c525a4396da2826db8d4a28b199cc76422a91de952802ae471d7e3caeb749ce",
-    "claude_usage/static/js/app.js": "f3201f1bf81455371bf32ff49d32937878b9eef6333092ee05e1badfebbdfea8"
+    "claude_usage/static/js/app.js": "c6e3cdad83dc1995f9e0c190f07607dfb8ec125302131187ba62cfb49049c78e"
   }
 }

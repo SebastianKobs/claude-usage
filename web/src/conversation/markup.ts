@@ -14,11 +14,15 @@ interface TrustedTypes {
   createPolicy(name: string, rules: { createHTML: (html: string) => string }): { createHTML(html: string): unknown };
 }
 
+const HIGHLIGHT_POLICY = 'highlight';
+/** The Trusted Types policies the page creates, which the CSP names: DOMPurify's own, and ours for highlight.js. */
+export const TRUSTED_TYPES = ['dompurify', HIGHLIGHT_POLICY] as const;
+
 // Under the CSP's `require-trusted-types-for 'script'` a string can't be put into an element as markup. This policy
 // hands highlight.js's output over as it is, which is safe only because that output escapes the text it is given (<,
 // >, & and quotes) and adds nothing but spans with classes: a test runs it against the real library. Without Trusted
 // Types (a test's DOM) there is no policy and the string goes in as it is.
-const highlightPolicy = (globalThis as { trustedTypes?: TrustedTypes }).trustedTypes?.createPolicy('highlight', {
+const highlightPolicy = (globalThis as { trustedTypes?: TrustedTypes }).trustedTypes?.createPolicy(HIGHLIGHT_POLICY, {
   createHTML: (html) => html,
 });
 

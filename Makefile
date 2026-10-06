@@ -6,6 +6,8 @@
 #   make backup FILE=<new file>               a copy of the history, e.g. outside the checkout
 #   make demo [DEMO_PORT=8799]                made-up transcripts and a dashboard on them, for screenshots
 #   make build                                the page's bundle from web/ (needs node; the build is committed)
+#   make contract                             what the page expects of the server, web/contract.json (needs node;
+#                                             committed), which the Python tests check the server against
 #   make browser-check                        that bundle on the demo in Chromium and Firefox (needs Playwright's
 #                                             browsers: cd web && npx playwright install chromium firefox)
 
@@ -25,7 +27,7 @@ ALIVE = [ -f $(PID_FILE) ] && ps -p "$$(cat $(PID_FILE))" -o args= 2>/dev/null |
 
 .DEFAULT_GOAL := help
 .PHONY: help start stop restart status logs scan report session backup test clean hook-line notify-test cron-line \
-	demo build browser-check
+	demo build contract browser-check
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-14s %s\n", $$1, $$2}'
@@ -106,6 +108,9 @@ cron-line: ## print a crontab line that keeps the history without the dashboard 
 
 build: ## build the page's bundle from web/ into claude_usage/static (needs node and npm)
 	@cd web && npm ci --ignore-scripts && npm run build
+
+contract: ## write web/contract.json from web/src: what the page expects of the server (needs make build's node_modules)
+	@cd web && npm run --silent contract
 
 browser-check: ## the built page on the demo in Chromium and Firefox: no console error, CSP violation or axe finding
 	@cd web && PYTHON=$(PYTHON) npx playwright test

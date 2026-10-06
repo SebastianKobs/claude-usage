@@ -1,9 +1,10 @@
 // What the dashboard reads from the server: one type per answer of /api/summary, /api/live, /api/session/<id>, its
 // /state and its /chat, and the parts they share. Each field is what claude_usage/server.py and queries.py put in
-// the JSON; tests/test_api_types.py reads this file and checks every answer of a demo store against it, both ways
-// (a declared field the server doesn't send, a field sent and not declared). So the file keeps to a small subset of
-// TypeScript that test can parse: interfaces (with `extends`), aliases of string literals or of interfaces, `T[]`,
-// `Record<string, T>`, `| null` and `?` on a field, and nothing else (no generics, intersections or tuples).
+// the JSON. `make contract` writes these types as data into web/contract.json (contract.ts), and
+// tests/test_contract.py checks every answer of a demo store against them, both ways (a declared field the server
+// doesn't send, a field sent and not declared). So the file keeps to what contract.ts describes, which refuses the
+// rest: interfaces (with `extends`), aliases, string literals, `T[]`, `Record<string, T>`, `| null` and `?` on a field
+// (no generics, intersections, tuples or inline objects).
 //
 // A `null` is a value the server sends where it has nothing: a timestamp the transcript lacked, a column the store
 // leaves empty, a figure that can't be worked out yet. Timestamps are ISO text in UTC with milliseconds, days are

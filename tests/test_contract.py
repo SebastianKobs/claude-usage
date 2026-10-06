@@ -1,4 +1,7 @@
-"""web/src/api/api.ts: the page's types of the server's answers match what the server sends, both ways."""
+"""web/contract.json, what the page expects of the server (its tests write it: make contract), and the server keeping
+to it: every answer of a demo store has the fields its type declares and no others, of the declared kinds; the session
+route takes the ids the page links to; the CSP names the policies the page creates; the values the page has words
+for are the server's; and the desktop notifications agree with the live card's compact states."""
 import json
 import re
 import shutil
@@ -11,19 +14,24 @@ from pathlib import Path
 
 from claude_usage import compact
 from claude_usage import config
+from claude_usage import notify
 from claude_usage import pricing
+from claude_usage import queries
 from claude_usage import scan
 from claude_usage import secret_paths
 from claude_usage import server
 from claude_usage import store
+from claude_usage import tool_kinds
+from claude_usage import turns
 
 import demo
 from helpers import TMP_DIR
-from helpers import page_file
 
-API_TYPES = page_file("api.ts")
-SHARED = types.SimpleNamespace()
+CONTRACT = json.loads((Path(__file__).resolve().parent.parent / "web" / "contract.json").read_text(encoding="utf-8"))
+TYPES = CONTRACT["types"]
 PRIMITIVES = {"string": str, "boolean": bool, "null": type(None)}
+DIFFER = "the server's answers and web/src/api/api.ts differ: change api.ts and run make contract"
+SHARED = types.SimpleNamespace()
 
 
 def setUpModule():
@@ -47,76 +55,48 @@ def tearDownModule():
     shutil.rmtree(SHARED.root)
 
 
-def without_comments(text):
-    """The TypeScript text without its line and block comments."""
-    return re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.DOTALL)
-
-
-def parse_types(text):
-    """The declared types by name: an interface is ("interface", parents, {field: (type, optional)}), an alias is
-    ("alias", type). A type is a string: primitives, a name, a quoted literal, `T[]`, `Record<string, T>` and
-    `A | B`, which the checker reads."""
-    declared = {}
-    source = without_comments(text)
-    for match in re.finditer(r"export interface (\w+)(?: extends ([\w, ]+))? \{(.*?)\n\}", source, flags=re.DOTALL):
-        name, parents, body = match.groups()
-        fields = {}
-        for field in re.finditer(r"^\s+(?:(\w+)|'([\w-]+)')(\??): (.+);$", body, flags=re.MULTILINE):
-            key = field.group(1) or field.group(2)
-            fields[key] = (field.group(4).strip(), field.group(3) == "?")
-        declared[name] = ("interface", [parent.strip() for parent in (parents or "").split(",") if parent.strip()],
-                          fields)
-    for match in re.finditer(r"export type (\w+) = ([^;]+);", source):
-        declared[match.group(1)] = ("alias", match.group(2).strip())
-    return declared
-
-
-DECLARED = parse_types(API_TYPES.read_text(encoding="utf-8"))
-
-
 def fields_of(name):
-    """An interface's fields with those of the interfaces it extends."""
-    _, parents, own = DECLARED[name]
+    """An interface's fields with those of the interfaces it extends: name -> (shape, optional)."""
+    declared = TYPES[name]
     fields = {}
-    for parent in parents:
+    for parent in declared["extends"]:
         fields.update(fields_of(parent))
-    fields.update(own)
+    fields.update({key: (shape, key in declared["optional"]) for key, shape in declared["fields"].items()})
     return fields
 
 
-def split_union(declaration):
-    """The members of `A | B`, at the top level (none of the subset's types nest a bar)."""
-    return [member.strip() for member in declaration.split(" | ")]
+def primitive_problems(value, name, where):
+    """What differs between a value and a primitive type (a bool is no number)."""
+    if name == "number":
+        matches = isinstance(value, (int, float)) and not isinstance(value, bool)
+    else:
+        matches = isinstance(value, PRIMITIVES[name])
+    return [] if matches else [f"{where}: expected {name}, got {value!r}"]
 
 
-def problems(value, declaration, where):
-    """What differs between a value and its declared type, as messages; empty where it matches."""
-    members = split_union(declaration)
-    if len(members) > 1:
-        found = [problems(value, member, where) for member in members]
+def problems(value, shape, where):
+    """What differs between a value and its declared shape, as messages; empty where it matches. A union reports
+    the member that differs least."""
+    if isinstance(shape, str):
+        return primitive_problems(value, shape, where)
+    if "union" in shape:
+        found = [problems(value, member, where) for member in shape["union"]]
         return [] if any(not each for each in found) else min(found, key=len)
-    if declaration.endswith("[]"):
+    if "literal" in shape:
+        return [] if value == shape["literal"] else [f"{where}: expected '{shape['literal']}', got {value!r}"]
+    if "array" in shape:
         if not isinstance(value, list):
-            return [f"{where}: expected {declaration}, got {type(value).__name__}"]
+            return [f"{where}: expected a list, got {type(value).__name__}"]
         return [message for index, item in enumerate(value)
-                for message in problems(item, declaration[:-2], f"{where}[{index}]")]
-    record = re.fullmatch(r"Record<string, (.+)>", declaration)
-    if record:
+                for message in problems(item, shape["array"], f"{where}[{index}]")]
+    if "record" in shape:
         if not isinstance(value, dict):
-            return [f"{where}: expected {declaration}, got {type(value).__name__}"]
-        return [message for key, item in value.items() for message in problems(item, record.group(1), f"{where}.{key}")]
-    if declaration == "number":
-        return [] if isinstance(value, (int, float)) and not isinstance(value, bool) else [
-            f"{where}: expected number, got {value!r}"]
-    if declaration in PRIMITIVES:
-        return [] if isinstance(value, PRIMITIVES[declaration]) else [f"{where}: expected {declaration}, got {value!r}"]
-    literal = re.fullmatch(r"'([^']*)'", declaration)
-    if literal:
-        return [] if value == literal.group(1) else [f"{where}: expected '{literal.group(1)}', got {value!r}"]
-    kind, *_ = DECLARED[declaration]
-    if kind == "alias":
-        return problems(value, DECLARED[declaration][1], where)
-    return interface_problems(value, declaration, where)
+            return [f"{where}: expected a record, got {type(value).__name__}"]
+        return [message for key, item in value.items() for message in problems(item, shape["record"], f"{where}.{key}")]
+    declared = TYPES[shape["ref"]]
+    if "alias" in declared:
+        return problems(value, declared["alias"], where)
+    return interface_problems(value, shape["ref"], where)
 
 
 def interface_problems(value, name, where):
@@ -128,9 +108,9 @@ def interface_problems(value, name, where):
     found = [f"{where}: {name} declares {key}, the server doesn't send it"
              for key, (_, optional) in fields.items() if key not in value and not optional]
     found += [f"{where}: the server sends {key}, {name} doesn't declare it" for key in value if key not in fields]
-    for key, (declaration, _) in fields.items():
+    for key, (shape, _) in fields.items():
         if key in value:
-            found += problems(value[key], declaration, f"{where}.{key}")
+            found += problems(value[key], shape, f"{where}.{key}")
     return found
 
 
@@ -139,19 +119,7 @@ def as_json(payload):
     return json.loads(json.dumps(payload))
 
 
-class TypeParserTest(unittest.TestCase):
-    def test_every_interface_and_alias_is_read(self):
-        declared_in_file = re.findall(r"^export (?:interface|type) (\w+)", API_TYPES.read_text(encoding="utf-8"),
-                                      flags=re.MULTILINE)
-        self.assertEqual(sorted(DECLARED), sorted(declared_in_file))
-
-    def test_every_field_is_read(self):
-        # one declaration per field line: a field the pattern missed would never be checked
-        source = without_comments(API_TYPES.read_text(encoding="utf-8"))
-        lines = [line for line in source.splitlines() if re.match(r"^  \S", line)]
-        self.assertEqual(sum(len(DECLARED[name][2]) for name in DECLARED if DECLARED[name][0] == "interface"),
-                         len(lines))
-
+class CheckerTest(unittest.TestCase):
     def test_a_missing_and_an_undeclared_field_are_found(self):
         found = interface_problems({"calls": 1, "extra": 2}, "Reminders", "x")
         self.assertEqual(sorted(found), ["x: Reminders declares chars, the server doesn't send it",
@@ -162,12 +130,16 @@ class TypeParserTest(unittest.TestCase):
                          ["x.calls: expected number, got '1'"])
 
     def test_null_matches_only_a_nullable_field(self):
-        self.assertEqual(problems(None, "string | null", "x"), [])
+        self.assertEqual(problems(None, {"union": ["string", "null"]}, "x"), [])
         self.assertEqual(problems(None, "string", "x"), ["x: expected string, got None"])
 
     def test_a_literal_union_takes_its_members_only(self):
-        self.assertEqual(len(problems("saved", DECLARED["SecretReach"][1], "x")), 1)
-        self.assertEqual(problems("sent", DECLARED["SecretReach"][1], "x"), [])
+        self.assertEqual(len(problems("saved", {"ref": "SecretReach"}, "x")), 1)
+        self.assertEqual(problems("sent", {"ref": "SecretReach"}, "x"), [])
+
+    def test_lists_and_records_check_each_item(self):
+        self.assertEqual(problems([1, "2"], {"array": "number"}, "x"), ["x[1]: expected number, got '2'"])
+        self.assertEqual(problems({"a": True}, {"record": "number"}, "x"), ["x.a: expected number, got True"])
 
 
 class AnswerTest(unittest.TestCase):
@@ -180,8 +152,8 @@ class AnswerTest(unittest.TestCase):
 
     def assertMatches(self, payloads, name):
         """Fail with every difference between the payloads and the named type, each once."""
-        found = sorted({message for payload in payloads for message in problems(as_json(payload), name, name)})
-        self.assertEqual(found, [], "web/src/api/api.ts and the server's answers differ")
+        found = sorted({message for payload in payloads for message in problems(as_json(payload), {"ref": name}, name)})
+        self.assertEqual(found, [], DIFFER)
 
     def test_summary_over_a_day_a_week_and_a_month(self):
         self.assertMatches([SHARED.app.summary(days) for days in (1, 7, 30)], "Summary")
@@ -210,6 +182,36 @@ class AnswerTest(unittest.TestCase):
         self.assertTrue(any(agent["compactions"] for agent in session["agents"]))
         self.assertTrue(session["secret_accesses"])
         self.assertTrue(SHARED.app.live()["sessions"][0]["waiting"] or SHARED.app.session(demo.PERMISSION_SESSION))
+
+
+class ExpectationTest(unittest.TestCase):
+    def test_the_session_route_takes_the_ids_the_page_links_to(self):
+        self.assertEqual(re.fullmatch(r"/api/session/\((.+)\)", server.SESSION_PATH.pattern).group(1),
+                         CONTRACT["session_id"])
+
+    def test_the_csp_names_exactly_the_policies_the_page_creates(self):
+        directives = [part.split() for part in server.DASHBOARD_POLICY.split(";")]
+        self.assertEqual([names for name, *names in directives if name == "trusted-types"], [CONTRACT["trusted_types"]])
+
+    def test_the_page_has_words_for_every_compaction_verdict(self):
+        self.assertEqual(sorted(CONTRACT["words"]["compaction_verdicts"]), sorted(turns.VERDICTS))
+
+    def test_the_page_has_words_for_every_command_kind(self):
+        self.assertEqual(sorted(CONTRACT["words"]["tool_kinds"]), sorted(tool_kinds.KINDS))
+
+    def test_the_page_orders_effort_levels_like_the_report(self):
+        self.assertEqual(tuple(CONTRACT["efforts"]["order"]), queries.EFFORT_ORDER)
+
+    def test_the_page_hatches_ultracode_and_the_background_calls(self):
+        self.assertEqual(CONTRACT["efforts"]["background"], store.BACKGROUND_EFFORT)
+        self.assertIn(store.BACKGROUND_EFFORT, CONTRACT["efforts"]["hatched"])
+        self.assertIn(store.ULTRACODE, CONTRACT["efforts"]["hatched"])
+
+    def test_the_notifications_agree_with_the_live_cards_compact_states(self):
+        for index, badge in enumerate(CONTRACT["compact_badges"]):
+            with self.subTest(case=index, states=badge["states"]):
+                now = datetime.fromisoformat(badge["now"])
+                self.assertEqual(notify.compact_states(badge["current"], now), frozenset(badge["states"]))
 
 
 if __name__ == "__main__":

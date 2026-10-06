@@ -3624,7 +3624,7 @@ function Us(e, t) {
 }
 //#endregion
 //#region src/app/loader.ts
-var Ws = 5e3, Gs = 6e4, Ks = /^#session\/([A-Za-z0-9_-]{1,128})$/;
+var Ws = 5e3, Gs = 6e4, Ks = RegExp("^#session/([A-Za-z0-9_-]{1,128})$");
 function qs(e) {
 	return e instanceof Error ? e.message : String(e);
 }
@@ -18316,8 +18316,6 @@ function ry(...e) {
 ny.use = ry, ny.walkTokens = function(e, t) {
 	return ty.walkTokens(e, t);
 }, ny.parseInline = ty.parseInline, ny.Parser = $v, ny.parser = $v.parse, ny.Renderer = Zv, ny.TextRenderer = Qv, ny.Lexer = Xv, ny.lexer = Xv.lex, ny.Tokenizer = Yv, ny.Hooks = ey, ny.parse = ny, ny.options, ny.setOptions, ny.walkTokens, ny.parseInline, $v.parse, Xv.lex;
-//#endregion
-//#region src/conversation/markup.ts
 var iy = globalThis.trustedTypes?.createPolicy("highlight", { createHTML: (e) => e });
 function ay(e) {
 	return !!(e && f_.getLanguage(e));

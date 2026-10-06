@@ -1,7 +1,6 @@
 import base64
 import os
 import re
-import shutil
 import sqlite3
 import threading
 import time
@@ -17,7 +16,6 @@ from claude_usage import store
 from helpers import FakeClock
 from helpers import PRICES
 from helpers import TempDirTestCase
-from helpers import run_function
 from helpers import tool_use_block
 from helpers import usage
 
@@ -28,8 +26,8 @@ EXPIRED = "2026-09-28T11:00:00.000+00:00"
 
 def gauge(context=150_000, warm_until=WARM, estimate=True, compacted=None, last_compaction=None, **fields):
     """A main thread's gauge with a 200K hint and an estimate with 40 calls ahead on average and a longest finished
-    stretch of 60 calls, updated by the given fields, as LiveStateTest in test_static builds it (no preview once it
-    compacted after its last call)."""
+    stretch of 60 calls, updated by the given fields, as the contract's gauges are (web/src/api/contract.ts; no
+    preview once it compacted after its last call)."""
     values = {"breakeven_calls": 10, "breakeven_low": 5, "calls_ahead": 40.0, "cold_saving": -0.5,
               "breakeven_cold": 10, "calls_after_high": 60}
     values.update(fields)
@@ -445,13 +443,6 @@ class CompactStatesTest(unittest.TestCase):
 
     def test_without_a_gauge_there_is_no_state(self):
         self.assertEqual(notify.compact_states(None, NOW), frozenset())
-
-    @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_the_states_agree_with_the_live_cards_icon(self):
-        for fields, states in COMPACT_CASES:
-            with self.subTest(fields=fields):
-                badge = run_function("live.ts", "liveCompactBadge", gauge(**fields), NOW.isoformat())
-                self.assertEqual(set(badge["states"]) if badge else set(), states)
 
 
 class SecretAndWaitTest(unittest.TestCase):

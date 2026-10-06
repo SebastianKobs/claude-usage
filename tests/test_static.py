@@ -6,11 +6,7 @@ import unittest
 from pathlib import Path
 
 from claude_usage import notify
-from claude_usage import queries
 from claude_usage import server
-from claude_usage import store
-from claude_usage import tool_kinds
-from claude_usage import turns
 from helpers import PAGE_SOURCES
 from helpers import page_file
 
@@ -49,39 +45,7 @@ def declarations(block):
     return dict(re.findall(r"(--[\w-]+):\s*([^;]+);", block))
 
 
-def object_keys(source_file, name):
-    """The keys of a source file's `const name = {…}` object literal (a type annotation before the = is fine)."""
-    source = read(source_file)
-    body = re.search(rf"const {name}\b[^=]*= \{{(.*?)\}};", source, re.DOTALL).group(1)
-    return set(re.findall(r"(\w+):", body))
-
-
 class ScriptTest(unittest.TestCase):
-    def test_every_rebuild_cause_has_its_words(self):
-        self.assertEqual(object_keys(page_file("compact.ts"), "REBUILD_CAUSES"), {"model", "idle", "prefix"})
-
-    def test_every_injected_kind_that_is_no_attachment_type_has_its_words(self):
-        self.assertEqual(object_keys(page_file("entries.ts"), "INJECTED_KINDS"), {"meta", "skill", "summary"})
-
-    def test_every_compaction_verdict_has_its_words(self):
-        self.assertEqual(object_keys(page_file("compact.ts"), "COMPACTION_VERDICTS"), set(turns.VERDICTS))
-
-    def test_every_compaction_trigger_has_its_words(self):
-        self.assertEqual(object_keys(page_file("context.ts"), "COMPACTION_TRIGGERS"), {"manual", "auto"})
-
-    def test_the_page_orders_effort_levels_like_the_report(self):
-        body = re.search(r"const EFFORT_ORDER[^=]*= \[(.*?)\];", read(COLORS)).group(1)
-        self.assertEqual(tuple(re.findall(r"'(\w+)'", body)), queries.EFFORT_ORDER)
-
-    def test_every_hatched_effort_level_has_a_shade(self):
-        self.assertLessEqual(object_keys(COLORS, "HATCH_SHADES"), object_keys(COLORS, "EFFORT_SHADES"))
-        self.assertIn(store.ULTRACODE, object_keys(COLORS, "HATCH_SHADES"))
-
-    def test_the_page_knows_the_background_effort_level(self):
-        self.assertIn(f"const BACKGROUND_EFFORT = '{store.BACKGROUND_EFFORT}';", read(COLORS))
-        self.assertIn(store.BACKGROUND_EFFORT, object_keys(COLORS, "HATCH_SHADES"))
-        self.assertIn(store.BACKGROUND_EFFORT, object_keys(COLORS, "EFFORT_SHADES"))
-
     def test_html_is_inserted_only_by_the_two_sanitized_paths_in_markup_ts(self):
         uses = {path.name: len(re.findall(r"\binnerHTML\b|\{@html\b", read(path))) for path in page_sources()}
         self.assertEqual({name: count for name, count in uses.items() if count}, {"markup.ts": 2})
@@ -122,12 +86,6 @@ class VerdictToneTest(unittest.TestCase):
             with self.subTest(theme=theme):
                 self.assertIn("--gain-text:", text)
                 self.assertIn("--loss-text:", text)
-
-
-class ToolTableTest(unittest.TestCase):
-
-    def test_every_command_kind_has_its_words(self):
-        self.assertEqual(object_keys(page_file("tables.ts"), "TOOL_KINDS"), set(tool_kinds.KINDS))
 
 
 class StyleTest(unittest.TestCase):

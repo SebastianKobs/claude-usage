@@ -474,11 +474,12 @@ def expired_cache(current: Mapping[str, Any], now: datetime) -> bool:
 
 
 def compact_states(current: Mapping[str, Any] | None, now: datetime) -> frozenset[str]:
-    """The states of compacting now that the live card's trash compactor shows (liveCompactBadge in figures.js,
-    whose states a test holds this to): hint past the compact hint; cold where the cache has expired and compacting
-    saves at once; else the pay-off's tone (soon, close, unlikely), or pays where it pays off without one; nothing
-    where it would pay off only once the context has grown, or never, and without calls ahead to compare with where
-    it doesn't pay off within the longest finished stretch. None of them right after a compaction."""
+    """The states of compacting now that the live card's trash compactor shows (liveCompactBadge in web/src/live,
+    whose states for the contract's gauges test_contract holds this to): hint past the compact hint; cold where the
+    cache has expired and compacting saves at once; else the pay-off's tone (soon, close, unlikely), or pays where it
+    pays off without one; nothing where it would pay off only once the context has grown, or never, and without calls
+    ahead to compare with where it doesn't pay off within the longest finished stretch. None of them right after a
+    compaction."""
     preview = current.get("compact_now") if current else None
     if not preview:
         return frozenset()

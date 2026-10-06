@@ -1,0 +1,2833 @@
+{
+  "about": "What the page (web/) expects of the server. Written by `make contract` from web/src (src/api/contract.ts); tests/test_contract.py checks the server against it. Not to be edited by hand.",
+  "session_id": "[A-Za-z0-9_-]{1,128}",
+  "trusted_types": [
+    "dompurify",
+    "highlight"
+  ],
+  "words": {
+    "compaction_verdicts": [
+      "saved",
+      "cost_more",
+      "even",
+      "forced",
+      "open",
+      "unknown"
+    ],
+    "tool_kinds": [
+      "search",
+      "view",
+      "list",
+      "edit_in_place",
+      "write_file",
+      "inline_script",
+      "git",
+      "run"
+    ]
+  },
+  "efforts": {
+    "order": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultracode"
+    ],
+    "hatched": [
+      "background",
+      "ultracode"
+    ],
+    "background": "background"
+  },
+  "compact_badges": [
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 10,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": 40,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": [
+        "soon"
+      ]
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 30,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": 40,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": [
+        "close"
+      ]
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 50,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": 40,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": [
+        "unlikely"
+      ]
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": null,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": 40,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": [
+        "unlikely"
+      ]
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": null,
+            "breakeven_low": null,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": 40,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": []
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 50,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": 40,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": 5,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": []
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 10,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": null,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": [
+        "pays"
+      ]
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 60,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": null,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": [
+        "pays"
+      ]
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 61,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": null,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": []
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 10,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": null,
+            "calls_ahead": null,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": []
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": null,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": null,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": []
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 250000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 100,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": null,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": [
+        "hint"
+      ]
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T11:00:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 10,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 100,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": null,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": []
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 250000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 10,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": 40,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": [
+        "soon",
+        "hint"
+      ]
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 250000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 50,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": 40,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": 5,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": [
+        "hint"
+      ]
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 250000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": null
+        },
+        "exploration": null
+      },
+      "states": [
+        "hint"
+      ]
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T12:30:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": null
+        },
+        "exploration": null
+      },
+      "states": []
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T11:00:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 10,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": 0.4,
+            "breakeven_cold": 10,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": 40,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": [
+        "cold"
+      ]
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T11:00:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 10,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": 30,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": 40,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": [
+        "close"
+      ]
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 150000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": null,
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": {
+          "before": 150000,
+          "reread_cost": 0.06,
+          "cache_ttl_minutes": 5,
+          "cache_warm_until": "2026-09-28T11:00:00.000+00:00",
+          "keep_across_break": 0.9,
+          "stored_compactions": 5,
+          "estimate": {
+            "compactions": 5,
+            "after": 50000,
+            "after_low": 40000,
+            "after_high": 60000,
+            "summary_tokens": 3000,
+            "one_time": 0.3,
+            "breakeven_calls": 10,
+            "breakeven_low": 5,
+            "breakeven_high": 20,
+            "before_break": null,
+            "cold_saving": -0.5,
+            "breakeven_cold": null,
+            "calls_after_low": 20,
+            "calls_after_high": 60,
+            "calls_ahead": 40,
+            "ahead_from": "longer",
+            "stretches_ahead": 3,
+            "pays_later_in": null,
+            "pays_later_at": null
+          }
+        },
+        "exploration": null
+      },
+      "states": []
+    },
+    {
+      "now": "2026-09-28T12:00:00.000+00:00",
+      "current": {
+        "context": 250000,
+        "model": "claude-opus-5-5",
+        "auto_compact": 967000,
+        "hint_tokens": 200000,
+        "share": 0.155,
+        "headroom": 817000,
+        "turns_since_compaction": 40,
+        "last_compaction": "2026-09-28T09:00:00.000+00:00",
+        "compacted": "2026-09-28T11:59:00.000+00:00",
+        "mean_growth": 3000,
+        "mean_step": 3500,
+        "turns_left": 230,
+        "compact_now": null,
+        "exploration": null
+      },
+      "states": []
+    }
+  ],
+  "types": {
+    "CostParts": {
+      "extends": [],
+      "fields": {
+        "new_input": "number",
+        "cache_write": "number",
+        "cache_read": "number",
+        "output": "number",
+        "web_search": "number"
+      },
+      "optional": []
+    },
+    "Usage": {
+      "extends": [],
+      "fields": {
+        "turns": "number",
+        "new_input": "number",
+        "cache_write_5m": "number",
+        "cache_write_1h": "number",
+        "cache_read": "number",
+        "output": "number",
+        "cache_write": "number",
+        "web_searches": "number",
+        "cost": "number",
+        "cost_parts": {
+          "ref": "CostParts"
+        },
+        "unpriced_turns": "number"
+      },
+      "optional": []
+    },
+    "ModelUsage": {
+      "extends": [
+        "Usage"
+      ],
+      "fields": {
+        "model": "string"
+      },
+      "optional": []
+    },
+    "ModelEffortUsage": {
+      "extends": [
+        "ModelUsage"
+      ],
+      "fields": {
+        "effort": {
+          "union": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "DayModelUsage": {
+      "extends": [
+        "ModelUsage"
+      ],
+      "fields": {
+        "day": "string"
+      },
+      "optional": []
+    },
+    "DayModelEffortUsage": {
+      "extends": [
+        "ModelEffortUsage"
+      ],
+      "fields": {
+        "day": "string"
+      },
+      "optional": []
+    },
+    "HourModelUsage": {
+      "extends": [
+        "ModelUsage"
+      ],
+      "fields": {
+        "hour": "string"
+      },
+      "optional": []
+    },
+    "HourModelEffortUsage": {
+      "extends": [
+        "ModelEffortUsage"
+      ],
+      "fields": {
+        "hour": "string"
+      },
+      "optional": []
+    },
+    "AgentTypeUsage": {
+      "extends": [
+        "Usage"
+      ],
+      "fields": {
+        "agent_type": "string"
+      },
+      "optional": []
+    },
+    "ProjectUsage": {
+      "extends": [
+        "Usage"
+      ],
+      "fields": {
+        "project": "string"
+      },
+      "optional": []
+    },
+    "SkillUsage": {
+      "extends": [
+        "Usage"
+      ],
+      "fields": {
+        "skill": "string"
+      },
+      "optional": []
+    },
+    "McpServerUsage": {
+      "extends": [
+        "Usage"
+      ],
+      "fields": {
+        "mcp_server": "string"
+      },
+      "optional": []
+    },
+    "ContextStats": {
+      "extends": [],
+      "fields": {
+        "turns": "number",
+        "median": "number",
+        "p90": "number"
+      },
+      "optional": []
+    },
+    "CompactionSavings": {
+      "extends": [],
+      "fields": {
+        "net": "number",
+        "compactions": "number",
+        "unknown": "number"
+      },
+      "optional": []
+    },
+    "ApiErrorEvent": {
+      "extends": [],
+      "fields": {
+        "record_id": "string",
+        "ts": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "error": "string",
+        "status": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "limit_type": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "resets_at": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "session_id": "string",
+        "project": "string",
+        "agent_type": "string",
+        "title": {
+          "union": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "DayErrors": {
+      "extends": [],
+      "fields": {
+        "day": "string",
+        "error": "string",
+        "count": "number"
+      },
+      "optional": []
+    },
+    "HourErrors": {
+      "extends": [],
+      "fields": {
+        "hour": "string",
+        "error": "string",
+        "count": "number"
+      },
+      "optional": []
+    },
+    "LimitWindow": {
+      "extends": [],
+      "fields": {
+        "limit_type": "string",
+        "start": "string",
+        "first_hit": "string",
+        "resets_at": "string",
+        "hits": "number",
+        "used": {
+          "ref": "Usage"
+        },
+        "models": {
+          "array": {
+            "ref": "ModelUsage"
+          }
+        }
+      },
+      "optional": []
+    },
+    "RuntimeTotals": {
+      "extends": [],
+      "fields": {
+        "sessions": "number",
+        "estimated_sessions": "number",
+        "duration_ms": "number",
+        "api_ms": "number",
+        "api_ms_without_retries": "number",
+        "tool_ms": "number",
+        "lines_added": "number",
+        "lines_removed": "number",
+        "cost": "number",
+        "cost_per_100_lines": {
+          "union": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "SessionListItem": {
+      "extends": [],
+      "fields": {
+        "session_id": "string",
+        "title": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "project": "string",
+        "last_ts": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "subagents": "number",
+        "turns": "number",
+        "context_avg": "number",
+        "context_peak": "number",
+        "output": "number",
+        "cost": "number"
+      },
+      "optional": []
+    },
+    "CostlySession": {
+      "extends": [
+        "Usage"
+      ],
+      "fields": {
+        "session_id": "string",
+        "project": "string",
+        "title": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "first_ts": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "last_ts": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "subagents": "number",
+        "context_avg": "number",
+        "context_peak": "number"
+      },
+      "optional": []
+    },
+    "Summary": {
+      "extends": [],
+      "fields": {
+        "days": "number",
+        "since": "string",
+        "until": "string",
+        "previous_day": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "next_day": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "project_filter": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "retention_days": "number",
+        "history_since": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "prices_checked": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "totals": {
+          "ref": "Usage"
+        },
+        "day_model": {
+          "array": {
+            "ref": "DayModelUsage"
+          }
+        },
+        "agent_type": {
+          "array": {
+            "ref": "AgentTypeUsage"
+          }
+        },
+        "project": {
+          "array": {
+            "ref": "ProjectUsage"
+          }
+        },
+        "model": {
+          "array": {
+            "ref": "ModelUsage"
+          }
+        },
+        "model_effort": {
+          "array": {
+            "ref": "ModelEffortUsage"
+          }
+        },
+        "day_model_effort": {
+          "array": {
+            "ref": "DayModelEffortUsage"
+          }
+        },
+        "skill": {
+          "array": {
+            "ref": "SkillUsage"
+          }
+        },
+        "mcp_server": {
+          "array": {
+            "ref": "McpServerUsage"
+          }
+        },
+        "hour_model": {
+          "array": {
+            "ref": "HourModelUsage"
+          }
+        },
+        "hour_model_effort": {
+          "array": {
+            "ref": "HourModelEffortUsage"
+          }
+        },
+        "runtime": {
+          "ref": "RuntimeTotals"
+        },
+        "api_errors": {
+          "ref": "SummaryErrors"
+        },
+        "context": {
+          "ref": "ContextStats"
+        },
+        "compact_hint_tokens": "number",
+        "compaction_savings": {
+          "union": [
+            {
+              "ref": "CompactionSavings"
+            },
+            "null"
+          ]
+        },
+        "scan_errors": {
+          "array": "string"
+        },
+        "sessions": {
+          "array": {
+            "ref": "SessionListItem"
+          }
+        },
+        "costly_sessions": {
+          "array": {
+            "ref": "CostlySession"
+          }
+        }
+      },
+      "optional": []
+    },
+    "SummaryErrors": {
+      "extends": [],
+      "fields": {
+        "day": {
+          "array": {
+            "ref": "DayErrors"
+          }
+        },
+        "hour": {
+          "array": {
+            "ref": "HourErrors"
+          }
+        },
+        "events": {
+          "array": {
+            "ref": "ApiErrorEvent"
+          }
+        },
+        "windows": {
+          "array": {
+            "ref": "LimitWindow"
+          }
+        }
+      },
+      "optional": []
+    },
+    "Waiting": {
+      "extends": [],
+      "fields": {
+        "kind": {
+          "union": [
+            {
+              "literal": "question"
+            },
+            {
+              "literal": "permission"
+            }
+          ]
+        },
+        "tool": "string",
+        "since": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "agent_type": {
+          "union": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "LiveSubagent": {
+      "extends": [],
+      "fields": {
+        "agent_id": "string",
+        "agent_type": "string",
+        "description": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "last_activity": "string",
+        "turns": "number",
+        "last_context": "number"
+      },
+      "optional": []
+    },
+    "LiveSession": {
+      "extends": [
+        "Usage"
+      ],
+      "fields": {
+        "session_id": "string",
+        "project": "string",
+        "title": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "git_branch": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "last_activity": "string",
+        "last_context": "number",
+        "last_output": "number",
+        "subagents": {
+          "array": {
+            "ref": "LiveSubagent"
+          }
+        },
+        "waiting": {
+          "union": [
+            {
+              "ref": "Waiting"
+            },
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "Live": {
+      "extends": [],
+      "fields": {
+        "minutes": "number",
+        "agent_minutes": "number",
+        "days": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "since": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "until": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "sessions": {
+          "array": {
+            "ref": "LiveSession"
+          }
+        },
+        "scan_errors": {
+          "array": "string"
+        },
+        "prompts_unavailable": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "notifications_unavailable": {
+          "union": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "SessionRuntime": {
+      "extends": [],
+      "fields": {
+        "source": {
+          "union": [
+            {
+              "literal": "cost_record"
+            },
+            {
+              "literal": "transcripts"
+            }
+          ]
+        },
+        "duration_ms": "number",
+        "api_ms": "number",
+        "api_ms_without_retries": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "tool_ms": "number",
+        "lines_added": "number",
+        "lines_removed": "number"
+      },
+      "optional": []
+    },
+    "ModelEffortPair": {
+      "extends": [],
+      "fields": {
+        "model": "string",
+        "effort": "string"
+      },
+      "optional": []
+    },
+    "Rebuild": {
+      "extends": [],
+      "fields": {
+        "cause": {
+          "union": [
+            {
+              "literal": "model"
+            },
+            {
+              "literal": "idle"
+            },
+            {
+              "literal": "prefix"
+            }
+          ]
+        },
+        "lost": "number",
+        "extra_cost": {
+          "union": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "ContextTurn": {
+      "extends": [],
+      "fields": {
+        "message_id": "string",
+        "ts": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "context": "number",
+        "effort": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "new_input": "number",
+        "cache_write": "number",
+        "cache_read": "number",
+        "growth": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "rebuild": {
+          "union": [
+            {
+              "ref": "Rebuild"
+            },
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "ToolCount": {
+      "extends": [],
+      "fields": {
+        "tool": "string",
+        "calls": "number",
+        "result_chars": "number"
+      },
+      "optional": []
+    },
+    "VersusKeeping": {
+      "extends": [],
+      "fields": {
+        "model": "string",
+        "before": "number",
+        "after": "number",
+        "difference": "number",
+        "saving_per_call": "number",
+        "rewrite": "number",
+        "one_time": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "calls_after": "number",
+        "last_stretch": "boolean",
+        "capped_at": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "cache_warm": "boolean",
+        "breakeven_call": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "breakeven_at_least": "boolean",
+        "net": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "net_low": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "net_high": "number",
+        "verdict": {
+          "union": [
+            {
+              "literal": "saved"
+            },
+            {
+              "literal": "cost_more"
+            },
+            {
+              "literal": "even"
+            },
+            {
+              "literal": "forced"
+            },
+            {
+              "literal": "open"
+            },
+            {
+              "literal": "unknown"
+            }
+          ]
+        },
+        "rework_margin": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "added": "number",
+        "prefix_read": "number",
+        "call_low": "number",
+        "call_cost": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "call_high": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "summary_tokens": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "summary_high": {
+          "union": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "Compaction": {
+      "extends": [],
+      "fields": {
+        "ts": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "trigger": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_tokens": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "post_tokens": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "duration_ms": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "next_context": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "versus_keeping": {
+          "union": [
+            {
+              "ref": "VersusKeeping"
+            },
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "Overhead": {
+      "extends": [],
+      "fields": {
+        "tokens": "number",
+        "cost": "number"
+      },
+      "optional": []
+    },
+    "RebuildTotals": {
+      "extends": [],
+      "fields": {
+        "count": "number",
+        "lost": "number",
+        "cost": {
+          "union": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "GrowthStep": {
+      "extends": [],
+      "fields": {
+        "message_id": "string",
+        "ts": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "growth": "number",
+        "tools": {
+          "array": {
+            "ref": "GrowthTool"
+          }
+        }
+      },
+      "optional": []
+    },
+    "GrowthTool": {
+      "extends": [],
+      "fields": {
+        "tool": "string",
+        "result_chars": "number"
+      },
+      "optional": []
+    },
+    "ToolKindRow": {
+      "extends": [],
+      "fields": {
+        "tool": "string",
+        "kind": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "detail": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "options": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "calls": "number",
+        "errors": "number",
+        "result_chars": "number",
+        "result_median": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "result_p90": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "input_median": "number",
+        "calls_after_median": "number",
+        "carried": "number",
+        "input_cost": "number"
+      },
+      "optional": []
+    },
+    "Exploration": {
+      "extends": [],
+      "fields": {
+        "calls": "number",
+        "chars": "number",
+        "tokens": "number",
+        "carried": "number",
+        "reread": "number"
+      },
+      "optional": []
+    },
+    "Agent": {
+      "extends": [
+        "Usage"
+      ],
+      "fields": {
+        "agent_id": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "agent_type": "string",
+        "description": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "workflow_run": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "workflow_phase": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "workflow_name": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "first_ts": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "last_ts": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "models": {
+          "array": "string"
+        },
+        "model_efforts": {
+          "array": {
+            "ref": "ModelEffortPair"
+          }
+        },
+        "context_first": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "context_last": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "input_total": "number",
+        "context_per_turn": {
+          "array": {
+            "ref": "ContextTurn"
+          }
+        },
+        "tools": {
+          "array": {
+            "ref": "ToolCount"
+          }
+        },
+        "compactions": {
+          "array": {
+            "ref": "Compaction"
+          }
+        },
+        "overhead": {
+          "union": [
+            {
+              "ref": "Overhead"
+            },
+            "null"
+          ]
+        },
+        "rebuilds": {
+          "ref": "RebuildTotals"
+        },
+        "top_growth": {
+          "array": {
+            "ref": "GrowthStep"
+          }
+        },
+        "returned_chars": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "tool_kinds": {
+          "union": [
+            {
+              "array": {
+                "ref": "ToolKindRow"
+              }
+            },
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "CompactEstimate": {
+      "extends": [],
+      "fields": {
+        "compactions": "number",
+        "after": "number",
+        "after_low": "number",
+        "after_high": "number",
+        "summary_tokens": "number",
+        "one_time": "number",
+        "breakeven_calls": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "breakeven_low": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "breakeven_high": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "before_break": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "cold_saving": "number",
+        "breakeven_cold": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "calls_after_low": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "calls_after_high": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "calls_ahead": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "ahead_from": {
+          "union": [
+            {
+              "literal": "longer"
+            },
+            {
+              "literal": "all"
+            },
+            "null"
+          ]
+        },
+        "stretches_ahead": "number",
+        "pays_later_in": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "pays_later_at": {
+          "union": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "CompactNow": {
+      "extends": [],
+      "fields": {
+        "before": "number",
+        "reread_cost": "number",
+        "cache_ttl_minutes": "number",
+        "cache_warm_until": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "keep_across_break": "number",
+        "stored_compactions": "number",
+        "estimate": {
+          "union": [
+            {
+              "ref": "CompactEstimate"
+            },
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "Gauge": {
+      "extends": [],
+      "fields": {
+        "context": "number",
+        "model": "string",
+        "auto_compact": "number",
+        "hint_tokens": "number",
+        "share": "number",
+        "headroom": "number",
+        "turns_since_compaction": "number",
+        "last_compaction": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "compacted": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "mean_growth": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "mean_step": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "turns_left": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "compact_now": {
+          "union": [
+            {
+              "ref": "CompactNow"
+            },
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "SessionGauge": {
+      "extends": [
+        "Gauge"
+      ],
+      "fields": {
+        "exploration": {
+          "union": [
+            {
+              "ref": "Exploration"
+            },
+            "null"
+          ]
+        }
+      },
+      "optional": [
+        "exploration"
+      ]
+    },
+    "SecretReach": {
+      "alias": {
+        "union": [
+          {
+            "literal": "sent"
+          },
+          {
+            "literal": "returned"
+          },
+          {
+            "literal": "pending"
+          },
+          {
+            "literal": "error"
+          },
+          {
+            "literal": "empty"
+          }
+        ]
+      }
+    },
+    "SecretSeverity": {
+      "alias": {
+        "union": [
+          {
+            "literal": "high"
+          },
+          {
+            "literal": "medium"
+          },
+          {
+            "literal": "low-medium"
+          },
+          {
+            "literal": "low"
+          }
+        ]
+      }
+    },
+    "SecretAccess": {
+      "extends": [],
+      "fields": {
+        "time": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "tool": "string",
+        "path": "string",
+        "pattern": "string",
+        "error": "boolean",
+        "via": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "sent": "boolean",
+        "test": "boolean",
+        "reach": {
+          "ref": "SecretReach"
+        },
+        "severity": {
+          "ref": "SecretSeverity"
+        },
+        "agent_type": "string",
+        "agent_id": {
+          "union": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "SessionDetail": {
+      "extends": [
+        "Usage"
+      ],
+      "fields": {
+        "session_id": "string",
+        "project": "string",
+        "title": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "git_branch": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "first_ts": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "last_ts": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "prompt": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "runtime": {
+          "union": [
+            {
+              "ref": "SessionRuntime"
+            },
+            "null"
+          ]
+        },
+        "context": {
+          "ref": "ContextStats"
+        },
+        "models": {
+          "array": {
+            "ref": "ModelUsage"
+          }
+        },
+        "model_effort": {
+          "array": {
+            "ref": "ModelEffortUsage"
+          }
+        },
+        "skills": {
+          "array": {
+            "ref": "SkillUsage"
+          }
+        },
+        "mcp_servers": {
+          "array": {
+            "ref": "McpServerUsage"
+          }
+        },
+        "api_errors": {
+          "array": {
+            "ref": "ApiErrorEvent"
+          }
+        },
+        "agents": {
+          "array": {
+            "ref": "Agent"
+          }
+        },
+        "compact_hint_tokens": "number",
+        "current": {
+          "union": [
+            {
+              "ref": "SessionGauge"
+            },
+            "null"
+          ]
+        },
+        "delegate_hint_tokens": "number",
+        "delegate_calls_ahead": "number",
+        "waiting": {
+          "union": [
+            {
+              "ref": "Waiting"
+            },
+            "null"
+          ]
+        },
+        "live": "boolean",
+        "compaction_savings": {
+          "union": [
+            {
+              "ref": "CompactionSavings"
+            },
+            "null"
+          ]
+        },
+        "transcript": "boolean",
+        "secret_accesses": {
+          "array": {
+            "ref": "SecretAccess"
+          }
+        }
+      },
+      "optional": []
+    },
+    "SecretCounts": {
+      "extends": [],
+      "fields": {
+        "high": "number",
+        "medium": "number",
+        "low-medium": "number",
+        "low": "number"
+      },
+      "optional": []
+    },
+    "SessionState": {
+      "extends": [],
+      "fields": {
+        "session_id": "string",
+        "current": {
+          "union": [
+            {
+              "ref": "Gauge"
+            },
+            "null"
+          ]
+        },
+        "secrets": {
+          "ref": "SecretCounts"
+        }
+      },
+      "optional": []
+    },
+    "CallUsage": {
+      "extends": [],
+      "fields": {
+        "new_input": "number",
+        "cache_write_5m": "number",
+        "cache_write_1h": "number",
+        "cache_read": "number",
+        "output": "number",
+        "cache_write": "number",
+        "web_searches": "number",
+        "context": "number",
+        "model": "string",
+        "speed": "string",
+        "effort": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "cost": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "cost_parts": {
+          "ref": "CostParts"
+        },
+        "growth": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "reply": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "rebuild": {
+          "union": [
+            {
+              "ref": "Rebuild"
+            },
+            "null"
+          ]
+        },
+        "reminder_chars": "number",
+        "compact_pays": {
+          "ref": "CompactEstimate"
+        }
+      },
+      "optional": [
+        "compact_pays"
+      ]
+    },
+    "ToolField": {
+      "extends": [],
+      "fields": {
+        "name": "string",
+        "value": "string",
+        "chars": "number",
+        "is_json": "boolean"
+      },
+      "optional": []
+    },
+    "InjectedItem": {
+      "extends": [],
+      "fields": {
+        "kind": "string",
+        "chars": "number",
+        "text": "string"
+      },
+      "optional": []
+    },
+    "CompactionMarker": {
+      "extends": [],
+      "fields": {
+        "trigger": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_tokens": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "post_tokens": {
+          "union": [
+            "number",
+            "null"
+          ]
+        },
+        "duration_ms": {
+          "union": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "optional": []
+    },
+    "SoftHint": {
+      "extends": [],
+      "fields": {
+        "kind": {
+          "literal": "soft"
+        },
+        "context": "number",
+        "threshold": "number",
+        "reread_cost": "number"
+      },
+      "optional": []
+    },
+    "SoftReminderHint": {
+      "extends": [],
+      "fields": {
+        "kind": {
+          "literal": "soft_reminder"
+        },
+        "context": "number",
+        "threshold": "number",
+        "times": "number"
+      },
+      "optional": []
+    },
+    "PaysHint": {
+      "extends": [],
+      "fields": {
+        "kind": {
+          "literal": "pays"
+        },
+        "context": "number",
+        "pays_off_in": "number",
+        "calls_ahead": "number",
+        "ahead_from": {
+          "union": [
+            {
+              "literal": "longer"
+            },
+            {
+              "literal": "all"
+            }
+          ]
+        },
+        "one_time": "number",
+        "after": "number"
+      },
+      "optional": []
+    },
+    "PaysReminderHint": {
+      "extends": [],
+      "fields": {
+        "kind": {
+          "literal": "pays_reminder"
+        },
+        "context": "number",
+        "pays_off_in": "number"
+      },
+      "optional": []
+    },
+    "AutoHint": {
+      "extends": [],
+      "fields": {
+        "kind": {
+          "union": [
+            {
+              "literal": "auto"
+            },
+            {
+              "literal": "auto_reminder"
+            }
+          ]
+        },
+        "context": "number",
+        "auto_compact": "number",
+        "share": "number"
+      },
+      "optional": []
+    },
+    "CompactHint": {
+      "alias": {
+        "union": [
+          {
+            "ref": "SoftHint"
+          },
+          {
+            "ref": "SoftReminderHint"
+          },
+          {
+            "ref": "PaysHint"
+          },
+          {
+            "ref": "PaysReminderHint"
+          },
+          {
+            "ref": "AutoHint"
+          }
+        ]
+      }
+    },
+    "ChatEntry": {
+      "extends": [],
+      "fields": {
+        "kind": {
+          "union": [
+            {
+              "literal": "prompt"
+            },
+            {
+              "literal": "text"
+            },
+            {
+              "literal": "thinking"
+            },
+            {
+              "literal": "tool"
+            },
+            {
+              "literal": "injected"
+            },
+            {
+              "literal": "compaction"
+            },
+            {
+              "literal": "error"
+            }
+          ]
+        },
+        "timestamp": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "tool": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "tool_fields": {
+          "array": {
+            "ref": "ToolField"
+          }
+        },
+        "result": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "result_chars": "number",
+        "is_error": "boolean",
+        "effort": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "message_id": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "usage": {
+          "union": [
+            {
+              "ref": "CallUsage"
+            },
+            "null"
+          ]
+        },
+        "items": {
+          "array": {
+            "ref": "InjectedItem"
+          }
+        },
+        "compaction": {
+          "union": [
+            {
+              "ref": "CompactionMarker"
+            },
+            "null"
+          ]
+        },
+        "compact_hint": {
+          "ref": "CompactHint"
+        },
+        "versus_keeping": {
+          "union": [
+            {
+              "ref": "VersusKeeping"
+            },
+            "null"
+          ]
+        }
+      },
+      "optional": [
+        "compact_hint",
+        "versus_keeping"
+      ]
+    },
+    "Reminders": {
+      "extends": [],
+      "fields": {
+        "calls": "number",
+        "chars": "number"
+      },
+      "optional": []
+    },
+    "Chat": {
+      "extends": [],
+      "fields": {
+        "session_id": "string",
+        "agent_id": {
+          "union": [
+            "string",
+            "null"
+          ]
+        },
+        "available": "boolean",
+        "entries": {
+          "array": {
+            "ref": "ChatEntry"
+          }
+        },
+        "reminders": {
+          "ref": "Reminders"
+        }
+      },
+      "optional": []
+    }
+  }
+}

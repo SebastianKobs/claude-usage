@@ -9,6 +9,7 @@
   "scripts": {
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+    "contract": "vitest run src/api/contract.test.ts --update",
     "test": "vitest run"
   },
   "devDependencies": {

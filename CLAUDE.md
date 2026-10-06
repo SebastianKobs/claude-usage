@@ -23,6 +23,9 @@ Claude Code deletes transcripts after its cleanup period (30 days by default); t
     with it (`test_web.py` fails otherwise).
 - **Tests:** `make test` runs `python3 -m unittest discover -s tests`, then the page's svelte-check, Vitest and the
   browser check where `web/node_modules` exists (`make build` installs it); the Python tests never need node.
+  - The Python tests test the server and its API, Vitest and the browser check the page. Where the two meet, the
+    page writes what it expects of the server into `web/contract.json` (`make contract`, committed; Vitest fails
+    where it is stale), and `test_contract.py` checks the server against it: neither side reads the other's sources.
   - The browser check (`make browser-check`, `web/browser/`): Playwright serves the demo once (`browser/demo.ts`, its
     own port 8797 and folder) and runs the built page in Chromium, which enforces the CSP's Trusted Types, and
     Firefox. Each test fails on a console error, an uncaught error or a CSP violation: the overview, and every
@@ -74,7 +77,7 @@ README.md                    the overview: highlights, quick start, what to know
 docs/                        the user guide by topic (dashboard, session view, compaction, notifications,
                              configuration, privacy); images/ holds screenshots of demo data only
 Makefile                     start/stop/status of the dashboard, scan, report, session, backup, test, clean,
-                             hook-line, notify-test, cron-line, demo, build, browser-check
+                             hook-line, notify-test, cron-line, demo, build, contract, browser-check
 claude_usage/
   __main__.py                CLI: scan | report | serve | backup | hook-settings | notify-test
   report.py                  the report as text (report without --json)
@@ -112,21 +115,30 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
                              run the dashboard
   package.json               exact versions, dev dependencies only (the bundle holds them; `@sveltejs/mcp` is the
                              autofixer and the docs); `npm run build`, `check`
-                             (svelte-check) and `test` (Vitest: happy-dom, jsdom where a test needs a real
-                             `<select>` or DOMPurify); `vite.config.ts` builds the one module, `svelte.config.js`
-                             sets the compiler (no injected CSS, `fragments: 'tree'`); `playwright.config.ts` runs
-                             the browser check
+                             (svelte-check), `test` (Vitest: happy-dom, jsdom where a test needs a real
+                             `<select>` or DOMPurify) and `contract` (writes contract.json); `vite.config.ts` builds
+                             the one module, `svelte.config.js` sets the compiler (no injected CSS,
+                             `fragments: 'tree'`); `playwright.config.ts` runs the browser check
   browser/                   the browser check: `demo.ts` serves the demo, `page.ts` the test that fails on the
                              page's complaints and the steps through the demo, `console.spec.ts` and `axe.spec.ts`
   src/main.ts                mounts `App` on `<main>`
   build.json                 what the last build read and wrote, by sha256: test_web.py says "run make build"
                              where the checkout differs
+  contract.json              what the page expects of the server, written by `make contract` from src/api/contract.ts
+                             (a Vitest file snapshot, which fails where it is stale) and committed: api.ts's types as
+                             data, the session ids its links take, the Trusted Types policies it creates, the values it
+                             has words or hatches for, the live card's compact states for a set of gauges.
+                             tests/test_contract.py checks the server against it
   src/<section>/             a folder per section of the page: its components and the plain modules they draw from, each
                              with its Testing Library or Vitest test beside it; a module never shares its component's
                              name ignoring case (macOS and Windows tell no difference), hence modelchart.ts and chat.ts
-  src/api/                   the server's answers: their types, and made-up ones for the tests
-    api.ts                   the types of the server's answers: test_api_types.py checks the demo's against them, so a
-                             field added in server.py or queries.py is added there too
+  src/api/                   the server's answers: their types, made-up ones for the tests, and the contract
+    api.ts                   the types of the server's answers, a subset of TypeScript that contract.ts describes:
+                             test_contract.py checks the demo's answers against them, so a field added in server.py or
+                             queries.py is added there too (and `make contract` run)
+    contract.ts              what the page expects of the server, as data (`pageContract`, `declarations` reads
+                             api.ts with TypeScript's parser); only contract.test.ts imports it, which writes it into
+                             web/contract.json
     fixtures.ts              made-up answers of the server for the component tests: a usage, a summary and a session's
                              detail (the main thread and its background calls, which share a null agent id), each with
                              the changes a test asks for on top of one plain default
@@ -233,8 +245,8 @@ web/                         the page's Svelte 5 + TypeScript sources; node only
                              marked and DOMPurify from npm, each through a Trusted Types policy (`highlight`, and
                              DOMPurify's own) which the CSP names
 tests/                       helpers.py (projects-folder and transcript builders, StoreCase) and one test file per
-                             module; test_static.py checks, without a browser or node, what the page shares with
-                             the server, what static/ serves and the themes (behaviour is Vitest's); demo.py
+                             module; test_contract.py checks the server against web/contract.json, test_static.py
+                             what static/ serves and the themes (behaviour is Vitest's); demo.py
                              builds the demo for the screenshots and serves it (make demo)
 .claude/hooks/project-guard/  the guard hook: a git submodule, see its README and CLAUDE.md
 .vscode/settings.json        the Svelte extension's TypeScript plugin on (off by default), so VS Code's TypeScript
@@ -676,7 +688,8 @@ Checked against real data (145 transcripts, 2026-09-27); the parser relies on th
     medium and high), and each compact state once per stretch between compactions (`compact_states`: hint, cold,
     soon, close, unlikely or pays, the trash compactor's; a new `last_compaction` starts again), the user's choice
     over every change, since Soon and Close take turns as the estimate moves. The first pass only notes the states, so
-    a start sends no burst. `compact_states` ports `liveCompactBadge`, whose `states` a test holds it to.
+    a start sends no burst. `compact_states` ports `liveCompactBadge`, whose `states` for the contract's gauges
+    `test_contract.py` holds it to.
   - The texts hold the session's title (else its project folder, else its id's start), tool names and counts, never
     a prompt or a path: the system keeps them in its notification history.
   - The notifier (`detect`, paths only, nothing run but WSL's `wslpath`): `[notify] command` (its words with

@@ -31,7 +31,6 @@ from claude_usage import turns
 from helpers import FakeClock
 from helpers import MILLION
 from helpers import TempDirTestCase
-from helpers import page_file
 from helpers import text_block
 from helpers import thinking_block
 from helpers import tool_use_block
@@ -324,12 +323,13 @@ class DashboardTest(ServerCase):
                     self.assertNotIn(external, body)
 
     def test_the_policy_allows_no_style_attribute_and_no_untrusted_markup(self):
-        # styles are set through the CSSOM, which a CSP doesn't block; markup only through the two named policies
+        # styles are set through the CSSOM, which a CSP doesn't block; markup only through the policies named
+        # (test_contract holds them to the page's)
         _, headers, _ = self.get("/")
         directives = [part.strip() for part in headers["Content-Security-Policy"].split(";")]
         self.assertIn("style-src 'self'", directives)
         self.assertIn("require-trusted-types-for 'script'", directives)
-        self.assertIn("trusted-types dompurify highlight", directives)
+        self.assertEqual(sum(directive.startswith("trusted-types ") for directive in directives), 1)
         self.assertNotIn("unsafe-inline", headers["Content-Security-Policy"])
         self.assertNotIn("unsafe-eval", headers["Content-Security-Policy"])
 
@@ -1088,13 +1088,6 @@ class SessionStateWithoutPatternsTest(ServerCase):
             _, payload = self.get_json("/api/session/s1/state")
         self.assertEqual(read.call_count, 0)
         self.assertEqual(payload["secrets"], {"high": 0, "medium": 0, "low-medium": 0, "low": 0})
-
-
-class PageTest(unittest.TestCase):
-    def test_the_page_accepts_exactly_the_servers_session_ids(self):
-        loader = page_file("loader.ts").read_text(encoding="utf-8")
-        page = re.search(r"const SESSION_HASH = /\^#session\\/\((.+?)\)\$/;", loader).group(1)
-        self.assertEqual(page, re.search(r"\((.+?)\)", server.SESSION_PATH.pattern).group(1))
 
 
 class DayNavigationTest(unittest.TestCase):

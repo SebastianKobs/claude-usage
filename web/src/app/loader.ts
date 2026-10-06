@@ -17,8 +17,9 @@ export const LIVE_INTERVAL_MS = 5000;
 /** How often the summary, and an open session that isn't live (which notices a resumed one), are asked for. */
 export const SUMMARY_INTERVAL_MS = 60000;
 
-// the server's session-id pattern: anything else isn't a session link
-const SESSION_HASH = /^#session\/([A-Za-z0-9_-]{1,128})$/;
+/** The session ids a link takes, the server's (the contract hands it to its tests): anything else isn't one. */
+export const SESSION_ID = '[A-Za-z0-9_-]{1,128}';
+const SESSION_HASH = new RegExp(`^#session/(${SESSION_ID})$`);
 
 /** What the loader takes from outside, so a test can hand it a server, a tab and an address. */
 export interface LoaderOptions {

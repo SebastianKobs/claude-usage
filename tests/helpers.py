@@ -4,7 +4,6 @@ read real transcripts."""
 import json
 import re
 import shutil
-import subprocess
 import tempfile
 import unittest
 import uuid
@@ -31,20 +30,6 @@ def page_file(name):
     if len(found) != 1:
         raise FileNotFoundError(f"{len(found)} files named {name} under {PAGE_SOURCES}")
     return found[0]
-
-
-def run_function(module, name, *arguments):
-    """Calls a function of a module of the page (web/src) in node, which imports it as it is and runs it as
-    TypeScript (skipped where it can't); its result. For the few checks that the page and the Python side agree."""
-    program = "\n".join([f"import {{ {name} }} from {json.dumps(page_file(module).as_uri())};",
-                         f"process.stdout.write(JSON.stringify({name}(...{json.dumps(arguments)})));"])
-    result = subprocess.run(["node", "--input-type=module", "-e", program], capture_output=True, text=True,
-                            timeout=30)
-    if result.returncode and "ERR_UNKNOWN_FILE_EXTENSION" in result.stderr:
-        raise unittest.SkipTest("this node can't run TypeScript")
-    if result.returncode:
-        raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
-    return json.loads(result.stdout)
 
 
 def slug(project_path):
