@@ -1,6 +1,6 @@
 {
   "sources": {
-    "web/package-lock.json": "b390ffe2853e386425868ddf46292310a461179b883094a0bc2dc4e3e45466e5",
+    "web/package-lock.json": "74fe250c4f7b96338820446194e1f944b3889d7a985589e6070891281e218fd1",
     "web/package.json": "ae161eede2fbaea25edb857556858c707fc74bab21e4f5636872f740c3b499e2",
     "web/src/app/App.svelte": "c3b9f2dd8e6df09e55dfe2dfe9b4a74367d5d3b76fcdc16b0afdbac2c7005c75",
     "web/src/app/Banner.svelte": "5752de020f00af7a40b743f7629fe66f53de49d4d39a3cb102e70e4e53dfb9bc",
